@@ -5,13 +5,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.HelpOutline
-import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.androidharness.app.R
 import com.androidharness.app.llm.ModelEntry
 import com.androidharness.app.llm.ModelReasoning
 import com.androidharness.app.llm.ProviderType
@@ -27,7 +26,7 @@ fun ModelReasoningIcon(entry: ModelEntry, providerType: ProviderType? = null, di
         else -> "Reasoning inferred from model name"
     }
     IconButton(onClick = { details = true }) {
-        Icon(if (status == ModelReasoning.INFERRED) Icons.Outlined.HelpOutline else Icons.Outlined.Psychology,
+        Icon(painterResource(R.drawable.ic_brain),
             contentDescription = description, modifier = Modifier.size(20.dp),
             tint = if (status == ModelReasoning.INFERRED) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.tertiary)
     }

@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.Difference
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.ForkRight
 import androidx.compose.material.icons.outlined.AutoMode
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -240,6 +241,7 @@ fun AppNav(container: AppContainer) {
     // Which session the current back stack shows, for drawer highlighting.
     val currentEntry by nav.currentBackStackEntryFlow.collectAsStateWithLifecycle(initialValue = null)
     var draftSessionId by remember { mutableStateOf<String?>(null) }
+    var workspaceChatViewModel by remember { mutableStateOf<ChatViewModel?>(null) }
     val currentSessionId = when (currentEntry?.destination?.route) {
         "chat/{sessionId}?messageId={messageId}" -> currentEntry?.arguments?.getString("sessionId")
         "chat" -> draftSessionId
@@ -252,6 +254,14 @@ fun AppNav(container: AppContainer) {
         ?: currentEntry?.arguments?.getString("project")?.takeIf { it.isNotBlank() }
     val currentWorkspace by remember(workspaceSessionId, workspaceProjectId) { container.workspace.projectForTools(workspaceSessionId, workspaceProjectId) }
         .collectAsStateWithLifecycle(initialValue = null)
+    val chatWorkspaceSelection by remember(workspaceSessionId) { container.workspace.selectionForChat(workspaceSessionId) }
+        .collectAsStateWithLifecycle(initialValue = null)
+    val chatWorkspaceContext = workspaceSessionId != null || workspaceChatViewModel != null
+    val workspaceSummary = if (chatWorkspaceContext) {
+        val count = chatWorkspaceSelection?.grants?.size ?: 1
+        "$count workspace${if (count == 1) "" else "s"}" +
+            currentWorkspace?.name?.let { " · Primary: $it" }.orEmpty()
+    } else currentWorkspace?.name ?: "Choose workspace"
     val activeFs by remember(workspaceSessionId, workspaceProjectId) { container.workspace.forTools(workspaceSessionId, workspaceProjectId) }
         .collectAsStateWithLifecycle(initialValue = null)
     var workspaceError by remember { mutableStateOf<String?>(null) }
@@ -465,59 +475,6 @@ fun AppNav(container: AppContainer) {
                     }
                     Spacer(Modifier.height(8.dp))
 
-                    // ----- Workspace switcher -----
-                    Surface(
-                        onClick = { showWorkspaceSheet = true },
-                        color = MaterialTheme.colorScheme.surfaceContainer,
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 2.dp),
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
-                        ) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                shape = RoundedCornerShape(10.dp),
-                            ) {
-                                Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        Icons.Outlined.Folder,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp),
-                                    )
-                                }
-                            }
-                            Spacer(Modifier.width(10.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    currentWorkspace?.name ?: "Workspace",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    currentWorkspace?.let { container.workspace.describe(it).kindLabel }
-                                        ?: "Choose workspace",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                            Icon(
-                                Icons.Filled.KeyboardArrowDown,
-                                contentDescription = "Switch workspace",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(4.dp))
-
                     DrawerRow(
                         icon = { Icon(Icons.Outlined.Folder, contentDescription = null) },
                         title = "Projects",
@@ -525,6 +482,15 @@ fun AppNav(container: AppContainer) {
                         onClick = {
                             scope.launch { drawerState.close() }
                             nav.navigate("projects") { launchSingleTop = true }
+                        },
+                    )
+                    DrawerRow(
+                        icon = { Icon(Icons.Outlined.FolderOpen, contentDescription = null) },
+                        title = if (chatWorkspaceContext) "Workspaces for this chat" else "Workspace",
+                        subtitle = workspaceSummary,
+                        onClick = {
+                            scope.launch { drawerState.close() }
+                            showWorkspaceSheet = true
                         },
                     )
 
@@ -761,6 +727,9 @@ fun AppNav(container: AppContainer) {
                         }
                     } },
                     onProjects = { desktopGuard.navigate { nav.navigate("projects") { launchSingleTop = true } } },
+                    workspaceLabel = if (chatWorkspaceContext) "Workspaces for this chat" else "Workspace",
+                    workspaceSummary = workspaceSummary,
+                    onWorkspaces = { showWorkspaceSheet = true },
                     onAutomation = { desktopGuard.navigate { nav.navigate("automation") { launchSingleTop = true } } },
                     onSettings = { desktopGuard.navigate { nav.navigate("settings") { launchSingleTop = true } } })
             }
@@ -787,6 +756,10 @@ fun AppNav(container: AppContainer) {
         ) {
             composable("chat") {
                 val vm: ChatViewModel = viewModel(factory = ChatViewModel.factory(container, null))
+                androidx.compose.runtime.DisposableEffect(vm) {
+                    workspaceChatViewModel = vm
+                    onDispose { if (workspaceChatViewModel === vm) workspaceChatViewModel = null }
+                }
                 val draftState by vm.state.collectAsStateWithLifecycle()
                 androidx.compose.runtime.LaunchedEffect(draftState.sessionId) { draftSessionId = draftState.sessionId }
                 ChatWorkspaceScreen(
@@ -827,6 +800,10 @@ fun AppNav(container: AppContainer) {
                 val searchMessageId = entry.arguments?.getString("messageId")
                 val vm: ChatViewModel =
                     viewModel(factory = ChatViewModel.factory(container, sessionId))
+                androidx.compose.runtime.DisposableEffect(vm) {
+                    workspaceChatViewModel = vm
+                    onDispose { if (workspaceChatViewModel === vm) workspaceChatViewModel = null }
+                }
                 ChatWorkspaceScreen(
                     viewModel = vm,
                     searchMessageId = searchMessageId,
@@ -1059,11 +1036,12 @@ fun AppNav(container: AppContainer) {
 
     com.androidharness.app.ui.common.ShizukuDisabledWarning(container.shizuku.workspaceWarning)
 
-    // Workspace switching from the drawer + chat overflow shares one sheet.
+    // The sidebar opens the same per-chat access editor, including unsent chats.
     if (showWorkspaceSheet) {
         com.androidharness.app.ui.common.ShizukuWorkspaceWarningEffect(container.shizuku)
-        if (workspaceSessionId != null) com.androidharness.app.ui.chat.components.ChatWorkspaceManagerSheet(
-            container, workspaceSessionId, onDismiss = { showWorkspaceSheet = false })
+        if (chatWorkspaceContext) com.androidharness.app.ui.chat.components.ChatWorkspaceManagerSheet(
+            container, workspaceSessionId, onDismiss = { showWorkspaceSheet = false },
+            onSave = workspaceChatViewModel?.let { vm -> vm::saveWorkspaces })
         else com.androidharness.app.ui.chat.components.WorkspaceSwitcherSheet(
             projects = allWorkspaces,
             currentProjectId = currentWorkspace?.id,

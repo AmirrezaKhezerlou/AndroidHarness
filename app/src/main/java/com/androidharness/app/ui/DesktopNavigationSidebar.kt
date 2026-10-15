@@ -36,6 +36,7 @@ internal fun DesktopNavigationSidebar(
     onNewChat: () -> Unit, onChat: (String) -> Unit, onProjectChat: (ProjectEntity) -> Unit,
     onChatActions: (SessionEntity) -> Unit,
     onProjects: () -> Unit, onAutomation: () -> Unit, onSettings: () -> Unit,
+    workspaceLabel: String, workspaceSummary: String, onWorkspaces: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     var query by rememberSaveable { mutableStateOf("") }
@@ -99,6 +100,7 @@ internal fun DesktopNavigationSidebar(
         }
         HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.5f))
         DesktopSidebarAction("Projects", Icons.Outlined.Folder, currentRoute?.startsWith("project") == true, onProjects)
+        DesktopSidebarAction(workspaceLabel, Icons.Outlined.FolderOpen, onClick = onWorkspaces, subtitle = workspaceSummary)
         DesktopSidebarAction("Scheduled tasks", Icons.Outlined.Schedule, currentRoute?.startsWith("automation") == true, onAutomation)
         DesktopSidebarAction("Settings", Icons.Outlined.Settings, currentRoute == "settings", onSettings)
         Spacer(Modifier.height(8.dp))
@@ -107,14 +109,19 @@ internal fun DesktopNavigationSidebar(
 }
 
 @Composable
-private fun DesktopSidebarAction(label: String, icon: ImageVector, selected: Boolean = false, onClick: () -> Unit) {
+private fun DesktopSidebarAction(label: String, icon: ImageVector, selected: Boolean = false, onClick: () -> Unit,
+    subtitle: String? = null) {
     val scheme = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp)
         .background(if (selected) scheme.surfaceContainerHighest else scheme.surfaceContainerLow, RoundedCornerShape(6.dp))
         .clickable(onClick = onClick).pointerHoverIcon(PointerIcon.Hand).heightIn(min = 38.dp).padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Icon(icon, null, Modifier.size(18.dp), tint = scheme.onSurfaceVariant)
-        Text(label, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.labelSmall,
+                color = scheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 

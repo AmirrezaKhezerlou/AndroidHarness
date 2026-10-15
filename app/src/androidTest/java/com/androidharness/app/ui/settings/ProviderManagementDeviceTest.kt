@@ -267,6 +267,50 @@ class ProviderManagementDeviceTest {
         }
     }
 
+    @Test fun providerPopupSwitchesCatalogWithoutApplyingUntilModelConfirmed() {
+        val first = ProviderConfig("popup:first", "Primary provider", ProviderType.OPENAI_COMPAT,
+            "https://example.test", "alpha-model")
+        val second = first.copy(id = "popup:second", name = "Secondary provider", model = "deepseek-r1")
+        val catalog = mapOf(first.id to listOf(ModelEntry(first.model, reasoning = true)),
+            second.id to listOf(ModelEntry(second.model)))
+        val selected = AtomicReference<ModelShortcut?>()
+        val storeName = "popup-test-${System.nanoTime()}"
+        try {
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { it.setContent { theme {
+                    var open by remember { mutableStateOf(true) }
+                    if (open) ModelPickerSheet(listOf(first, second), first.id, first.model, catalog,
+                        onDismiss = { open = false }, onSelect = { id, model -> selected.set(ModelShortcut(id, requireNotNull(model))) },
+                        onRefreshCatalog = { null }, onManageProviders = {}, modelShortcuts = ModelShortcuts(c.appContext, storeName))
+                } } }
+                await { find("Switch provider") != null }
+                assertTrue(bounds(requireNotNull(find("Switch provider"))).top < bounds(requireNotNull(find("Choose model"))).top)
+                assertNotNull(find("Reasoning reported by provider"))
+                screenshot("models-brain-provider-control")
+                tap("Switch provider")
+                await { find("Search providers") != null }
+                search("Secondary"); hideKeyboard()
+                assertNull(find("Browse models from ${first.name}"))
+                screenshot("models-provider-popup")
+                tap("Browse models from ${second.name}")
+                await { find("Choose ${second.model} from ${second.name}") != null }
+                assertNull(selected.get())
+                assertNull(find("Choose ${first.model} from ${first.name}"))
+                tap("Reasoning inferred from model name")
+                await { find("This model family may support reasoning") != null }
+                tap("Got it")
+                screenshot("models-inferred-brain")
+                tapModelRow(second.model)
+                assertNull(selected.get())
+                tap("Use ${second.model}")
+                await { selected.get() != null }
+                assertEquals(ModelShortcut(second.id, second.model), selected.get())
+            }
+        } finally {
+            c.appContext.getSharedPreferences(storeName, android.content.Context.MODE_PRIVATE).edit().clear().commit()
+        }
+    }
+
     @Test fun providerFirstPickerSavesFilteredChecksAndKeepsRefreshesAndCancelledEditsSafe() {
         val provider = ProviderConfig("visibility:fixture", "OpenRouter fixture", ProviderType.OPENAI_COMPAT,
             "https://example.test", "qwen-one")

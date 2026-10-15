@@ -187,7 +187,7 @@ class MultiWorkspaceDeviceTest {
         }
     }
 
-    @Test fun compactChipSelectionCancelAndRecreationKeepChatAccess() = runBlocking {
+    @Test fun sidebarSelectionCancelAndRecreationKeepChatAccess() = runBlocking {
         // Remove only disposable fixtures left if an earlier instrumentation process was killed.
         val stale = c.workspace.projects.first().filter { it.uri?.startsWith(c.appContext.cacheDir.path + "/multi-ui-") == true }
         c.sessions.sessions.first().filter { session -> stale.any { it.id == session.projectId } }.forEach { c.sessions.deleteSession(it) }
@@ -202,27 +202,40 @@ class MultiWorkspaceDeviceTest {
             c.settings.setOnboardingDone(true); c.settings.setResumeLastChat(true); c.settings.setLastActiveSessionId(chat)
             val activity = instrumentation.startActivitySync(Intent(c.appContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             try {
-                tap("1 workspace"); awaitNode("Workspaces for this chat")
+                fun openAccess(count: Int, primary: String) {
+                    tap("Open navigation")
+                    awaitNode("$count workspace${if (count == 1) "" else "s"} · Primary: $primary")
+                    val projects = Rect().also { awaitNode("Projects").getBoundsInScreen(it) }
+                    val access = Rect().also { awaitNode("Workspaces for this chat").getBoundsInScreen(it) }
+                    assertTrue("Chat workspace access should be below Projects", access.top >= projects.bottom)
+                    screenshot("sidebar-chat-workspaces.png")
+                    tap("Workspaces for this chat")
+                    awaitNode("Choose access for each project. Primary is the default place for new files.")
+                }
+                awaitNode("Open navigation")
+                assertNull(find("1 workspace"))
+                openAccess(1, a.name)
                 tap(b.name)
                 tap("Close without saving")
-                awaitNode("1 workspace")
+                awaitNode("Open navigation")
                 assertNull(c.sessions.session(chat)?.workspaceSelectionJson)
-                tap("1 workspace"); tap(b.name); tap("Use 2 workspaces")
+                openAccess(1, a.name); tap(b.name); tap("Use 2 workspaces")
                 awaitSheetClosed()
-                awaitNode("2 workspaces")
+                awaitNode("Open navigation")
+                assertNull(find("2 workspaces"))
                 screenshot("issue38-chat.png")
                 val selected = ChatWorkspaceSelection.decode(c.sessions.session(chat)!!.workspaceSelectionJson!!)
                 assertEquals(a.id, selected.primaryId); assertFalse(selected.grants.first { it.projectId == b.id }.canEdit)
                 instrumentation.runOnMainSync { activity.recreate() }
-                awaitNode("2 workspaces"); tap("2 workspaces"); awaitNode("${b.name} access: Read only")
+                awaitNode("Open navigation"); openAccess(2, a.name); awaitNode("${b.name} access: Read only")
                 screenshot("issue38-workspaces.png")
                 tap("${b.name} access: Read only"); tap("Can edit"); awaitNode("${b.name} access: Can edit"); tap("Use 2 workspaces")
                 awaitSheetClosed()
-                awaitNode("2 workspaces")
+                awaitNode("Open navigation")
                 assertTrue(ChatWorkspaceSelection.decode(c.sessions.session(chat)!!.workspaceSelectionJson!!).grants.all { it.canEdit })
-                tap("2 workspaces"); tap("Primary workspace: ${b.name}"); tap("Use 2 workspaces")
+                openAccess(2, a.name); tap("Primary workspace: ${b.name}"); tap("Use 2 workspaces")
                 awaitSheetClosed()
-                awaitNode("2 workspaces")
+                awaitNode("Open navigation")
                 assertEquals(b.id, c.sessions.session(chat)?.projectId)
             } finally { instrumentation.runOnMainSync {
                 androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
@@ -231,6 +244,50 @@ class MultiWorkspaceDeviceTest {
             } }
         } finally {
             c.sessions.session(chat)?.let { c.sessions.deleteSession(it) }
+            c.workspace.deleteProject(a); c.workspace.deleteProject(b); c.workspace.setActiveProject(previous.id)
+            c.settings.setLastActiveSessionId(saved.lastActiveSessionId); c.settings.setResumeLastChat(saved.resumeLastChat)
+            c.settings.setOnboardingDone(saved.onboardingDone); root.deleteRecursively()
+        }
+    }
+
+    @Test fun sidebarAccessBeforeFirstMessageKeepsTheDraftAndCreatesOnlyItsChat() = runBlocking<Unit> {
+        val previous = c.workspace.currentProjectOnce()
+        val saved = c.settings.settings.first()
+        val root = File(c.appContext.cacheDir, "multi-draft-${System.nanoTime()}").apply { mkdirs() }
+        val a = c.workspace.addShellProject(root.resolve("Draft Alpha").apply { mkdirs() }.path)
+        val b = c.workspace.addShellProject(root.resolve("Draft Beta").apply { mkdirs() }.path)
+        var draftChat: String? = null
+        try {
+            c.workspace.setActiveProject(a.id)
+            c.settings.setOnboardingDone(true); c.settings.setResumeLastChat(false); c.settings.setLastActiveSessionId(null)
+            val activity = instrumentation.startActivitySync(Intent(c.appContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            try {
+                awaitNode("Open navigation")
+                fun editable(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+                    node ?: return null
+                    if (node.isEditable) return node
+                    for (i in 0 until node.childCount) editable(node.getChild(i))?.let { return it }
+                    return null
+                }
+                val input = requireNotNull(editable(instrumentation.uiAutomation.rootInActiveWindow))
+                assertTrue(input.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, android.os.Bundle().apply {
+                    putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "Keep this unsent draft")
+                }))
+                assertNull(c.settings.settings.first().lastActiveSessionId)
+                tap("Open navigation"); tap("Workspaces for this chat")
+                awaitNode("Choose access for each project. Primary is the default place for new files.")
+                tap(b.name); tap("Use 2 workspaces"); awaitSheetClosed()
+                draftChat = c.settings.settings.first().lastActiveSessionId
+                awaitNode("Keep this unsent draft")
+                val session = requireNotNull(c.sessions.session(requireNotNull(draftChat)))
+                val selection = ChatWorkspaceSelection.decode(requireNotNull(session.workspaceSelectionJson))
+                assertEquals(a.id, selection.primaryId)
+                assertFalse(selection.grants.single { it.projectId == b.id }.canEdit)
+                assertTrue(c.sessions.messages(session.id).isEmpty())
+                tap("Open navigation"); awaitNode("2 workspaces · Primary: ${a.name}")
+            } finally { instrumentation.runOnMainSync { activity.finish() } }
+        } finally {
+            draftChat?.let { c.sessions.session(it) }?.let { c.sessions.deleteSession(it) }
             c.workspace.deleteProject(a); c.workspace.deleteProject(b); c.workspace.setActiveProject(previous.id)
             c.settings.setLastActiveSessionId(saved.lastActiveSessionId); c.settings.setResumeLastChat(saved.resumeLastChat)
             c.settings.setOnboardingDone(saved.onboardingDone); root.deleteRecursively()

@@ -170,10 +170,6 @@ fun ChatScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val desktopLayout = com.androidharness.app.ui.LocalDesktopLayout.current
     val currentProject by viewModel.activeWorkspace.collectAsStateWithLifecycle(initialValue = null)
-    val workspaceSelection by viewModel.workspaceSelection.collectAsStateWithLifecycle()
-    var showWorkspaces by rememberSaveable { mutableStateOf(false) }
-    if (showWorkspaces) com.androidharness.app.ui.chat.components.ChatWorkspaceManagerSheet(
-        viewModel.container, state.sessionId, onDismiss = { showWorkspaces = false }, onSave = viewModel::saveWorkspaces)
     var githubProject by remember { mutableStateOf<Pair<String, String>?>(null) }
     val listState = rememberChatListState()
     val snackbar = remember { SnackbarHostState() }
@@ -988,18 +984,6 @@ fun ChatScreen(
                 },
                 onOpenWebPreview = { showWebPreview = true },
             )
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                val count = workspaceSelection?.grants?.size ?: 1
-                androidx.compose.material3.AssistChip(onClick = { showWorkspaces = true },
-                    label = { Text("$count workspace${if (count == 1) "" else "s"}", style = MaterialTheme.typography.labelMedium) },
-                    leadingIcon = { Icon(Icons.Outlined.Folder, null, Modifier.size(16.dp)) },
-                    trailingIcon = { Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(16.dp)) })
-                Spacer(Modifier.width(10.dp))
-                Text(if (workspaceSelection?.grants?.all { !it.canEdit } == true) "Read only" else currentProject?.name.orEmpty(),
-                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f))
-            }
             }
         },
         snackbarHost = {},

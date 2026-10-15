@@ -5,7 +5,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.selection.selectable
@@ -22,12 +21,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.androidharness.app.R
 import com.androidharness.app.chatgpt.ChatGptProtocol
 import com.androidharness.app.data.ModelShortcut
 import com.androidharness.app.data.ModelShortcuts
@@ -87,6 +88,7 @@ fun ModelPickerSheet(
     var managing by rememberSaveable { mutableStateOf(manageModelsInitially) }
     var showAddCustom by rememberSaveable { mutableStateOf(false) }
     var reasoningLegend by remember { mutableStateOf(false) }
+    var choosingProvider by rememberSaveable { mutableStateOf(false) }
     var pendingProvider by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingModel by rememberSaveable { mutableStateOf<String?>(null) }
     var enableChoice by remember { mutableStateOf<ModelShortcut?>(null) }
@@ -157,20 +159,32 @@ fun ModelPickerSheet(
             LazyColumn(Modifier.weight(1f).padding(horizontal = 16.dp)) {
                 item(key = "picker-controls") {
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(onClick = { choosingProvider = true }, shape = RoundedCornerShape(14.dp),
+                            color = scheme.surfaceContainerHigh,
+                            modifier = Modifier.weight(1f).semantics { contentDescription = "Switch provider" }) {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                ProviderMark(size = 30.dp)
+                                Spacer(Modifier.width(10.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text("Choose provider", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+                                    Text(if (showAll) "All providers" else listedProvider?.name ?: "Select a provider",
+                                        style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                }
+                                Icon(Icons.Outlined.ExpandMore, null, Modifier.size(20.dp))
+                            }
+                        }
+                        IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, "Close") }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Choose model", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                         TextButton(onClick = { managing = true }) { Text("Manage models") }
-                        IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, "Close") }
                     }
                     OutlinedTextField(value = query, onValueChange = { query = it }, singleLine = true,
                         placeholder = { Text(if (showAll) "Search models or providers" else "Search models") },
                         leadingIcon = { Icon(Icons.Outlined.Search, null) }, shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth())
-                    if (!showAll) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(providers.filter { it.enabled }, key = { it.id }) { provider ->
-                            FilterChip(selected = provider.id == listedId, onClick = { listedId = provider.id; query = "" },
-                                label = { Text(provider.name) })
-                        }
-                    }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
                         FilterChip(selected = showAll, onClick = { showAll = !showAll }, label = { Text("Show all") },
                             leadingIcon = { Icon(if (showAll) Icons.Filled.Check else Icons.Outlined.FilterList, null, Modifier.size(16.dp)) })
@@ -182,7 +196,8 @@ fun ModelPickerSheet(
                         Text(if (showAll) "All connected catalogs · ${rows.size} ${if (rows.size == 1) "model" else "models"}" else "Selected models · ${rows.size}",
                             style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant, modifier = Modifier.weight(1f))
                         IconToggleButton(checked = thinkOnly, onCheckedChange = { thinkOnly = it }) {
-                            Icon(Icons.Outlined.Psychology, "Thinking only", tint = if (thinkOnly) scheme.tertiary else scheme.onSurfaceVariant)
+                            Icon(painterResource(R.drawable.ic_brain), "Thinking only", Modifier.size(22.dp),
+                                tint = if (thinkOnly) scheme.tertiary else scheme.onSurfaceVariant)
                         }
                         IconButton(onClick = { reasoningLegend = true }) { Icon(Icons.Outlined.Info, "Reasoning indicators", Modifier.size(18.dp)) }
                         IconButton(enabled = !isRefreshing, onClick = { scope.launch { refresh(if (showAll) providers.map { it.id } else listOfNotNull(listedProvider?.id)) } }) {
@@ -262,6 +277,17 @@ fun ModelPickerSheet(
             }
         }
     }
+    if (choosingProvider) ProviderChooserDialog(
+        providers = providers.filter { it.enabled }, selectedId = if (showAll) null else listedId,
+        onDismiss = { choosingProvider = false },
+        onChoose = { provider ->
+            listedId = provider.id
+            showAll = false
+            query = ""
+            choosingProvider = false
+        },
+        onManage = { choosingProvider = false; onDismiss(); onManageProviders() },
+    )
     enableChoice?.let { choice ->
         val provider = providers.firstOrNull { it.id == choice.providerId }
         AlertDialog(onDismissRequest = { enableChoice = null }, title = { Text("Enable ${provider?.name ?: "provider"}?") },
@@ -273,7 +299,7 @@ fun ModelPickerSheet(
     }
     if (reasoningLegend) AlertDialog(onDismissRequest = { reasoningLegend = false }, title = { Text("Reasoning indicators") },
         text = { Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
-            Text("The brain icon means reasoning is reported by the provider or marked by you for a custom model. Tap it to check the source.\n\nA question mark is an unconfirmed model-family hint. No icon means support is unknown or reported as unsupported.\n\nReasoning support does not guarantee visible thinking text.")
+            Text("The brain icon marks reasoning support. A colored brain is reported by the provider or marked by you for a custom model. A muted brain is an unconfirmed model-family hint. Tap the brain to check the source.\n\nNo icon means support is unknown or reported as unsupported. Reasoning support does not guarantee visible thinking text.")
         } },
         confirmButton = { TextButton(onClick = { reasoningLegend = false }) { Text("Got it") } })
     if (showAddCustom && listedProvider != null) AddCustomModelDialog(listedProvider.name,
@@ -284,6 +310,44 @@ fun ModelPickerSheet(
                 visible.selected.getValue(listedProvider.id) + model)
             commit(listedProvider.id, model)
         })
+}
+
+@Composable
+private fun ProviderChooserDialog(
+    providers: List<ProviderConfig>, selectedId: String?, onDismiss: () -> Unit,
+    onChoose: (ProviderConfig) -> Unit, onManage: () -> Unit,
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val matches = providers.filter { it.name.contains(query.trim(), ignoreCase = true) }
+    val scheme = MaterialTheme.colorScheme
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("Choose provider") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(query, { query = it }, singleLine = true,
+                    placeholder = { Text("Search providers") }, leadingIcon = { Icon(Icons.Outlined.Search, null) },
+                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+                LazyColumn(Modifier.fillMaxWidth().heightIn(max = (LocalConfiguration.current.screenHeightDp * .45f).dp)) {
+                    items(matches, key = { it.id }) { provider ->
+                        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                            .selectable(provider.id == selectedId, role = Role.RadioButton, onClick = { onChoose(provider) })
+                            .semantics { contentDescription = "Browse models from ${provider.name}" }
+                            .padding(horizontal = 4.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            ProviderMark(size = 28.dp)
+                            Spacer(Modifier.width(10.dp))
+                            Text(provider.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
+                                maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            RadioButton(provider.id == selectedId, onClick = null)
+                        }
+                    }
+                    if (matches.isEmpty()) item {
+                        Text("No enabled providers match.", Modifier.padding(vertical = 16.dp), color = scheme.onSurfaceVariant)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        dismissButton = { TextButton(onClick = onManage) { Text("Manage providers") } },
+    )
 }
 
 @Composable
