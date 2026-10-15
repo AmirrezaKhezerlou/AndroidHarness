@@ -77,8 +77,22 @@ class TerminalManager(
         }
     }
 
+    private var storageMaintenance = false
+
+    suspend fun <T> withClosedStorage(action: suspend () -> T): T {
+        synchronized(this) {
+            check(!storageMaintenance && !_state.value.started && !_state.value.busy && process == null) {
+                "Close the terminal before cleaning storage."
+            }
+            storageMaintenance = true
+        }
+        try { return action() } finally { synchronized(this) { storageMaintenance = false } }
+    }
+
     /** Starts the terminal if it isn't running yet. */
+    @Synchronized
     fun ensureStarted() {
+        if (storageMaintenance) return
         if (remoteWorkspace != null) {
             _state.update { it.copy(started = true, cwd = cwd.absolutePath) }
             return
@@ -227,7 +241,9 @@ class TerminalManager(
     }
 
     /** Sends one command line. */
+    @Synchronized
     fun send(command: String, workspace: com.androidharness.app.workspace.WorkspaceFs? = null) {
+        if (storageMaintenance) { appendLines(listOf("# storage cleanup in progress; try again shortly")); return }
         val cmd = command.trimEnd()
         if (cmd.isEmpty()) return
         if (_state.value.busy) {

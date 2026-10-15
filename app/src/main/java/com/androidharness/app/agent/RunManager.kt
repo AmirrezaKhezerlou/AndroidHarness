@@ -125,6 +125,12 @@ class RunManager(
         action()
     }
 
+    /** Maintenance holds the same gate as run starts and workspace mutations. */
+    suspend fun <T> withIdleStorage(action: suspend () -> T): T = workspaceGuard.withLock {
+        check(runningSessionIds.value.isEmpty()) { "Wait for running tasks to finish before cleaning storage." }
+        action()
+    }
+
     suspend fun assignWorkspace(sessionId: String, projectId: String) = workspaceGuard.withLock {
         if (sessions.session(sessionId)?.projectId == projectId) return@withLock
         check(!isRunning(sessionId)) { "Wait for this chat's task to finish before changing its workspace." }

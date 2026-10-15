@@ -44,6 +44,7 @@ class BgProcessStore(
     private val shizuku: ShizukuManager,
     /** App workspace root, so detached logs live under it so file tools can read them. */
     workspaceRoot: File,
+    private val privilegedLiveness: suspend (Int) -> Boolean? = shizuku::probeProcessAlive,
 ) {
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -52,6 +53,14 @@ class BgProcessStore(
     private val appProcesses = ConcurrentHashMap<Int, Process>()
     private val nextId = AtomicInteger(1)
     private val ioLock = Mutex()
+    private val storageLock = Mutex()
+
+    suspend fun <T> withIdleStorage(action: suspend () -> T): T = storageLock.withLock {
+        // Prune only verified exits. An unavailable privileged service is not proof of exit.
+        list()
+        check(entries.isEmpty()) { "Stop background processes and refresh their list before cleaning storage." }
+        action()
+    }
 
     /**
      * Bug 2 fix: unique-per-app-run token inside every log filename. Process
@@ -71,9 +80,9 @@ class BgProcessStore(
         runCatching {
             if (storeFile.exists()) {
                 val loaded = json.decodeFromString<List<BgProcessEntry>>(storeFile.readText())
-                val cutoff = System.currentTimeMillis() - 24L * 60 * 60 * 1000
-                // prune stale entries from runs older than a day
-                loaded.filter { it.startedAt >= cutoff }.forEach { entries[it.id] = it }
+                // Detached processes survive app death and may run for more than a day.
+                // Only a verified exit (or successful stop) can remove their reference.
+                loaded.forEach { entries[it.id] = it }
                 nextId.set((entries.keys.maxOrNull() ?: 0) + 1)
             }
         }
@@ -98,7 +107,9 @@ class BgProcessStore(
      * app death) when Shizuku is connected; otherwise an app-child process.
      * May throw when the app tier can't reach [cwd]; callers report that.
      */
-    suspend fun start(command: String, cwd: File): Started {
+    suspend fun start(command: String, cwd: File): Started = storageLock.withLock { startLocked(command, cwd) }
+
+    private suspend fun startLocked(command: String, cwd: File): Started {
         val id = nextId.getAndIncrement()
         val bgDir = File(cwd, ".harness/bg").apply { mkdirs() }
         val logName = "$id-$bootToken.log"
@@ -159,7 +170,8 @@ class BgProcessStore(
         val deadIds = mutableListOf<Int>()
         entries.values.sortedBy { it.id }.forEach { e ->
             val alive = when (e.source) {
-                "SHIZUKU" -> shizuku.isProcessAlive(e.pid)
+                "SHIZUKU" -> privilegedLiveness(e.pid)
+                    ?: error("Cannot verify a background process. Reconnect Shizuku before cleaning storage.")
                 else -> appProcesses[e.id]?.isAlive == true
             }
             if (alive) {
@@ -192,13 +204,14 @@ class BgProcessStore(
 
     suspend fun kill(id: Int): Boolean {
         val e = entries[id] ?: return false
+        if (e.source == "SHIZUKU" && privilegedLiveness(e.pid) == null) return false
         val logFile = File(e.cwd, e.logPath).takeIf { it.exists() }
             ?: File(e.logPath).let { if (it.isAbsolute) it else File(detachedLogDir.parentFile, e.logPath) }
         val ok = when (e.source) {
             "SHIZUKU" -> {
                 shizuku.killProcess(e.pid)
                 killPidsWithFd(logFile)
-                true
+                privilegedLiveness(e.pid) == false
             }
             else -> {
                 val p = appProcesses[id]
@@ -219,13 +232,14 @@ class BgProcessStore(
                     killPidsWithFd(logFile)
                     p.destroyForcibly()
                     p.waitFor(2, TimeUnit.SECONDS)
-                    true
+                    !p.isAlive
                 } else {
                     killPidsWithFd(logFile)
                     true
                 }
             }
         }
+        if (!ok) return false
         appProcesses.remove(id)
         entries.remove(id)
         persist()

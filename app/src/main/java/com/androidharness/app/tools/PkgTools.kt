@@ -11,12 +11,17 @@ class PkgInstallTool(
     private val isReady: () -> Boolean,
     private val installedPackages: () -> List<String>,
     private val installPackages: suspend (List<String>) -> Unit,
+    private val installForWorkspace: (suspend (List<String>, String) -> Unit)? = null,
 ) : Tool {
 
     constructor(linuxEnv: LinuxEnvironmentManager) : this(
         isReady = { linuxEnv.isReady },
         installedPackages = { linuxEnv.installedPackages() },
         installPackages = { linuxEnv.install(it) },
+        installForWorkspace = { packages, workspace ->
+            linuxEnv.install(packages, workspace)
+            check(linuxEnv.isReady && packages.all(linuxEnv::installedContains)) { "Package installation did not complete. Check the Linux environment status." }
+        },
     )
 
     override val name = "pkg_install"
@@ -57,7 +62,7 @@ class PkgInstallTool(
             return ToolResult(result.exitCode == 0, result.rawOutput + result.rawStderr + "\n" + result.note.orEmpty())
         }
         return try {
-            installPackages(pkgs)
+            if (installForWorkspace != null) installForWorkspace.invoke(pkgs, ctx.workspace.displayPath) else installPackages(pkgs)
             val newlyInstalled = installedPackages().filter { it in pkgs }
             val listText = if (newlyInstalled.isNotEmpty()) newlyInstalled.joinToString(", ") else pkgs.joinToString(", ")
             ToolResult(

@@ -232,7 +232,7 @@ fun SettingsScreen(
                             .fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
-                        if (page != SettingsPage.LOCAL_MODELS && page != SettingsPage.AGENT && page != SettingsPage.TELEGRAM) SettingsPageIntro(page)
+                        if (page != SettingsPage.LOCAL_MODELS && page != SettingsPage.AGENT && page != SettingsPage.TELEGRAM && page != SettingsPage.STORAGE) SettingsPageIntro(page)
                     when (page) {
                         SettingsPage.CONNECTED_ACCOUNTS -> ConnectedAccountsSection(container)
                         SettingsPage.MODELS -> {
@@ -284,6 +284,7 @@ fun SettingsScreen(
                                 onSelectWorkspace = { id -> scope.launch { container.workspace.setActiveProject(id) } },
                             )
                         }
+                        SettingsPage.STORAGE -> StorageSection(container)
                         SettingsPage.ENVIRONMENT -> TerminalSection(container, envState, shizukuState, serviceState)
                         SettingsPage.TROUBLESHOOTING -> TroubleshootingSection(container, ::openPage)
                         SettingsPage.BACKUP -> {
@@ -1809,12 +1810,16 @@ private fun LinuxEnvironmentCard(
         AlertDialog(
             onDismissRequest = { confirmUninstall = false },
             title = { Text("Uninstall Linux environment?") },
-            text = { Text("This deletes the whole toolchain (bash, git, python, node, npm and all downloaded packages). The agent falls back to toybox sh until it is installed again.") },
+            text = { Text("This removes the shared toolchain for every local workspace (bash, git, python, node, npm and all downloaded packages). The agent falls back to toybox sh until it is installed again.") },
             confirmButton = {
                 TextButton(onClick = {
                     confirmUninstall = false
                     checkResult = null
-                    scope.launch { container.linuxEnv.uninstall() }
+                    scope.launch {
+                        try { container.storage.uninstallToolchain() }
+                        catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                        catch (e: Exception) { checkResult = e.message }
+                    }
                 }) { Text("Uninstall", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {

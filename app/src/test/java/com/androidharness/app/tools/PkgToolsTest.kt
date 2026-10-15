@@ -39,6 +39,18 @@ Description: Fast search tool that respects your gitignore
 """.trimIndent()
 
     @Test
+    fun `managed installer records the workspace when reusing an installed tool`() = runBlocking {
+        val workspace = createMockWorkspace()
+        var recorded: Pair<List<String>, String>? = null
+        val tool = PkgInstallTool(isReady = { true }, installedPackages = { listOf("jq") },
+            installPackages = { error("Use workspace-aware installation") },
+            installForWorkspace = { names, owner -> recorded = names to owner })
+        val result = tool.execute(buildJsonObject { put("packages", buildJsonArray { add(kotlinx.serialization.json.JsonPrimitive("jq")) }) }, ToolContext(workspace))
+        assertTrue(result.ok)
+        assertEquals(listOf("jq") to workspace.displayPath, recorded)
+    }
+
+    @Test
     fun `package index parses metadata description and installed size`() {
         val parsed = PackageIndex.parse(samplePackages)
         assertEquals(2, parsed.size)

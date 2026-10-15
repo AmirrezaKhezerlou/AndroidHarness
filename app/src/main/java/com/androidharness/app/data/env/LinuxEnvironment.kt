@@ -301,6 +301,14 @@ class LinuxEnvironmentManager(
     private val marker = File(prefix, ".harness-installed")
     private val tempDir = File(context.cacheDir, "deb-download").apply { mkdirs() }
 
+    /** Outside the deployed toolchain: caches must not inflate its staging archive. */
+    val sharedCacheRoot: File = File(context.filesDir, "package-cache")
+
+    suspend fun <T> withPackageStorageLock(action: suspend () -> T): T = installMutex.withLock { action() }
+
+    private val toolStore = com.androidharness.app.data.storage.SharedToolStore(
+        File(context.filesDir, "shared-tools"), prefix)
+
     /**
      * Real cwd for shell commands when the active workspace is a SAF folder.
      * Lives on shared storage (external files dir) so the Shizuku shell uid can
@@ -323,6 +331,7 @@ class LinuxEnvironmentManager(
     val internalDataRoot: File = context.dataDir
 
     init {
+        runCatching { toolStore.recover(installedPackages().toSet()) }.onFailure { Log.e(TAG, "Package removal recovery is incomplete", it) }
         // An older build left these world-writable; restore private defaults.
         runCatching { Os.chmod(context.dataDir.absolutePath, 0x1C0 /* 0700 */) }
         runCatching { Os.chmod(context.filesDir.absolutePath, 0x1C0 /* 0700 */) }
@@ -386,16 +395,11 @@ class LinuxEnvironmentManager(
     val fullPackages = corePackages + listOf("gh", "python", "python-pip", "nodejs", "npm")
 
     /** Installs [wanted] plus their full dependency closure. Resumes after interruptions. */
-    suspend fun install(wanted: List<String>) {
-        if (isReady && wanted.all { installedContains(it) && it !in brokenInstalledPackages() }) return
-        withContext(Dispatchers.IO) {
-            // Serialized: concurrent installs race the read-modify-write on the
-            // package marker and can silently drop entries, which later reads
-            // as phantom "missing" packages.
-            installMutex.withLock {
-                if (isReady && wanted.all { installedContains(it) && it !in brokenInstalledPackages() }) return@withLock
-                installLocked(wanted)
-            }
+    suspend fun install(wanted: List<String>, requester: String = "Manual install") = withContext(Dispatchers.IO) {
+        installMutex.withLock {
+            val broken = brokenInstalledPackages().toSet()
+            if (!(isReady && wanted.all { installedContains(it) && it !in broken })) installLocked(wanted)
+            if (wanted.all { installedContains(it) }) toolStore.require(wanted, requester)
         }
     }
 
@@ -469,21 +473,43 @@ class LinuxEnvironmentManager(
         resolve(index, wanted).filter { it.name !in already }
     }
 
-    /**
-     * Uninstalls an installed package. Core packages cannot be uninstalled.
-     */
-    suspend fun uninstallPackage(name: String): Boolean = withContext(Dispatchers.IO) {
-        if (name in corePackages) throw IllegalArgumentException("Cannot uninstall core package '$name'")
-        val installed = installedPackages().toMutableSet()
-        if (name !in installed) return@withContext false
-        installed.remove(name)
-        marker.writeText(installed.joinToString("\n"))
-        BINARY_PROOF[name]?.forEach { binRel ->
-            File(prefix, binRel).delete()
+    /** Includes transitive dependencies of the app's required toolchain. */
+    private fun requiredToolPackages(): Set<String> {
+        val records = toolStore.all()
+        val result = fullPackages.toMutableSet()
+        fun visit(name: String) { records[name]?.depends.orEmpty().forEach { if (result.add(it)) visit(it) } }
+        fullPackages.forEach(::visit)
+        return result
+    }
+
+    fun managedTools() = toolStore.all()
+    fun packageProtection(name: String): String? = toolStore.reason(name, installedPackages().toSet(), requiredToolPackages())
+    suspend fun releasePackageRequirement(name: String, requester: String) = withContext(Dispatchers.IO) {
+        installMutex.withLock { toolStore.release(name, requester) }
+    }
+    suspend fun packageCleanupCandidates(): List<com.androidharness.app.data.storage.StorageCandidate> =
+        installedPackages().mapNotNull { toolStore.preview(it, installedPackages().toSet(), requiredToolPackages()) }
+
+    /** Caller holds the package lock and the app's idle gates. */
+    suspend fun removeUnusedPackage(candidate: com.androidharness.app.data.storage.StorageCandidate): Long {
+        val name = requireNotNull(candidate.packageName)
+        val bytes = toolStore.remove(candidate, installedPackages().toSet(), requiredToolPackages()) {
+            val atomic = android.util.AtomicFile(marker)
+            val output = atomic.startWrite()
+            try {
+                output.write(installedPackages().filter { it != name }.joinToString("\n").toByteArray())
+                atomic.finishWrite(output)
+            } catch (e: Exception) { atomic.failWrite(output); throw e }
         }
+        invalidateExternalToolDeploy()
         ensureShims(force = true)
-        runCatching { deployStateListener?.invoke() }
-        true
+        return bytes
+    }
+
+    suspend fun uninstallPackage(name: String): Boolean = withContext(Dispatchers.IO) {
+        if (name !in installedPackages()) return@withContext false
+        throw IllegalStateException("Shared packages require a cleanup preview. Open Settings → Storage → Shared to review recorded requirements, then Review cleanup. " +
+            (packageProtection(name) ?: "No recorded requirements remain."))
     }
 
     private suspend fun installLocked(wanted: List<String>) {
@@ -520,7 +546,8 @@ class LinuxEnvironmentManager(
                 val debFile = File(tempDir, debBase)
                 downloadVerified("$BASE_URL/$fileField", debFile, pkg.sha256)
                 _state.value = EnvState.Installing(i, closure.size, pkg.name)
-                extractDeb(debFile)
+                val installedPaths = extractDeb(debFile)
+                recordPackageFiles(pkg, installedPaths)
                 debFile.delete()
                 // record progress per package so a killed install resumes
                 markInstalled(listOf(pkg.name))
@@ -540,17 +567,33 @@ class LinuxEnvironmentManager(
         }
     }
 
+    /** Captures the bytes actually extracted (including shebang/binary rewrites), never index size estimates. */
+    internal suspend fun recordPackageFiles(pkg: PkgMeta, installedPaths: List<String>) {
+        val ownership = mutableListOf<com.androidharness.app.data.storage.StorageStamp>()
+        var complete = true
+        installedPaths.distinct().forEach { path ->
+            try {
+                val stamp = com.androidharness.app.data.storage.StorageFiles.snapshot(prefix, File(prefix, path)).single()
+                ownership += stamp.copy(path = path)
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { complete = false }
+        }
+        toolStore.put(com.androidharness.app.data.storage.ManagedTool(pkg.name, pkg.version, pkg.depends,
+            ownership, complete && ownership.isNotEmpty(), toolStore.all()[pkg.name]?.requirements.orEmpty(), installedPaths))
+    }
+
     private fun markInstalled(names: List<String>) {
         val current = installedPackages().toMutableSet()
         current.addAll(names)
         marker.writeText(current.joinToString("\n"))
     }
 
-    suspend fun uninstall() = withContext(Dispatchers.IO) {
-        runCatching { prefix.deleteRecursively() }
-        runCatching { stagingDir.deleteRecursively() }
+    suspend fun uninstall() = withContext(Dispatchers.IO) { installMutex.withLock {
+        check(prefix.deleteRecursively() || !prefix.exists()) { "Could not remove the full toolchain." }
+        check(stagingDir.deleteRecursively() || !stagingDir.exists()) { "Could not remove runtime staging." }
         _state.value = EnvState.NotInstalled
-    }
+        runCatching { deployStateListener?.invoke() }
+    } }
 
     fun installedPackages(): List<String> =
         runCatching { marker.readText().lines().filter { it.isNotBlank() } }.getOrDefault(emptyList())
@@ -796,6 +839,8 @@ class LinuxEnvironmentManager(
         put("HOME", "${prefix.absolutePath}/home")
         put("TMPDIR", "${prefix.absolutePath}/tmp")
         put("PREFIX", prefix.absolutePath)
+        put("npm_config_cache", File(sharedCacheRoot, "npm").absolutePath)
+        put("PIP_CACHE_DIR", File(sharedCacheRoot, "pip").absolutePath)
         // Recent termux-exec packages split the interception library from the
         // API library. Loading the API alone leaves Git's child execs blocked
         // by Android's app-data execution restriction.
@@ -1133,6 +1178,9 @@ class LinuxEnvironmentManager(
         put("HOME", "$tmpPrefix/home")
         put("TMPDIR", "$tmpPrefix/tmp")
         put("PREFIX", tmpPrefix)
+        // Shell/root cannot enter app-private storage. Share within this execution tier instead.
+        put("npm_config_cache", "$tmpBase/package-cache/npm")
+        put("PIP_CACHE_DIR", "$tmpBase/package-cache/pip")
         // Same derivation rule as the entries below, and the same trap: the
         // deployed copy carries the preload iff the app prefix does. Pointing
         // LD_PRELOAD at a file that is not there is worse than not setting it,
@@ -1577,7 +1625,8 @@ class LinuxEnvironmentManager(
         }
     }
 
-    private fun extractDeb(deb: File) {
+    private fun extractDeb(deb: File): List<String> {
+        val installedPaths = mutableListOf<String>()
         ArArchiveInputStream(deb.inputStream().buffered()).use { ar ->
             var entry = ar.nextEntry
             while (entry != null && !entry.name.startsWith("data.tar")) {
@@ -1614,6 +1663,7 @@ class LinuxEnvironmentManager(
                     }
 
                     val target = File(prefix, rel)
+                    if (!e.isDirectory) installedPaths += rel
                     when {
                         e.isDirectory -> target.mkdirs()
                         e.isSymbolicLink -> {
@@ -1685,6 +1735,7 @@ class LinuxEnvironmentManager(
                 }
             }
         }
+        return installedPaths
     }
 
     companion object {

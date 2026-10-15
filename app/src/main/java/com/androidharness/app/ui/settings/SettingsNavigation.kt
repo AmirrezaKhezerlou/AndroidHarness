@@ -23,6 +23,7 @@ internal enum class SettingsPage(
     MCP("Connected tools", "Add and configure MCP servers", "Connections", "mcp integrations servers transport"),
     TELEGRAM("Telegram", "Continue chats and edit projects from your paired bot", "Connections", "telegram bot remote control pairing notifications gateway"),
     WORKSPACE("Workspaces", "Choose, add and manage your project folders", "Workspace & device", "storage files saf folder project remembered permissions grants revoke always"),
+    STORAGE("Storage", "Shared tools, file usage and safe cleanup", "Workspace & device", "storage cleanup disk space cache packages downloads build outputs"),
     ENVIRONMENT("Terminal & device", "Linux tools, storage permissions and background access", "Workspace & device", "shizuku shell packages environment battery optimization keep alive"),
     TROUBLESHOOTING("Troubleshooting", "Check connections, permissions and device tools", "Workspace & device", "diagnostics help doctor repair errors storage linux shizuku ssh mcp notifications provider report"),
     BACKUP("Backups", "Encrypted settings and chat backups", "App & data", "restore history archive transfer password providers keys encryption"),
@@ -114,6 +115,7 @@ internal fun settingsDeepLink(target: String): SettingsPage? = when (target) {
     "voice" -> SettingsPage.VOICE
     "telegram" -> SettingsPage.TELEGRAM
     "agent" -> SettingsPage.AGENT
+    "storage" -> SettingsPage.STORAGE
     else -> null
 }
 

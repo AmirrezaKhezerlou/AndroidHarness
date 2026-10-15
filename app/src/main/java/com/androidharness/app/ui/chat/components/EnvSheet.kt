@@ -154,11 +154,15 @@ fun EnvSheet(
         AlertDialog(
             onDismissRequest = { confirmUninstall = false },
             title = { Text("Uninstall Linux environment?") },
-            text = { Text("This deletes the whole toolchain (bash, git, python, node, npm and all downloaded packages). The agent falls back to toybox sh until it is installed again.") },
+            text = { Text("This removes the shared toolchain for every local workspace (bash, git, python, node, npm and all downloaded packages). The agent falls back to toybox sh until it is installed again.") },
             confirmButton = {
                 TextButton(onClick = {
                     confirmUninstall = false
-                    scope.launch { linuxEnv.uninstall() }
+                    scope.launch {
+                        try { container.storage.uninstallToolchain() }
+                        catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                        catch (e: Exception) { checkResult = e.message }
+                    }
                 }) { Text("Uninstall", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {

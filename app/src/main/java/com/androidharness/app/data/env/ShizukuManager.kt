@@ -633,11 +633,17 @@ class ShizukuManager(
             withDeployPaths(env).toList(), dir, logPath))?.toIntOrNull()
     }
 
-    suspend fun isProcessAlive(pid: Int): Boolean = withContext(Dispatchers.IO) {
+    /** Null means the process could not be checked; maintenance must retain its reference. */
+    suspend fun probeProcessAlive(pid: Int): Boolean? = withContext(Dispatchers.IO) {
         val svc = service
-        if (svc != null) runCatching { svc.isProcessAlive(pid) }.getOrDefault(false)
-        else compatibility?.takeIf { it.isAlive }?.request(CompatRequest(0, "alive", pid = pid))?.toBooleanStrictOrNull() ?: false
+        try {
+            if (svc != null) svc.isProcessAlive(pid)
+            else compatibility?.takeIf { it.isAlive }?.request(CompatRequest(0, "alive", pid = pid))?.toBooleanStrictOrNull()
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { null }
     }
+
+    suspend fun isProcessAlive(pid: Int): Boolean = probeProcessAlive(pid) ?: false
 
     suspend fun killProcess(pid: Int): Boolean = withContext(Dispatchers.IO) {
         val svc = service

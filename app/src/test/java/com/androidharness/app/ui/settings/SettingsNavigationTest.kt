@@ -5,6 +5,12 @@ import org.junit.Test
 
 class SettingsNavigationTest {
     @Test
+    fun `storage is searchable and supports a direct link`() {
+        assertEquals(listOf(SettingsPage.STORAGE), matchingSettingsPages("cleanup disk"))
+        assertEquals(SettingsPage.STORAGE, settingsDeepLink("storage"))
+    }
+
+    @Test
     fun `search finds controls by familiar names and hidden keywords`() {
         assertEquals(listOf(SettingsPage.APPEARANCE), matchingSettingsPages("  DARK  theme "))
         assertEquals(listOf(SettingsPage.ENVIRONMENT), matchingSettingsPages("battery"))

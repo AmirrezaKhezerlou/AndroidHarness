@@ -230,6 +230,7 @@ class AppContainer(val appContext: Context) {
     val automation = com.androidharness.app.automation.AutomationManager(this)
     internal var telegram = com.androidharness.app.telegram.TelegramManager(this)
     val terminal = com.androidharness.app.data.TerminalManager(appContext, linuxEnv, shizuku, runManager)
+    val storage = com.androidharness.app.data.storage.StorageManager(this)
     val projectChecks = com.androidharness.app.data.ProjectCheckStore(appContext, terminal)
 
     /**

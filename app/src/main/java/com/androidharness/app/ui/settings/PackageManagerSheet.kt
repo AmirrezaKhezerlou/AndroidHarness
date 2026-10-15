@@ -20,7 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Search
@@ -266,7 +266,7 @@ fun PackageManagerSheet(
                                 description = pkg.description,
                                 sizeBytes = pkg.size,
                                 isInstalled = pkg.name in installedList,
-                                isCore = pkg.name in linuxEnv.corePackages,
+                                isCore = pkg.name in linuxEnv.fullPackages,
                                 isBusy = isBusy,
                                 onInstall = {
                                     errorMessage = null
@@ -279,17 +279,7 @@ fun PackageManagerSheet(
                                         }
                                     }
                                 },
-                                onUninstall = {
-                                    errorMessage = null
-                                    scope.launch {
-                                        try {
-                                            linuxEnv.uninstallPackage(pkg.name)
-                                            installedList = linuxEnv.installedPackages()
-                                        } catch (e: Exception) {
-                                            errorMessage = e.message ?: "Failed to remove ${pkg.name}"
-                                        }
-                                    }
-                                },
+                                onReviewRemoval = { container.pendingSettingsScroll.value = "storage"; onDismiss() },
                             )
                         }
                     }
@@ -312,7 +302,7 @@ fun PackageManagerSheet(
                             description = desc,
                             sizeBytes = null,
                             isInstalled = name in installedList,
-                            isCore = name in linuxEnv.corePackages,
+                            isCore = name in linuxEnv.fullPackages,
                             isBusy = isBusy,
                             onInstall = {
                                 errorMessage = null
@@ -325,17 +315,7 @@ fun PackageManagerSheet(
                                     }
                                 }
                             },
-                            onUninstall = {
-                                errorMessage = null
-                                scope.launch {
-                                    try {
-                                        linuxEnv.uninstallPackage(name)
-                                        installedList = linuxEnv.installedPackages()
-                                    } catch (e: Exception) {
-                                        errorMessage = e.message ?: "Failed to remove $name"
-                                    }
-                                }
-                            },
+                            onReviewRemoval = { container.pendingSettingsScroll.value = "storage"; onDismiss() },
                         )
                     }
 
@@ -354,19 +334,9 @@ fun PackageManagerSheet(
                     items(installedList.sorted(), key = { "installed-$it" }) { name ->
                         InstalledPackageRow(
                             name = name,
-                            isCore = name in linuxEnv.corePackages,
+                            isCore = name in linuxEnv.fullPackages,
                             isBusy = isBusy,
-                            onUninstall = {
-                                errorMessage = null
-                                scope.launch {
-                                    try {
-                                        linuxEnv.uninstallPackage(name)
-                                        installedList = linuxEnv.installedPackages()
-                                    } catch (e: Exception) {
-                                        errorMessage = e.message ?: "Failed to remove $name"
-                                    }
-                                }
-                            },
+                            onReviewRemoval = { container.pendingSettingsScroll.value = "storage"; onDismiss() },
                         )
                     }
                 }
@@ -385,7 +355,7 @@ private fun PackageItemRow(
     isCore: Boolean,
     isBusy: Boolean,
     onInstall: () -> Unit,
-    onUninstall: () -> Unit,
+    onReviewRemoval: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     Surface(
@@ -468,13 +438,13 @@ private fun PackageItemRow(
                 if (!isCore) {
                     Spacer(Modifier.width(4.dp))
                     IconButton(
-                        onClick = onUninstall,
+                        onClick = onReviewRemoval,
                         enabled = !isBusy,
                         modifier = Modifier.size(40.dp),
                     ) {
                         Icon(
-                            Icons.Outlined.Delete,
-                            contentDescription = "Uninstall",
+                            Icons.Outlined.Storage,
+                            contentDescription = "Review shared storage",
                             tint = scheme.onSurfaceVariant,
                             modifier = Modifier.size(17.dp),
                         )
@@ -504,7 +474,7 @@ private fun InstalledPackageRow(
     name: String,
     isCore: Boolean,
     isBusy: Boolean,
-    onUninstall: () -> Unit,
+    onReviewRemoval: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     Surface(
@@ -525,19 +495,19 @@ private fun InstalledPackageRow(
             )
             if (isCore) {
                 Text(
-                    "core",
+                    "required",
                     style = MaterialTheme.typography.labelSmall,
                     color = scheme.outline,
                 )
             } else {
                 IconButton(
-                    onClick = onUninstall,
+                    onClick = onReviewRemoval,
                     enabled = !isBusy,
                     modifier = Modifier.size(40.dp),
                 ) {
                     Icon(
-                        Icons.Outlined.Delete,
-                        contentDescription = "Uninstall $name",
+                        Icons.Outlined.Storage,
+                        contentDescription = "Review shared storage for $name",
                         tint = scheme.error.copy(alpha = 0.7f),
                         modifier = Modifier.size(17.dp),
                     )
