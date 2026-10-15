@@ -57,6 +57,9 @@ data class ProviderConfig(
     /** Picker visibility; saved chats and running work keep their selected connection. */
     @kotlinx.serialization.Transient
     val enabled: Boolean = true,
+    /** Loaded from encrypted credentials; excluded from provider/task JSON and chat exports. */
+    @kotlinx.serialization.Transient
+    val headers: List<ProviderHeader> = emptyList(),
 )
 
 data class ToolSchema(

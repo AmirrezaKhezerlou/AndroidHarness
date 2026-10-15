@@ -97,6 +97,7 @@ class GeminiProvider(
             .url(url)
             .header("x-goog-api-key", apiKey)
             .post(body.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+            .apply { ProviderHeaders.apply(this, config) }
             .build()
 
         var callCounter = 0
@@ -112,7 +113,7 @@ class GeminiProvider(
         var finishReason: String? = null
 
         return flow {
-            ProviderFactory.sseJson(request, client).collect { el ->
+            ProviderFactory.sseJson(request, ProviderHeaders.client(config, client)).collect { el ->
                 val chunk = el as? JsonObject ?: return@collect
 
                 chunk["error"]?.jsonObjectOrAbsent()?.get("message")?.jsonPrimitive?.contentOrNull

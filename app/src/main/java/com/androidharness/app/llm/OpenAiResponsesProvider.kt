@@ -56,7 +56,7 @@ class OpenAiResponsesProvider(
             // Usage lands once on response.completed, hold it and emit after
             // the stream so each request tallies exactly once.
             var pendingUsage: StreamEvent.Usage? = null
-            ProviderFactory.sseJson(request, client).collect { el ->
+            ProviderFactory.sseJson(request, ProviderHeaders.client(config, client)).collect { el ->
                 parseEvent(el, acc).forEach { event ->
                     if (event is StreamEvent.Usage) pendingUsage = event else emit(event)
                 }
@@ -82,7 +82,7 @@ class OpenAiResponsesProvider(
         if (HarnessProvider.isOpenCode(config)) {
             HarnessProvider.withSession(requestBuilder, options.cacheKey)
         }
-        return requestBuilder.post(body).build()
+        return ProviderHeaders.apply(requestBuilder, config).post(body).build()
     }
 
     internal fun buildRequestBody(

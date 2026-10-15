@@ -52,6 +52,7 @@ fun ProviderManagerSheet(
         baseUrl: String,
         model: String,
         apiKey: String,
+        headers: List<com.androidharness.app.llm.ProviderHeader>,
     ) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -131,8 +132,8 @@ fun ProviderManagerSheet(
                     existing = editing,
                     existingKey = editing?.let { apiKey(it.id) },
                     onDismiss = { showForm = false },
-                    onSave = { name, type, baseUrl, model, key ->
-                        onSave(editing, name, type, baseUrl, model, key)
+                    onSave = { name, type, baseUrl, model, key, headers ->
+                        onSave(editing, name, type, baseUrl, model, key, headers)
                         showForm = false
                         editing = null
                     },

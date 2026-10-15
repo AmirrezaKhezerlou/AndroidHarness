@@ -2302,12 +2302,12 @@ private fun PlanningModelSection(
             },
             onEnabledChange = { id, enabled -> scope.launch { container.providers.setEnabled(id, enabled) } },
             onMove = { id, direction, visible -> scope.launch { container.providers.move(id, direction, visible) } },
-            onSave = { existing, name, type, baseUrl, model, apiKey ->
+            onSave = { existing, name, type, baseUrl, model, apiKey, headers ->
                 scope.launch {
                     val created = if (existing == null) {
-                        container.providers.add(name, type, baseUrl, model, apiKey)
+                        container.providers.add(name, type, baseUrl, model, apiKey, headers)
                     } else {
-                        val updated = existing.copy(name = name, type = type, baseUrl = baseUrl, model = model)
+                        val updated = existing.copy(name = name, type = type, baseUrl = baseUrl, model = model, headers = headers)
                         container.providers.update(updated, apiKey)
                         updated
                     }

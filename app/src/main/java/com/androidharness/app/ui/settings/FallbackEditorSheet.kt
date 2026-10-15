@@ -78,10 +78,10 @@ fun FallbackEditorSheet(
             onDelete = { id -> scope.launch { container.providers.delete(id) } },
             onEnabledChange = { id, enabled -> scope.launch { container.providers.setEnabled(id, enabled) } },
             onMove = { id, direction, visible -> scope.launch { container.providers.move(id, direction, visible) } },
-            onSave = { old, name, type, url, model, key -> scope.launch {
+            onSave = { old, name, type, url, model, key, headers -> scope.launch {
                 try {
-                    if (old == null) container.providers.add(name, type, url, model, key)
-                    else container.providers.update(old.copy(name = name, type = type, baseUrl = url, model = model), key)
+                    if (old == null) container.providers.add(name, type, url, model, key, headers)
+                    else container.providers.update(old.copy(name = name, type = type, baseUrl = url, model = model, headers = headers), key)
                 } catch (e: CancellationException) { throw e }
                 catch (_: Exception) { error = "Could not save the provider. Check the connection and retry." }
             } })

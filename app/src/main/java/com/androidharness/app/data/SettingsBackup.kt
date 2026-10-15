@@ -24,7 +24,8 @@ class SettingsBackupFile(
 )
 
 @Serializable
-class BackupProvider(val config: ProviderConfig, val customModels: List<String> = emptyList(), val apiKey: String? = null)
+class BackupProvider(val config: ProviderConfig, val customModels: List<String> = emptyList(), val apiKey: String? = null,
+    val headers: List<com.androidharness.app.llm.ProviderHeader> = emptyList())
 
 /** Local models and device sign-ins are not portable API connections. */
 object SettingsBackupPolicy {
@@ -101,6 +102,7 @@ enum class SettingsBackupProblem(val hint: String) {
     PROVIDER_REFERENCE("A selected provider is missing. Choose your models again in Models and Subagent settings."),
     PROVIDER_URL("A saved provider URL is invalid. Review Manage providers in Models settings."),
     CUSTOM_MODELS("A custom model ID is empty or too long. Review Manage providers in Models settings."),
+    PROVIDER_HEADERS("A custom provider header is invalid. Review Manage providers in Models settings."),
     MCP("An MCP server name or transport is invalid, or names are duplicated. Review MCP servers settings."),
 }
 
@@ -130,6 +132,7 @@ object SettingsBackupValidation {
         val ids = file.providers.map { it.config.id }.toSet() + HarnessProvider.ID
         check(listOfNotNull(s.activeProviderId, s.planningProviderId, s.executionProviderId, s.subagentProviderId).all { it in ids }, SettingsBackupProblem.PROVIDER_REFERENCE)
         file.providers.forEach {
+            check(com.androidharness.app.llm.ProviderHeaders.error(it.headers) == null, SettingsBackupProblem.PROVIDER_HEADERS)
             check(!com.androidharness.app.chatgpt.ChatGptProtocol.isProvider(it.config.id), SettingsBackupProblem.PROVIDERS)
             check(it.config.id.isNotBlank() && it.config.name.length in 1..200 && it.customModels.size <= 1000, SettingsBackupProblem.PROVIDERS)
             check(!LocalModelCatalog.isLocal(it.config.id), SettingsBackupProblem.PROVIDERS)
@@ -160,7 +163,8 @@ class SettingsBackup(private val c: AppContainer) {
             val s = SettingsBackupPolicy.exportSettings(current, configs.map { it.id }.toSet() + HarnessProvider.ID)
             val providers = configs.map { config ->
                 BackupProvider(config, c.providers.customModels(config.id).map { it.id },
-                    if (includeKeys && config.id != HarnessProvider.ID) credential { c.keys.getKey(config.id) } else null)
+                    if (includeKeys && config.id != HarnessProvider.ID) credential { c.keys.getKey(config.id) } else null,
+                    if (includeKeys) config.headers else emptyList())
             }
             val file = SettingsBackupFile(settings = s, providers = providers,
                 servers = if (includeKeys) c.mcp.servers.value.map { it.copy(enabled = false) } else emptyList(),
@@ -203,7 +207,7 @@ class SettingsBackup(private val c: AppContainer) {
         val ids = mutableMapOf(HarnessProvider.ID to HarnessProvider.ID)
         file.providers.filterNot { it.config.id == HarnessProvider.ID }.forEach { entry ->
             val p = entry.config
-            val restored = c.providers.add(p.name + " (restored)", p.type, p.baseUrl, p.model, entry.apiKey.orEmpty())
+            val restored = c.providers.add(p.name + " (restored)", p.type, p.baseUrl, p.model, entry.apiKey.orEmpty(), entry.headers)
             ids[p.id] = restored.id
             entry.customModels.forEach { c.providers.addCustomModel(restored.id, it) }
         }

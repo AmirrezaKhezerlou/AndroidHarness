@@ -163,11 +163,11 @@ fun ProvidersScreen(
             existing = editing,
             existingKey = editing?.let { container.providers.apiKey(it.id) },
             onDismiss = { showDialog = false },
-            onSave = { name, type, baseUrl, model, apiKey ->
+            onSave = { name, type, baseUrl, model, apiKey, headers ->
                 scope.launch {
                     val existingConfig = editing
                     if (existingConfig == null) {
-                        val created = container.providers.add(name, type, baseUrl, model, apiKey)
+                        val created = container.providers.add(name, type, baseUrl, model, apiKey, headers)
                         if (settings.activeProviderId == null) {
                             container.settings.setActiveProvider(created.id)
                         }
@@ -178,6 +178,7 @@ fun ProvidersScreen(
                                 type = type,
                                 baseUrl = baseUrl,
                                 model = model,
+                                headers = headers,
                             ),
                             apiKey,
                         )

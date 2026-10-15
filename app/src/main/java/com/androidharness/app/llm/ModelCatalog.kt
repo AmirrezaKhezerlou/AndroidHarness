@@ -91,7 +91,7 @@ object ModelCatalog {
             val started = System.currentTimeMillis()
             try {
                 val request = buildRequest(config, apiKey)
-                httpClient.newCall(request).execute().use { resp ->
+                ProviderHeaders.client(config, httpClient).newCall(request).execute().use { resp ->
                     if (!resp.isSuccessful) {
                         return@use Result.Failed("HTTP ${resp.code}: ${resp.message}")
                     }
@@ -128,11 +128,12 @@ object ModelCatalog {
                     Request.Builder().apply { if (authed) header("x-goog-api-key", apiKey) }
         }
         val rawRequest = requestBuilder.url(url).build()
-        return when {
+        val request = when {
             config.id == HarnessProvider.ID -> HarnessProvider.anonymous(rawRequest)
             HarnessProvider.isOpenCode(config) -> HarnessProvider.withSession(rawRequest.newBuilder(), null).build()
             else -> rawRequest
         }
+        return ProviderHeaders.apply(request.newBuilder(), config).build()
     }
 
     /** Pure parser, unit-testable without HTTP. */

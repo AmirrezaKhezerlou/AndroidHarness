@@ -98,7 +98,7 @@ class AnthropicProvider(
             options,
         )
 
-        return parseStream(ProviderFactory.sseJson(request, client))
+        return parseStream(ProviderFactory.sseJson(request, ProviderHeaders.client(config, client)))
     }
 
     internal fun parseStream(events: Flow<JsonElement>): Flow<StreamEvent> = flow {
@@ -412,6 +412,6 @@ class AnthropicProvider(
         if (HarnessProvider.isOpenCode(config)) {
             HarnessProvider.withSession(requestBuilder, options.cacheKey)
         }
-        return requestBuilder.post(body).build()
+        return ProviderHeaders.apply(requestBuilder, config).post(body).build()
     }
 }

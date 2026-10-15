@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -113,13 +114,12 @@ fun ProviderSheet(
     existing: ProviderConfig?,
     existingKey: String?,
     onDismiss: () -> Unit,
-    onSave: (name: String, type: ProviderType, baseUrl: String, model: String, apiKey: String) -> Unit,
+    onSave: (name: String, type: ProviderType, baseUrl: String, model: String, apiKey: String, headers: List<com.androidharness.app.llm.ProviderHeader>) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         // The API key field lives in this sheet's own window, which the
         // activity-level FLAG_SECURE never covered.
-        SecureDialogEffect()
         ProviderSheetContent(
             existing = existing,
             existingKey = existingKey,
@@ -136,8 +136,9 @@ internal fun ProviderSheetContent(
     existing: ProviderConfig?,
     existingKey: String?,
     onDismiss: () -> Unit,
-    onSave: (name: String, type: ProviderType, baseUrl: String, model: String, apiKey: String) -> Unit,
+    onSave: (name: String, type: ProviderType, baseUrl: String, model: String, apiKey: String, headers: List<com.androidharness.app.llm.ProviderHeader>) -> Unit,
 ) {
+    SecureDialogEffect()
     val scope = rememberCoroutineScope()
 
     // ---- Provider identity --------------------------------------------------
@@ -155,6 +156,9 @@ internal fun ProviderSheetContent(
     var name by remember { mutableStateOf(existing?.name ?: "") }
     var model by remember { mutableStateOf(existing?.model ?: "") }
     var apiKey by remember { mutableStateOf(existingKey ?: "") }
+    var headerRows by remember { mutableStateOf(existing?.headers.orEmpty().map { ProviderHeaderDraft(it) }) }
+    val headers = headerRows.map { it.header }
+    val headersValid = com.androidharness.app.llm.ProviderHeaders.error(headers) == null
 
     var typeMenu by remember { mutableStateOf(false) }
     var providerQuery by remember { mutableStateOf("") }
@@ -220,7 +224,7 @@ internal fun ProviderSheetContent(
             fetchError = null
             val result = withContext(Dispatchers.IO) {
                 ModelCatalog.listModels(
-                    ProviderConfig("", "", effectiveType, effectiveBaseUrl, ""),
+                    ProviderConfig("", "", effectiveType, effectiveBaseUrl, "", headers = headers),
                     apiKey,
                 )
             }
@@ -243,7 +247,8 @@ internal fun ProviderSheetContent(
         Modifier
             .fillMaxWidth()
             .height(sheetHeight)
-            .navigationBarsPadding(),
+            .navigationBarsPadding()
+            .imePadding(),
     ) {
         ProviderFlowHeader(
             step = step,
@@ -415,6 +420,8 @@ internal fun ProviderSheetContent(
                         }
                     }
 
+                    ProviderHeadersEditor(headerRows, onChange = { headerRows = it; fetchError = null })
+
                     fetchError?.let { message ->
                         Text(
                             message,
@@ -428,12 +435,12 @@ internal fun ProviderSheetContent(
                     primary = {
                         Button(
                             onClick = { continueToModels() },
-                            enabled = !fetching &&
+                            enabled = !fetching && headersValid &&
                                 (!requiresKey || apiKey.isNotBlank()) &&
                                 (!isCustom || baseUrl.isNotBlank()),
                         ) { Text(if (fetching) "Connecting…" else "Continue") }
                     },
-                    secondary = if (fetchError != null) {
+                    secondary = if (fetchError != null && headersValid) {
                         { TextButton(onClick = { step = AddStep.MODEL }) { Text("Continue anyway") } }
                     } else null,
                     onCancel = onDismiss,
@@ -522,9 +529,10 @@ internal fun ProviderSheetContent(
                         Button(
                             onClick = {
                                 val finalName = name.ifBlank { selectedLabel }
-                                onSave(finalName, effectiveType, effectiveBaseUrl.trim(), model.trim(), apiKey.trim())
+                                onSave(finalName, effectiveType, effectiveBaseUrl.trim(), model.trim(), apiKey.trim(),
+                                    com.androidharness.app.llm.ProviderHeaders.normalized(headers))
                             },
-                            enabled = model.isNotBlank(),
+                            enabled = model.isNotBlank() && headersValid,
                         ) { Text("Save") }
                     },
                     secondary = null,
@@ -566,6 +574,7 @@ private fun ProviderFlowHeader(
                     style = MaterialTheme.typography.titleMediumEmphasized,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
                 Spacer(Modifier.width(8.dp))
                 Surface(
@@ -580,6 +589,8 @@ private fun ProviderFlowHeader(
                         },
                         style = MaterialTheme.typography.labelSmall,
                         color = scheme.onSurfaceVariant,
+                        maxLines = 1,
+                        softWrap = false,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                     )
                 }

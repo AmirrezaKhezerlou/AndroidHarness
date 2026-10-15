@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.androidharness.app.llm.HarnessProvider
 import com.androidharness.app.llm.ModelCatalog
@@ -29,6 +30,7 @@ class ProviderRepository(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private val listKey = stringPreferencesKey("provider_list")
+    private val headersRevision = longPreferencesKey("provider_headers_revision")
 
     val providers: Flow<List<ProviderConfig>> = kotlinx.coroutines.flow.combine(context.providerStore.data, localModels.installed, chatGpt.state) { prefs, installed, accounts ->
         HarnessProvider.restoreModels(harnessModels(prefs))
@@ -46,7 +48,9 @@ class ProviderRepository(
         accounts.accounts.filter { it.connected && it.models.isNotEmpty() }.map { it.config() } +
             listOf(HarnessProvider.config.copy(model = HarnessProvider.sanitize(saved.firstOrNull { it.id == HarnessProvider.ID }?.model, harnessCustom))) + saved.filterNot { it.id == HarnessProvider.ID || com.androidharness.app.chatgpt.ChatGptProtocol.isProvider(it.id) || com.androidharness.app.local.LocalModelCatalog.isLocal(it.id) || it.baseUrl.startsWith("local://") } + localModels.configs(installed)
     }.combine(settings.settings) { available, saved ->
-        ProviderListPreferences.apply(available, saved.providerOrder, saved.disabledProviderIds)
+        ProviderListPreferences.apply(available.map { config ->
+            if (com.androidharness.app.llm.ProviderHeaders.editable(config)) config.copy(headers = keys.providerHeaders(config.id)) else config
+        }, saved.providerOrder, saved.disabledProviderIds)
     }
 
     suspend fun setEnabled(id: String, enabled: Boolean) = settings.setProviderEnabled(id, enabled)
@@ -106,7 +110,17 @@ class ProviderRepository(
     }
 
     suspend fun resolveHarnessConfig(config: ProviderConfig): ProviderConfig {
-        if (config.id != HarnessProvider.ID) return config
+        if (config.id != HarnessProvider.ID) {
+            if (!com.androidharness.app.llm.ProviderHeaders.editable(config)) return config
+            val headers = keys.providerHeaders(config.id)
+            if (headers.any { it.enabled }) {
+                val current = current().firstOrNull { it.id == config.id }
+                check(current?.baseUrl == config.baseUrl && current.type == config.type) {
+                    "This provider connection changed. Choose its model again before resuming."
+                }
+            }
+            return config.copy(headers = headers)
+        }
         providers.first() // A background resume can arrive before the UI starts collecting.
         val custom = customModels(HarnessProvider.ID).map { it.id }.toSet()
         return config.copy(model = HarnessProvider.sanitize(config.model, custom))
@@ -157,14 +171,17 @@ class ProviderRepository(
         prefs[catalogKey(HarnessProvider.ID)], prefs[harnessCatalogSource],
     )
 
-    suspend fun add(name: String, type: ProviderType, baseUrl: String, model: String, apiKey: String): ProviderConfig {
+    suspend fun add(name: String, type: ProviderType, baseUrl: String, model: String, apiKey: String,
+        headers: List<com.androidharness.app.llm.ProviderHeader> = emptyList()): ProviderConfig {
         val config = ProviderConfig(
             id = UUID.randomUUID().toString(),
             name = name,
             type = type,
             baseUrl = baseUrl.ifBlank { type.defaultBaseUrl },
             model = model,
+            headers = com.androidharness.app.llm.ProviderHeaders.normalized(headers),
         )
+        keys.putProviderHeaders(config.id, config.headers)
         if (apiKey.isNotBlank()) keys.putKey(config.id, apiKey)
         save(current() + config)
         return config
@@ -178,9 +195,11 @@ class ProviderRepository(
             save(current().map { if (it.id == config.id) HarnessProvider.config.copy(model = HarnessProvider.sanitize(config.model, custom)) else it })
             return
         }
+        val headers = com.androidharness.app.llm.ProviderHeaders.normalized(config.headers)
         if (apiKey != null) {
             if (apiKey.isBlank()) keys.removeKey(config.id) else keys.putKey(config.id, apiKey)
         }
+        keys.putProviderHeaders(config.id, headers)
         save(current().map { if (it.id == config.id) config else it })
     }
 
@@ -192,6 +211,7 @@ class ProviderRepository(
         }
         if (id == HarnessProvider.ID) return
         keys.removeKey(id)
+        keys.putProviderHeaders(id, emptyList())
         context.providerStore.edit { it.remove(catalogKey(id)) }
         save(current().filterNot { it.id == id })
     }
@@ -246,7 +266,11 @@ class ProviderRepository(
 
     private suspend fun save(list: List<ProviderConfig>) {
         val raw = json.encodeToString(ListSerializer(ProviderConfig.serializer()), list.filterNot { com.androidharness.app.local.LocalModelCatalog.isLocal(it.id) || com.androidharness.app.chatgpt.ChatGptProtocol.isProvider(it.id) })
-        context.providerStore.edit { it[listKey] = raw }
+        context.providerStore.edit {
+            it[listKey] = raw
+            // Header-only edits leave metadata JSON identical but must refresh collected connections.
+            it[headersRevision] = (it[headersRevision] ?: 0L) + 1L
+        }
     }
 
     private companion object {

@@ -47,6 +47,20 @@ class KeyStoreManager(context: Context) {
 
     fun getKey(providerId: String): String? = prefs.getString(providerId, null)
 
+    fun providerHeaders(providerId: String): List<com.androidharness.app.llm.ProviderHeader> =
+        prefs.getString("provider_headers:$providerId", null)?.let {
+            kotlinx.serialization.json.Json.decodeFromString<List<com.androidharness.app.llm.ProviderHeader>>(it)
+        }.orEmpty()
+
+    fun putProviderHeaders(providerId: String, headers: List<com.androidharness.app.llm.ProviderHeader>) {
+        val clean = com.androidharness.app.llm.ProviderHeaders.normalized(headers)
+        val editor = prefs.edit()
+        if (clean.isEmpty()) editor.remove("provider_headers:$providerId")
+        else editor.putString("provider_headers:$providerId", kotlinx.serialization.json.Json.encodeToString(
+            kotlinx.serialization.builtins.ListSerializer(com.androidharness.app.llm.ProviderHeader.serializer()), clean))
+        check(editor.commit()) { "Could not securely save provider headers." }
+    }
+
     fun removeKey(providerId: String) {
         prefs.edit().remove(providerId).apply()
     }

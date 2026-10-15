@@ -117,10 +117,10 @@ internal fun SubagentModelSection(container: AppContainer, settings: AppSettings
         onDelete = { providerId -> scope.launch { container.providers.delete(providerId) } },
         onEnabledChange = { id, enabled -> scope.launch { container.providers.setEnabled(id, enabled) } },
         onMove = { id, direction, visible -> scope.launch { container.providers.move(id, direction, visible) } },
-        onSave = { existing, name, type, baseUrl, model, apiKey ->
+        onSave = { existing, name, type, baseUrl, model, apiKey, headers ->
             scope.launch {
-                val provider = if (existing == null) container.providers.add(name, type, baseUrl, model, apiKey)
-                else existing.copy(name = name, type = type, baseUrl = baseUrl, model = model).also {
+                val provider = if (existing == null) container.providers.add(name, type, baseUrl, model, apiKey, headers)
+                else existing.copy(name = name, type = type, baseUrl = baseUrl, model = model, headers = headers).also {
                     container.providers.update(it, apiKey)
                 }
                 container.settings.setSubagentModel(provider.id, null)

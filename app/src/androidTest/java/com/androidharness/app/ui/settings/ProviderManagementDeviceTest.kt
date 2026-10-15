@@ -40,6 +40,113 @@ class ProviderManagementDeviceTest {
     private val desktop get() = InstrumentationRegistry.getArguments().getString("desktop") == "true"
     private val dark get() = InstrumentationRegistry.getArguments().getString("dark") == "true"
 
+    @Test fun inlineHeadersEditPersistDisableAndRemoveThroughProviderSettings() = runBlocking {
+        val settings = c.settings.settings.first()
+        val server = java.net.ServerSocket(0)
+        val received = java.util.concurrent.CopyOnWriteArrayList<String>()
+        val serverThread = kotlin.concurrent.thread(isDaemon = true) {
+            try {
+                while (!server.isClosed) server.accept().use { socket ->
+                    socket.soTimeout = 5000
+                    val reader = socket.getInputStream().bufferedReader()
+                    received += buildString {
+                        while (true) { val line = reader.readLine() ?: break; if (line.isEmpty()) break; appendLine(line) }
+                    }
+                    val body = """{"data":[{"id":"header-model"}]}"""
+                    socket.getOutputStream().write(("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: ${body.toByteArray().size}\r\nConnection: close\r\n\r\n" + body).toByteArray())
+                }
+            } catch (_: java.net.SocketException) { }
+        }
+        val provider = c.providers.add("Headers fixture", ProviderType.OPENAI_COMPAT,
+            "http://127.0.0.1:${server.localPort}", "header-model", "header-fixture-api-key",
+            listOf(ProviderHeader("X-Client-Type", "original-fixture-header")))
+        val saved = AtomicReference<ProviderConfig?>()
+        val observed = AtomicReference<ProviderConfig?>()
+        val collector = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            c.providers.providers.collect { observed.set(it.firstOrNull { item -> item.id == provider.id }) }
+        }
+        try {
+            c.settings.setAllowScreenshots(true)
+            await { observed.get() != null }
+            fun open(existing: ProviderConfig): ActivityScenario<ChatListTestActivity> =
+                ActivityScenario.launch(ChatListTestActivity::class.java).also { scenario ->
+                    scenario.onActivity { activity -> activity.setContent { theme {
+                        val scope = rememberCoroutineScope()
+                        ProviderSheetContent(existing, "header-fixture-api-key", {},
+                            onSave = { name, type, url, model, key, headers -> scope.launch {
+                                val updated = existing.copy(name = name, type = type, baseUrl = url, model = model, headers = headers)
+                                c.providers.update(updated, key)
+                                saved.set(updated)
+                            } })
+                    } } }
+                }
+            open(provider).use {
+                await { find("Connect Custom endpoint") != null }
+                scrollTo("Add header"); tap("Add header")
+                editHeader("Header 2 name", "X-Disabled")
+                editHeader("Header 2 value", "disabled-fixture-value")
+                hideKeyboard()
+                tap("Enable header 2")
+                tap("Add header"); hideKeyboard(); tap("Remove header 3")
+                editHeader("Header 1 value", "edited-fixture-header")
+                hideKeyboard()
+                scrollTo("Custom headers")
+                screenshot("provider-inline-headers")
+                assertVisibleWithinWindow("Continue")
+                tap("Continue")
+                await { find("Choose model") != null }
+                tap("Save")
+                await { saved.get() != null && observed.get()?.headers?.firstOrNull()?.value == "edited-fixture-header" }
+            }
+            val loaded = c.providers.providers.first().single { it.id == provider.id }
+            assertEquals(listOf(ProviderHeader("X-Client-Type", "edited-fixture-header"),
+                ProviderHeader("X-Disabled", "disabled-fixture-value", false)), loaded.headers)
+            assertEquals(loaded.headers, KeyStoreManager(c.appContext).providerHeaders(provider.id))
+            assertEquals(loaded.headers, c.providers.resolveHarnessConfig(loaded.copy(headers = emptyList())).headers)
+            assertThrows(IllegalStateException::class.java) { runBlocking {
+                c.providers.resolveHarnessConfig(loaded.copy(baseUrl = "https://other.example/v1", headers = emptyList()))
+            } }
+            assertTrue(received.last().contains("X-Client-Type: edited-fixture-header"))
+            assertFalse(received.last().contains("X-Disabled", ignoreCase = true))
+            val metadata = File(c.appContext.filesDir, "datastore/providers.preferences_pb").readBytes().toString(Charsets.ISO_8859_1)
+            assertFalse(metadata.contains("edited-fixture-header"))
+            saved.set(null)
+            open(loaded).use {
+                await { find("Connect Custom endpoint") != null }
+                scrollTo("Show header 1 value"); tap("Show header 1 value")
+                await { find("edited-fixture-header") != null }
+                tap("Remove header 2"); tap("Remove header 1")
+                tap("Continue"); await { find("Choose model") != null }; tap("Save")
+                await { saved.get() != null && observed.get()?.headers?.isEmpty() == true }
+            }
+            assertTrue(KeyStoreManager(c.appContext).providerHeaders(provider.id).isEmpty())
+            assertFalse(received.last().contains("X-Client-Type", ignoreCase = true))
+        } finally {
+            collector.cancel()
+            c.providers.delete(provider.id)
+            c.settings.restorePortable(settings)
+            server.close(); serverThread.join(1000)
+        }
+    }
+
+    private fun editHeader(label: String, value: String) {
+        scrollTo(label)
+        // Compose exposes the description as a child of the native EditText.
+        val input = checkNotNull(generateSequence(requireNotNull(find(label))) { it.parent }
+            .firstOrNull { node -> node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_SET_TEXT } })
+        assertTrue(input.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value)
+        }))
+        instrumentation.waitForIdleSync()
+    }
+
+    private fun hideKeyboard() {
+        if (instrumentation.uiAutomation.windows.any { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD }) {
+            instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+            instrumentation.waitForIdleSync()
+        }
+    }
+
     @Test fun providerScreenReordersHidesSearchesAndPersistsWithoutChangingExistingSelection() = withProviders { first, second ->
         runBlocking { c.settings.setActiveSelection(first.id, "shared-model") }
         ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
@@ -84,7 +191,7 @@ class ProviderManagementDeviceTest {
                     onDelete = {},
                     onEnabledChange = { id, enabled -> scope.launch { c.providers.setEnabled(id, enabled) } },
                     onMove = { id, direction, visible -> scope.launch { c.providers.move(id, direction, visible) } },
-                    onSave = { _, _, _, _, _, _ -> })
+                    onSave = { _, _, _, _, _, _, _ -> })
             } } }
             await { find("Search providers") != null }
             search("Fixture")

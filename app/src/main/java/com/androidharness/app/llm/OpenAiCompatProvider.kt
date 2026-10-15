@@ -156,7 +156,7 @@ class OpenAiCompatProvider(
             var completed = false
             var doneSeen = false
             var failed = false
-            ProviderFactory.sseJson(request, client, onDone = { completed = true }).takeWhile { el ->
+            ProviderFactory.sseJson(request, ProviderHeaders.client(config, client), onDone = { completed = true }).takeWhile { el ->
                 val events = parseChunk(el, acc, indexToId)
                 events.forEach { event ->
                     if (event is StreamEvent.Done) doneSeen = true
@@ -376,7 +376,7 @@ class OpenAiCompatProvider(
             requestBuilder.header("HTTP-Referer", "https://github.com/Sanuu7/AndroidHarness")
             requestBuilder.header("X-Title", "Android Harness")
         }
-        return requestBuilder.post(body).build()
+        return ProviderHeaders.apply(requestBuilder, config).post(body).build()
     }
 
     /**

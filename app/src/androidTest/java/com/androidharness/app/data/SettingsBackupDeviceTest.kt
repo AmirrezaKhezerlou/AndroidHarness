@@ -22,8 +22,11 @@ class SettingsBackupDeviceTest {
     private val container get() = (context.applicationContext as HarnessApp).container
 
     @Test fun credentialsRoundTripThroughAndroidStorageAndEncryption() = runBlocking {
+        val savedSettings = container.settings.settings.first()
         val provider = container.providers.add("Backup device test", ProviderType.OPENAI_COMPAT,
-            "https://example.com/v1", "test-model", "backup-fixture-key")
+            "https://example.com/v1", "test-model", "backup-fixture-key",
+            listOf(com.androidharness.app.llm.ProviderHeader("X-Custom-Token", "backup-fixture-header"),
+                com.androidharness.app.llm.ProviderHeader("X-Disabled", "disabled-value", false)))
         val file = File(context.cacheDir, "settings-backup-device-test.hbackup")
         try {
             val backup = SettingsBackup(container)
@@ -34,11 +37,20 @@ class SettingsBackupDeviceTest {
                 assertFalse(file.readText(Charsets.ISO_8859_1).contains("backup-fixture-key"))
                 val restored = backup.read(Uri.fromFile(file), "123456789101".toCharArray())
                 val connection = restored.providers.single { it.config.id == provider.id }
-                assertEquals(provider, connection.config)
+                assertEquals(provider.copy(headers = emptyList()), connection.config)
                 assertEquals(if (includeKeys) "backup-fixture-key" else null, connection.apiKey)
+                assertEquals(if (includeKeys) provider.headers else emptyList<com.androidharness.app.llm.ProviderHeader>(), connection.headers)
+                assertFalse(file.readText(Charsets.ISO_8859_1).contains("backup-fixture-header"))
+                if (includeKeys) {
+                    backup.restore(SettingsBackupFile(settings = AppSettings(), providers = listOf(connection)))
+                    val copy = container.providers.providers.first().single { it.name == "Backup device test (restored)" }
+                    try { assertEquals(provider.headers, copy.headers) }
+                    finally { container.providers.delete(copy.id) }
+                }
             }
         } finally {
             container.providers.delete(provider.id)
+            container.settings.restorePortable(savedSettings)
             file.delete()
         }
     }
