@@ -84,4 +84,18 @@ class ShellShimsTest {
         assertNull(line("bad name", "/p/bin/bad", isElf = true))
         assertNull(line("-flag", "/p/bin/-flag", isElf = true))
     }
+
+    @Test
+    fun `older Android shims execute binaries and interpreters without the linker`() {
+        assertEquals(
+            "git() { command '/p/bin/git' \"\$@\"; }\n",
+            ShellShims.line("git", "/p/bin/git", true, null, null, bash, null, null),
+        )
+        assertEquals(
+            "npm() { command '/p/bin/node' '/p/bin/npm' \"\$@\"; }\n",
+            ShellShims.line("npm", "/p/bin/npm", false, "#!/usr/bin/env node", null, bash, "/p/bin/node", null),
+        )
+        // Regenerate a previously installed linker shim file on Android 8/9.
+        org.junit.Assert.assertNotEquals(ShellShims.HEADER, ShellShims.header(null))
+    }
 }

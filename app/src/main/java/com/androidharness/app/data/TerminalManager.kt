@@ -121,19 +121,8 @@ class TerminalManager(
 
     private fun startAppShell() {
         stopProcess()
-        val builder = runCatching {
-            val bash = linuxEnv.bashExecutable()
-            if (bash != null) {
-                val linker = when (android.os.Build.SUPPORTED_ABIS.firstOrNull()) {
-                    "x86_64", "arm64-v8a" -> "/system/bin/linker64"
-                    else -> "/system/bin/linker"
-                }
-                if (File(linker).exists()) ProcessBuilder(linker, bash.absolutePath)
-                else ProcessBuilder(bash.absolutePath)
-            } else {
-                ProcessBuilder("sh")
-            }
-        }.getOrElse { ProcessBuilder("sh") }
+        val builder = runCatching { linuxEnv.shellProcessBuilder() }
+            .getOrElse { ProcessBuilder("sh") }
 
         builder.directory(cwd)
         builder.redirectErrorStream(true)
