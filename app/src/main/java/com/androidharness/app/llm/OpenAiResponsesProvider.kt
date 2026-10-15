@@ -98,7 +98,7 @@ class OpenAiResponsesProvider(
         put("store", false)
         put("max_output_tokens", options.maxOutputTokens)
         put("instructions", systemPrompt)
-        options.cacheKey?.let { key ->
+        options.cacheKey?.takeIf { PromptCachePolicy.supportsKey(config.baseUrl) }?.let { key ->
             val cleanKey = key.take(64)
             put("prompt_cache_key", cleanKey)
             put("user", "pc_$cleanKey")

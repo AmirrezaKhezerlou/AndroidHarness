@@ -88,12 +88,10 @@ class OpenAiCompatProvider(
             // Pins all requests of one session to the same cache shard where
             // the endpoint supports it; gated by host so strict OpenAI-compat
             // servers that reject unknown fields keep working.
-            if (options.cacheKey != null && supportsCacheKey(config.baseUrl)) {
+            if (options.cacheKey != null && PromptCachePolicy.supportsKey(config.baseUrl)) {
                 val cleanKey = options.cacheKey.take(64)
                 put("prompt_cache_key", cleanKey)
-                if (!Companion.isLocalHost(host)) {
-                    put("user", "pc_$cleanKey")
-                }
+                put("user", "pc_$cleanKey")
             }
             // Older llama.cpp/Ollama builds answer 400 to unknown fields; only
             // request usage accounting from endpoint families documenting it.
@@ -389,12 +387,6 @@ class OpenAiCompatProvider(
      * because older llama.cpp/Ollama/LM Studio builds reject unknown fields.
      */
     internal fun supportsUsageAccounting(baseUrl: String): Boolean = !Companion.isLocalHost(baseUrl)
-
-    /**
-     * Hosts that support session KV-cache pinning via `prompt_cache_key`.
-     * Sent to all remote gateways while protecting bare-local servers (Ollama, LM Studio).
-     */
-    private fun supportsCacheKey(baseUrl: String): Boolean = !Companion.isLocalHost(baseUrl)
 
     private fun serializeMessage(m: ChatMessage): JsonObject = when (m.role) {
         Role.USER -> buildJsonObject {
