@@ -484,8 +484,10 @@ fun ChatScreen(
             onSetActive = { providerId ->
                 viewModel.selectProviderForTarget(target, providerId)
             },
-            onDelete = viewModel::deleteProvider,
-            onEnabledChange = { id, enabled -> scope.launch { viewModel.container.providers.setEnabled(id, enabled) } },
+            onDelete = { id -> viewModel.container.providers.delete(id) },
+            catalogs = state.catalogs,
+            onRefreshCatalog = viewModel::refreshCatalog,
+            onEnabledChange = { id, enabled -> viewModel.container.providers.setEnabled(id, enabled) },
             onMove = { id, direction, visible -> scope.launch { viewModel.container.providers.move(id, direction, visible) } },
             onSave = viewModel::upsertProvider,
         )

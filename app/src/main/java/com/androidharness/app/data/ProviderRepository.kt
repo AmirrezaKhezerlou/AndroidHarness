@@ -11,6 +11,7 @@ import com.androidharness.app.llm.ModelCatalog
 import com.androidharness.app.llm.ModelEntry
 import com.androidharness.app.llm.ProviderConfig
 import com.androidharness.app.llm.ProviderType
+import com.androidharness.app.llm.effectiveApiKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -101,6 +102,16 @@ class ProviderRepository(
 
     suspend fun catalog(providerId: String): List<ModelEntry> =
         catalogs.first()[providerId].orEmpty()
+
+    suspend fun refreshCatalog(providerId: String): String? {
+        val provider = current().firstOrNull { it.id == providerId } ?: return "Provider unavailable"
+        val key = if (providerId == HarnessProvider.ID) harnessApiKey()
+            else provider.effectiveApiKey(apiKey(providerId))
+        return when (val result = ModelCatalog.listModels(provider, key)) {
+            is ModelCatalog.Result.Models -> { saveCatalog(providerId, result.models); null }
+            is ModelCatalog.Result.Failed -> result.message
+        }
+    }
 
     suspend fun customModels(providerId: String): List<ModelEntry> {
         val raw = context.providerStore.data.first()[customModelsKey(providerId)] ?: return emptyList()
@@ -212,7 +223,11 @@ class ProviderRepository(
         if (id == HarnessProvider.ID) return
         keys.removeKey(id)
         keys.putProviderHeaders(id, emptyList())
-        context.providerStore.edit { it.remove(catalogKey(id)) }
+        context.providerStore.edit {
+            it.remove(catalogKey(id))
+            it.remove(customModelsKey(id))
+        }
+        ModelVisibility.get(context).remove(id)
         save(current().filterNot { it.id == id })
     }
 

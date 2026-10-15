@@ -41,4 +41,16 @@ class ProviderModelSearchTest {
         assertEquals(listOf("current"), ProviderModelSearch.models(managed, listOf(ModelEntry("current"))).map { it.id })
         assertTrue(ProviderModelSearch.models(managed, emptyList()).isEmpty())
     }
+
+    @Test fun quickSelectionFiltersHiddenModelsEvenInSearchFavouritesAndRecents() {
+        val visibility = com.androidharness.app.data.ModelVisibilityState().save("a", emptySet())
+        for (collection in listOf("All", "Favourites", "Recent")) {
+            assertTrue(ProviderModelSearch.results(listOf(a, b), catalogs, "shared", collection,
+                favourites = listOf(ModelShortcut("a", "shared")), recent = listOf(ModelShortcut("a", "shared")),
+                includeDisabled = false, visibility = visibility).isEmpty())
+        }
+        val unfiltered = ProviderModelSearch.results(listOf(a, b), catalogs, "", includeDisabled = true)
+        assertEquals(setOf("a", "b"), unfiltered.map { it.provider.id }.toSet())
+        assertEquals(3, unfiltered.size)
+    }
 }

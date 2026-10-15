@@ -235,7 +235,7 @@ class AssistantToolsDeviceTest {
                 tap("Favourites"); awaitText("beta")
                 screenshot("models-favourites")
                 awaitCondition { find { it.contentDescription?.toString() == "Favourite alpha" } == null }
-                tap("beta"); assertEquals("beta", chosen.get())
+                tap("beta"); tap("Use beta"); assertEquals("beta", chosen.get())
                 tap("Recent"); awaitText("beta")
                 screenshot("models-recent")
                 val restarted = ModelShortcuts(c.appContext, name)

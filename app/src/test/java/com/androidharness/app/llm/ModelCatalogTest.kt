@@ -75,7 +75,17 @@ class ModelCatalogTest {
     @Test fun geminiSkipsMalformedNamesAndRetainsValidModels() {
         val body = """{"models":[null,{"name":{}},{"name":null},{"name":""},
             {"name":"models/gemini-2.5-flash"}]}"""
-        assertEquals(listOf(ModelEntry("gemini-2.5-flash", true)),
+        assertEquals(listOf(ModelEntry("gemini-2.5-flash")),
             ModelCatalog.parseCatalog(ProviderType.GEMINI, body))
+    }
+
+    @Test fun geminiUsesReportedThinkingAndKeepsMissingMetadataUnknown() {
+        val body = """{"models":[{"name":"models/unknown"},
+            {"name":"models/reasoner","thinking":true},
+            {"name":"models/gemini-2.5-no-thinking","thinking":false}]}"""
+        val entries = ModelCatalog.parseCatalog(ProviderType.GEMINI, body).associateBy { it.id }
+        assertEquals(ModelReasoning.REPORTED, ModelReasoning.of(entries.getValue("reasoner"), ProviderType.GEMINI))
+        assertEquals(ModelReasoning.UNSUPPORTED, ModelReasoning.of(entries.getValue("gemini-2.5-no-thinking"), ProviderType.GEMINI))
+        assertNull(entries.getValue("unknown").reasoning)
     }
 }

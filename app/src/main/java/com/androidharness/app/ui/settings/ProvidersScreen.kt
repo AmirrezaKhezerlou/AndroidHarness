@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.androidharness.app.AppContainer
 import com.androidharness.app.data.AppSettings
@@ -45,7 +46,9 @@ fun ProvidersScreen(
     var query by rememberSaveable { mutableStateOf("") }
     var showDisabled by rememberSaveable { mutableStateOf(false) }
     var showAllModels by remember { mutableStateOf(false) }
-    val visibleProviders = providers.filter { (it.enabled || showDisabled || query.isNotBlank()) &&
+    val visibility by com.androidharness.app.data.ModelVisibility.get(LocalContext.current).state.collectAsStateWithLifecycle()
+    val selection = rememberProviderSelection()
+    val visibleProviders = providers.filter { (it.enabled || showDisabled || query.isNotBlank() || selection.selecting && it.id in selection.ids) &&
         ProviderModelSearch.providerMatches(it, catalogs[it.id].orEmpty(), query) }
     val visibleIds = visibleProviders.map { it.id }
 
@@ -58,6 +61,13 @@ fun ProvidersScreen(
                 onBack = onBack,
             )
         },
+        bottomBar = {
+            if (selection.selecting || selection.deleting != null || selection.error != null) Surface {
+                Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp)) {
+                    ProviderBulkActions(selection, providers, container.providers::setEnabled, container.providers::delete)
+                }
+            }
+        },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
             LazyColumn(
@@ -65,6 +75,11 @@ fun ProvidersScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 item {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(enabled = !selection.busy, onClick = {
+                            if (selection.selecting) selection.done() else selection.selecting = true
+                        }) { Text(if (selection.selecting) "Done" else "Select providers") }
+                    }
                     FilledTonalButton(
                         onClick = {
                             editing = null
@@ -119,10 +134,16 @@ fun ProvidersScreen(
                             showDialog = true
                         },
                         onDelete = {
-                            scope.launch { container.providers.delete(provider.id) }
+                            selection.requestDelete(listOf(provider.id))
                         },
                         onBrowseModels = { showModelsFor = provider.id },
-                        catalogSize = catalogs[provider.id]?.size,
+                        catalogSize = ProviderModelSearch.models(provider, catalogs[provider.id].orEmpty()).size,
+                        selectedModelCount = ProviderModelSearch.models(provider, catalogs[provider.id].orEmpty())
+                            .count { visibility.includes(provider.id, it.id) },
+                        selectionMode = selection.selecting,
+                        selected = provider.id in selection.ids,
+                        onToggleSelection = { if (!selection.busy) selection.toggle(provider.id) },
+                        onLongPress = { if (!selection.busy) selection.start(provider.id) },
                     )
                 }
                 if (visibleProviders.isEmpty()) {
@@ -196,6 +217,7 @@ fun ProvidersScreen(
             activeModel = settings.activeModel,
             catalogs = catalogs,
             browseProviderId = showModelsFor,
+            manageModelsInitially = showModelsFor != null,
             searchAllProvidersInitially = showAllModels,
             onEnableProvider = { id -> scope.launch { container.providers.setEnabled(id, true) } },
             onDismiss = { showModelsFor = null; showAllModels = false },

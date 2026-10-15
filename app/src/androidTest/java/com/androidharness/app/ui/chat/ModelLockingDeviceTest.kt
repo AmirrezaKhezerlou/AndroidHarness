@@ -132,33 +132,35 @@ class ModelLockingDeviceTest {
 
     @Test fun pickerSwitchChatNavigationAndRecreationKeepSelectionsAndDraft() = runBlocking {
         fixture { activity, provider, a, b, _ ->
-            awaitText("Alpha model chat")
+            val alphaTitle = requireNotNull(c.sessions.session(a)).title
+            val betaTitle = requireNotNull(c.sessions.session(b)).title
+            awaitText(alphaTitle)
             setText("Keep my unsent draft")
             shell("input keyevent 4")
             tap("Switch model")
-            awaitText("Use the same model in every chat")
+            scrollTo("Use the same model in every chat"); awaitText("Use the same model in every chat")
             screenshot("model-picker-shared")
             tap("Use the same model in every chat")
             withTimeout(15000) { c.settings.settings.first { !it.sameModelAcrossChats } }
             awaitText("Each chat remembers its own model.")
             screenshot("model-picker-this-chat")
-            scrollTo("beta-model"); tap("beta-model")
+            scrollTo("beta-model"); tap("beta-model"); tap("Use beta-model")
             withTimeout(15000) { c.chatModels.observe(a).first { it.selection.active?.model == "beta-model" } }
             awaitText("This chat"); awaitText("Keep my unsent draft")
-            tap("Open navigation"); scrollTo("Beta model chat"); tap("Beta model chat")
-            awaitText("Beta model chat"); awaitText("This chat")
+            tap("Open navigation"); scrollTo(betaTitle); tapTextPosition(betaTitle)
+            awaitText(betaTitle); awaitText("This chat")
             assertEquals("alpha-model", c.chatModels.observe(b).first().selection.active?.model)
-            tap("Switch model"); scrollTo("exec-model"); tap("exec-model")
+            tap("Switch model"); scrollTo("exec-model"); tap("exec-model"); tap("Use exec-model")
             withTimeout(15000) { c.chatModels.observe(b).first { it.selection.active?.model == "exec-model" } }
-            shell("input keyevent 4"); awaitText("Alpha model chat")
+            shell("input keyevent 4"); awaitText(alphaTitle)
             awaitText("Keep my unsent draft")
             assertEquals("beta-model", c.chatModels.observe(a).first().selection.active?.model)
-            tap("Switch model"); awaitText("Each chat remembers its own model.")
+            tap("Switch model"); scrollTo("Each chat remembers its own model."); awaitText("Each chat remembers its own model.")
             tap("Use the same model in every chat")
             withTimeout(15000) { c.settings.settings.first { it.sameModelAcrossChats && it.activeModel == "beta-model" } }
             tap("Use the same model in every chat")
             withTimeout(15000) { c.settings.settings.first { !it.sameModelAcrossChats } }
-            tap("Close")
+            scrollTo("Close"); tap("Close")
             val monitor = instrumentation.addMonitor(MainActivity::class.java.name, null, false)
             instrumentation.runOnMainSync { activity.recreate() }
             val recreated = instrumentation.waitForMonitorWithTimeout(monitor, 10000) as? MainActivity
@@ -166,12 +168,12 @@ class ModelLockingDeviceTest {
             assertNotNull(recreated)
             try {
                 awaitText("This chat"); awaitText("Keep my unsent draft")
-                tap("Switch model"); awaitText("Each chat remembers its own model.")
+                tap("Switch model"); scrollTo("Each chat remembers its own model."); awaitText("Each chat remembers its own model.")
                 screenshot("model-picker-restored")
                 instrumentation.runOnMainSync { recreated!!.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
                 awaitLandscape()
                 scrollTo("beta-model"); screenshot("model-picker-landscape")
-                tap("beta-model"); awaitText("This chat")
+                tap("beta-model"); tap("Use beta-model"); awaitText("This chat")
                 assertEquals(provider.id, c.chatModels.observe(a).first().selection.active?.providerId)
             } finally { recreated?.let { instrumentation.runOnMainSync { it.finish() } } }
         }
@@ -179,8 +181,8 @@ class ModelLockingDeviceTest {
 
     @Test fun pickerControlsRemainReachableInLandscape() = runBlocking {
         fixture { activity, _, a, _, _ ->
-            awaitText("Alpha model chat")
-            tap("Switch model")
+            awaitText(requireNotNull(c.sessions.session(a)).title)
+            tap("Switch model"); scrollTo("Use the same model in every chat")
             tap("Use the same model in every chat")
             withTimeout(15000) { c.settings.settings.first { !it.sameModelAcrossChats } }
             awaitText("Each chat remembers its own model.")
@@ -189,7 +191,7 @@ class ModelLockingDeviceTest {
             awaitLandscape()
             scrollTo("beta-model")
             screenshot("model-picker-accessible-landscape")
-            tap("beta-model")
+            tap("beta-model"); tap("Use beta-model")
             withTimeout(15000) { c.chatModels.observe(a).first { it.selection.active?.model == "beta-model" } }
             awaitText("This chat")
         }
@@ -208,8 +210,9 @@ class ModelLockingDeviceTest {
             "http://127.0.0.1:${server.port}/v1", "alpha-model", "fixture")
         c.providers.saveCatalog(provider.id, listOf("alpha-model", "beta-model", "plan-model", "exec-model", "shared-model").map { ModelEntry(it) })
         withTimeout(10000) { c.providers.providers.first { list -> list.any { it.id == provider.id } } }
-        val a = c.sessions.createSession("Alpha model chat", project.id)
-        val b = c.sessions.createSession("Beta model chat", project.id)
+        val label = System.nanoTime().toString().takeLast(6)
+        val a = c.sessions.createSession("Alpha model $label", project.id)
+        val b = c.sessions.createSession("Beta model $label", project.id)
         c.settings.setModelSelectionScope(true)
         c.settings.setActiveSelection(provider.id, "alpha-model")
         c.settings.setPlanningModel(null, null); c.settings.setExecutionModel(null, null)
@@ -286,11 +289,14 @@ class ModelLockingDeviceTest {
         instrumentation.runOnMainSync { result = runCatching(action) }
         return result!!.getOrThrow()
     }
-    private fun find(node: AccessibilityNodeInfo? = instrumentation.uiAutomation.rootInActiveWindow,
-        predicate: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo? {
+    private fun find(predicate: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo? {
+        instrumentation.uiAutomation.clearCache()
+        return findNode(instrumentation.uiAutomation.rootInActiveWindow, predicate)
+    }
+    private fun findNode(node: AccessibilityNodeInfo?, predicate: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo? {
         node ?: return null
         if (predicate(node)) return node
-        for (i in 0 until node.childCount) find(node.getChild(i), predicate)?.let { return it }
+        for (i in 0 until node.childCount) findNode(node.getChild(i), predicate)?.let { return it }
         return null
     }
     private fun matches(node: AccessibilityNodeInfo, text: String) = node.isVisibleToUser &&
@@ -326,6 +332,14 @@ class ModelLockingDeviceTest {
         }))
         SystemClock.sleep(250)
     }
+    private fun tapTextPosition(text: String) {
+        // Drawer rows can move when recency updates; target the current text position
+        // rather than a cached virtual accessibility action from another row.
+        SystemClock.sleep(350)
+        val bounds = Rect().also(awaitText(text)::getBoundsInScreen)
+        shell("input tap ${bounds.centerX()} ${bounds.centerY()}")
+        instrumentation.waitForIdleSync()
+    }
     private fun awaitLandscape() {
         val deadline = SystemClock.uptimeMillis() + 10000
         while (instrumentation.targetContext.resources.displayMetrics.let { it.widthPixels <= it.heightPixels }) {
@@ -335,14 +349,27 @@ class ModelLockingDeviceTest {
         SystemClock.sleep(1000)
     }
     private fun scrollTo(text: String) {
-        repeat(10) {
-            if (find { matches(it, text) && clickableParent(it) != null } != null) return
-            val scrollable = find { it.isScrollable }
-            if (scrollable?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) != true) {
-                val d = instrumentation.targetContext.resources.displayMetrics
-                shell("input swipe ${d.widthPixels / 2} ${d.heightPixels * 3 / 4} ${d.widthPixels / 2} ${d.heightPixels / 3} 300")
+        for (direction in listOf(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)) {
+            repeat(15) { step ->
+                if (find { matches(it, text) && clickableParent(it) != null } != null) return
+                val vertical = find { node -> node.isScrollable && node.actionList.any {
+                    it.id == AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_DOWN.id ||
+                        it.id == AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_UP.id
+                } }
+                val moved = vertical?.performAction(direction) == true
+                // Restored bottom sheets may need a real drag to expand before
+                // their inner list can consume accessibility scroll actions.
+                if (!moved || step % 3 == 2) {
+                    val d = instrumentation.targetContext.resources.displayMetrics
+                    val top = d.heightPixels / 3
+                    val bottom = d.heightPixels * 2 / 3
+                    val from = if (direction == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) bottom else top
+                    val to = if (direction == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) top else bottom
+                    shell("input swipe ${d.widthPixels / 2} $from ${d.widthPixels / 2} $to 300")
+                }
+                instrumentation.waitForIdleSync()
+                SystemClock.sleep(250)
             }
-            SystemClock.sleep(300)
         }
         awaitText(text, clickableOnly = true)
     }

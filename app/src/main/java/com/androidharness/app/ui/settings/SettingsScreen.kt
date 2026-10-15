@@ -2297,10 +2297,11 @@ private fun PlanningModelSection(
                 }
                 managingRoleProvider = null
             },
+            catalogs = catalogs, onRefreshCatalog = container.providers::refreshCatalog,
             onDelete = { providerId ->
-                scope.launch { container.providers.delete(providerId) }
+                container.providers.delete(providerId)
             },
-            onEnabledChange = { id, enabled -> scope.launch { container.providers.setEnabled(id, enabled) } },
+            onEnabledChange = { id, enabled -> container.providers.setEnabled(id, enabled) },
             onMove = { id, direction, visible -> scope.launch { container.providers.move(id, direction, visible) } },
             onSave = { existing, name, type, baseUrl, model, apiKey, headers ->
                 scope.launch {

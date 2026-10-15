@@ -75,8 +75,9 @@ fun FallbackEditorSheet(
         ProviderManagerSheet(providers, browseProviderId, container.providers::apiKey,
             onDismiss = { managing = false; picking = true },
             onSetActive = { id -> browseProviderId = id; managing = false; picking = true },
-            onDelete = { id -> scope.launch { container.providers.delete(id) } },
-            onEnabledChange = { id, enabled -> scope.launch { container.providers.setEnabled(id, enabled) } },
+            onDelete = { id -> container.providers.delete(id) },
+            catalogs = catalogs, onRefreshCatalog = container.providers::refreshCatalog,
+            onEnabledChange = { id, enabled -> container.providers.setEnabled(id, enabled) },
             onMove = { id, direction, visible -> scope.launch { container.providers.move(id, direction, visible) } },
             onSave = { old, name, type, url, model, key, headers -> scope.launch {
                 try {

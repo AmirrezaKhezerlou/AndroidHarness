@@ -158,8 +158,6 @@ class ChatGptDeviceTest {
                     onRefreshCatalog = { id -> container.chatGpt.refreshModels(id); null }, onManageProviders = {})
             } } }
             waitForText("Choose model")
-            waitForText("Limits & resets")
-            waitForText("View live limits in ChatGPT")
             waitForText("GPT-6.1 Sol")
             val previousModel = models.first { it.id == "gpt-6-astra" }.let { it.displayName ?: it.id }
             waitForText(previousModel)
@@ -168,9 +166,12 @@ class ChatGptDeviceTest {
             val previousBounds = android.graphics.Rect().also { checkNotNull(find(root, previousModel)).getBoundsInScreen(it) }
             assertTrue("Newest model should appear above GPT-6", newestBounds.top < previousBounds.top)
             clickText("GPT-6.1 Sol")
+            clickText("Use GPT-6.1 Sol")
             instrumentation.waitForIdleSync()
             assertEquals("gpt-6.1-sol", picked.get())
             report("CHATGPT_PICKER_OK: GPT-6.1 Sol appears first without scrolling and is selectable")
+            scrollToText("Limits & resets")
+            waitForText("View live limits in ChatGPT")
             val regular = config.copy(id = "regular-device-fixture", name = "Regular provider")
             scenario.onActivity { activity -> activity.setContent { MaterialTheme {
                 ModelPickerSheet(providers = listOf(regular), activeProviderId = regular.id, activeModel = regular.model,
@@ -300,5 +301,23 @@ data: {"type":"response.completed","response":{"status":"completed","output":[]}
         var node: AccessibilityNodeInfo? = waitForText(text)
         while (node != null && !node.isClickable) node = node.parent
         check(node?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true)
+    }
+
+    private fun scrollToText(text: String) {
+        fun scrollable(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+            if (node.isScrollable && node.contentDescription?.toString() !in listOf("Drag handle", "Close sheet")) return node
+            for (i in 0 until node.childCount) node.getChild(i)?.let { scrollable(it)?.let { found -> return found } }
+            return null
+        }
+        for (direction in listOf(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)) {
+            repeat(12) {
+                val root = instrumentation.uiAutomation.rootInActiveWindow ?: return@repeat
+                if (find(root, text)?.isVisibleToUser == true) return
+                scrollable(root)?.performAction(direction)
+                instrumentation.waitForIdleSync()
+                SystemClock.sleep(150)
+            }
+        }
+        error("Could not scroll to $text")
     }
 }

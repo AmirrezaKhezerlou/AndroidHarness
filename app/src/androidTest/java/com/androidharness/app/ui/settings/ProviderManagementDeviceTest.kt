@@ -229,7 +229,7 @@ class ProviderManagementDeviceTest {
                     modelShortcuts = shortcuts, searchAllProvidersInitially = true,
                     onEnableProvider = { id -> enabled.set(id); providers.value = providers.value.map { if (it.id == id) it.copy(enabled = true) else it } })
             } } }
-            await { find("All providers") != null }
+            await { find("Show all") != null }
             scrollTo("Search models or providers")
             if (desktop) {
                 // Tab brings the complete field into view, including in short desktop windows.
@@ -255,13 +255,116 @@ class ProviderManagementDeviceTest {
             scrollTo("Favourites"); tap("Favourites")
             scrollTo("Shared backup")
             await { find("Shared backup") != null }
-            assertNull(find("Shared primary"))
+            assertNull(find("Favourite Shared primary"))
             screenshot("models-unified-favourites")
             tap("Disabled · Enable & use")
+            await { find("Enable and use") != null }
+            tap("Enable and use")
             await { selected.get() != null }
             assertEquals(ModelShortcut(second.id, "shared-model"), selected.get())
             assertEquals(second.id, enabled.get())
             assertTrue(providers.value.last().enabled)
+        }
+    }
+
+    @Test fun providerFirstPickerSavesFilteredChecksAndKeepsRefreshesAndCancelledEditsSafe() {
+        val provider = ProviderConfig("visibility:fixture", "OpenRouter fixture", ProviderType.OPENAI_COMPAT,
+            "https://example.test", "qwen-one")
+        val other = provider.copy(id = "visibility:disabled", name = "NVIDIA fixture", model = "other-model", enabled = false)
+        val catalog = mutableStateOf(mapOf(provider.id to listOf(ModelEntry("qwen-one", true), ModelEntry("qwen-two"), ModelEntry("llama")),
+            other.id to listOf(ModelEntry("other-model"))))
+        val storeName = "visibility-test-${System.nanoTime()}"
+        val visibility = ModelVisibility(c.appContext, storeName)
+        visibility.save(provider.id, setOf("llama"))
+        val selected = AtomicReference<ModelShortcut?>()
+        try {
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { it.setContent { theme {
+                    var open by remember { mutableStateOf(true) }
+                    if (open) ModelPickerSheet(listOf(provider, other), provider.id, provider.model, catalog.value,
+                        onDismiss = { open = false }, onSelect = { id, model -> selected.set(ModelShortcut(id, requireNotNull(model))) },
+                        onRefreshCatalog = { null }, onManageProviders = {}, modelVisibility = visibility,
+                        modelShortcuts = ModelShortcuts(c.appContext, "visibility-shortcuts-test"))
+                } } }
+                await { find("Choose model") != null }
+                tap("Reasoning indicators")
+                await { find("Reasoning support does not guarantee visible thinking text.") != null }
+                assertVisibleWithinWindow("Got it")
+                tap("Got it")
+                tap("Manage models")
+                await { find("Search this provider") != null }
+                search("qwen"); hideKeyboard()
+                tap("Select results (2)")
+                search("llama"); hideKeyboard(); tapModelRow("llama", checkable = true)
+                // Draft edits do not change any saved quick list before Save.
+                assertEquals(setOf("llama"), visibility.state.value.selected[provider.id])
+                search("qwen"); hideKeyboard()
+                tap("Reasoning reported by provider")
+                assertVisibleWithinWindow("Got it")
+                tap("Got it")
+                screenshot("models-manage-filtered-selection")
+                tap("Save selection")
+                await { find("Choose model") != null }
+                assertEquals(setOf("qwen-one", "qwen-two"), ModelVisibility(c.appContext, storeName).state.value.selected[provider.id])
+                scenario.onActivity { catalog.value = catalog.value + (provider.id to (catalog.value.getValue(provider.id) + ModelEntry("newly-discovered"))) }
+                search("newly-discovered"); hideKeyboard()
+                assertNull(find("Hidden"))
+                assertFalse(visibility.state.value.includes(provider.id, "newly-discovered"))
+                tap("Show all")
+                scrollTo("newly-discovered")
+                await { find("Hidden") != null }
+                screenshot("models-show-all-hidden")
+                search(""); hideKeyboard()
+                tap("Manage models")
+                search("qwen-one"); hideKeyboard(); tapModelRow("qwen-one", checkable = true)
+                tap("Close model management")
+                await { find("Choose model") != null }
+                assertTrue(visibility.state.value.includes(provider.id, "qwen-one"))
+                search("qwen-two"); hideKeyboard(); tapModelRow("qwen-two")
+                assertNull(selected.get())
+                assertVisibleWithinWindow("Use qwen-two")
+                screenshot("models-provider-first-confirm")
+                tap("Use qwen-two")
+                await { selected.get() != null }
+                assertEquals(ModelShortcut(provider.id, "qwen-two"), selected.get())
+            }
+        } finally {
+            c.appContext.getSharedPreferences(storeName, android.content.Context.MODE_PRIVATE).edit().clear().commit()
+            c.appContext.getSharedPreferences("visibility-shortcuts-test", android.content.Context.MODE_PRIVATE).edit().clear().commit()
+        }
+    }
+
+    @Test fun longPressBulkActionsReviewEveryDeletionAndEditKeepsSelection() = withProviders { first, second ->
+        runBlocking { c.settings.setActiveSelection(first.id, "shared-model") }
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            scenario.onActivity { it.setContent { theme { ProvidersScreen(c, {}) } } }
+            await { find("Search providers or models") != null }
+            search("Fixture"); hideKeyboard()
+            scrollTo("Select ${first.name}")
+            tap("Select ${first.name}", holdMillis = 700)
+            await { find("1 selected") != null }
+            tap("Select provider ${second.name}")
+            await { find("2 selected") != null }
+            tap("Disable")
+            await { runBlocking { c.providers.providers.first().filter { it.id in setOf(first.id, second.id) }.all { !it.enabled } } }
+            assertNotNull(find("2 selected"))
+            tap("Enable")
+            await { runBlocking { c.providers.providers.first().filter { it.id in setOf(first.id, second.id) }.all { it.enabled } } }
+            tap("Delete")
+            await { find("Delete 2 providers?") != null }
+            tap("Continue")
+            await { find("Delete all 2 providers?") != null }
+            assertNotNull(find(first.name)); assertNotNull(find(second.name))
+            assertTrue(runBlocking { c.providers.providers.first().any { it.id == first.id } })
+            screenshot("providers-bulk-delete-review")
+            tap("Edit selection")
+            await { find("2 selected") != null }
+            assertTrue(nodes().count { it.isCheckable && it.isChecked } >= 2)
+            screenshot("providers-bulk-edit-retains-selection")
+            tap("Delete"); tap("Continue"); tap("Delete all")
+            await { runBlocking { c.providers.providers.first().none { it.id == first.id || it.id == second.id } } }
+            // Keep the missing connection explicit; deleting must never reroute a chat.
+            assertEquals(first.id, runBlocking { c.settings.settings.first().activeProviderId })
         }
     }
 
@@ -296,8 +399,16 @@ class ProviderManagementDeviceTest {
         }
         instrumentation.uiAutomation.rootInActiveWindow?.let(::visit)
     }
-    private fun find(text: String) = nodes().firstOrNull {
-        it.isVisibleToUser && (it.text?.toString()?.contains(text) == true || it.contentDescription?.toString() == text)
+    private fun find(text: String): AccessibilityNodeInfo? {
+        val visible = nodes().filter { it.isVisibleToUser }
+        return visible.firstOrNull { it.contentDescription?.toString() == text || it.text?.toString() == text }
+            ?: visible.firstOrNull { it.text?.toString()?.contains(text) == true }
+    }
+    private fun tapModelRow(text: String, checkable: Boolean = false) {
+        val label = if (checkable) "Show $text in quick selection" else nodes().first {
+            it.isVisibleToUser && it.contentDescription?.toString()?.startsWith("Choose $text from ") == true
+        }.contentDescription.toString()
+        tap(label)
     }
     private fun bounds(node: AccessibilityNodeInfo) = Rect().also(node::getBoundsInScreen)
     private fun search(value: String) {
@@ -313,7 +424,7 @@ class ProviderManagementDeviceTest {
         instrumentation.waitForIdleSync()
         SystemClock.sleep(200)
     }
-    private fun tap(text: String) {
+    private fun tap(text: String, holdMillis: Long = 0) {
         if (find(text) == null) scrollTo(text)
         await { find(text) != null }
         val rect = bounds(requireNotNull(find(text)))
@@ -328,6 +439,7 @@ class ProviderManagementDeviceTest {
                 0, if (desktop && action == MotionEvent.ACTION_DOWN) MotionEvent.BUTTON_PRIMARY else 0,
                 1f, 1f, 0, 0, source, 0)
             try { assertTrue(instrumentation.uiAutomation.injectInputEvent(event, true)) } finally { event.recycle() }
+            if (action == MotionEvent.ACTION_DOWN && holdMillis > 0) SystemClock.sleep(holdMillis)
         }
         instrumentation.waitForIdleSync()
         SystemClock.sleep(200)

@@ -64,7 +64,6 @@ import com.androidharness.app.llm.ModelsDev
 import com.androidharness.app.llm.ProviderConfig
 import com.androidharness.app.llm.ProviderType
 import com.androidharness.app.llm.endpointPath
-import com.androidharness.app.llm.reasoningCapable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -485,8 +484,8 @@ internal fun ProviderSheetContent(
                         if (q.isNotBlank() && filtered.none { it.id == q }) {
                             item(key = "typed-$q") {
                                 ModelPickRow(
-                                    id = q,
-                                    thinking = reasoningCapable(q),
+                                    entry = ModelEntry(q),
+                                    providerType = effectiveType,
                                     selected = model == q,
                                     hint = "Use custom model ID",
                                     onClick = { model = q },
@@ -495,8 +494,9 @@ internal fun ProviderSheetContent(
                         }
                         items(filtered, key = { it.id }) { entry ->
                             ModelPickRow(
-                                id = entry.id,
-                                thinking = entry.reasoning ?: reasoningCapable(entry.id),
+                                entry = entry,
+                                providerType = effectiveType,
+                                directory = entries == null,
                                 selected = model == entry.id,
                                 hint = null,
                                 onClick = { model = entry.id },
@@ -672,11 +672,12 @@ private fun StepButtons(
 
 @Composable
 private fun ModelPickRow(
-    id: String,
-    thinking: Boolean,
+    entry: ModelEntry,
+    providerType: ProviderType,
     selected: Boolean,
     hint: String?,
     onClick: () -> Unit,
+    directory: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
     Surface(
@@ -694,21 +695,21 @@ private fun ModelPickRow(
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    id,
+                    entry.id,
                     style = MaterialTheme.typography.titleSmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                val sub = listOfNotNull(if (thinking) "thinking" else null, hint)
-                    .joinToString(" · ")
+                val sub = hint.orEmpty()
                 if (sub.isNotEmpty()) {
                     Text(
                         sub,
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (thinking) scheme.primary else scheme.onSurfaceVariant,
+                        color = scheme.onSurfaceVariant,
                     )
                 }
             }
+            com.androidharness.app.ui.common.ModelReasoningIcon(entry, providerType, directory)
             if (selected) {
                 Icon(
                     Icons.Filled.CheckCircle,

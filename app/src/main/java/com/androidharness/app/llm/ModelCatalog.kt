@@ -31,6 +31,8 @@ data class ModelEntry(
     val displayName: String? = null,
     val reasoningEfforts: List<String>? = null,
     val defaultReasoningEffort: String? = null,
+    /** Distinguishes Gemini's reported thinking field from older cached family-name guesses. */
+    val reasoningReported: Boolean = false,
 )
 
 /** Family-based thinking-capability hint for endpoints that don't report it. */
@@ -167,7 +169,8 @@ object ModelCatalog {
                     val obj = el as? JsonObject ?: return@mapNotNull null
                     val name = (obj["name"] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
                         ?.removePrefix("models/")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                    ModelEntry(name, reasoning = reasoningCapable(name))
+                    val thinking = (obj["thinking"] as? JsonPrimitive)?.booleanOrNull
+                    ModelEntry(name, reasoning = thinking, reasoningReported = thinking != null)
                 } ?: emptyList()
         }.sortedBy { it.id }
     }

@@ -1,6 +1,7 @@
 package com.androidharness.app.llm
 
 import com.androidharness.app.data.ModelShortcut
+import com.androidharness.app.data.ModelVisibilityState
 
 data class ProviderModelResult(val provider: ProviderConfig, val model: ModelEntry, val available: Boolean) {
     val shortcut get() = ModelShortcut(provider.id, model.id)
@@ -17,9 +18,10 @@ object ProviderModelSearch {
         providers: List<ProviderConfig>, catalogs: Map<String, List<ModelEntry>>, query: String,
         collection: String = "All", favourites: List<ModelShortcut> = emptyList(),
         recent: List<ModelShortcut> = emptyList(), thinkingOnly: Boolean = false,
+        includeDisabled: Boolean? = null, visibility: ModelVisibilityState? = null,
     ): List<ProviderModelResult> {
         val clean = query.trim()
-        val included = providers.filter { it.enabled || clean.isNotEmpty() }
+        val included = providers.filter { it.enabled || (includeDisabled ?: clean.isNotEmpty()) }
         val available = included.flatMap { provider ->
             models(provider, catalogs[provider.id].orEmpty()).map { ProviderModelResult(provider, it, true) }
         }
@@ -30,7 +32,7 @@ object ProviderModelSearch {
                 ProviderModelResult(it, ModelEntry(key.modelId), false)
             }
         }.distinctBy { it.shortcut }
-        return rows.filter { matches(it.provider, it.model, clean) &&
+        return rows.filter { (visibility?.includes(it.provider.id, it.model.id) != false) && matches(it.provider, it.model, clean) &&
             (!thinkingOnly || (it.model.reasoning ?: reasoningCapable(it.model.id))) }
     }
 

@@ -1,0 +1,112 @@
+package com.androidharness.app.ui.settings
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.androidharness.app.llm.ProviderConfig
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+
+internal fun deletableProvider(provider: ProviderConfig) = provider.id != com.androidharness.app.llm.HarnessProvider.ID &&
+    !com.androidharness.app.chatgpt.ChatGptProtocol.isProvider(provider.id) &&
+    !com.androidharness.app.local.LocalModelCatalog.isLocal(provider.id)
+
+@Stable
+internal class ProviderSelectionState(selecting: Boolean = false, ids: Set<String> = emptySet()) {
+    var selecting by mutableStateOf(selecting)
+    var ids by mutableStateOf(ids)
+    var deleting by mutableStateOf<List<String>?>(null)
+    var reviewing by mutableStateOf(false)
+    var busy by mutableStateOf(false)
+    var error by mutableStateOf<String?>(null)
+    fun toggle(id: String) { ids = if (id in ids) ids - id else ids + id }
+    fun start(id: String) { selecting = true; ids = ids + id }
+    fun done() { selecting = false; ids = emptySet(); error = null }
+    fun requestDelete(ids: List<String>) { deleting = ids; reviewing = false; error = null }
+}
+
+@Composable
+internal fun rememberProviderSelection(): ProviderSelectionState = rememberSaveable(saver = listSaver(
+    save = { listOf(if (it.selecting) "yes" else "no") + it.ids },
+    restore = { ProviderSelectionState(it.first() == "yes", it.drop(1).toSet()) },
+)) { ProviderSelectionState() }
+
+/** Confirmation is shared by the full settings screen and every in-chat provider manager. */
+@Composable
+internal fun ProviderBulkActions(
+    state: ProviderSelectionState, providers: List<ProviderConfig>,
+    onEnabledChange: suspend (String, Boolean) -> Unit,
+    onDelete: suspend (String) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val selected = providers.filter { it.id in state.ids }
+    if (state.selecting) {
+        Text("${selected.size} selected", style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(true to "Enable", false to "Disable").forEach { (enabled, label) ->
+                OutlinedButton(enabled = selected.isNotEmpty() && !state.busy, onClick = {
+                    scope.launch {
+                        state.busy = true; state.error = null
+                        try { selected.forEach { onEnabledChange(it.id, enabled) } }
+                        catch (e: CancellationException) { throw e }
+                        catch (_: Exception) { state.error = "Some providers could not be updated. Review the list and retry." }
+                        finally { state.busy = false }
+                    }
+                }) { Text(label) }
+            }
+            OutlinedButton(enabled = selected.isNotEmpty() && selected.all(::deletableProvider) && !state.busy,
+                onClick = { state.requestDelete(selected.map { it.id }) }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+        }
+        if (selected.any { !deletableProvider(it) }) Text("Built-in providers, connected accounts and installed models can be disabled here. Only API connections can be deleted.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+    state.deleting?.let { requested ->
+        val targets = providers.filter { it.id in requested }
+        val valid = targets.size == requested.size && targets.all(::deletableProvider)
+        val multiple = requested.size > 1
+        AlertDialog(onDismissRequest = { if (!state.busy) state.deleting = null },
+            title = { Text(if (state.reviewing) "Delete all ${requested.size} providers?"
+                else if (multiple) "Delete ${requested.size} providers?" else "Delete ${targets.firstOrNull()?.name ?: "provider"}?") },
+            text = {
+                Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Saved API keys and connections will be removed. Chat history stays. Chats and schedules using these connections will need another provider.")
+                    if (state.reviewing || !multiple) targets.forEach { Text(it.name, style = MaterialTheme.typography.bodyMedium) }
+                    if (!valid) Text("The provider list changed. Edit the selection and try again.", color = MaterialTheme.colorScheme.error)
+                    state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = valid && !state.busy, onClick = {
+                    if (multiple && !state.reviewing) state.reviewing = true
+                    else scope.launch {
+                        state.busy = true; state.error = null
+                        val remaining = targets.map { it.id }.toMutableSet()
+                        try {
+                            targets.forEach { provider ->
+                                onDelete(provider.id)
+                                remaining.remove(provider.id)
+                                state.ids = state.ids - provider.id
+                            }
+                            state.deleting = null
+                            if (state.ids.isEmpty()) state.done()
+                        } catch (e: CancellationException) { throw e }
+                        catch (_: Exception) {
+                            state.deleting = null
+                            state.selecting = true
+                            state.ids = state.ids + remaining
+                            state.error = "Some providers could not be deleted. Remaining providers stay selected; review them and retry."
+                        } finally { state.busy = false }
+                    }
+                }) { Text(if (state.busy) "Deleting…" else if (multiple && !state.reviewing) "Continue" else if (multiple) "Delete all" else "Delete provider") }
+            }, dismissButton = { TextButton(enabled = !state.busy, onClick = { state.deleting = null }) {
+                Text(if (state.reviewing) "Edit selection" else "Cancel")
+            } })
+    }
+}

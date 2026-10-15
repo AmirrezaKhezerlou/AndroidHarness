@@ -21,6 +21,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.androidharness.app.data.ModelVisibility
+import com.androidharness.app.llm.ModelEntry
 import com.androidharness.app.llm.ModelsDev
 import com.androidharness.app.llm.ProviderConfig
 import com.androidharness.app.llm.ProviderType
@@ -29,10 +32,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Provider management without leaving the conversation: a fully-expanded
- * bottom sheet with two pages, a list (tap = activate + close; edit/delete
- * icons mirror the Providers screen) and the shared add/edit form
- * ([ProviderSheetContent]) reached with a forward/back slide. The full-screen
- * Providers destination still exists for bulk management from the drawer.
+ * bottom sheet with a provider list, shared add/edit form and model visibility editor.
+ * Long-press selection and deletion review match the full Providers screen.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,8 +43,8 @@ fun ProviderManagerSheet(
     apiKey: (providerId: String) -> String?,
     onDismiss: () -> Unit,
     onSetActive: (String) -> Unit,
-    onDelete: (String) -> Unit,
-    onEnabledChange: (String, Boolean) -> Unit,
+    onDelete: suspend (String) -> Unit,
+    onEnabledChange: suspend (String, Boolean) -> Unit,
     onMove: (String, Int, List<String>) -> Unit,
     onSave: (
         existing: ProviderConfig?,
@@ -54,6 +55,8 @@ fun ProviderManagerSheet(
         apiKey: String,
         headers: List<com.androidharness.app.llm.ProviderHeader>,
     ) -> Unit,
+    catalogs: Map<String, List<ModelEntry>> = emptyMap(),
+    onRefreshCatalog: suspend (String) -> String? = { "Open model selection to refresh this provider." },
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
@@ -61,10 +64,17 @@ fun ProviderManagerSheet(
     var showForm by remember { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     var showDisabled by rememberSaveable { mutableStateOf(false) }
-    val visible = providers.filter { (it.enabled || showDisabled || query.isNotBlank()) &&
-        ProviderModelSearch.providerMatches(it, emptyList(), query) }
+    val visibility by ModelVisibility.get(LocalContext.current).state.collectAsStateWithLifecycle()
+    val selection = rememberProviderSelection()
+    var manageModelsFor by rememberSaveable { mutableStateOf<String?>(null) }
+    val visible = providers.filter { (it.enabled || showDisabled || query.isNotBlank() || selection.selecting && it.id in selection.ids) &&
+        ProviderModelSearch.providerMatches(it, catalogs[it.id].orEmpty(), query) }
     val visibleIds = visible.map { it.id }
 
+    if (manageModelsFor != null) {
+        ModelVisibilitySheet(providers, catalogs, manageModelsFor, onDismiss = { manageModelsFor = null }, onRefreshCatalog = onRefreshCatalog)
+        return
+    }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Crossfade(
             targetState = showForm,
@@ -72,57 +82,74 @@ fun ProviderManagerSheet(
             label = "provider manager page",
         ) { inForm ->
             if (!inForm) {
-                LazyColumn(
-                    Modifier.fillMaxWidth().height((LocalConfiguration.current.screenHeightDp * .9f).dp)
-                        .padding(horizontal = 16.dp).navigationBarsPadding(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    item {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Providers", style = MaterialTheme.typography.titleMediumEmphasized, modifier = Modifier.weight(1f))
-                            IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Close") }
+                Column(Modifier.fillMaxWidth().height((LocalConfiguration.current.screenHeightDp * .9f).dp).navigationBarsPadding()) {
+                    LazyColumn(
+                        Modifier.weight(1f).padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        item {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Providers", style = MaterialTheme.typography.titleMediumEmphasized, modifier = Modifier.weight(1f))
+                                TextButton(enabled = !selection.busy, onClick = {
+                                    if (selection.selecting) selection.done() else selection.selecting = true
+                                }) { Text(if (selection.selecting) "Done" else "Select providers") }
+                                IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Close") }
+                            }
+                            Text("Disabled providers stay searchable. Existing chats keep their model.",
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            FilledTonalButton(onClick = { editing = null; showForm = true }, modifier = Modifier.fillMaxWidth()) {
+                                Text("Add provider")
+                            }
+                            OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Search providers") },
+                                singleLine = true, modifier = Modifier.fillMaxWidth())
+                            FilterChip(selected = showDisabled, onClick = { showDisabled = !showDisabled }, label = { Text("Show disabled") })
                         }
-                        Text("Disabled providers stay searchable. Existing chats keep their model.",
-                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        FilledTonalButton(onClick = { editing = null; showForm = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text("Add provider")
+                        itemsIndexed(visible, key = { _, p -> p.id }) { index, provider ->
+                            ProviderListCard(provider, provider.id == activeProviderId, index > 0, index < visible.lastIndex,
+                                onSelect = {
+                                    scope.launch {
+                                        if (!provider.enabled) onEnabledChange(provider.id, true)
+                                        onSetActive(provider.id)
+                                        onDismiss()
+                                    }
+                                },
+                                onEnabledChange = { enabled -> scope.launch { onEnabledChange(provider.id, enabled) } },
+                                onMove = { onMove(provider.id, it, visibleIds) },
+                                onEdit = { editing = provider; showForm = true },
+                                onDelete = { selection.requestDelete(listOf(provider.id)) },
+                                onBrowseModels = { manageModelsFor = provider.id },
+                                catalogSize = ProviderModelSearch.models(provider, catalogs[provider.id].orEmpty()).size,
+                                selectedModelCount = ProviderModelSearch.models(provider, catalogs[provider.id].orEmpty())
+                                    .count { visibility.includes(provider.id, it.id) },
+                                selectionMode = selection.selecting, selected = provider.id in selection.ids,
+                                onToggleSelection = { if (!selection.busy) selection.toggle(provider.id) },
+                                onLongPress = { if (!selection.busy) selection.start(provider.id) })
                         }
-                        OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Search providers") },
-                            singleLine = true, modifier = Modifier.fillMaxWidth())
-                        FilterChip(selected = showDisabled, onClick = { showDisabled = !showDisabled }, label = { Text("Show disabled") })
-                    }
-                    itemsIndexed(visible, key = { _, p -> p.id }) { index, provider ->
-                        ProviderListCard(provider, provider.id == activeProviderId, index > 0, index < visible.lastIndex,
-                            onSelect = {
-                                if (!provider.enabled) onEnabledChange(provider.id, true)
-                                onSetActive(provider.id)
-                                onDismiss()
-                            },
-                            onEnabledChange = { onEnabledChange(provider.id, it) },
-                            onMove = { onMove(provider.id, it, visibleIds) },
-                            onEdit = { editing = provider; showForm = true },
-                            onDelete = { onDelete(provider.id) })
-                    }
-                    if (visible.isEmpty()) item {
-                        Text("No matching providers. Try searching or show disabled providers.",
-                            modifier = Modifier.padding(vertical = 20.dp))
-                    }
-                    item {
-                        val context = LocalContext.current
-                        var catalogBusy by remember { mutableStateOf(false) }
-                        var catalogStatus by remember { mutableStateOf<String?>(null) }
-                        Column {
-                            TextButton(onClick = {
-                                scope.launch {
-                                    catalogBusy = true
-                                    try {
-                                        catalogStatus = ModelsDev.refresh(context, force = true)
-                                            ?: "Catalog updated"
-                                    } finally { catalogBusy = false }
-                                }
-                            }, enabled = !catalogBusy) { Text(if (catalogBusy) "Updating catalog…" else "Update model catalog") }
-                            catalogStatus?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
+                        if (visible.isEmpty()) item {
+                            Text("No matching providers. Try searching or show disabled providers.",
+                                modifier = Modifier.padding(vertical = 20.dp))
                         }
+                        item {
+                            val context = LocalContext.current
+                            var catalogBusy by remember { mutableStateOf(false) }
+                            var catalogStatus by remember { mutableStateOf<String?>(null) }
+                            Column {
+                                TextButton(onClick = {
+                                    scope.launch {
+                                        catalogBusy = true
+                                        try {
+                                            catalogStatus = ModelsDev.refresh(context, force = true)
+                                                ?: "Catalog updated"
+                                        } finally { catalogBusy = false }
+                                    }
+                                }, enabled = !catalogBusy) { Text(if (catalogBusy) "Updating catalog…" else "Update model catalog") }
+                                catalogStatus?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
+                            }
+                        }
+                    }
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                        ProviderBulkActions(selection, providers,
+                            onEnabledChange = { id, enabled -> onEnabledChange(id, enabled) }, onDelete = onDelete)
                     }
                 }
             } else {

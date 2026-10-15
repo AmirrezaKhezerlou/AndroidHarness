@@ -47,7 +47,7 @@ class FallbackDeviceTest {
                 val settings by c.settings.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
                 FallbackSettingsSection(c, settings.fallbackPolicy)
             } } }
-            await { find("Fallbacks") != null }
+            scrollTo("Fallbacks")
             tap("Fallbacks")
             await { find("Automatic fallbacks") != null }
             scrollTo("Fallback actions 2"); tap("Fallback actions 2"); tap("Move up")
@@ -109,7 +109,9 @@ class FallbackDeviceTest {
                 instrumentation.waitForIdleSync()
                 SystemClock.sleep(300)
             }
-            scrollTo(second.model); tap(second.model)
+            scrollTo(second.model)
+            tap("Choose ${second.model} from ${second.name}")
+            tap("Use ${second.model}")
             await { find("For this chat") != null }
             scrollTo("Save fallbacks"); screenshot("fallback-custom"); tap("Save fallbacks")
             await { c.runManager.controls.flow(sid).value.fallbackMode == FallbackMode.CUSTOM }
@@ -119,7 +121,7 @@ class FallbackDeviceTest {
             assertEquals(first.model, runBlocking { c.settings.settings.first().activeModel })
             await { find("Choose model") != null }
             SystemClock.sleep(500)
-            tap("Fallbacks"); await { find("For this chat") != null }; tap("Off"); scrollTo("Save fallbacks"); tap("Save fallbacks")
+            scrollTo("Fallbacks"); tap("Fallbacks"); await { find("For this chat") != null }; tap("Off"); scrollTo("Save fallbacks"); tap("Save fallbacks")
             await { c.runManager.controls.flow(sid).value.fallbackMode == FallbackMode.OFF }
             assertFalse(effectiveFallback(seeded, FallbackMode.OFF, null)!!.enabled)
             val restored = com.androidharness.app.agent.TaskControlStore(File(c.appContext.filesDir, "task-controls")).flow(sid).value

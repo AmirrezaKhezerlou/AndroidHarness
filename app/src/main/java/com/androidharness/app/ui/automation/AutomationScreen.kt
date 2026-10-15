@@ -1112,14 +1112,15 @@ private fun AutomationEditorDialog(
                 modelSelectionInitialized = true
                 showProviderManager = false
             },
+            catalogs = catalogs, onRefreshCatalog = container.providers::refreshCatalog,
             onDelete = { providerId ->
-                scope.launch { container.providers.delete(providerId) }
+                container.providers.delete(providerId)
                 if (providerId == selectedProviderId) {
                     selectedProviderId = null
                     selectedModel = null
                 }
             },
-            onEnabledChange = { id, enabled -> scope.launch { container.providers.setEnabled(id, enabled) } },
+            onEnabledChange = { id, enabled -> container.providers.setEnabled(id, enabled) },
             onMove = { id, direction, visible -> scope.launch { container.providers.move(id, direction, visible) } },
             onSave = { existing, name, type, baseUrl, model, apiKey, headers ->
                 scope.launch {
