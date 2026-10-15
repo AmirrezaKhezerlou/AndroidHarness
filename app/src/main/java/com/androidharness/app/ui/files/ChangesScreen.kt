@@ -208,7 +208,8 @@ private fun ChangeRow(
     }
 
     val fileName = change.relPath.substringAfterLast('/')
-    val dirName = change.relPath.substringBeforeLast('/', "")
+    val displayPath = (fs as? com.androidharness.app.workspace.ChatWorkspaceFs)?.displayPathFor(change.relPath) ?: change.relPath
+    val dirName = displayPath.substringBeforeLast('/', "")
 
     Column(Modifier.fillMaxWidth()) {
         Row(

@@ -269,7 +269,9 @@ class ChatViewModel(
     private val historyPaging = Mutex()
     val activeWorkspace = sessionIdFlow.flatMapLatest { c.workspace.projectForChat(it) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
-    val workspaceFs = activeWorkspace.map { project -> project?.let { runCatching { c.workspace.fsFor(it) }.getOrNull() } }
+    val workspaceSelection = sessionIdFlow.flatMapLatest { c.workspace.selectionForChat(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val workspaceFs = sessionIdFlow.flatMapLatest { c.workspace.forChat(it) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
     private val sessionCreation = Mutex()
 
@@ -1808,6 +1810,10 @@ class ChatViewModel(
             try { c.runManager.assignWorkspace(ensureSession(), projectId) }
             catch (e: Exception) { _state.update { it.copy(error = e.message) } }
         }
+    }
+
+    suspend fun saveWorkspaces(selection: com.androidharness.app.workspace.ChatWorkspaceSelection) {
+        c.runManager.assignWorkspaces(ensureSession(), selection)
     }
 
     fun addSafWorkspace(uri: Uri) {

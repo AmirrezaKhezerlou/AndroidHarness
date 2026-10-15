@@ -33,6 +33,7 @@ data class SessionEntity(
     /** Plan awaiting user approval; survives process death so the card reappears. */
     val pendingPlan: String? = null,
     val modelSelectionJson: String? = null,
+    val workspaceSelectionJson: String? = null,
 )
 
 @Entity(tableName = "messages", indices = [Index("sessionId")])
@@ -204,13 +205,40 @@ interface HarnessDao {
     @Query("UPDATE sessions SET modelSelectionJson = :selection WHERE id = :id")
     suspend fun setModelSelection(id: String, selection: String)
 
-    @Query("UPDATE sessions SET projectId = :projectId WHERE id = :id")
+    @Query("UPDATE sessions SET projectId = :projectId, workspaceSelectionJson = NULL WHERE id = :id")
     suspend fun setSessionProject(id: String, projectId: String)
+
+    @Query("UPDATE sessions SET projectId = :projectId, workspaceSelectionJson = :selection WHERE id = :id")
+    suspend fun setChatWorkspaces(id: String, projectId: String, selection: String)
+
+    @Query("SELECT relPath FROM checkpoints WHERE sessionId = :id UNION SELECT relPath FROM file_edits WHERE sessionId = :id UNION SELECT relPath FROM session_file_changes WHERE sessionId = :id")
+    suspend fun savedWorkspacePaths(id: String): List<String>
+
+    @Query("UPDATE checkpoints SET relPath = :newPath WHERE sessionId = :id AND relPath = :oldPath")
+    suspend fun qualifyCheckpointPath(id: String, oldPath: String, newPath: String)
+    @Query("UPDATE file_edits SET relPath = :newPath WHERE sessionId = :id AND relPath = :oldPath")
+    suspend fun qualifyFileEditPath(id: String, oldPath: String, newPath: String)
+    @Query("UPDATE session_file_changes SET relPath = :newPath WHERE sessionId = :id AND relPath = :oldPath")
+    suspend fun qualifyFileChangePath(id: String, oldPath: String, newPath: String)
+
+    @androidx.room.Transaction
+    suspend fun saveChatWorkspaces(id: String, projectId: String, selection: String, qualifyLegacy: Boolean) {
+        if (qualifyLegacy) savedWorkspacePaths(id).forEach { path ->
+            require(!path.startsWith('/') && path.split('/').none { it == ".." } && !path.removePrefix("./").startsWith("@workspaces/")) {
+                "This chat has saved changes outside its workspace or in a reserved path. Undo those changes before adding workspaces."
+            }
+            val newPath = "@workspaces/$projectId/" + com.androidharness.app.workspace.normalizeRelPath(path)
+            qualifyCheckpointPath(id, path, newPath)
+            qualifyFileEditPath(id, path, newPath)
+            qualifyFileChangePath(id, path, newPath)
+        }
+        setChatWorkspaces(id, projectId, selection)
+    }
 
     @Query("UPDATE sessions SET projectId = :projectId WHERE id = :id AND projectId IS NULL")
     suspend fun bindSessionProject(id: String, projectId: String)
 
-    @Query("SELECT COUNT(*) FROM sessions WHERE projectId = :projectId")
+    @Query("SELECT COUNT(*) FROM sessions WHERE projectId = :projectId OR instr(workspaceSelectionJson, '\"' || :projectId || '\"') > 0")
     suspend fun projectSessionCount(projectId: String): Int
 
     @Insert
@@ -472,13 +500,19 @@ interface HarnessDao {
         SessionFileChangeEntity::class,
         MessageFtsEntity::class,
     ],
-    version = 15,
+    version = 16,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun dao(): HarnessDao
 
     companion object {
+        val MIGRATION_15_16 = object : androidx.room.migration.Migration(15, 16) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE sessions ADD COLUMN workspaceSelectionJson TEXT")
+            }
+        }
+
         val MIGRATION_14_15 = object : androidx.room.migration.Migration(14, 15) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE sessions ADD COLUMN modelSelectionJson TEXT")

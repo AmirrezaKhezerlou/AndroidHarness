@@ -22,6 +22,7 @@ data class LiveCodeDraft(
     /** Exact provider total for the response, including reasoning and other output; never per-file. */
     val responseOutputTokens: Int? = null,
     val comparisonAvailable: Boolean = true,
+    val workspaceName: String? = null,
 )
 
 /** Reads string fields from incomplete JSON without executing or repairing the tool arguments. */
@@ -34,9 +35,13 @@ internal object LiveCodePreview {
     /** Rebuild a bounded preview from saved arguments, using measured counts when available. */
     suspend fun fromCall(call: com.androidharness.app.core.ToolCallData,
         result: com.androidharness.app.core.ChatMessage?, running: Boolean): LiveCodeDraft? {
-        val draft = build(call.id, call.name, call.argumentsJson, complete = true) ?: return null
+        val raw = build(call.id, call.name, call.argumentsJson, complete = true) ?: return null
+        val draft = raw.copy(files = raw.files.map { file -> call.workspaceId?.let {
+            file.copy(path = "${com.androidharness.app.workspace.ChatWorkspaceFs.PREFIX}/$it/${file.path.removePrefix("./")}")
+        } ?: file })
         val measured = call.codeChanges.associateBy { com.androidharness.app.workspace.normalizeRelPath(it.path) }
         return draft.copy(
+            workspaceName = call.workspaceName,
             stage = when {
                 result?.isError == true -> CodeDraftStage.FAILED
                 result != null -> CodeDraftStage.SAVED
@@ -208,7 +213,13 @@ internal class LiveCodeTracker(private val now: () -> Long = System::nanoTime) {
     private suspend fun preview(id: String, tool: String, arguments: CharSequence, complete: Boolean,
         chars: Int, workspace: WorkspaceFs): LiveCodeDraft? {
         if (tool !in LiveCodePreview.tools) return null
-        val path = LiveCodePreview.fields(arguments.take(1_000_000)).firstOrNull { it.key == "path" && it.complete }?.text
+        val fields = LiveCodePreview.fields(arguments.take(1_000_000))
+        val selected = workspace as? com.androidharness.app.workspace.ChatWorkspaceFs
+        val targetId = fields.firstOrNull { it.key == "workspace_id" && it.complete }?.text
+        val path = fields.firstOrNull { it.key == "path" && it.complete }?.text?.let { path ->
+            if (selected == null) path else if (!complete && targetId == null) null
+            else runCatching { selected.key(targetId ?: selected.primaryId, path) }.getOrNull()
+        }
         if (tool == "write_file" && path != null && path !in baselines) {
             baselines[path] = withContext(Dispatchers.IO) {
                 try {
@@ -218,7 +229,12 @@ internal class LiveCodeTracker(private val now: () -> Long = System::nanoTime) {
                 catch (_: Exception) { null }
             }
         }
-        return LiveCodePreview.build(id, tool, arguments, complete, baselines[path], chars)?.copy(
+        val draft = LiveCodePreview.build(id, tool, arguments, complete, baselines[path], chars) ?: return null
+        return draft.copy(
+            workspaceName = selected?.let { fs -> if (complete || targetId != null) runCatching { fs.binding(targetId).name }.getOrNull() else null },
+            files = if (selected == null || (!complete && targetId == null)) draft.files else draft.files.map { file ->
+                runCatching { file.copy(path = selected.key(targetId ?: selected.primaryId, file.path)) }.getOrDefault(file)
+            },
             comparisonAvailable = tool != "write_file" || (path != null && baselines[path] != null),
         )
     }

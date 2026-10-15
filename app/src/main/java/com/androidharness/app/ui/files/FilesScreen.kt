@@ -790,7 +790,9 @@ fun FilesScreen(
     }
     if (showWorkspaceSheet) {
         com.androidharness.app.ui.common.ShizukuWorkspaceWarningEffect(container.shizuku)
-        com.androidharness.app.ui.chat.components.WorkspaceSwitcherSheet(
+        if (sessionId != null) com.androidharness.app.ui.chat.components.ChatWorkspaceManagerSheet(
+            container, sessionId, onDismiss = { showWorkspaceSheet = false })
+        else com.androidharness.app.ui.chat.components.WorkspaceSwitcherSheet(
             projects = allWorkspaces,
             currentProjectId = currentWorkspace?.id,
             chatWorkspace = sessionId != null,

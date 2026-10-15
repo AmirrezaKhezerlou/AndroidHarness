@@ -1062,7 +1062,9 @@ fun AppNav(container: AppContainer) {
     // Workspace switching from the drawer + chat overflow shares one sheet.
     if (showWorkspaceSheet) {
         com.androidharness.app.ui.common.ShizukuWorkspaceWarningEffect(container.shizuku)
-        com.androidharness.app.ui.chat.components.WorkspaceSwitcherSheet(
+        if (workspaceSessionId != null) com.androidharness.app.ui.chat.components.ChatWorkspaceManagerSheet(
+            container, workspaceSessionId, onDismiss = { showWorkspaceSheet = false })
+        else com.androidharness.app.ui.chat.components.WorkspaceSwitcherSheet(
             projects = allWorkspaces,
             currentProjectId = currentWorkspace?.id,
             chatWorkspace = workspaceSessionId != null,

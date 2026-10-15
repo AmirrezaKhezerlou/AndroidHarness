@@ -53,6 +53,8 @@ internal fun LiveCodeCard(draft: LiveCodeDraft, awaitingApproval: Boolean = fals
         else -> if (draft.stage == CodeDraftStage.SAVED) "Edit" else "Editing"
     }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        draft.workspaceName?.let { Text(it, style = MaterialTheme.typography.labelSmall,
+            color = scheme.primary, modifier = Modifier.padding(horizontal = 2.dp)) }
         draft.files.ifEmpty { listOf(LiveCodeFile("File name arriving…", 0, 0, emptyList())) }.forEach { file ->
             key(draft.id, file.path) {
                 var expanded by rememberSaveable(draft.id, file.path) { mutableStateOf(false) }

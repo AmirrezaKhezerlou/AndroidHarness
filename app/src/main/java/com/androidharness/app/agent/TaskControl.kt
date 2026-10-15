@@ -32,6 +32,7 @@ data class TaskRecord(
     val fallbackPrimary: ProviderConfig? = null,
     val usedProviderIds: Set<String> = emptySet(),
     val workspacePath: String = "",
+    val workspacePaths: List<String> = emptyList(),
     val mode: String = "ACT",
     val thinking: String = "OFF",
     val maxOutput: Int = 32768,

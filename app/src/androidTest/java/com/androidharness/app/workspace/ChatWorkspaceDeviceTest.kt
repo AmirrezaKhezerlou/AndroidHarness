@@ -174,12 +174,15 @@ class ChatWorkspaceDeviceTest {
                 awaitNode("only-alpha.txt")
                 assertNull(find("only-beta.txt"))
                 tap("Switch workspace")
-                awaitNode("Assigned to this chat")
+                awaitNode("Workspaces for this chat")
                 tap(b.name)
+                awaitNode("Use 2 workspaces")
+                tap("Primary workspace: ${b.name}")
+                tap("Use 2 workspaces")
                 awaitNode("only-beta.txt")
                 assertEquals(b.id, c.sessions.session(sa)?.projectId)
                 assertEquals(b.id, c.sessions.session(sb)?.projectId)
-                tap("Switch workspace"); awaitNode("Assigned to this chat"); tap(a.name)
+                tap("Switch workspace"); awaitNode("Workspaces for this chat"); tap("Primary workspace: ${a.name}"); tap("Use 2 workspaces")
                 awaitNode("only-alpha.txt")
                 assertEquals(a.id, c.sessions.session(sa)?.projectId)
                 assertEquals(b.id, c.sessions.session(sb)?.projectId)
@@ -202,10 +205,13 @@ class ChatWorkspaceDeviceTest {
     private fun awaitNode(text: String): AccessibilityNodeInfo {
         val deadline = SystemClock.uptimeMillis() + 20000
         while (SystemClock.uptimeMillis() < deadline) {
+            instrumentation.uiAutomation.clearCache()
             find(text)?.let { return it }
             SystemClock.sleep(100)
         }
-        error("Missing UI node: $text")
+        fun labels(node: AccessibilityNodeInfo?): List<String> = if (node == null) emptyList() else
+            listOfNotNull(node.text?.toString(), node.contentDescription?.toString()) + (0 until node.childCount).flatMap { labels(node.getChild(it)) }
+        error("Missing UI node: $text. Visible: ${labels(instrumentation.uiAutomation.rootInActiveWindow).take(60)}")
     }
     private fun tap(text: String) {
         awaitNode(text); SystemClock.sleep(400)

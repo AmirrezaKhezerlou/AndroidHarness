@@ -15,6 +15,10 @@ import com.androidharness.app.data.env.LinuxEnvironmentManager
 import com.androidharness.app.llm.ProviderConfig
 import com.androidharness.app.llm.RequestOptions
 import com.androidharness.app.workspace.WorkspaceManager
+import com.androidharness.app.workspace.ChatWorkspaceSelection
+import com.androidharness.app.workspace.ChatWorkspaceFs
+import com.androidharness.app.workspace.workspacePaths
+import com.androidharness.app.workspace.workspacePathsOverlap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.CompletableDeferred
@@ -115,7 +119,7 @@ class RunManager(
     suspend fun <T> withIdleWorkspace(fs: com.androidharness.app.workspace.WorkspaceFs,
         busyMessage: String = "A task is working in this workspace. Wait for it to finish, then retry publishing.",
         action: suspend () -> T): T = workspaceGuard.withLock {
-        check(runningSessionIds.value.none { controls.flow(it).value.workspacePath == fs.displayPath }) {
+        check(!workspaceBusy(fs)) {
             busyMessage
         }
         action()
@@ -129,6 +133,29 @@ class RunManager(
             "This chat has saved file changes. Start a new chat to work in another workspace."
         }
         workspace.assignSession(sessionId, projectId)
+    }
+
+    private fun workspaceBusy(fs: com.androidharness.app.workspace.WorkspaceFs, except: String? = null): Boolean =
+        runningSessionIds.value.any { sid -> sid != except && controls.flow(sid).value.let {
+            workspacePathsOverlap(fs.workspacePaths(), it.workspacePaths.ifEmpty { listOf(it.workspacePath) })
+        } }
+
+    suspend fun assignWorkspaces(sessionId: String, selection: ChatWorkspaceSelection) = workspaceGuard.withLock {
+        selection.validated()
+        check(!isRunning(sessionId)) { "Wait for this chat's task to finish before changing workspace access." }
+        check(!controls.flow(sessionId).value.resumable) { "Resume or stop this chat's saved task before changing workspace access." }
+        val saved = requireNotNull(sessions.session(sessionId)) { "This chat no longer exists." }
+        val prior = saved.workspaceSelectionJson?.let { runCatching { ChatWorkspaceSelection.decode(it) }.getOrNull() }
+            ?: saved.projectId?.let(ChatWorkspaceSelection::single)
+        if (prior == selection) return@withLock
+        val hasChanges = checkpoints.turnsWithCheckpoints(sessionId).isNotEmpty() || sessions.fileChangesFor(sessionId).first().isNotEmpty()
+        if (hasChanges) {
+            check(prior != null && prior.primaryId == selection.primaryId && selection.grants.map { it.projectId }.containsAll(prior.grants.map { it.projectId })) {
+                "This chat has saved file changes. Keep its primary and existing workspaces so undo stays available; you can add workspaces or change access."
+            }
+        }
+        workspace.assignSelection(sessionId, selection)
+        synchronized(lock) { allowedTools.remove(sessionId) }
     }
     private val states = mutableMapOf<String, MutableStateFlow<LiveRunState>>()
     private val jobs = mutableMapOf<String, Job>()
@@ -295,8 +322,7 @@ class RunManager(
         val runWorkspace = workspaceOverride ?: assignedWorkspace
         if (replacementMessageId != null) {
             check(!resume) { "Cannot replace a message while resuming" }
-            val path = runWorkspace.displayPath
-            check(runningSessionIds.value.none { it != sid && controls.flow(it).value.workspacePath == path }) {
+            check(!workspaceBusy(runWorkspace, except = sid)) {
                 "Pause other tasks in this workspace before editing or retrying a message"
             }
             rewindAndTruncate(sid, replacementMessageId)
@@ -308,6 +334,7 @@ class RunManager(
         val turnId = if (resume) prior.turnId else UUID.randomUUID().toString()
         val record = controls.update(sid) { it.copy(
             status = "running", reason = null, provider = runConfig, workspacePath = runWorkspace.displayPath,
+            workspacePaths = runWorkspace.workspacePaths(),
             allowModelFallback = allowModelFallback,
             fallbackPrimary = if (resume) it.fallbackPrimary ?: runConfig else runConfig,
             usedProviderIds = (if (resume) it.usedProviderIds else emptySet()) + runConfig.id,
@@ -436,7 +463,7 @@ class RunManager(
                     maxIterations = maxIterations,
                     // Connected MCP servers ride into this run; a failing
                     // server must never block the run itself.
-                    extraTools = runCatching { mcp?.activeTools(runWorkspace) }.getOrNull().orEmpty(),
+                    extraTools = if (runWorkspace is ChatWorkspaceFs) emptyList() else runCatching { mcp?.activeTools(runWorkspace) }.getOrNull().orEmpty(),
                     resolveSubagentModel = modelResolver::resolve,
                     repoMapEnabled = repoMapOn,
                     pinnedInstructions = record.pins,
@@ -1053,6 +1080,7 @@ class RunManager(
         // distinct turns from the edited message onward, newest first
         val turnIds = msgs.drop(index).mapNotNull { it.turnId }.distinct().reversed()
         val fs = workspace.forSession(sessionId)
+        check(!workspaceBusy(fs, except = sessionId)) { "Pause other tasks in these workspaces before editing or retrying a message." }
         for (tid in turnIds) {
             val result = checkpoints.rewind(sessionId, tid, fs)
             check(result.failed == 0) { "Some files could not be restored. History and failed checkpoints were kept; retry undo." }
@@ -1070,7 +1098,7 @@ class RunManager(
      */
     suspend fun rewindFromTurn(sessionId: String, turnId: String): RewindSummary = kotlinx.coroutines.withContext(Dispatchers.IO) { workspaceGuard.withLock {
         val fs = workspace.forSession(sessionId)
-        check(runningSessionIds.value.none { controls.flow(it).value.workspacePath == fs.displayPath }) {
+        check(!workspaceBusy(fs)) {
             "Pause tasks in this workspace before undoing changes"
         }
         val ordered = checkpoints.turnsOrdered(sessionId)
@@ -1127,7 +1155,7 @@ class RunManager(
         section: com.androidharness.app.core.Diff.UndoSection?,
     ) = kotlinx.coroutines.withContext(Dispatchers.IO) { workspaceGuard.withLock {
         val fs = workspace.forSession(sessionId)
-        check(runningSessionIds.value.none { controls.flow(it).value.workspacePath == fs.displayPath }) {
+        check(!workspaceBusy(fs)) {
             "Pause tasks in this workspace before undoing changes"
         }
         check(change.hasBase) { "The original file content is unavailable" }

@@ -39,7 +39,7 @@ fun toolPresentation(call: ToolCallData, result: ChatMessage? = null): ToolPrese
         return count.takeIf { it > 0 }
     }
 
-    return when (call.name) {
+    val presentation = when (call.name) {
         "write_file" -> {
             val path = target()
             ToolPresentation(
@@ -199,6 +199,8 @@ fun toolPresentation(call: ToolCallData, result: ChatMessage? = null): ToolPrese
             ToolPresentation(label, "$label…")
         }
     }
+    return call.workspaceName?.let { name -> presentation.copy(title = "$name · ${presentation.title}",
+        action = "$name · ${presentation.action}", detail = listOfNotNull(name, presentation.detail).joinToString(" · ")) } ?: presentation
 }
 
 fun describeToolCall(call: ToolCallData): String = toolPresentation(call).action

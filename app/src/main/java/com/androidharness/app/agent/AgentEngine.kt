@@ -15,6 +15,8 @@ import com.androidharness.app.tools.FuzzyEdit
 import com.androidharness.app.tools.ToolContext
 import com.androidharness.app.tools.ToolRegistry
 import com.androidharness.app.tools.ToolResult
+import com.androidharness.app.tools.WorkspaceToolRouting
+import com.androidharness.app.workspace.ChatWorkspaceFs
 import com.androidharness.app.workspace.UnboundedFileFs
 import com.androidharness.app.workspace.WorkspaceFs
 import kotlinx.coroutines.CancellationException
@@ -362,8 +364,9 @@ class AgentEngine(
             emit(AgentEvent.CodeDraftsCleared)
 
             suspend fun codeReady(call: ToolCallData) {
-                calls += call
-                codeTracker.ready(call, execWorkspace)?.let { emit(AgentEvent.CodeDraft(it)) }
+                val labeled = workspaceCall(call, execWorkspace)
+                calls += labeled
+                codeTracker.ready(labeled, execWorkspace)?.let { emit(AgentEvent.CodeDraft(it)) }
             }
 
             suspend fun codeDelta(event: StreamEvent.ToolCallDelta) {
@@ -685,6 +688,15 @@ class AgentEngine(
         return "${call.name}:$normalized"
     }
 
+    private fun workspaceCall(call: ToolCallData, workspace: WorkspaceFs): ToolCallData {
+        val selected = workspace as? ChatWorkspaceFs ?: return call
+        return runCatching {
+            val args = json.parseToJsonElement(call.argumentsJson).jsonObject
+            val binding = selected.binding(args["workspace_id"]?.jsonPrimitive?.content)
+            call.copy(workspaceId = binding.id, workspaceName = binding.name)
+        }.getOrDefault(call)
+    }
+
     private fun deterministicFailureHint(call: ToolCallData, result: ToolResult): String? {
         if (result.ok) return null
         val text = result.output.lowercase()
@@ -772,6 +784,13 @@ class AgentEngine(
     ): ToolResult {
         val tool = registry.get(call.name)
             ?: return ToolResult(false, "Unknown tool: ${call.name}")
+        val checkpointWorkspace = workspace
+        val parsedArgs = try { json.parseToJsonElement(call.argumentsJson).jsonObject }
+        catch (e: Exception) { return ToolResult(false, "Invalid tool arguments: ${e.message}") }
+        val route = try { WorkspaceToolRouting.route(tool, parsedArgs, workspace) }
+        catch (e: Exception) { return ToolResult(false, e.message ?: "Workspace access was denied.") }
+        val workspace = route.workspace
+        val sandboxOff = mode == PermissionMode.FULL_ACCESS && checkpointWorkspace !is ChatWorkspaceFs
 
         // The model sometimes tries to modify files in plan mode, refuse cleanly.
         if (agentMode == AgentMode.PLAN && !tool.isReadOnly) {
@@ -918,25 +937,26 @@ class AgentEngine(
                 }
             }
         }
-        val grantKey = com.androidharness.app.tools.ShellPolicy.grantKey(call.name, command)
+        val baseGrantKey = com.androidharness.app.tools.ShellPolicy.grantKey(call.name, command)
+        val grantKey = route.binding?.let { "workspace:${it.id}:$baseGrantKey" } ?: baseGrantKey
         val isPkgInstall = call.name == "pkg_install"
         val approved = when {
             isPkgInstall -> {
                 // Mandatory confirmation: even in FULL_ACCESS or FULL_AUTO mode,
                 // package installation ALWAYS requires explicit user confirmation (Decline or Allow).
                 val preview = if (workspace is com.androidharness.app.workspace.SshFs) "Install requested packages on the SSH host for ${workspace.root}." else computePkgInstallPreview(call)
-                val request = ApprovalRequest(call, tool.description, preview, grantKey)
+                val request = ApprovalRequest(call, route.label?.let { "$it · ${tool.description}" } ?: tool.description, preview, grantKey)
                 emitEvent(AgentEvent.ApprovalNeeded(request))
                 request.response.await()
             }
             mode == PermissionMode.FULL_ACCESS -> true
-            com.androidharness.app.tools.ShellPolicy.isGranted(call.name, command, sessionAllowedTools) -> true
+            (if (route.binding != null) grantKey in sessionAllowedTools else com.androidharness.app.tools.ShellPolicy.isGranted(call.name, command, sessionAllowedTools)) -> true
             mode == PermissionMode.FULL_AUTO -> true
             mode == PermissionMode.CONFIRM_RISKY && tool.isReadOnly -> true
             else -> {
                 val preview = computeDiffPreview(call, workspace)
                     ?: command?.take(400)
-                val request = ApprovalRequest(call, tool.description, preview, grantKey)
+                val request = ApprovalRequest(call, route.label?.let { "$it · ${tool.description}" } ?: tool.description, preview, grantKey)
                 emitEvent(AgentEvent.ApprovalNeeded(request))
                 request.response.await()
             }
@@ -956,7 +976,9 @@ class AgentEngine(
         // "file absent" (empty baseline) from "file too big to capture".
         val beforeTexts = LinkedHashMap<String, Pair<Boolean, String?>>()
         checkpointTargets(call.name, args).forEach { path ->
-            runCatching { checkpointer.snapshot(sessionId, turnId, workspace, path) }
+            try { checkpointer.snapshot(sessionId, turnId, checkpointWorkspace, route.path(path)) }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) { return ToolResult(false, "Could not save undo for ${route.label ?: "workspace"}/$path: ${e.message}. No edit was made.") }
             runCatching {
                 val node = workspace.resolve(path)
                 beforeTexts[path] =
@@ -973,7 +995,7 @@ class AgentEngine(
         val executed = try {
             if (call.name in setOf("git_push", "git_pull", "http_request", "shell", "shell_background") &&
                 workspace !is com.androidharness.app.workspace.SshFs) prepareGitHub()
-            val raw = tool.execute(args, ToolContext(workspace, mode == PermissionMode.FULL_ACCESS, sessionId))
+            val raw = tool.execute(args, ToolContext(workspace, sandboxOff, sessionId))
             raw.redacted()
         } catch (ce: CancellationException) {
             throw ce
@@ -1004,7 +1026,7 @@ class AgentEngine(
                     // Repaired: run the exact same command again for the model.
                     kotlin.coroutines.coroutineContext[TaskBudget]?.check()
                     val retry = try {
-                        tool.execute(args, ToolContext(workspace, mode == PermissionMode.FULL_ACCESS, sessionId))
+                        tool.execute(args, ToolContext(workspace, sandboxOff, sessionId))
                     } catch (ce: CancellationException) {
                         throw ce
                     } catch (e: Exception) {
@@ -1057,7 +1079,7 @@ class AgentEngine(
                             // Normalized so "./x.html" and "x.html" land in the
                             // same change row instead of splitting the counts.
                             AgentEvent.FileEdited(
-                                turnId, com.androidharness.app.workspace.normalizeRelPath(path),
+                                turnId, com.androidharness.app.workspace.normalizeRelPath(route.path(path)),
                                 added.toLong(), removed.toLong(),
                                 existedBefore = existedBefore,
                                 existsAfter = nodeIsFile,
@@ -1069,7 +1091,7 @@ class AgentEngine(
                 }
             }
         }
-        return result
+        return route.label?.let { result.copy(output = "[Workspace: $it]\n${result.output}") } ?: result
     }
 
     /** Files a tool call is about to touch, for pre-execution snapshots. */
@@ -1237,7 +1259,8 @@ class AgentEngine(
                 "When reporting file properties like newlines or byte counts, inspect with file_info rather than inferring from line counts. " +
                 "Finish with a complete, self-contained answer: your final message is the " +
                 "ONLY thing returned to the caller, so include file paths, line references " +
-                "and concrete details, and no meta-commentary.",
+                "and concrete details, and no meta-commentary." +
+                ((workspace as? ChatWorkspaceFs)?.let(WorkspaceToolRouting::instructions) ?: ""),
             installed = caveman.cavemanInstalled,
             intensity = caveman.cavemanIntensity,
             wenyan = caveman.cavemanWenyan,
@@ -1284,14 +1307,14 @@ class AgentEngine(
                         is StreamEvent.Retrying -> emitEvent(AgentEvent.Retrying(event.attempt, event.delayMs, event.reason))
                         is StreamEvent.TextDelta -> text.append(event.text)
                         is StreamEvent.ThinkingDelta -> subThinking.append(event.text)
-                        is StreamEvent.ToolCallReady -> calls += event.call
-                        is StreamEvent.ToolCallBatch -> calls += event.calls
+                        is StreamEvent.ToolCallReady -> calls += workspaceCall(event.call, workspace)
+                        is StreamEvent.ToolCallBatch -> calls += event.calls.map { workspaceCall(it, workspace) }
                         is StreamEvent.Batch -> event.events.forEach { nested ->
                             when (nested) {
                                 is StreamEvent.TextDelta -> text.append(nested.text)
                                 is StreamEvent.ThinkingDelta -> subThinking.append(nested.text)
-                                is StreamEvent.ToolCallReady -> calls += nested.call
-                                is StreamEvent.ToolCallBatch -> calls += nested.calls
+                                is StreamEvent.ToolCallReady -> calls += workspaceCall(nested.call, workspace)
+                                is StreamEvent.ToolCallBatch -> calls += nested.calls.map { workspaceCall(it, workspace) }
                                 else -> {}
                             }
                         }
@@ -1375,7 +1398,7 @@ class AgentEngine(
                 val tool = registry.get(call.name)
                 val subStartedAt = System.currentTimeMillis()
                 val result = if (tool == null || (!actionTools && !tool.isReadOnly) ||
-                    call.name == "ask_user" || call.name == "task" || !tool.isAvailable(ctx)
+                    call.name == "ask_user" || call.name == "task" || !WorkspaceToolRouting.available(tool, ctx)
                 ) {
                     ToolResult(false, "${call.name} is not available to subagents.")
                 } else {
@@ -1387,7 +1410,10 @@ class AgentEngine(
                     } else {
                         try {
                             val args = json.parseToJsonElement(call.argumentsJson).jsonObject
-                            tool.execute(args, ctx).redacted()
+                            val route = WorkspaceToolRouting.route(tool, args, workspace)
+                            val result = tool.execute(args, ctx.copy(workspace = route.workspace,
+                                sandboxOff = ctx.sandboxOff && workspace !is ChatWorkspaceFs)).redacted()
+                            route.label?.let { result.copy(output = "[Workspace: $it]\n${result.output}") } ?: result
                         } catch (ce: CancellationException) {
                             throw ce
                         } catch (e: Exception) {
@@ -1625,7 +1651,12 @@ class AgentEngine(
         mode: AgentMode,
         fullAccess: Boolean,
         repoMapEnabled: Boolean = true,
+        multiWorkspace: Boolean = false,
     ): String {
+        if (workspace is ChatWorkspaceFs) {
+            return systemPrompt(workspace.fileAccess(workspace.primary), mode, false, repoMapEnabled = false, multiWorkspace = true) +
+                WorkspaceToolRouting.instructions(workspace)
+        }
         val agentsFile = readWorkspaceDoc(workspace, "AGENTS.md")
             ?: readWorkspaceDoc(workspace, "HARNESS.md")
         val memory = readWorkspaceDoc(workspace, "memory")
@@ -1653,7 +1684,9 @@ Rules:
 
 """.trim()
         )
-        if (workspace is com.androidharness.app.workspace.SshFs) {
+        if (multiWorkspace) {
+            sb.append("- Workspace tool capabilities and access are listed below. Select workspace_id for commands as well as file tools.\n")
+        } else if (workspace is com.androidharness.app.workspace.SshFs) {
             sb.append("- This is an SSH workspace at ${workspace.root}. All file tools, checkpoints, shell commands, Git, builds and background jobs operate on that host. Use its installed tools and Git credentials. Never use local Android paths or assume the built-in toolchain is available remotely. Inspect uncertain command results before retrying any modifying operation.\n")
         } else if (workspace.shellRoot != null) {
             if (linuxEnv.isReady) {
@@ -1665,7 +1698,7 @@ Rules:
             sb.append("- This workspace has no real filesystem path (cloud/SAF). File tools still work. Do NOT call shell, shell_background, or git tools, they will fail. Tell the user to switch to a device folder or the app workspace if they need a shell.\n")
         }
 
-        if (workspace !is com.androidharness.app.workspace.SshFs) {
+        if (!multiWorkspace && workspace !is com.androidharness.app.workspace.SshFs) {
             // Shizuku guidance: tell the agent the current state so it can guide the user.
             shizukuAgentStatus(shizuku.state.value, shizuku.serviceState.value, shizuku.isServiceReady())
                 ?.let { sb.append("- ").append(it).append('\n') }

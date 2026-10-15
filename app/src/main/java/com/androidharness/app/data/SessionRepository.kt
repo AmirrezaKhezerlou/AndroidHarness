@@ -311,6 +311,7 @@ class SessionRepository(
                 lastInputTokens = parent.lastInputTokens,
                 projectId = parent.projectId,
                 modelSelectionJson = parent.modelSelectionJson,
+                workspaceSelectionJson = parent.workspaceSelectionJson,
                 compactionSummary = finalSummary,
                 compactionBefore = if (finalSummary.isNotBlank()) now else 0L,
             )

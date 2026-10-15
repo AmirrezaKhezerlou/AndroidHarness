@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import java.io.File
 import java.util.UUID
 
@@ -69,8 +71,24 @@ class WorkspaceManager(
         })
     }
 
-    fun forChat(sessionId: String?): Flow<WorkspaceFs?> = projectForChat(sessionId)
-        .map { project -> project?.let { runCatching { fsFor(it) }.getOrNull() } }
+    fun selectionForChat(sessionId: String?): Flow<ChatWorkspaceSelection?> = if (sessionId == null)
+        currentProject.map { ChatWorkspaceSelection.single(it.id) }
+    else flow {
+        if (dao.session(sessionId)?.projectId == null) projectForChat(sessionId).first()
+        emitAll(dao.sessionFlow(sessionId).map { saved -> saved?.let {
+            it.workspaceSelectionJson?.let { raw -> runCatching { ChatWorkspaceSelection.decode(raw) }.getOrNull() }
+                ?: if (it.workspaceSelectionJson == null) it.projectId?.let(ChatWorkspaceSelection::single) else null
+        } })
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    fun forChat(sessionId: String?): Flow<WorkspaceFs?> = projectForChat(sessionId).flatMapLatest { project ->
+        if (project == null) flowOf(null)
+        else if (sessionId == null) flowOf(fsFor(project))
+        else combine(dao.sessionFlow(sessionId), projects) { saved, available ->
+            saved?.let { runCatching { scopedFs(it.workspaceSelectionJson, project, available) }.getOrNull() }
+        }
+    }
 
     /** Project tools must not change the recent workspace or create a chat just to browse files. */
     fun projectForTools(sessionId: String?, projectId: String?): Flow<ProjectEntity?> =
@@ -78,13 +96,47 @@ class WorkspaceManager(
         else projects.map { list -> list.firstOrNull { it.id == projectId } }
             .distinctUntilChanged { previous, next -> previous?.copy(lastUsedAt = 0) == next?.copy(lastUsedAt = 0) }
 
-    fun forTools(sessionId: String?, projectId: String?): Flow<WorkspaceFs?> = projectForTools(sessionId, projectId)
-        .map { project -> project?.let { runCatching { fsFor(it) }.getOrNull() } }
+    fun forTools(sessionId: String?, projectId: String?): Flow<WorkspaceFs?> = if (sessionId != null) forChat(sessionId)
+        else projectForTools(null, projectId).map { project -> project?.let { runCatching { fsFor(it) }.getOrNull() } }
 
     suspend fun projectForSession(sessionId: String): ProjectEntity =
         projectForChat(sessionId).first() ?: error("This chat's workspace is unavailable. Choose a workspace for this chat.")
 
-    suspend fun forSession(sessionId: String): WorkspaceFs = fsFor(projectForSession(sessionId))
+    suspend fun forSession(sessionId: String): WorkspaceFs {
+        val primary = projectForSession(sessionId)
+        val session = requireNotNull(dao.session(sessionId)) { "This chat no longer exists." }
+        return scopedFs(session.workspaceSelectionJson, primary, projects.first())
+    }
+
+    private fun scopedFs(raw: String?, primary: ProjectEntity, available: List<ProjectEntity>): WorkspaceFs {
+        if (raw == null) return fsFor(primary)
+        val selection = ChatWorkspaceSelection.decode(raw)
+        check(selection.primaryId == primary.id) { "This chat's primary workspace changed. Choose its workspaces again." }
+        return ChatWorkspaceFs(selection.primaryId, selection.grants.map { grant ->
+            val project = available.firstOrNull { it.id == grant.projectId }
+                ?: error("A selected workspace is unavailable. Open Workspaces to review this chat's access.")
+            check(project.kind != KIND_SHELL || project.uri?.let { File(it).isDirectory } == true) {
+                "${project.name} is unavailable. Restore its folder or review this chat's workspace access."
+            }
+            ChatWorkspaceBinding(project.id, project.name, grant.canEdit, fsFor(project))
+        })
+    }
+
+    /** Called under RunManager's guard, after the user saves the selection. */
+    suspend fun assignSelection(sessionId: String, selection: ChatWorkspaceSelection) {
+        val saved = requireNotNull(dao.session(sessionId)) { "This chat no longer exists." }
+        val available = projects.first()
+        val fs = scopedFs(ChatWorkspaceSelection.encode(selection),
+            requireNotNull(available.firstOrNull { it.id == selection.primaryId }) { "The primary workspace is unavailable." }, available) as ChatWorkspaceFs
+        fs.bindings.forEachIndexed { index, binding ->
+            fs.bindings.drop(index + 1).forEach { other ->
+                require(!workspacePathsOverlap(binding.fs.workspacePaths(), other.fs.workspacePaths())) {
+                    "${binding.name} and ${other.name} overlap. Choose separate workspace folders."
+                }
+            }
+        }
+        dao.saveChatWorkspaces(sessionId, selection.primaryId, ChatWorkspaceSelection.encode(selection), qualifyLegacy = saved.workspaceSelectionJson == null)
+    }
 
     /** Call through RunManager, which guards active tasks and saved file changes. */
     suspend fun assignSession(sessionId: String, projectId: String) {

@@ -14,6 +14,9 @@ data class ToolCallData(
     val responseProviderId: String? = null,
     /** Measured file changes for the activity row; never sent as tool arguments. */
     val codeChanges: List<ToolCodeChange> = emptyList(),
+    /** Captured presentation metadata; never part of provider tool arguments. */
+    val workspaceId: String? = null,
+    val workspaceName: String? = null,
 )
 
 @Serializable
