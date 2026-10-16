@@ -316,20 +316,37 @@ fun SettingsScreen(
     }
 
     pendingDelete?.let { project ->
+        var deleting by remember(project.id) { mutableStateOf(false) }
+        var deleteError by remember(project.id) { mutableStateOf<String?>(null) }
         AlertDialog(
-            onDismissRequest = { pendingDelete = null },
+            onDismissRequest = { if (!deleting) pendingDelete = null },
             title = { Text("Delete workspace?") },
-            text = { Text("Remove \"${project.name}\" from the list? Files on disk are not deleted.") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Remove \"${project.name}\" from the list? Files on disk are not deleted.")
+                    deleteError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                }
+            },
             confirmButton = {
-                TextButton(onClick = {
+                TextButton(enabled = !deleting, onClick = {
+                    deleting = true
+                    deleteError = null
                     scope.launch {
-                        container.workspace.deleteProject(project)
-                        pendingDelete = null
+                        try {
+                            container.workspace.deleteProject(project)
+                            pendingDelete = null
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            deleteError = e.message?.takeIf { it.isNotBlank() } ?: "Could not remove workspace. Try again."
+                        } finally {
+                            deleting = false
+                        }
                     }
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                }) { Text(if (deleting) "Deleting…" else "Delete", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) { Text("Cancel") }
+                TextButton(enabled = !deleting, onClick = { pendingDelete = null }) { Text("Cancel") }
             },
         )
     }
