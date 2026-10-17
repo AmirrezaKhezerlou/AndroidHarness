@@ -242,11 +242,14 @@ class AssistantToolsDeviceTest {
                 val key = ModelShortcut(provider.id, "beta")
                 assertEquals(listOf(key), restarted.state.value.favourites)
                 assertEquals(listOf(key), restarted.state.value.recent)
-                tap("Model options"); tap("Clear recent"); awaitText("Models you use will appear here.")
+                tap("Model options"); tap("Clear recent")
+                awaitCondition { find { it.text?.toString() == "Recent" } == null }
+                awaitText("Favourite alpha")
                 assertTrue(ModelShortcuts(c.appContext, name).state.value.recent.isEmpty())
                 assertEquals(listOf(key), repo.state.value.favourites)
                 tap("Favourites"); tap("Remove beta from favourites")
-                awaitText("Star a model to keep it here.")
+                awaitCondition { find { it.text?.toString() == "Favourites" } == null }
+                awaitText("Favourite alpha")
                 assertEquals(1, calls.get())
             }
         } finally { c.appContext.getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().commit() }
@@ -271,7 +274,8 @@ class AssistantToolsDeviceTest {
                 shell("input tap ${bounds.centerX()} ${bounds.centerY()}")
                 SystemClock.sleep(200); assertEquals(0, chosen.get())
                 tap("Remove removed-model from favourites")
-                awaitText("Star a model to keep it here.")
+                awaitCondition { find { it.text?.toString() == "Favourites" } == null }
+                awaitText("Favourite alpha")
             }
         } finally { c.appContext.getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().commit() }
     }

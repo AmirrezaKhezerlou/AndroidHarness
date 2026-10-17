@@ -40,6 +40,47 @@ class ProviderManagementDeviceTest {
     private val desktop get() = InstrumentationRegistry.getArguments().getString("desktop") == "true"
     private val dark get() = InstrumentationRegistry.getArguments().getString("dark") == "true"
 
+    @Test fun modelCollectionsStartWithAllAndHideEmptyShortcuts() {
+        val name = "collections-test-${System.nanoTime()}"
+        val shortcuts = ModelShortcuts(c.appContext, name)
+        val provider = ProviderConfig("collections:first", "Collections fixture", ProviderType.OPENAI_COMPAT, "https://example.test", "alpha")
+        val key = ModelShortcut(provider.id, "beta")
+        val chosen = AtomicReference<ModelShortcut?>()
+        try {
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { it.setContent { theme {
+                    ModelPickerSheet(listOf(provider), provider.id, provider.model,
+                        mapOf(provider.id to listOf(ModelEntry("alpha"), ModelEntry("beta"))), {},
+                        { id, model -> chosen.set(ModelShortcut(id, requireNotNull(model))) }, { null }, {}, modelShortcuts = shortcuts)
+                } } }
+                await { find("All models") != null }
+                assertNull(find("Recent")); assertNull(find("Favourites"))
+                shortcuts.selected(key); shortcuts.toggle(key)
+                await { find("Recent") != null && find("Favourites") != null }
+                fun selected(label: String) = generateSequence(find(label)) { it.parent }.any { it.isSelected }
+                assertTrue("Adding shortcuts keeps All models selected", selected("All models"))
+                val ordered = listOf("All models", "Recent", "Favourites").map { bounds(requireNotNull(find(it))) }
+                assertTrue(ordered.zipWithNext().all { (a, b) -> a.top < b.top || a.top == b.top && a.left < b.left })
+                screenshot("models-collections-order")
+                tap("Recent"); shortcuts.clearRecent(provider.id)
+                await { find("Recent") == null && selected("All models") }
+                tap("Favourites"); shortcuts.toggle(key)
+                await { find("Favourites") == null && selected("All models") }
+                assertNull(chosen.get())
+                screenshot("models-empty-shortcuts-hidden")
+            }
+            shortcuts.selected(key)
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { it.setContent { theme {
+                    ModelPickerSheet(listOf(provider), provider.id, provider.model,
+                        mapOf(provider.id to listOf(ModelEntry("alpha"), ModelEntry("beta"))), {}, { _, _ -> }, { null }, {}, modelShortcuts = shortcuts)
+                } } }
+                await { find("Recent") != null }
+                assertTrue("A reopened picker starts with All models", generateSequence(find("All models")) { it.parent }.any { it.isSelected })
+            }
+        } finally { c.appContext.getSharedPreferences(name, android.content.Context.MODE_PRIVATE).edit().clear().commit() }
+    }
+
     @Test fun inlineHeadersEditPersistDisableAndRemoveThroughProviderSettings() = runBlocking {
         val settings = c.settings.settings.first()
         val server = java.net.ServerSocket(0)

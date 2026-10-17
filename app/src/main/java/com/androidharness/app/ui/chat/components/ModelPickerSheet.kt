@@ -92,10 +92,7 @@ fun ModelPickerSheet(
     var providerQuery by rememberSaveable { mutableStateOf("") }
     var listedId by rememberSaveable { mutableStateOf(browseProviderId) }
     var showAll by rememberSaveable { mutableStateOf(searchAllProvidersInitially) }
-    var collection by rememberSaveable { mutableStateOf(if (!searchAllProvidersInitially && saved.recent.any { key ->
-        providers.any { provider -> provider.id == key.providerId && provider.enabled &&
-            visible.includes(provider.id, key.modelId) && ProviderModelSearch.models(provider, catalogs[provider.id].orEmpty()).any { it.id == key.modelId } }
-    }) "Recent" else "All") }
+    var collection by rememberSaveable { mutableStateOf("All") }
     var thinkOnly by rememberSaveable { mutableStateOf(false) }
     var managing by rememberSaveable { mutableStateOf(manageModelsInitially) }
     var showAddCustom by rememberSaveable { mutableStateOf(false) }
@@ -118,13 +115,24 @@ fun ModelPickerSheet(
     val chosenEntry = chosenProvider?.let { p -> ProviderModelSearch.models(p, catalogs[p.id].orEmpty()).firstOrNull { it.id == chosenModelId } }
     val searching = query.isNotBlank()
     val scopedProviders = if (listedId == null) providers else providers.filter { it.id == listedId }
+    val shortcutProviderIds = scopedProviders.mapTo(mutableSetOf()) { it.id }
+    fun hasShortcuts(keys: List<ModelShortcut>) = keys.any {
+        it.providerId in shortcutProviderIds && (showAll || visible.includes(it.providerId, it.modelId))
+    }
+    val collections = buildList {
+        add("All" to "All models")
+        if (hasShortcuts(saved.recent)) add("Recent" to "Recent")
+        if (hasShortcuts(saved.favourites)) add("Favourites" to "Favourites")
+    }
+    val activeCollection = collection.takeIf { key -> collections.any { it.first == key } } ?: "All"
+    LaunchedEffect(activeCollection) { collection = activeCollection }
     val rows = ProviderModelSearch.results(
-        scopedProviders, catalogs, query, if (searching) "All" else collection,
+        scopedProviders, catalogs, query, if (searching) "All" else activeCollection,
         saved.favourites, saved.recent,
-        includeDisabled = showAll || searching || listedProvider?.enabled == false,
+        includeDisabled = showAll || searching || listedProvider?.enabled == false || activeCollection != "All",
         visibility = if (showAll || searching) null else visible,
     ).filter { !thinkOnly || ModelCapabilities.of(it.model, it.provider).thinking.supported == true }.let { results ->
-        if (ChatGptProtocol.isProvider(listedId) && collection == "All") results.sortedWith { a, b -> newestChatGptFirst.compare(a.model, b.model) }
+        if (ChatGptProtocol.isProvider(listedId) && (searching || activeCollection == "All")) results.sortedWith { a, b -> newestChatGptFirst.compare(a.model, b.model) }
         else results
     }
     LaunchedEffect(providers.map { it.id }, listedId) {
@@ -236,8 +244,8 @@ fun ModelPickerSheet(
                         }
                         FlowRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp).selectableGroup(),
                             horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            listOf("Recent" to "Recent", "Favourites" to "Favourites", "All" to "All models").forEach { (key, label) ->
-                                val selected = if (searching) key == "All" else collection == key
+                            collections.forEach { (key, label) ->
+                                val selected = if (searching) key == "All" else activeCollection == key
                                 Surface(onClick = { collection = key; query = "" }, shape = RoundedCornerShape(9.dp),
                                     color = if (selected) scheme.surfaceContainerHigh else scheme.surface,
                                     modifier = Modifier.semantics { this.selected = selected; role = Role.Tab }) {
