@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.Json
 import java.util.UUID
 
@@ -191,12 +192,24 @@ class SessionRepository(
         createSession("New chat", projectId)
     }
 
+    suspend fun artifacts(sessionId: String): List<com.androidharness.app.artifacts.ChatArtifact> =
+        db.dao().artifactMessages(sessionId).mapNotNull { com.androidharness.app.artifacts.ChatArtifact.decode(it.artifactJson) }
+
     suspend fun addMessage(sessionId: String, message: ChatMessage, turnId: String? = null): String {
         val id = message.id ?: UUID.randomUUID().toString()
         val safeText = clampForStorage(message.text)
         val safeThinking = clampForStorage(message.thinking)
         val rawCalls = json.encodeToString(toolCallList, message.toolCalls)
-        val safeCalls = if (rawCalls.length <= MAX_PERSISTED_FIELD_CHARS) rawCalls else "[]"
+        val compactCalls = if (rawCalls.length <= MAX_PERSISTED_FIELD_CHARS) rawCalls else {
+            json.encodeToString(toolCallList, message.toolCalls.map { call ->
+                if (call.name != "create_artifact") call else runCatching {
+                    val args = json.parseToJsonElement(call.argumentsJson).jsonObject
+                    call.copy(argumentsJson = kotlinx.serialization.json.JsonObject(args +
+                        ("html" to kotlinx.serialization.json.JsonPrimitive("HTML omitted from replay; use read_artifact for saved concept source."))).toString())
+                }.getOrDefault(call)
+            })
+        }
+        val safeCalls = if (compactCalls.length <= MAX_PERSISTED_FIELD_CHARS) compactCalls else "[]"
         db.dao().insertMessage(
             MessageEntity(
                 id = id,
@@ -214,6 +227,7 @@ class SessionRepository(
                 firstTokenMs = message.firstTokenMs,
                 streamMs = message.streamMs,
                 imagesJson = json.encodeToString(imageList, message.images),
+                artifactJson = message.artifact?.let(com.androidharness.app.artifacts.ChatArtifact::encode),
                 turnId = turnId,
                 createdAt = System.currentTimeMillis(),
             )
@@ -318,6 +332,16 @@ class SessionRepository(
             db.dao().insertSession(newSession)
 
             val newMessages = mutableListOf<MessageEntity>()
+            val savedConcepts = priorMessages.filter { it.artifactJson != null && it.id != targetAssistant.id }
+            val latestConceptRows = savedConcepts.groupBy {
+                com.androidharness.app.artifacts.ChatArtifact.decode(it.artifactJson)?.id ?: it.id
+            }.values.map { it.last().id }.toSet()
+            savedConcepts.forEach { saved ->
+                newMessages.add(saved.copy(id = UUID.randomUUID().toString(), sessionId = newSessionId,
+                    role = if (saved.id in latestConceptRows) Role.ASSISTANT.name else Role.SYSTEM.name,
+                    text = "Saved concept", toolCallsJson = "[]", toolCallId = null,
+                    toolName = null, turnId = null, createdAt = now - 3))
+            }
             if (finalSummary.isNotBlank()) {
                 val summaryEntity = MessageEntity(
                     id = UUID.randomUUID().toString(),
@@ -356,6 +380,7 @@ class SessionRepository(
                         firstTokenMs = userMsg.firstTokenMs,
                         streamMs = userMsg.streamMs,
                         imagesJson = userMsg.imagesJson,
+                        artifactJson = userMsg.artifactJson,
                         turnId = newTurnId,
                         createdAt = now - 1,
                     )
@@ -379,6 +404,7 @@ class SessionRepository(
                     firstTokenMs = targetAssistant.firstTokenMs,
                     streamMs = targetAssistant.streamMs,
                     imagesJson = targetAssistant.imagesJson,
+                    artifactJson = targetAssistant.artifactJson,
                     turnId = newTurnId,
                     createdAt = now,
                 )
@@ -423,7 +449,7 @@ class SessionRepository(
                 messageId = row.id,
                 sessionId = row.sessionId,
                 sessionTitle = titles[row.sessionId].orEmpty(),
-                text = row.text,
+                text = com.androidharness.app.artifacts.ArtifactAttachment.visibleText(row.text),
                 createdAt = row.createdAt,
             )
         }
@@ -684,6 +710,7 @@ class SessionRepository(
         generationMs = generationMs,
         firstTokenMs = firstTokenMs,
         streamMs = streamMs,
+        artifact = com.androidharness.app.artifacts.ChatArtifact.decode(artifactJson),
         images = runCatching {
             json.decodeFromString(imageList, imagesJson)
         }.getOrDefault(emptyList()),

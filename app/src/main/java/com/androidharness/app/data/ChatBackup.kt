@@ -66,12 +66,13 @@ data class BackupMessage(
     val imagesJson: String = "[]",
     val turnId: String? = null,
     val createdAt: Long,
+    val artifactJson: String? = null,
 )
 
 /** Pure encode/decode plus file validation; no Android types, so JVM-testable. */
 object ChatBackupCodec {
     const val FORMAT = "androidharness-chats"
-    const val VERSION = 1
+    const val VERSION = 2
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -156,6 +157,7 @@ class ChatBackupManager(
                             firstTokenMs = m.firstTokenMs,
                             streamMs = m.streamMs,
                             imagesJson = m.imagesJson,
+                            artifactJson = m.artifactJson,
                             turnId = m.turnId,
                             createdAt = m.createdAt,
                         )
@@ -216,6 +218,7 @@ class ChatBackupManager(
                             firstTokenMs = m.firstTokenMs,
                             streamMs = m.streamMs,
                             imagesJson = m.imagesJson,
+                            artifactJson = m.artifactJson,
                             turnId = m.turnId,
                             createdAt = m.createdAt,
                         )

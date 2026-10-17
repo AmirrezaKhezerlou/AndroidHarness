@@ -91,7 +91,7 @@ class AppContainer(val appContext: Context) {
         .addMigrations(
             AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6,
             AppDatabase.MIGRATION_6_7, AppDatabase.MIGRATION_7_8,
-            AppDatabase.MIGRATION_8_9, AppDatabase.MIGRATION_9_10, AppDatabase.MIGRATION_10_11, AppDatabase.MIGRATION_11_12, AppDatabase.MIGRATION_12_13, AppDatabase.MIGRATION_13_14, AppDatabase.MIGRATION_14_15, AppDatabase.MIGRATION_15_16,
+            AppDatabase.MIGRATION_8_9, AppDatabase.MIGRATION_9_10, AppDatabase.MIGRATION_10_11, AppDatabase.MIGRATION_11_12, AppDatabase.MIGRATION_12_13, AppDatabase.MIGRATION_13_14, AppDatabase.MIGRATION_14_15, AppDatabase.MIGRATION_15_16, AppDatabase.MIGRATION_16_17,
         )
         .addCallback(AppDatabase.OVERSIZED_ROW_SANITIZER)
         // Only kicks in when no migration path exists (pre-v4 databases);
@@ -163,6 +163,7 @@ class AppContainer(val appContext: Context) {
         imageStore = images,
         browserController = browser,
         searchApi = { searchApiConfig },
+        artifactLoader = sessions::artifacts,
     )
     val mcp = com.androidharness.app.tools.mcp.McpManager(appContext, linuxEnv, keys, codeGraph)
     fun routedProvider(): com.androidharness.app.llm.LlmProvider =

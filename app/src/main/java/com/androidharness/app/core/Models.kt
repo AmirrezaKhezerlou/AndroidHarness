@@ -62,4 +62,5 @@ data class ChatMessage(
     /** Database id + timestamp when loaded from storage; null/0 for in-flight. */
     val id: String? = null,
     val createdAt: Long = 0,
+    val artifact: com.androidharness.app.artifacts.ChatArtifact? = null,
 )

@@ -27,6 +27,7 @@ data class ToolResult(
      * [ChatMessage.imageData] for vision-capable models.
      */
     val image: com.androidharness.app.core.ImageRef? = null,
+    val artifact: com.androidharness.app.artifacts.ChatArtifact? = null,
 )
 
 class ToolFailure(message: String) : Exception(message)
@@ -71,6 +72,7 @@ class ToolRegistry(private val tools: List<Tool>) {
             imageStore: com.androidharness.app.data.ImageStore? = null,
             browserController: com.androidharness.app.browser.BrowserController? = null,
             searchApi: () -> com.androidharness.app.tools.SearchApiConfig? = { null },
+            artifactLoader: ArtifactLoader? = null,
         ): ToolRegistry {
             val baseTools = mutableListOf<Tool>(
                 ListDirTool(),
@@ -123,6 +125,10 @@ class ToolRegistry(private val tools: List<Tool>) {
                 CodeGraphAffectedTool(codeGraph),
                 CodeGraphSyncTool(codeGraph),
             )
+            if (artifactLoader != null) {
+                baseTools.add(CreateArtifactTool(artifactLoader))
+                baseTools.add(ReadArtifactTool(artifactLoader))
+            }
             if (imageStore != null) {
                 baseTools.add(ReadImageTool(imageStore))
             }

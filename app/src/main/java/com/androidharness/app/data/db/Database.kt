@@ -55,6 +55,7 @@ data class MessageEntity(
     val imagesJson: String = "[]",
     val turnId: String? = null,
     val createdAt: Long,
+    val artifactJson: String? = null,
 )
 
 /** Stable ordering even when several messages share a millisecond. No schema change. */
@@ -192,6 +193,9 @@ data class ModelUsagePojo(    val providerName: String,
 
 @Dao
 interface HarnessDao {
+    @Query("SELECT * FROM messages WHERE sessionId = :sessionId AND artifactJson IS NOT NULL ORDER BY createdAt, rowid")
+    suspend fun artifactMessages(sessionId: String): List<MessageEntity>
+
     // sessions
     @Query("SELECT * FROM sessions ORDER BY updatedAt DESC")
     fun sessionsFlow(): Flow<List<SessionEntity>>
@@ -500,13 +504,18 @@ interface HarnessDao {
         SessionFileChangeEntity::class,
         MessageFtsEntity::class,
     ],
-    version = 16,
+    version = 17,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun dao(): HarnessDao
 
     companion object {
+        val MIGRATION_16_17 = object : androidx.room.migration.Migration(16, 17) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN artifactJson TEXT")
+            }
+        }
         val MIGRATION_15_16 = object : androidx.room.migration.Migration(15, 16) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE sessions ADD COLUMN workspaceSelectionJson TEXT")

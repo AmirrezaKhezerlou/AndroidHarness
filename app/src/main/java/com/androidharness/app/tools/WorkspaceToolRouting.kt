@@ -10,7 +10,7 @@ object WorkspaceToolRouting {
     private val fileTools = setOf("list_dir", "read_file", "file_info", "write_file", "edit_file", "multi_edit",
         "apply_patch", "search_files", "grep", "create_dir", "delete_file", "move_file", "read_image",
         "memory_write", "memory_read", "memory_search")
-    private val independentTools = setOf("ask_user", "task", "todo_write", "web_fetch", "web_search", "http_request", "read_logcat")
+    private val independentTools = setOf("create_artifact", "read_artifact", "ask_user", "task", "todo_write", "web_fetch", "web_search", "http_request", "read_logcat")
 
     fun available(tool: Tool, ctx: ToolContext): Boolean {
         val selected = ctx.workspace as? ChatWorkspaceFs ?: return tool.isAvailable(ctx)

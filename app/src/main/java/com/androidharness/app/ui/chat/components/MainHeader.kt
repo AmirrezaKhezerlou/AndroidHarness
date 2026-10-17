@@ -2,15 +2,9 @@ package com.androidharness.app.ui.chat.components
 
 import androidx.compose.material3.TextButton
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,10 +20,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.EditNote
-import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.ForkRight
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Language
@@ -37,7 +29,6 @@ import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.Terminal
-import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -55,7 +46,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -68,7 +58,7 @@ import com.androidharness.app.ui.theme.fastEffectsSpec
 
 /**
  * Phones give the model and thinking level their own row so neither competes
- * with navigation or workspace actions. Wider screens keep a single row.
+ * with navigation or workspace actions. Desktop uses its own compact header.
  * Labels and touch targets grow with the system font size.
  */
 @Composable
@@ -97,6 +87,7 @@ internal fun MainHeader(
     canOpenGitHub: Boolean = true,
     onOpenWebPreview: () -> Unit = {},
     modelScopeLabel: String? = null,
+    workspaceName: String? = null,
 ) {
     var menu by remember { mutableStateOf(false) }
     var thinkingMenu by remember { mutableStateOf(false) }
@@ -116,18 +107,17 @@ internal fun MainHeader(
             .background(scheme.surface)
             .statusBarsPadding(),
     ) {
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val stackedControls = maxWidth < 600.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
+        Column(Modifier.fillMaxWidth()) {
             Column {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = if (stackedControls) 48.dp else 60.dp)
-                        .padding(start = 4.dp, end = 4.dp),
+                        .heightIn(min = 48.dp)
+                        .padding(start = 10.dp, end = 10.dp),
                 ) {
                     IconButton(onClick = onOpenDrawer) {
-                        Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+                        Icon(painterResource(R.drawable.ic_chat_menu), contentDescription = "Open navigation", modifier = Modifier.size(18.dp))
                     }
                     Column(Modifier.weight(1f).padding(horizontal = 6.dp, vertical = 6.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -137,53 +127,35 @@ internal fun MainHeader(
                                 Spacer(Modifier.width(4.dp))
                             }
                             Text(sessionTitle, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                style = MaterialTheme.typography.titleMediumEmphasized)
+                                style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
                         }
-                        if (!stackedControls) HeaderModelPicker(pickerLabel, onPickModel, scopeLabel = modelScopeLabel)
-                    }
-
-                    AnimatedVisibility(
-                        // Plan controls remain in the overflow when space is limited.
-                        visible = !stackedControls && (mode == AgentMode.PLAN || dualPlanning),
-                        enter = fadeIn(fastEffectsSpec()) + scaleIn(fastEffectsSpec(), initialScale = 0.8f),
-                        exit = fadeOut(fastEffectsSpec()) + scaleOut(fastEffectsSpec(), targetScale = 0.8f),
-                    ) {
-                        IconButton(onClick = { if (dualPlanning) onToggleDualPlanning() else onSetMode(AgentMode.ACT) }) {
-                            Icon(
-                                Icons.Outlined.ForkRight,
-                                contentDescription = if (dualPlanning) "Dual planning on: switch to Act" else "Plan mode on: switch to Act",
-                                tint = scheme.primary,
-                            )
+                        workspaceName?.let {
+                            Text(it, style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
-
-                    if (!stackedControls && thinkingLevels.isNotEmpty()) HeaderThinkingControl(
-                        thinkingLevel, thinkingLevels, thinkingMenu, { thinkingMenu = it }, onSetThinking, onPickModel,
-                    )
 
                     // Workspace files explorer, migrated here from the drawer;
                     // workspace switching itself lives inside the file manager.
                     IconButton(onClick = onOpenFiles) {
                         Icon(
-                            Icons.Outlined.Folder,
+                            painterResource(R.drawable.ic_chat_folder),
+                            modifier = Modifier.size(18.dp),
                             contentDescription = "Workspace files",
                             tint = scheme.onSurfaceVariant,
                         )
                     }
 
-                    IconButton(onClick = onOpenGitHub, enabled = canOpenGitHub) {
-                        Icon(
-                            painterResource(R.drawable.ic_github),
-                            contentDescription = "GitHub",
-                            modifier = Modifier.size(24.dp),
-                        )
-                    }
-
                     Box {
                         IconButton(onClick = { menu = true }) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "More options")
+                            Icon(painterResource(R.drawable.ic_chat_ellipsis_vertical), contentDescription = "More options", modifier = Modifier.size(18.dp))
                         }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("GitHub") }, enabled = canOpenGitHub,
+                                leadingIcon = { Icon(painterResource(R.drawable.ic_github), null, Modifier.size(18.dp)) },
+                                onClick = { menu = false; onOpenGitHub() },
+                            )
                             DropdownMenuItem(
                                 text = { Text(if (mode == AgentMode.PLAN && !dualPlanning) "Act mode" else "Plan mode") },
                                 leadingIcon = {
@@ -226,7 +198,7 @@ internal fun MainHeader(
                                 text = { Text("Thinking · ${thinkingLevel.label}") },
                                 leadingIcon = {
                                     Icon(
-                                        Icons.Outlined.Tune,
+                                        painterResource(R.drawable.ic_chat_sparkles),
                                         contentDescription = null,
                                         tint = if (thinkingOn) scheme.primary else scheme.onSurfaceVariant,
                                     )
@@ -312,19 +284,17 @@ internal fun MainHeader(
                         }
                     }
                 }
-                if (stackedControls) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 2.dp),
+                Row(
+                        Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, bottom = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        HeaderModelPicker(pickerLabel, onPickModel, Modifier.weight(1f), scopeLabel = modelScopeLabel)
+                        HeaderModelPicker(pickerLabel, onPickModel, Modifier.weight(1f, fill = false), scopeLabel = modelScopeLabel)
                         if (thinkingLevels.isNotEmpty()) {
                             Spacer(Modifier.width(8.dp))
                             HeaderThinkingControl(thinkingLevel, thinkingLevels, thinkingMenu,
                                 { thinkingMenu = it }, onSetThinking, onPickModel)
                         }
                     }
-                }
             }
         }
         HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.5f))
@@ -413,18 +383,16 @@ private fun HeaderThinkingControl(
         ) {
             Surface(
                 shape = RoundedCornerShape(8.dp),
-                color = scheme.surfaceContainerHigh,
-                contentColor = scheme.onSurfaceVariant,
+                color = if (thinkingOn) scheme.primaryContainer else scheme.surfaceContainerHigh,
+                contentColor = if (thinkingOn) scheme.primary else scheme.onSurfaceVariant,
             ) {
                 Row(Modifier.heightIn(min = 28.dp).padding(horizontal = 8.dp, vertical = 3.dp),
                     verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Tune, contentDescription = "Thinking level", modifier = Modifier.size(14.dp),
+                    Icon(painterResource(R.drawable.ic_chat_sparkles), contentDescription = "Thinking level", modifier = Modifier.size(14.dp),
                         tint = if (thinkingOn) scheme.primary else scheme.onSurfaceVariant)
                     Spacer(Modifier.width(4.dp))
                     Text(thinkingLevel.label, maxLines = 1, style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Medium)
-                    Spacer(Modifier.width(3.dp))
-                    Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null, modifier = Modifier.size(12.dp))
                 }
             }
         }

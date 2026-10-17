@@ -99,6 +99,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.painterResource
+import com.androidharness.app.R
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.androidharness.app.data.AppSettings
@@ -150,6 +152,7 @@ internal fun MessageComposer(
     onSchedule: (() -> Unit)? = null,
     scheduleUnavailableReason: String? = null,
     modifier: Modifier = Modifier,
+    attachments: @Composable () -> Unit = {},
 ) {
     val desktop = com.androidharness.app.ui.LocalDesktopLayout.current
     val desktopInput = com.androidharness.app.ui.LocalDesktopInput.current
@@ -212,7 +215,7 @@ internal fun MessageComposer(
         label = "sendScale",
     )
 
-    val actionSize = if (desktopInput) 36.dp else 52.dp
+    val actionSize = if (desktopInput) 36.dp else if (desktop) 52.dp else 44.dp
     val leading: @Composable () -> Unit = {
         // Leading button: discard recording when locked, otherwise attachments/skills
         if (isGroqActive && isGroqLocked) {
@@ -286,7 +289,7 @@ internal fun MessageComposer(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = if (desktopInput) 8.dp else 16.dp, vertical = 2.dp),
+                        .padding(horizontal = if (!desktop || desktopInput) 8.dp else 16.dp, vertical = 2.dp),
                 ) {
                     if (!attachedSkill.isNullOrBlank()) {
                         Surface(
@@ -327,11 +330,13 @@ internal fun MessageComposer(
                                     !attachedSkill.isNullOrBlank() -> "Add a note, or send…"
                                     busy -> "Queue message"
                                     desktop -> "Describe a task…"
-                                    else -> "Message your agent…"
+                                    else -> "Message…"
                                 },
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = if (isInbuiltListening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(vertical = if (desktopInput) 10.dp else 12.dp),
+                                modifier = Modifier.padding(vertical = if (!desktop) 8.dp else if (desktopInput) 10.dp else 12.dp),
                             )
                         }
                         BasicTextField(
@@ -340,7 +345,7 @@ internal fun MessageComposer(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = if (desktopInput) 44.dp else if (desktop) 72.dp else 44.dp,
-                                    max = if (desktopInput) 140.dp else 180.dp)
+                                    max = if (desktopInput || !desktop) 140.dp else 180.dp)
                                 .verticalScroll(rememberScrollState())
                                 .then(inputFocus?.let { Modifier.focusRequester(it) } ?: Modifier)
                                 .semantics { contentDescription = "Message input" }
@@ -355,7 +360,7 @@ internal fun MessageComposer(
                                         true
                                     } else false
                                 }
-                                .padding(vertical = if (desktopInput) 10.dp else 12.dp),
+                                .padding(vertical = if (!desktop) 8.dp else if (desktopInput) 10.dp else 12.dp),
                             textStyle = MaterialTheme.typography.bodyLarge.copy(
                                 color = MaterialTheme.colorScheme.onSurface,
                             ),
@@ -372,7 +377,7 @@ internal fun MessageComposer(
                         .matchParentSize()
                         .border(
                             width = 1.dp,
-                            color = if (desktop) Color.Transparent else if (ringAlpha > 0f) {
+                            color = if (desktop || !isGroqActive) Color.Transparent else if (ringAlpha > 0f) {
                                 MaterialTheme.colorScheme.primary.copy(alpha = 0.55f * ringAlpha)
                             } else {
                                 MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
@@ -383,6 +388,64 @@ internal fun MessageComposer(
             }
         }
 
+    }
+    val voice: @Composable () -> Unit = {
+        when {
+            isGroq -> {
+                // Groq Whisper mode: Hold to talk, swipe up to lock, swipe left to cancel
+                Box(contentAlignment = Alignment.Center) {
+                    LockRail(
+                        visible = isGroqActive && !cancelArmed && !isGroqLocked,
+                        progress = lockProgress,
+                    )
+                    HuliaMicButton(
+                        size = actionSize,
+                        recording = isGroqActive,
+                        cancelArmed = cancelArmed,
+                        available = true,
+                        level = levels.lastOrNull() ?: 0f,
+                        dragX = dragX,
+                        dragY = dragY,
+                        onStart = { onStartGroqRecord(false) },
+                        onTapLock = { onStartGroqRecord(true) },
+                        onFinish = onStopAndTranscribeGroq,
+                        onCancel = onCancelGroqRecord,
+                        onLock = onLockGroqRecord,
+                        onCancelArmedChange = onCancelArmedChange,
+                        onDrag = { x, y ->
+                            dragX = x
+                            dragY = y
+                        },
+                    )
+                }
+            }
+
+            else -> {
+                // Inbuilt voice mode: Simple tap toggle without gesture overlays
+                Box(
+                    modifier = Modifier
+                        .size(actionSize)
+                        .clip(RoundedCornerShape(corner))
+                        .clickable { onToggleInbuiltVoice() }
+                        .semantics { contentDescription = if (isInbuiltListening) "Stop voice input" else "Voice input" },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(actionSize)
+                            .graphicsLayer {
+                                scaleX = buttonScale
+                                scaleY = buttonScale
+                            }
+                            .clip(RoundedCornerShape(corner))
+                            .background(if (isInbuiltListening) MaterialTheme.colorScheme.primary else Color.Transparent),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(painterResource(R.drawable.ic_chat_mic), null, Modifier.size(18.dp), tint = if (isInbuiltListening) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
     }
     val trailing: @Composable () -> Unit = {
         // Action button on the right.
@@ -415,7 +478,7 @@ internal fun MessageComposer(
                             .background(MaterialTheme.colorScheme.primary),
                         contentAlignment = Alignment.Center,
                     ) {
-                        SendGlyph(color = MaterialTheme.colorScheme.onPrimary)
+                        Icon(painterResource(R.drawable.ic_chat_arrow_up), null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onPrimary)
                     }
                 }
             }
@@ -439,7 +502,7 @@ internal fun MessageComposer(
                             .background(MaterialTheme.colorScheme.primary),
                         contentAlignment = Alignment.Center,
                     ) {
-                        SendGlyph(color = MaterialTheme.colorScheme.onPrimary)
+                        Icon(painterResource(R.drawable.ic_chat_arrow_up), null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onPrimary)
                     }
                 }
             }
@@ -495,65 +558,12 @@ internal fun MessageComposer(
                             .background(buttonColor),
                         contentAlignment = Alignment.Center,
                     ) {
-                        SendGlyph(color = iconColor)
+                        Icon(painterResource(R.drawable.ic_chat_arrow_up), null, Modifier.size(20.dp), tint = iconColor)
                     }
                 }
             }
 
-            isGroq -> {
-                // Groq Whisper mode: Hold to talk, swipe up to lock, swipe left to cancel
-                Box(contentAlignment = Alignment.Center) {
-                    LockRail(
-                        visible = isGroqActive && !cancelArmed && !isGroqLocked,
-                        progress = lockProgress,
-                    )
-                    HuliaMicButton(
-                        size = actionSize,
-                        recording = isGroqActive,
-                        cancelArmed = cancelArmed,
-                        available = true,
-                        level = levels.lastOrNull() ?: 0f,
-                        dragX = dragX,
-                        dragY = dragY,
-                        onStart = { onStartGroqRecord(false) },
-                        onTapLock = { onStartGroqRecord(true) },
-                        onFinish = onStopAndTranscribeGroq,
-                        onCancel = onCancelGroqRecord,
-                        onLock = onLockGroqRecord,
-                        onCancelArmedChange = onCancelArmedChange,
-                        onDrag = { x, y ->
-                            dragX = x
-                            dragY = y
-                        },
-                    )
-                }
-            }
-
-            else -> {
-                // Inbuilt voice mode: Simple tap toggle without gesture overlays
-                Box(
-                    modifier = Modifier
-                        .size(actionSize)
-                        .clip(RoundedCornerShape(corner))
-                        .clickable { onToggleInbuiltVoice() }
-                        .semantics { contentDescription = if (isInbuiltListening) "Stop voice input" else "Voice input" },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(actionSize)
-                            .graphicsLayer {
-                                scaleX = buttonScale
-                                scaleY = buttonScale
-                            }
-                            .clip(RoundedCornerShape(corner))
-                            .background(if (isInbuiltListening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        MicGlyph(color = if (isInbuiltListening) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
+            else -> voice()
         }
     }
     if (desktopInput) {
@@ -571,6 +581,27 @@ internal fun MessageComposer(
             Box(Modifier.padding(bottom = 6.dp)) { leading() }
             field()
             Box(Modifier.padding(bottom = 6.dp)) { trailing() }
+        }
+    } else if (!desktop) {
+        val scheme = MaterialTheme.colorScheme
+        Column(
+            modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
+                .background(scheme.surfaceContainerHigh, RoundedCornerShape(21.dp))
+                .border(1.dp, if (focused) scheme.primary else scheme.outlineVariant, RoundedCornerShape(21.dp))
+                .padding(4.dp),
+        ) {
+            attachments()
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                leading()
+                field()
+                if (!isGroqLocked && !showStopOnly) voice()
+                if (canSend || showStopOnly || isGroqLocked) trailing()
+                else IconButton(onClick = {}, enabled = false, modifier = Modifier.size(44.dp)) {
+                    Surface(shape = CircleShape, color = scheme.primary.copy(alpha = 0.45f)) {
+                        Icon(painterResource(R.drawable.ic_chat_arrow_up), "Send message", Modifier.padding(9.dp).size(18.dp), tint = scheme.onPrimary)
+                    }
+                }
+            }
         }
     } else {
         Row(
@@ -1079,10 +1110,10 @@ private fun ComposerLeadingButton(
                         scaleY = 0.86f
                     }
                     .clip(RoundedCornerShape(17.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                    .background(Color.Transparent),
                 contentAlignment = Alignment.Center,
             ) {
-                PlusGlyph(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(painterResource(R.drawable.ic_chat_plus), null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 

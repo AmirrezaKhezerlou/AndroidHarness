@@ -70,37 +70,40 @@ internal fun UserBubble(
     onLongPress: (() -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-        Surface(
-            color = scheme.surfaceContainerHigh,
-            contentColor = scheme.onSurface,
-            shape = RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp),
-            modifier = Modifier.fillMaxWidth(0.88f).widthIn(max = 560.dp).let { m ->
-                if (onLongPress != null) {
-                    m.combinedClickable(onClick = {}, onLongClick = onLongPress)
-                } else m
-            },
-        ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.padding(horizontal = 15.dp, vertical = 10.dp),
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val bubbleMaxWidth = minOf(560.dp, maxWidth * 0.88f)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            Surface(
+                color = scheme.surfaceContainerHigh,
+                contentColor = scheme.onSurface,
+                shape = RoundedCornerShape(18.dp, 18.dp, 5.dp, 18.dp),
+                modifier = Modifier.widthIn(max = bubbleMaxWidth).let { m ->
+                    if (onLongPress != null) {
+                        m.combinedClickable(onClick = {}, onLongClick = onLongPress)
+                    } else m
+                },
             ) {
-                images.forEach { img ->
-                    AttachmentChip(
-                        name = img.name,
-                        detail = "Image",
-                        icon = Icons.Outlined.Image,
-                    )
-                }
-                fileChips.forEach { chip ->
-                    AttachmentChip(
-                        name = chip.name,
-                        detail = chip.sizeLabel,
-                        icon = Icons.Outlined.Description,
-                    )
-                }
-                if (text.isNotBlank()) {
-                    Text(text, style = MaterialTheme.typography.bodyLarge)
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(horizontal = 15.dp, vertical = 10.dp),
+                ) {
+                    images.forEach { img ->
+                        AttachmentChip(
+                            name = img.name,
+                            detail = "Image",
+                            icon = Icons.Outlined.Image,
+                        )
+                    }
+                    fileChips.forEach { chip ->
+                        AttachmentChip(
+                            name = chip.name,
+                            detail = chip.sizeLabel,
+                            icon = Icons.Outlined.Description,
+                        )
+                    }
+                    if (text.isNotBlank()) {
+                        Text(text, style = MaterialTheme.typography.bodyLarge)
+                    }
                 }
             }
         }

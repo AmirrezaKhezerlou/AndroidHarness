@@ -47,10 +47,12 @@ class ModelLockingDeviceTest {
             db.close()
             SQLiteDatabase.openDatabase(context.getDatabasePath(name).path, null, SQLiteDatabase.OPEN_READWRITE).use {
                 it.execSQL("ALTER TABLE sessions DROP COLUMN modelSelectionJson")
+                it.execSQL("ALTER TABLE sessions DROP COLUMN workspaceSelectionJson")
+                it.execSQL("ALTER TABLE messages DROP COLUMN artifactJson")
                 it.version = 14
             }
             db = Room.databaseBuilder(context, AppDatabase::class.java, name)
-                .addMigrations(AppDatabase.MIGRATION_14_15).build()
+                .addMigrations(AppDatabase.MIGRATION_14_15, AppDatabase.MIGRATION_15_16, AppDatabase.MIGRATION_16_17).build()
             sessions = SessionRepository(db)
             assertNull(sessions.session(sid)?.modelSelectionJson)
             assertEquals("Keep this history", sessions.messages(sid).single().text)

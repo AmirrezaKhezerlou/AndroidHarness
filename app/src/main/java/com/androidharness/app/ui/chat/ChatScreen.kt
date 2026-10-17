@@ -1,6 +1,10 @@
 package com.androidharness.app.ui.chat
 
 import androidx.compose.foundation.layout.widthIn
+import com.androidharness.app.artifacts.ArtifactAttachment
+import androidx.compose.ui.res.painterResource
+import com.androidharness.app.R
+import com.androidharness.app.ui.chat.components.ChatAppearance
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -167,6 +171,26 @@ fun ChatScreen(
     onNavigateToSession: (sessionId: String) -> Unit = {},
     searchMessageId: String? = null,
 ) {
+    ChatAppearance {
+        ChatScreenContent(viewModel, onOpenDrawer, onOpenFile, onNewChat, onOpenTerminal,
+            onOpenFiles, onOpenSubagent, onOpenSettings, onNavigateToSession, searchMessageId)
+    }
+}
+
+@Composable
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+private fun ChatScreenContent(
+    viewModel: ChatViewModel,
+    onOpenDrawer: () -> Unit,
+    onOpenFile: (path: String, line: Int?) -> Unit,
+    onNewChat: () -> Unit,
+    onOpenTerminal: () -> Unit,
+    onOpenFiles: () -> Unit = {},
+    onOpenSubagent: (toolCallId: String) -> Unit,
+    onOpenSettings: () -> Unit = {},
+    onNavigateToSession: (sessionId: String) -> Unit = {},
+    searchMessageId: String? = null,
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val desktopLayout = com.androidharness.app.ui.LocalDesktopLayout.current
     val currentProject by viewModel.activeWorkspace.collectAsStateWithLifecycle(initialValue = null)
@@ -196,6 +220,8 @@ fun ChatScreen(
     // user last typed. composerText mirrors value.text for the readers.
     var composerValue by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
     val composerText = composerValue.text
+    var attachedConceptJson by rememberSaveable(state.sessionId) { mutableStateOf<String?>(null) }
+    val attachedConcept = remember(attachedConceptJson) { ArtifactAttachment.decode(attachedConceptJson) }
     val scheduleKeyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     var scheduleDraft by remember { mutableStateOf<com.androidharness.app.automation.AutomationTask?>(null) }
     var scheduledComposerText by remember { mutableStateOf<String?>(null) }
@@ -521,7 +547,7 @@ fun ChatScreen(
             title = { Text("Your message") },
             text = {
                 Text(
-                    if (msg.text.length > 200) msg.text.take(200) + "…" else msg.text,
+                    ArtifactAttachment.visibleText(msg.text).let { if (it.length > 200) it.take(200) + "…" else it },
                     maxLines = 6,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyMedium,
@@ -530,7 +556,7 @@ fun ChatScreen(
             confirmButton = {
                 Row {
                     TextButton(onClick = {
-                        clipboard.setText(AnnotatedString(msg.text))
+                        clipboard.setText(AnnotatedString(ArtifactAttachment.visibleText(msg.text)))
                         actionsMessage = null
                     }) { Text("Copy") }
                     TextButton(onClick = {
@@ -547,14 +573,20 @@ fun ChatScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { actionsMessage = null }) { Text("Close") }
+                Row {
+                    if (msg.turnId in state.turnsWithCheckpoints) TextButton(onClick = {
+                        actionsMessage = null
+                        confirmRewindTurn = msg.turnId
+                    }) { Text("Undo file changes") }
+                    TextButton(onClick = { actionsMessage = null }) { Text("Close") }
+                }
             },
         )
     }
 
     // Prefilled editor for a user message.
     editingMessage?.let { msg ->
-        var text by remember(msg) { mutableStateOf(msg.text) }
+        var text by remember(msg) { mutableStateOf(ArtifactAttachment.visibleText(msg.text)) }
         AlertDialog(
             onDismissRequest = { editingMessage = null },
             title = { Text("Edit message") },
@@ -569,7 +601,7 @@ fun ChatScreen(
             confirmButton = {
                 Button(onClick = {
                     if (text.isNotBlank()) {
-                        confirmingEdit = msg to text
+                        confirmingEdit = msg to ArtifactAttachment.attach(text, ArtifactAttachment.fromPrompt(msg.text))
                         editingMessage = null
                     }
                 }) { Text("Continue") }
@@ -946,6 +978,7 @@ fun ChatScreen(
             Column {
             MainHeader(
                 sessionTitle = state.sessionTitle,
+                workspaceName = currentProject?.name,
                 busy = state.busy,
                 pickerLabel = when {
                     !state.modelSelectionReady -> "Loading model…"
@@ -1100,7 +1133,7 @@ fun ChatScreen(
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxWidth(),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 16.dp),
+                            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 24.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             var nextItemIndex = 0
@@ -1156,42 +1189,39 @@ fun ChatScreen(
                                 }
                             }
                         }
+                        message.artifact?.takeIf { message.role != Role.SYSTEM }?.let { artifact ->
+                            indexedItem(key = "message-$messageKey-artifact", contentType = ChatListContentType.Artifact) {
+                                com.androidharness.app.ui.chat.components.ArtifactCard(
+                                    artifact = artifact,
+                                    revisions = state.messages.mapNotNull { it.artifact }.filter { it.id == artifact.id },
+                                    loadRevisions = { state.sessionId?.let { viewModel.container.sessions.artifacts(it) }.orEmpty() },
+                                    onRevise = { selected ->
+                                        attachedConceptJson = ArtifactAttachment.from(selected).encode()
+                                        if (composerText.isBlank()) setComposerText("Revise this concept: ")
+                                    },
+                                )
+                            }
+                        }
                         when (message.role) {
                             Role.USER -> indexedItem(key = "message-$messageKey-user", contentType = ChatListContentType.User) {
                                 Box(Modifier.animateItem(fadeInSpec = fastEffectsSpec(), placementSpec = null, fadeOutSpec = null)) {
                                     Column(horizontalAlignment = Alignment.End) {
                                         val (visibleText, fileChips) = FileAttachments.splitForDisplay(
-                                            slashSkillInstruction(message.text)
-                                                ?.ifBlank { "/${slashInvokedSkillName(message.text)}" }
-                                                ?: message.text,
+                                            slashSkillInstruction(ArtifactAttachment.visibleText(message.text))
+                                                ?.ifBlank { "/${slashInvokedSkillName(ArtifactAttachment.visibleText(message.text))}" }
+                                                ?: ArtifactAttachment.visibleText(message.text),
                                         )
-                                        slashInvokedSkillName(message.text)?.let { skillName ->
+                                        slashInvokedSkillName(ArtifactAttachment.visibleText(message.text))?.let { skillName ->
                                             SkillUsedBadge(skillName)
                                         }
+                                        ArtifactAttachment.fromPrompt(message.text)?.let { SkillUsedBadge("Concept · ${it.title}") }
                                         UserBubble(
                                             visibleText,
                                             message.images,
                                             fileChips,
                                             onLongPress = { actionsMessage = message },
                                         )
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            CopyIconButton(message.text)
-                                            if (message.turnId in state.turnsWithCheckpoints) {
-                                                UndoIconButton(
-                                                    onClick = { message.turnId?.let { confirmRewindTurn = it } },
-                                                )
-                                            }
-                                            IconButton(
-                                                onClick = { actionsMessage = message },
-                                            ) {
-                                                Icon(
-                                                    Icons.Outlined.MoreHoriz,
-                                                    contentDescription = "More message actions",
-                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.size(17.dp),
-                                                )
-                                            }
-                                        }
+
                                     }
                                 }
                             }
@@ -1205,29 +1235,12 @@ fun ChatScreen(
                                 val isSearchTurn = searchMessageId != null && message.turnId == searchTurnId
                                 val hasFinishedActivity = !isTurnRunning && !isSearchTurn && activity.isNotEmpty()
                                 if (hasFinishedActivity && !isTurnFinal) continue
-                                if (hasFinishedActivity) {
-                                    val userAt = turnFirstUserTimes[message.turnId]
-                                    val workedLabel = if (userAt != null) {
-                                        formatDuration((message.createdAt - userAt).coerceAtLeast(0))
-                                    } else ""
-                                    indexedItem(key = "turn-${message.turnId}-activity", contentType = ChatListContentType.Activity) {
-                                        TurnActivityCard(
-                                            calls = activity.flatMap { it.toolCalls },
-                                            results = toolResults,
-                                            fileEdits = state.fileEditsByTurn[message.turnId].orEmpty(),
-                                            workedLabel = workedLabel,
-                                            activity = activity,
-                                            onOpenFile = onOpenFile,
-                                            showLiveCode = state.showLiveCode,
-                                        )
-                                    }
-                                }
                                 if (!hasFinishedActivity && message.thinking.isNotBlank()) {
                                     indexedItem(key = "message-$messageKey-thinking", contentType = ChatListContentType.Thinking) {
                                         Box(Modifier.animateItem(fadeInSpec = fastEffectsSpec(), placementSpec = null, fadeOutSpec = null)) { ThinkingBlock(message.thinking, durationMs = message.thinkingMs) }
                                     }
                                 }
-                                if (message.text.isNotBlank()) {
+                                if (message.text.isNotBlank() || hasFinishedActivity) {
                                     indexedItem(key = "message-$messageKey-text", contentType = ChatListContentType.AssistantText) {
                                         Box(Modifier.animateItem(fadeInSpec = fastEffectsSpec(), placementSpec = null, fadeOutSpec = null)) {
                                             Column {
@@ -1239,6 +1252,11 @@ fun ChatScreen(
                                                     ) {
                                                         used.forEach { SkillUsedBadge(it) }
                                                     }
+                                                }
+                                                if (message.text.isNotBlank()) {
+                                                    Text("ANDROIDHARNESS", style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp))
                                                 }
                                                 AssistantText(
                                                     message.text,
@@ -1257,6 +1275,17 @@ fun ChatScreen(
                                                         modifier = Modifier.padding(top = 8.dp),
                                                     )
                                                 }
+                                                if (hasFinishedActivity) {
+                                                    val userAt = turnFirstUserTimes[message.turnId]
+                                                    Box(Modifier.padding(top = 18.dp)) {
+                                                        TurnActivityCard(
+                                                            calls = activity.flatMap { it.toolCalls }, results = toolResults,
+                                                            fileEdits = edits,
+                                                            workedLabel = userAt?.let { formatDuration((message.createdAt - it).coerceAtLeast(0)) }.orEmpty(),
+                                                            activity = activity, onOpenFile = onOpenFile, showLiveCode = state.showLiveCode,
+                                                        )
+                                                    }
+                                                }
                                                 if (isTurnFinal && !isTurnRunning &&
                                                     (edits.isNotEmpty() || turnVerification[message.turnId].orEmpty().isNotEmpty())) {
                                                     com.androidharness.app.ui.chat.components.VerificationCard(turnVerification[message.turnId].orEmpty())
@@ -1266,18 +1295,17 @@ fun ChatScreen(
                                                     verticalAlignment = Alignment.CenterVertically,
                                                 ) {
                                                     CopyIconButton(message.text)
-                                                    ForkIconButton(
-                                                        onClick = {
-                                                            viewModel.requestFork(message) { newSid ->
-                                                                onNavigateToSession(newSid)
-                                                            }
+                                                    ResponseActions(
+                                                        onFork = { viewModel.requestFork(message) { onNavigateToSession(it) } },
+                                                        onUndo = if (canRewind) ({ message.turnId?.let { confirmRewindTurn = it } }) else null,
+                                                        details = {
+                                                            val duration = turnFirstUserTimes[message.turnId]?.let { message.createdAt - it }
+                                                            Text(turnPerformanceLabel(duration, turnSpeeds[message.turnId]),
+                                                                style = MaterialTheme.typography.labelSmall,
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                                                         },
                                                     )
-                                                    if (canRewind) {
-                                                        UndoIconButton(
-                                                            onClick = { message.turnId?.let { confirmRewindTurn = it } },
-                                                        )
-                                                    }
                                                     if (isTurnFinal && !isTurnRunning) {
                                                         val duration = turnFirstUserTimes[message.turnId]?.let {
                                                             message.createdAt - it
@@ -1287,7 +1315,7 @@ fun ChatScreen(
                                                                 .format(java.util.Date(it))
                                                         }
                                                         val label = listOfNotNull(
-                                                            turnPerformanceLabel(duration, turnSpeeds[message.turnId]).takeIf { it.isNotBlank() },
+                                                            duration?.let { formatDuration(it.coerceAtLeast(0)) },
                                                             timestamp,
                                                         ).joinToString(" · ")
                                                         if (label.isNotBlank()) {
@@ -1301,7 +1329,8 @@ fun ChatScreen(
                                                     }
                                                 }
                                                 if (isTurnFinal && !isTurnRunning) {
-                                                    CacheUsageFooter(state.turnCacheUsage[message.turnId].orEmpty())
+                                                    CacheUsageFooter(state.turnCacheUsage[message.turnId].orEmpty(),
+                                                        speed = turnSpeeds[message.turnId])
                                                 }
                                             }
                                         }
@@ -1600,6 +1629,27 @@ fun ChatScreen(
                     onSendNow = viewModel::sendQueuedNow,
                 )
 
+                if (desktopLayout) {
+                    attachedConcept?.let { concept ->
+                        com.androidharness.app.ui.chat.components.ConceptAttachmentChip(concept) { attachedConceptJson = null }
+                    }
+                    if (state.attachments.isNotEmpty()) AttachmentChips(state.attachments, viewModel::removeAttachment)
+                    if (state.fileAttachments.isNotEmpty()) FileAttachmentChips(state.fileAttachments, viewModel::removeFileAttachment)
+                }
+
+                state.compactionNote?.let { note ->
+                    CompactionBanner(note, Modifier.padding(bottom = 6.dp))
+                }
+
+                AgentStatusBar(action = state.currentAction, busy = state.busy)
+                com.androidharness.app.ui.automation.ScheduledMessageRow(chatSchedules, scheduleConnection, scheduleNow) {
+                    if (chatSchedules.size == 1) scheduleDraft = chatSchedules.first() else showScheduledList = true
+                }
+                MessageComposer(
+                    attachments = {
+                        attachedConcept?.let { concept ->
+                            com.androidharness.app.ui.chat.components.ConceptAttachmentChip(concept) { attachedConceptJson = null }
+                        }
                 if (state.attachments.isNotEmpty()) {
                     AttachmentChips(
                         attachments = state.attachments,
@@ -1614,15 +1664,7 @@ fun ChatScreen(
                     )
                 }
 
-                state.compactionNote?.let { note ->
-                    CompactionBanner(note, Modifier.padding(bottom = 6.dp))
-                }
-
-                AgentStatusBar(action = state.currentAction, busy = state.busy)
-                com.androidharness.app.ui.automation.ScheduledMessageRow(chatSchedules, scheduleConnection, scheduleNow) {
-                    if (chatSchedules.size == 1) scheduleDraft = chatSchedules.first() else showScheduledList = true
-                }
-                MessageComposer(
+                    },
                     busy = state.busy,
                     value = composerValue,
                     attachedSkill = attachedSkill,
@@ -1632,12 +1674,14 @@ fun ChatScreen(
                     },
                     onClearSkill = { attachedSkill = null },
                     onSend = {
-                        val payload = SlashCommands.composeSend(attachedSkill, composerText)
+                        val payload = ArtifactAttachment.attach(SlashCommands.composeSend(attachedSkill,
+                            composerText.ifBlank { if (attachedConcept != null) "Revise this concept." else "" }), attachedConcept)
                         if (payload.isNotBlank() || state.fileAttachments.isNotEmpty()) {
                             // Keep the draft when a selection is still loading/saving or unavailable.
                             if (viewModel.send(payload)) {
                                 setComposerText("")
                                 attachedSkill = null
+                                attachedConceptJson = null
                                 slashExpanded = false
                             }
                         }
@@ -1656,6 +1700,7 @@ fun ChatScreen(
                     },
                     scheduleUnavailableReason = when {
                         composerText.isBlank() -> "Write a message first"
+                        attachedConcept != null -> "Remove the concept attachment to schedule a message"
                         attachedSkill != null || state.attachments.isNotEmpty() || state.fileAttachments.isNotEmpty() -> "Schedule a text message without attachments"
                         currentProject == null -> "Choose a workspace first"
                         else -> null
@@ -1716,7 +1761,7 @@ fun ChatScreen(
                             setComposerText(newText)
                         }
                     },
-                    hasAttachments = state.fileAttachments.isNotEmpty(),
+                    hasAttachments = state.fileAttachments.isNotEmpty() || state.attachments.isNotEmpty() || attachedConcept != null,
                 )
             }
 
@@ -1753,7 +1798,7 @@ internal fun CopyIconButton(text: String) {
         copied = true
     }) {
         Icon(
-            if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy,
+            painterResource(if (copied) R.drawable.ic_chat_check_check else R.drawable.ic_chat_copy),
             contentDescription = "Copy",
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(17.dp),
@@ -1768,26 +1813,21 @@ internal fun CopyIconButton(text: String) {
 }
 
 @Composable
-private fun ForkIconButton(onClick: () -> Unit) {
-    IconButton(onClick = onClick) {
-        Icon(
-            Icons.Outlined.ForkRight,
-            contentDescription = "Fork from this message",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(17.dp),
-        )
-    }
-}
-
-@Composable
-private fun UndoIconButton(onClick: () -> Unit) {
-    IconButton(onClick = onClick) {
-        Icon(
-            Icons.Outlined.History,
-            contentDescription = "Undo file changes from this turn",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(17.dp),
-        )
+internal fun ResponseActions(onFork: () -> Unit, onUndo: (() -> Unit)?, details: @Composable () -> Unit = {}) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(painterResource(R.drawable.ic_chat_ellipsis), "More response actions", Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        androidx.compose.material3.DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            androidx.compose.material3.DropdownMenuItem(text = { Text("Fork from this message") },
+                onClick = { expanded = false; onFork() })
+            if (onUndo != null) androidx.compose.material3.DropdownMenuItem(text = { Text("Undo file changes from this turn") },
+                onClick = { expanded = false; onUndo() })
+            HorizontalDivider()
+            details()
+        }
     }
 }
 
@@ -1817,9 +1857,9 @@ private fun FileEditsCard(
     )
 
     Surface(
-        shape = MaterialTheme.shapes.medium,
-        color = scheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.5f)),
+        shape = RoundedCornerShape(13.dp),
+        color = scheme.surface,
+        border = BorderStroke(1.dp, scheme.outlineVariant),
         modifier = modifier.fillMaxWidth(),
     ) {
         Column {
@@ -1831,9 +1871,11 @@ private fun FileEditsCard(
                     .clickable { expanded = !expanded }
                     .padding(horizontal = 12.dp, vertical = 9.dp),
             ) {
+                Icon(painterResource(R.drawable.ic_chat_file_code_2), null, Modifier.size(18.dp), tint = scheme.onSurfaceVariant)
                 Text(
-                    "Edited files",
-                    style = MaterialTheme.typography.labelLarge,
+                    if (merged.size == 1) merged.first().first.substringAfterLast('/') else "${merged.size} edited files",
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelMedium,
                     modifier = Modifier.weight(1f),
                 )
                 DiffStatText(merged.sumOf { it.second.first }, merged.sumOf { it.second.second })

@@ -40,6 +40,10 @@ fun toolPresentation(call: ToolCallData, result: ChatMessage? = null): ToolPrese
     }
 
     val presentation = when (call.name) {
+        "create_artifact" -> ToolPresentation(
+            if (result == null) "Creating concept" else okTitle("Created concept", "Concept failed"),
+            "Creating ${arg("title") ?: "interactive concept"}…", arg("title"), ToolActivityKind.OTHER)
+        "read_artifact" -> ToolPresentation("Read concept", "Reading concept source…", kind = ToolActivityKind.READ)
         "write_file" -> {
             val path = target()
             ToolPresentation(

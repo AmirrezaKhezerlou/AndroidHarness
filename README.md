@@ -42,6 +42,7 @@ Open a workspace, point the agent at a project, and ask for a change. `/doctor` 
 
 - **Telegram remote control.** Pair a private bot account in Settings → Telegram to continue real chats, choose projects and models, edit files, approve tools and answer agent questions while the app is minimized. A persistent notification offers Pause and Stop, and saved requests/replies remain recoverable after a connection failure. See the [setup and command guide](TELEGRAM.md).
 - Full markdown chat with streaming responses, thinking blocks that report an estimated token count, and a tool call card for every action the agent takes.
+- **Interactive concepts in chat.** Ask for a mockup, chart, diagram, or small interactive tool. Tool-capable models can create offline HTML/CSS/JS previews with Preview/Code tabs, fullscreen, revision history, Revise, and Save HTML. Concepts stay with the chat through restarts, backups, and forks. See the [concept guide](CONCEPTS.md).
 - Responsive markdown tables with compact card previews and an expandable full-sheet viewer with horizontal scroll.
 - File diff sheets open right from tool call cards, so you can inspect a change without leaving the conversation.
 - Turn metrics: response duration, token generation throughput measured over the streaming window itself, first-token latency, and token counts in turn stats.

@@ -89,7 +89,11 @@ class MobileWorkflowDeviceTest {
                     VerificationCard(emptyList())
                 }
             } } }
-            await("verification card") { hasNode("Recheck needed") && hasNode("Verification") }
+            await("verification summary") { hasNode("Verification · 1 passed · 1 need recheck") }
+            tapNode("Verification · 1 passed · 1 need recheck")
+            await("verification commands") { hasNode("Recheck needed") && hasNode("npm run build") && hasNode("npm test") }
+            tapNode("Verification · Checks not run")
+            await("empty verification details") { hasNode("No build, test, or lint result recorded for this turn.") }
             screenshot("workflow-verification.png")
         }
         root.deleteRecursively()

@@ -61,7 +61,7 @@ fun MessageQueueCard(
                 .heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
                     Text("${queue.size} queued", style = MaterialTheme.typography.labelLarge)
-                    if (!expanded) Text(queue.first().text, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    if (!expanded) Text(com.androidharness.app.artifacts.ArtifactAttachment.visibleText(queue.first().text), maxLines = 1, overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, "Manage queue")
@@ -72,7 +72,7 @@ fun MessageQueueCard(
                 queue.forEachIndexed { index, item ->
                     HorizontalDivider()
                     Column(Modifier.padding(horizontal = 10.dp, vertical = 4.dp)) {
-                        Text(item.text, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                        Text(com.androidharness.app.artifacts.ArtifactAttachment.visibleText(item.text), maxLines = 3, overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.fillMaxWidth().clickable { editing = item }.padding(4.dp),
                             style = MaterialTheme.typography.bodySmall)
                         FlowRow(Modifier.fillMaxWidth()) {
@@ -92,10 +92,10 @@ fun MessageQueueCard(
         }
     }
     editing?.let { item ->
-        var text by remember(item.id) { mutableStateOf(item.text) }
+        var text by remember(item.id) { mutableStateOf(com.androidharness.app.artifacts.ArtifactAttachment.visibleText(item.text)) }
         AlertDialog(onDismissRequest = { editing = null }, title = { Text("Edit queued message") },
             text = { OutlinedTextField(text, { text = it }, modifier = Modifier.fillMaxWidth(), minLines = 3, maxLines = 8) },
-            confirmButton = { TextButton(onClick = { onEdit(item.id, text); editing = null }, enabled = text.isNotBlank()) { Text("Save") } },
+            confirmButton = { TextButton(onClick = { onEdit(item.id, com.androidharness.app.artifacts.ArtifactAttachment.attach(text, com.androidharness.app.artifacts.ArtifactAttachment.fromPrompt(item.text))); editing = null }, enabled = text.isNotBlank()) { Text("Save") } },
             dismissButton = { TextButton(onClick = { editing = null }) { Text("Cancel") } })
     }
 }

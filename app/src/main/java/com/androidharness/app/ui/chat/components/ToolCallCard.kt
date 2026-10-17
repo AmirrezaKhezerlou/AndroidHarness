@@ -1,5 +1,8 @@
 package com.androidharness.app.ui.chat.components
 
+import androidx.compose.ui.res.painterResource
+import com.androidharness.app.R
+
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.animation.AnimatedVisibility
@@ -442,74 +445,37 @@ internal fun TurnActivityCard(
     val scheme = MaterialTheme.colorScheme
     val success = LocalStatusColors.current.success
     val failedCount = calls.count { results[it.id]?.isError == true }
-    val changedFiles = fileEdits.map { it.relPath }.distinct().size
-    val verificationCalls = calls.filter { toolPresentation(it, results[it.id]).kind == com.androidharness.app.agent.ToolActivityKind.VERIFY }
-    val passedChecks = verificationCalls.count { results[it.id]?.isError == false }
-    val failedChecks = verificationCalls.count { results[it.id]?.isError == true }
-    val title = buildString {
-        if (workedLabel.isNotBlank()) append("Worked for $workedLabel · ")
-        append("${calls.size} tool${if (calls.size == 1) "" else "s"}")
-        if (changedFiles > 0) append(" · $changedFiles file${if (changedFiles == 1) "" else "s"} changed")
-    }
-
+    val completedCount = calls.count { results[it.id] != null }
     Surface(
         onClick = { expanded = !expanded },
-        shape = MaterialTheme.shapes.large,
-        color = scheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.5f)),
+        shape = RoundedCornerShape(13.dp),
+        color = scheme.surfaceContainerHigh,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
             ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .size(30.dp)
-                        .background(scheme.surfaceContainerHigh, RoundedCornerShape(9.dp)),
-                ) {
-                    Icon(
-                        Icons.Outlined.Build,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = scheme.onSurfaceVariant,
-                    )
-                }
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        title,
-                        style = MaterialTheme.typography.labelLarge,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    val summary = buildString {
-                        when {
-                            failedCount > 0 -> append("$failedCount failed")
-                            else -> append("Done")
-                        }
-                        if (passedChecks > 0) append(" · $passedChecks check${if (passedChecks == 1) "" else "s"} passed")
-                        if (failedChecks > 0) append(" · $failedChecks check${if (failedChecks == 1) "" else "s"} failed")
-                    }
-                    Text(
-                        summary,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (failedCount > 0) scheme.error else scheme.onSurfaceVariant,
-                    )
-                }
                 Icon(
-                    if (failedCount > 0) Icons.Filled.Close else Icons.Filled.CheckCircle,
-                    contentDescription = if (failedCount > 0) "Completed with failures" else "Done",
-                    tint = if (failedCount > 0) scheme.error else success,
-                    modifier = Modifier.size(18.dp),
+                    painterResource(R.drawable.ic_chat_check_check),
+                    contentDescription = null, modifier = Modifier.size(18.dp),
+                    tint = if (failedCount > 0) scheme.error else if (completedCount == calls.size && calls.isNotEmpty()) success else scheme.onSurfaceVariant,
                 )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (failedCount > 0) "Work summary · $failedCount failed" else "Work summary",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (failedCount > 0) scheme.error else scheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                if (calls.isNotEmpty()) Text("$completedCount / ${calls.size}",
+                    style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
                 Icon(
-                    Icons.Filled.KeyboardArrowDown,
+                    painterResource(R.drawable.ic_chat_chevron_right),
                     contentDescription = if (expanded) "Collapse activity" else "Expand activity",
                     tint = scheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 2.dp).size(20.dp).rotate(rotation),
+                    modifier = Modifier.padding(start = 8.dp).size(18.dp).rotate(rotation / 2),
                 )
             }
             AnimatedVisibility(
@@ -521,7 +487,8 @@ internal fun TurnActivityCard(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
                 ) {
-                    HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.5f))
+                    if (workedLabel.isNotBlank()) Text("Worked for $workedLabel", style = MaterialTheme.typography.labelSmall,
+                        color = scheme.onSurfaceVariant)
                     activity.forEach { message ->
                         if (message.thinking.isNotBlank()) {
                             ThinkingBlock(message.thinking, durationMs = message.thinkingMs)

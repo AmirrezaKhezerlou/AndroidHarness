@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextAlign
 import com.androidharness.app.data.db.UsageEventEntity
 import com.androidharness.app.llm.ModelsDev
 import com.androidharness.app.ui.theme.LocalStatusColors
@@ -87,8 +88,9 @@ private fun cacheMoney(cost: Double): String = when {
 
 /** One quiet footer line; request-level amounts stay behind a tap, inside chat. */
 @Composable
-internal fun CacheUsageFooter(rows: List<UsageEventEntity>, running: Boolean = false) {
-    if (rows.isEmpty()) return
+internal fun CacheUsageFooter(rows: List<UsageEventEntity>, running: Boolean = false, speed: TurnSpeed? = null) {
+    val speedLabel = turnPerformanceLabel(null, speed?.copy(firstTokenMs = null))
+    if (rows.isEmpty() && speedLabel.isBlank()) return
     var expanded by remember { mutableStateOf(false) }
     val summary = remember(rows) { cacheUsageSummary(rows) }
     val indicator = remember(rows, running) { cacheIndicatorSummary(rows, running) }
@@ -103,10 +105,18 @@ internal fun CacheUsageFooter(rows: List<UsageEventEntity>, running: Boolean = f
     val errorColor = MaterialTheme.colorScheme.error
     Column(Modifier.fillMaxWidth()) {
         Row(
-            Modifier.fillMaxWidth().clickable { expanded = !expanded }.heightIn(min = 36.dp),
-            horizontalArrangement = Arrangement.End,
+            Modifier.fillMaxWidth().clickable(enabled = rows.isNotEmpty()) { expanded = !expanded }.heightIn(min = 36.dp),
+            horizontalArrangement = Arrangement.Start,
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (speedLabel.isNotBlank()) {
+                Text(speedLabel, style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Start,
+                    modifier = Modifier.weight(1f).padding(end = 8.dp))
+            }
+            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically) {
             if (indicator.rate != null) {
                 Icon(
                     if (indicator.cached > 0) Icons.Filled.CheckCircle else Icons.Filled.Close,
@@ -120,11 +130,14 @@ internal fun CacheUsageFooter(rows: List<UsageEventEntity>, running: Boolean = f
                 indicator.label + if (running) " · last completed" else "",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f, fill = false),
+                textAlign = TextAlign.End,
             )
-            Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+            if (rows.isNotEmpty()) Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                 if (expanded) "Hide cache details" else "Show cache details",
                 Modifier.padding(start = 2.dp).size(16.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
         if (expanded) {
             Column(Modifier.fillMaxWidth().heightIn(max = 200.dp).verticalScroll(rememberScrollState()).padding(8.dp),

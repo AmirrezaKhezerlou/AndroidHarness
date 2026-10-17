@@ -43,9 +43,10 @@ class MultiWorkspaceDeviceTest {
             initial.close()
             android.database.sqlite.SQLiteDatabase.openDatabase(context.getDatabasePath(name).path, null, 0).use { old ->
                 old.execSQL("ALTER TABLE sessions DROP COLUMN workspaceSelectionJson")
+                old.execSQL("ALTER TABLE messages DROP COLUMN artifactJson")
                 old.version = 15
             }
-            val migrated = Room.databaseBuilder(context, AppDatabase::class.java, name).addMigrations(AppDatabase.MIGRATION_15_16).build()
+            val migrated = Room.databaseBuilder(context, AppDatabase::class.java, name).addMigrations(AppDatabase.MIGRATION_15_16, AppDatabase.MIGRATION_16_17).build()
             try {
                 val row = requireNotNull(migrated.dao().session("legacy"))
                 assertEquals("Keep this chat", row.title); assertEquals("original", row.projectId)
