@@ -140,27 +140,27 @@ class ModelLockingDeviceTest {
             setText("Keep my unsent draft")
             shell("input keyevent 4")
             tap("Switch model")
-            scrollTo("Use the same model in every chat"); awaitText("Use the same model in every chat")
+            awaitText("All chats")
             screenshot("model-picker-shared")
-            tap("Use the same model in every chat")
+            tap("All chats"); awaitText("Use model for"); tap("This chat")
             withTimeout(15000) { c.settings.settings.first { !it.sameModelAcrossChats } }
-            awaitText("Each chat remembers its own model.")
+            awaitText("For this chat")
             screenshot("model-picker-this-chat")
-            scrollTo("beta-model"); tap("beta-model"); tap("Use beta-model")
+            tap("All models"); scrollTo("beta-model"); tap("beta-model"); tap("Use model")
             withTimeout(15000) { c.chatModels.observe(a).first { it.selection.active?.model == "beta-model" } }
             awaitText("This chat"); awaitText("Keep my unsent draft")
             tap("Open navigation"); scrollTo(betaTitle); tapTextPosition(betaTitle)
             awaitText(betaTitle); awaitText("This chat")
             assertEquals("alpha-model", c.chatModels.observe(b).first().selection.active?.model)
-            tap("Switch model"); scrollTo("exec-model"); tap("exec-model"); tap("Use exec-model")
+            tap("Switch model"); tap("All models"); scrollTo("exec-model"); tap("exec-model"); tap("Use model")
             withTimeout(15000) { c.chatModels.observe(b).first { it.selection.active?.model == "exec-model" } }
             shell("input keyevent 4"); awaitText(alphaTitle)
             awaitText("Keep my unsent draft")
             assertEquals("beta-model", c.chatModels.observe(a).first().selection.active?.model)
-            tap("Switch model"); scrollTo("Each chat remembers its own model."); awaitText("Each chat remembers its own model.")
-            tap("Use the same model in every chat")
+            tap("Switch model"); awaitText("For this chat")
+            tap("This chat"); awaitText("Use model for"); tap("All chats")
             withTimeout(15000) { c.settings.settings.first { it.sameModelAcrossChats && it.activeModel == "beta-model" } }
-            tap("Use the same model in every chat")
+            tap("All chats"); awaitText("Use model for"); tap("This chat")
             withTimeout(15000) { c.settings.settings.first { !it.sameModelAcrossChats } }
             scrollTo("Close"); tap("Close")
             val monitor = instrumentation.addMonitor(MainActivity::class.java.name, null, false)
@@ -170,13 +170,15 @@ class ModelLockingDeviceTest {
             assertNotNull(recreated)
             try {
                 awaitText("This chat"); awaitText("Keep my unsent draft")
-                tap("Switch model"); scrollTo("Each chat remembers its own model."); awaitText("Each chat remembers its own model.")
+                tap("Switch model"); awaitText("For this chat")
                 screenshot("model-picker-restored")
                 instrumentation.runOnMainSync { recreated!!.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
                 awaitLandscape()
-                scrollTo("beta-model"); screenshot("model-picker-landscape")
-                tap("beta-model"); tap("Use beta-model"); awaitText("This chat")
+                screenshot("model-picker-landscape")
+                // The restored choice is already current, so applying it again is disabled.
+                awaitText("Current model"); tap("Close"); awaitText("This chat")
                 assertEquals(provider.id, c.chatModels.observe(a).first().selection.active?.providerId)
+                assertEquals("beta-model", c.chatModels.observe(a).first().selection.active?.model)
             } finally { recreated?.let { instrumentation.runOnMainSync { it.finish() } } }
         }
     }
@@ -184,16 +186,16 @@ class ModelLockingDeviceTest {
     @Test fun pickerControlsRemainReachableInLandscape() = runBlocking {
         fixture { activity, _, a, _, _ ->
             awaitText(requireNotNull(c.sessions.session(a)).title)
-            tap("Switch model"); scrollTo("Use the same model in every chat")
-            tap("Use the same model in every chat")
+            tap("Switch model"); awaitText("All chats")
+            tap("All chats"); awaitText("Use model for"); tap("This chat")
             withTimeout(15000) { c.settings.settings.first { !it.sameModelAcrossChats } }
-            awaitText("Each chat remembers its own model.")
+            awaitText("For this chat")
             screenshot("model-picker-accessible")
             instrumentation.runOnMainSync { activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
             awaitLandscape()
-            scrollTo("beta-model")
+            tap("All models"); scrollTo("beta-model")
             screenshot("model-picker-accessible-landscape")
-            tap("beta-model"); tap("Use beta-model")
+            tap("beta-model"); tap("Use model")
             withTimeout(15000) { c.chatModels.observe(a).first { it.selection.active?.model == "beta-model" } }
             awaitText("This chat")
         }
@@ -305,7 +307,9 @@ class ModelLockingDeviceTest {
         (node.text?.toString()?.split('\n')?.contains(text) == true || node.contentDescription?.toString() == text)
     private fun clickableParent(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
         var target = node
-        while (!target.isClickable) target = target.parent ?: return null
+        // Android exposes an already selected tab/radio as selected or checkable,
+        // even when isClickable is false. It remains a valid touch target.
+        while (!target.isClickable && !target.isCheckable && !target.isSelected) target = target.parent ?: return null
         return target
     }
     private fun awaitText(text: String, clickableOnly: Boolean = false): AccessibilityNodeInfo {

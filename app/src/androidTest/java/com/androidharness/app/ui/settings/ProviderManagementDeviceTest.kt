@@ -94,7 +94,7 @@ class ProviderManagementDeviceTest {
                 screenshot("provider-inline-headers")
                 assertVisibleWithinWindow("Continue")
                 tap("Continue")
-                await { find("Choose model") != null }
+                await { find("Choose a model") != null }
                 tap("Save")
                 await { saved.get() != null && observed.get()?.headers?.firstOrNull()?.value == "edited-fixture-header" }
             }
@@ -116,7 +116,7 @@ class ProviderManagementDeviceTest {
                 scrollTo("Show header 1 value"); tap("Show header 1 value")
                 await { find("edited-fixture-header") != null }
                 tap("Remove header 2"); tap("Remove header 1")
-                tap("Continue"); await { find("Choose model") != null }; tap("Save")
+                tap("Continue"); await { find("Choose a model") != null }; tap("Save")
                 await { saved.get() != null && observed.get()?.headers?.isEmpty() == true }
             }
             assertTrue(KeyStoreManager(c.appContext).providerHeaders(provider.id).isEmpty())
@@ -229,7 +229,7 @@ class ProviderManagementDeviceTest {
                     modelShortcuts = shortcuts, searchAllProvidersInitially = true,
                     onEnableProvider = { id -> enabled.set(id); providers.value = providers.value.map { if (it.id == id) it.copy(enabled = true) else it } })
             } } }
-            await { find("Show all") != null }
+            await { find("Choose a model") != null }
             scrollTo("Search models or providers")
             if (desktop) {
                 // Tab brings the complete field into view, including in short desktop windows.
@@ -250,15 +250,17 @@ class ProviderManagementDeviceTest {
             scrollTo("Refresh models"); screenshot("models-before-refresh"); tap("Refresh models")
             await { nodes().any { it.text?.contains("Offline fixture") == true } }
             scrollTo("Shared backup")
-            scrollTo("Disabled · Enable & use")
+            scrollTo("Disabled · Enable and use")
             tap("Favourite Shared backup")
             scrollTo("Favourites"); tap("Favourites")
             scrollTo("Shared backup")
             await { find("Shared backup") != null }
             assertNull(find("Favourite Shared primary"))
             screenshot("models-unified-favourites")
-            tap("Disabled · Enable & use")
+            tap("Disabled · Enable and use")
             await { find("Enable and use") != null }
+            tap("Enable and use")
+            await { find("Enable ${second.name}?") != null }
             tap("Enable and use")
             await { selected.get() != null }
             assertEquals(ModelShortcut(second.id, "shared-model"), selected.get())
@@ -284,30 +286,76 @@ class ProviderManagementDeviceTest {
                         onRefreshCatalog = { null }, onManageProviders = {}, modelShortcuts = ModelShortcuts(c.appContext, storeName))
                 } } }
                 await { find("Switch provider") != null }
-                assertTrue(bounds(requireNotNull(find("Switch provider"))).top < bounds(requireNotNull(find("Choose model"))).top)
-                assertNotNull(find("Reasoning reported by provider"))
+                assertTrue(bounds(requireNotNull(find("Switch provider"))).top > bounds(requireNotNull(find("Choose a model"))).top)
+                scrollTo("Thinking: Reported by this provider")
+                assertNotNull(find("Thinking: Reported by this provider"))
                 screenshot("models-brain-provider-control")
-                tap("Switch provider")
+                scrollTo("Switch provider"); tap("Switch provider")
                 await { find("Search providers") != null }
                 search("Secondary"); hideKeyboard()
-                assertNull(find("Browse models from ${first.name}"))
+                assertNull(find(first.name))
                 screenshot("models-provider-popup")
-                tap("Browse models from ${second.name}")
+                tap(second.name)
                 await { find("Choose ${second.model} from ${second.name}") != null }
                 assertNull(selected.get())
                 assertNull(find("Choose ${first.model} from ${first.name}"))
-                tap("Reasoning inferred from model name")
-                await { find("This model family may support reasoning") != null }
+                scrollTo("Thinking unconfirmed"); tapModelRow(second.model)
+                assertNotNull(find("Thinking unconfirmed"))
+                tap("Selected model details")
+                await { find("Unconfirmed model-family hint") != null }
                 tap("Got it")
                 screenshot("models-inferred-brain")
                 tapModelRow(second.model)
                 assertNull(selected.get())
-                tap("Use ${second.model}")
+                tap("Use model")
                 await { selected.get() != null }
                 assertEquals(ModelShortcut(second.id, second.model), selected.get())
             }
         } finally {
             c.appContext.getSharedPreferences(storeName, android.content.Context.MODE_PRIVATE).edit().clear().commit()
+        }
+    }
+
+    @Test fun providerChooserAddsConnectionDirectlyAndCapabilitiesStayVisible() {
+        val first = ProviderConfig("switcher:fixture", "Demo provider", ProviderType.OPENAI_COMPAT,
+            "https://example.test", "demo-model")
+        val shortcutsName = "switcher-add-${System.nanoTime()}"
+        val selected = AtomicReference<ModelShortcut?>()
+        try {
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { it.setContent { theme {
+                    var picker by remember { mutableStateOf(true) }
+                    var adding by remember { mutableStateOf(false) }
+                    if (picker) ModelPickerSheet(listOf(first), first.id, first.model,
+                        mapOf(first.id to listOf(ModelEntry(first.model, reasoning = true, tools = true, imageInput = true))),
+                        onDismiss = { picker = false }, onSelect = { id, model -> selected.set(ModelShortcut(id, requireNotNull(model))) },
+                        onRefreshCatalog = { null }, onManageProviders = {}, sameModelAcrossChats = false,
+                        modelShortcuts = ModelShortcuts(c.appContext, shortcutsName), onAddProvider = { adding = true })
+                    if (adding) ProviderManagerSheet(listOf(first), first.id, { null }, { adding = false }, {}, {}, { _, _ -> },
+                        { _, _, _ -> }, { _, _, _, _, _, _, _ -> }, addProviderInitially = true)
+                } } }
+                await { find("Choose a model") != null }
+                scrollTo("Tools: Reported by this provider")
+                assertNotNull(find("Images: Reported by this provider"))
+                assertNotNull(find("Thinking: Reported by this provider"))
+                screenshot("models-unified-capabilities")
+                scrollTo("Selected model details"); tap("Selected model details")
+                await { find("Got it") != null }
+                screenshot("models-capability-details")
+                tap("Got it")
+                scrollTo("Switch provider"); tap("Switch provider")
+                await { find("Search providers") != null }
+                scrollTo(first.name)
+                assertVisibleWithinWindow(first.name)
+                assertVisibleWithinWindow("Add provider")
+                screenshot("models-switch-provider")
+                tap("Add provider")
+                await { find("1 of 3") != null }
+                screenshot("models-add-provider-direct")
+                assertNull(selected.get())
+            }
+        } finally {
+            c.appContext.getSharedPreferences(shortcutsName, android.content.Context.MODE_PRIVATE).edit().clear().commit()
         }
     }
 
@@ -330,12 +378,12 @@ class ProviderManagementDeviceTest {
                         onRefreshCatalog = { null }, onManageProviders = {}, modelVisibility = visibility,
                         modelShortcuts = ModelShortcuts(c.appContext, "visibility-shortcuts-test"))
                 } } }
-                await { find("Choose model") != null }
-                tap("Reasoning indicators")
-                await { find("Reasoning support does not guarantee visible thinking text.") != null }
+                await { find("Choose a model") != null }
+                tap("Selected model details")
+                await { find("Thinking support does not guarantee visible thinking text.") != null }
                 assertVisibleWithinWindow("Got it")
                 tap("Got it")
-                tap("Manage models")
+                tap("Edit list")
                 await { find("Search this provider") != null }
                 search("qwen"); hideKeyboard()
                 tap("Select results (2)")
@@ -348,27 +396,27 @@ class ProviderManagementDeviceTest {
                 tap("Got it")
                 screenshot("models-manage-filtered-selection")
                 tap("Save selection")
-                await { find("Choose model") != null }
+                await { find("Choose a model") != null }
                 assertEquals(setOf("qwen-one", "qwen-two"), ModelVisibility(c.appContext, storeName).state.value.selected[provider.id])
                 scenario.onActivity { catalog.value = catalog.value + (provider.id to (catalog.value.getValue(provider.id) + ModelEntry("newly-discovered"))) }
                 search("newly-discovered"); hideKeyboard()
-                assertNull(find("Hidden"))
+                assertNotNull(find("Hidden"))
                 assertFalse(visibility.state.value.includes(provider.id, "newly-discovered"))
-                tap("Show all")
+                tap("Model options"); tap("Show all")
                 scrollTo("newly-discovered")
                 await { find("Hidden") != null }
                 screenshot("models-show-all-hidden")
                 search(""); hideKeyboard()
-                tap("Manage models")
+                tap("Edit list")
                 search("qwen-one"); hideKeyboard(); tapModelRow("qwen-one", checkable = true)
                 tap("Close model management")
-                await { find("Choose model") != null }
+                await { find("Choose a model") != null }
                 assertTrue(visibility.state.value.includes(provider.id, "qwen-one"))
                 search("qwen-two"); hideKeyboard(); tapModelRow("qwen-two")
                 assertNull(selected.get())
-                assertVisibleWithinWindow("Use qwen-two")
+                assertVisibleWithinWindow("Use model")
                 screenshot("models-provider-first-confirm")
-                tap("Use qwen-two")
+                tap("Use model")
                 await { selected.get() != null }
                 assertEquals(ModelShortcut(provider.id, "qwen-two"), selected.get())
             }

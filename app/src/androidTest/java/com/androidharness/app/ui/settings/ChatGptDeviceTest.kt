@@ -159,7 +159,7 @@ class ChatGptDeviceTest {
                     catalogs = catalogs, onDismiss = {}, onSelect = { _, model -> picked.set(model) },
                     onRefreshCatalog = { id -> container.chatGpt.refreshModels(id); null }, onManageProviders = {})
             } } }
-            waitForText("Choose model")
+            waitForText("Choose a model")
             waitForText("GPT-6.1 Sol")
             val previousModel = models.first { it.id == "gpt-6-astra" }.let { it.displayName ?: it.id }
             waitForText(previousModel)
@@ -168,7 +168,7 @@ class ChatGptDeviceTest {
             val previousBounds = android.graphics.Rect().also { checkNotNull(find(root, previousModel)).getBoundsInScreen(it) }
             assertTrue("Newest model should appear above GPT-6", newestBounds.top < previousBounds.top)
             clickText("GPT-6.1 Sol")
-            clickText("Use GPT-6.1 Sol")
+            clickText("Use model")
             instrumentation.waitForIdleSync()
             assertEquals("gpt-6.1-sol", picked.get())
             report("CHATGPT_PICKER_OK: GPT-6.1 Sol appears first without scrolling and is selectable")

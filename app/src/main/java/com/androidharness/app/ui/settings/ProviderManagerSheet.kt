@@ -57,11 +57,12 @@ fun ProviderManagerSheet(
     ) -> Unit,
     catalogs: Map<String, List<ModelEntry>> = emptyMap(),
     onRefreshCatalog: suspend (String) -> String? = { "Open model selection to refresh this provider." },
+    addProviderInitially: Boolean = false,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf<ProviderConfig?>(null) }
-    var showForm by remember { mutableStateOf(false) }
+    var showForm by rememberSaveable { mutableStateOf(addProviderInitially) }
     var query by rememberSaveable { mutableStateOf("") }
     var showDisabled by rememberSaveable { mutableStateOf(false) }
     val visibility by ModelVisibility.get(LocalContext.current).state.collectAsStateWithLifecycle()

@@ -210,6 +210,7 @@ private fun ChatScreenContent(
     }
     var activeModelPickerTarget by remember { mutableStateOf<ModelSelectionTarget?>(null) }
     var activeProviderManagerTarget by remember { mutableStateOf<ModelSelectionTarget?>(null) }
+    var addProviderInitially by remember { mutableStateOf(false) }
     var showFallbacks by rememberSaveable { mutableStateOf(false) }
     var fallbackProviderId by rememberSaveable { mutableStateOf<String?>(null) }
     val showModelPicker = activeModelPickerTarget != null
@@ -476,6 +477,12 @@ private fun ChatScreenContent(
             // Provider management stays in-conversation: a sheet, not a screen.
             onEnableProvider = { id -> scope.launch { viewModel.container.providers.setEnabled(id, true) } },
             onManageProviders = {
+                addProviderInitially = false
+                activeProviderManagerTarget = target
+                activeModelPickerTarget = null
+            },
+            onAddProvider = {
+                addProviderInitially = true
                 activeProviderManagerTarget = target
                 activeModelPickerTarget = null
             },
@@ -509,6 +516,7 @@ private fun ChatScreenContent(
     activeProviderManagerTarget?.let { target ->
         ProviderManagerSheet(
             providers = state.providers,
+            addProviderInitially = addProviderInitially,
             activeProviderId = state.selectedProviderIdFor(target) ?: state.activeProviderId,
             apiKey = viewModel::providerApiKey,
             onDismiss = { activeProviderManagerTarget = null },
@@ -1165,7 +1173,7 @@ private fun ChatScreenContent(
                                     EmptyState(
                                         hasProvider = state.activeProvider != null,
                                         onSuggestion = { viewModel.send(it) },
-                                        onAddProvider = { activeProviderManagerTarget = ModelSelectionTarget.ACTIVE },
+                                        onAddProvider = { addProviderInitially = true; activeProviderManagerTarget = ModelSelectionTarget.ACTIVE },
                                     )
                                 }
                             }

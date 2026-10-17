@@ -5,6 +5,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -33,6 +35,9 @@ data class ModelEntry(
     val defaultReasoningEffort: String? = null,
     /** Distinguishes Gemini's reported thinking field from older cached family-name guesses. */
     val reasoningReported: Boolean = false,
+    /** Explicit catalog metadata only. Null means this connection did not report it. */
+    val tools: Boolean? = null,
+    val imageInput: Boolean? = null,
 )
 
 /** Family-based thinking-capability hint for endpoints that don't report it. */
@@ -161,7 +166,7 @@ object ModelCatalog {
                     val ctx = sequenceOf(obj["context_length"], obj["max_tokens"], window,
                         window.jsonObjectOrAbsent()?.get("tokens"))
                         .mapNotNull { (it as? JsonPrimitive)?.longOrNull }.firstOrNull()
-                    ModelEntry(id, reasoning, ctx)
+                    ModelEntry(id, reasoning, ctx, tools = reportedTools(obj), imageInput = reportedImageInput(obj))
                 } ?: emptyList()
 
             ProviderType.GEMINI ->
@@ -173,5 +178,21 @@ object ModelCatalog {
                     ModelEntry(name, reasoning = thinking, reasoningReported = thinking != null)
                 } ?: emptyList()
         }.sortedBy { it.id }
+    }
+
+    internal fun reportedTools(obj: JsonObject): Boolean? {
+        val parameters = obj["supported_parameters"] as? JsonArray ?: return null
+        if (parameters.any { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content == "tools" }) return true
+        return false.takeIf { parameters.all { it is JsonPrimitive && it.isString } }
+    }
+
+    internal fun reportedImageInput(obj: JsonObject): Boolean? = inputImages(
+        (obj["architecture"] as? JsonObject)?.get("input_modalities"),
+    )
+
+    internal fun inputImages(value: JsonElement?): Boolean? {
+        val modalities = value as? JsonArray ?: return null
+        if (modalities.any { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content == "image" }) return true
+        return false.takeIf { modalities.all { it is JsonPrimitive && it.isString } }
     }
 }

@@ -235,18 +235,18 @@ class AssistantToolsDeviceTest {
                 tap("Favourites"); awaitText("beta")
                 screenshot("models-favourites")
                 awaitCondition { find { it.contentDescription?.toString() == "Favourite alpha" } == null }
-                tap("beta"); tap("Use beta"); assertEquals("beta", chosen.get())
+                tap("beta"); tap("Use model"); assertEquals("beta", chosen.get())
                 tap("Recent"); awaitText("beta")
                 screenshot("models-recent")
                 val restarted = ModelShortcuts(c.appContext, name)
                 val key = ModelShortcut(provider.id, "beta")
                 assertEquals(listOf(key), restarted.state.value.favourites)
                 assertEquals(listOf(key), restarted.state.value.recent)
-                tap("Clear recent"); awaitText("Models you choose will appear here.")
+                tap("Model options"); tap("Clear recent"); awaitText("Models you use will appear here.")
                 assertTrue(ModelShortcuts(c.appContext, name).state.value.recent.isEmpty())
                 assertEquals(listOf(key), repo.state.value.favourites)
                 tap("Favourites"); tap("Remove beta from favourites")
-                awaitText("Tap a star beside a model to keep it here.")
+                awaitText("Star a model to keep it here.")
                 assertEquals(1, calls.get())
             }
         } finally { c.appContext.getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().commit() }
@@ -271,7 +271,7 @@ class AssistantToolsDeviceTest {
                 shell("input tap ${bounds.centerX()} ${bounds.centerY()}")
                 SystemClock.sleep(200); assertEquals(0, chosen.get())
                 tap("Remove removed-model from favourites")
-                awaitText("Tap a star beside a model to keep it here.")
+                awaitText("Star a model to keep it here.")
             }
         } finally { c.appContext.getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().commit() }
     }

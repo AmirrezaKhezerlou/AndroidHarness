@@ -85,15 +85,15 @@ class FallbackDeviceTest {
                 else ModelPickerSheet(providers, first.id, first.model, catalogs, {}, { _, _ -> }, { null }, {},
                     fallbackSummary = "Use default", onEditFallbacks = { editor = true })
             } } }
-            await { find("Fallbacks") != null }
+            tap("Model options"); await { find("Fallbacks") != null }
             SystemClock.sleep(500)
             tap("Fallbacks"); await { find("For this chat") != null }; tap("Custom chain")
             scrollTo("Add model"); tap("Add model")
             await { nodes().any { it.isEditable && it.isVisibleToUser } }
-            scrollTo("Manage providers…"); tap("Manage providers…")
+            scrollTo("Switch provider"); tap("Switch provider"); tap("Manage providers")
             await { find("Providers") != null && nodes().any { it.isEditable && it.isVisibleToUser } }
             tap("Close")
-            await { find("Choose model") != null && nodes().any { it.isEditable && it.isVisibleToUser } }
+            await { find("Choose a model") != null && nodes().any { it.isEditable && it.isVisibleToUser } }
             if (desktop) {
                 for (step in 0 until 20) {
                     if (nodes().any { it.isEditable && it.isFocused }) break
@@ -111,7 +111,7 @@ class FallbackDeviceTest {
             }
             scrollTo(second.model)
             tap("Choose ${second.model} from ${second.name}")
-            tap("Use ${second.model}")
+            tap("Use model")
             await { find("For this chat") != null }
             scrollTo("Save fallbacks"); screenshot("fallback-custom"); tap("Save fallbacks")
             await { c.runManager.controls.flow(sid).value.fallbackMode == FallbackMode.CUSTOM }
@@ -119,9 +119,9 @@ class FallbackDeviceTest {
             assertEquals(seeded, runBlocking { c.settings.settings.first().fallbackPolicy })
             assertEquals(first.id, runBlocking { c.settings.settings.first().activeProviderId })
             assertEquals(first.model, runBlocking { c.settings.settings.first().activeModel })
-            await { find("Choose model") != null }
+            await { find("Choose a model") != null }
             SystemClock.sleep(500)
-            scrollTo("Fallbacks"); tap("Fallbacks"); await { find("For this chat") != null }; tap("Off"); scrollTo("Save fallbacks"); tap("Save fallbacks")
+            tap("Model options"); tap("Fallbacks"); await { find("For this chat") != null }; tap("Off"); scrollTo("Save fallbacks"); tap("Save fallbacks")
             await { c.runManager.controls.flow(sid).value.fallbackMode == FallbackMode.OFF }
             assertFalse(effectiveFallback(seeded, FallbackMode.OFF, null)!!.enabled)
             val restored = com.androidharness.app.agent.TaskControlStore(File(c.appContext.filesDir, "task-controls")).flow(sid).value

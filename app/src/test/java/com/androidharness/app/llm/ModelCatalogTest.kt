@@ -47,8 +47,8 @@ class ModelCatalogTest {
             {"id":"m","context_window":32000,"reasoning":false}
         ]}"""
         for (type in listOf(ProviderType.OPENAI_COMPAT, ProviderType.OPENAI_RESPONSES, ProviderType.ANTHROPIC)) {
-            assertEquals(listOf(ModelEntry("a", false, 64000), ModelEntry("m", false, 32000),
-                ModelEntry("z", true, 128000)), ModelCatalog.parseCatalog(type, body))
+            assertEquals(listOf(ModelEntry("a", false, 64000, tools = true), ModelEntry("m", false, 32000),
+                ModelEntry("z", true, 128000, tools = true)), ModelCatalog.parseCatalog(type, body))
         }
     }
 

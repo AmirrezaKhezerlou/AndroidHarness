@@ -5,8 +5,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
@@ -69,6 +72,8 @@ object ModelsDev {
         /** Live model pricing from the models.dev catalog ($ per 1M tokens). */
         val cost: ModelCost? = null,
         val cachePrices: CachePrices? = null,
+        val tools: Boolean? = null,
+        val imageInput: Boolean? = null,
     )
 
     /** One provider listed on models.dev: display name, endpoint, protocol hint. */
@@ -96,6 +101,8 @@ object ModelsDev {
      */
     private val _providersFlow = MutableStateFlow<List<ProviderInfo>>(emptyList())
     val providersFlow: StateFlow<List<ProviderInfo>> = _providersFlow.asStateFlow()
+    private val _revision = MutableStateFlow(0L)
+    val revision: StateFlow<Long> = _revision.asStateFlow()
 
     /**
      * Subset of [ProviderInfo] the app can actually speak to: known protocol
@@ -125,6 +132,7 @@ object ModelsDev {
     private fun publish(infos: List<ProviderInfo>) {
         providerInfos = infos
         _providersFlow.value = infos
+        _revision.update { it + 1 }
     }
 
     /** models.dev provider key for an endpoint, or null when unmapped. */
@@ -346,7 +354,9 @@ object ModelsDev {
                 val cachePrices = explicitRate("input")?.let {
                     CachePrices(it, explicitRate("cache_read"), explicitRate("cache_write"))
                 }
-                models[modelId] = Entry(reasoning, effort, budget, budgetMax, toggle, ctx, cost, cachePrices)
+                val tools = (obj["tool_call"] as? JsonPrimitive)?.takeUnless { it.isString }?.booleanOrNull
+                val images = ModelCatalog.inputImages((obj["modalities"] as? JsonObject)?.get("input"))
+                models[modelId] = Entry(reasoning, effort, budget, budgetMax, toggle, ctx, cost, cachePrices, tools, images)
             }
             entriesMap[providerId] = models
             providersList += ProviderInfo(
