@@ -8,6 +8,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
@@ -29,6 +33,7 @@ import com.androidharness.app.ui.chat.components.ChatAppearance
 import com.androidharness.app.ui.chat.components.MessageComposer
 import com.androidharness.app.ui.theme.HarnessTheme
 import java.io.File
+import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -41,6 +46,42 @@ import org.junit.runner.RunWith
 class ChatAppearanceDeviceTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val c get() = (instrumentation.targetContext.applicationContext as HarnessApp).container
+
+    @Test fun chatPreservesWallpaperColorsInLightDarkAndAmoled() {
+        val mode = mutableStateOf(ThemeMode.LIGHT)
+        val outer = AtomicReference<ColorScheme>()
+        val inner = AtomicReference<ColorScheme>()
+        val rendered = AtomicReference<ThemeMode>()
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            scenario.onActivity { it.setContent { HarnessTheme(mode.value, dynamicColor = true) {
+                outer.set(MaterialTheme.colorScheme)
+                ChatAppearance {
+                    inner.set(MaterialTheme.colorScheme)
+                    rendered.set(mode.value)
+                    androidx.compose.material3.Surface(Modifier.fillMaxSize()) {
+                        Column(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp)) {
+                            Text("Wallpaper colors", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                            androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                            MessageComposer(false, TextFieldValue("Make the spacing clearer"), null, {}, {}, {}, {}, {}, {})
+                        }
+                    }
+                }
+            } } }
+            for (theme in listOf(ThemeMode.LIGHT, ThemeMode.DARK, ThemeMode.AMOLED)) {
+                scenario.onActivity { mode.value = theme }
+                instrumentation.waitForIdleSync()
+                awaitGeometry("Theme should finish recomposing") { rendered.get() == theme }
+                assertSame("Chat must retain every parent palette role", outer.get(), inner.get())
+                if (android.os.Build.VERSION.SDK_INT >= 31) {
+                    val expected = if (theme == ThemeMode.LIGHT) dynamicLightColorScheme(c.appContext) else dynamicDarkColorScheme(c.appContext)
+                    assertEquals(expected.primary, inner.get().primary)
+                    if (theme == ThemeMode.AMOLED) assertEquals(androidx.compose.ui.graphics.Color.Black, inner.get().surface)
+                    else assertEquals(expected.surface, inner.get().surface)
+                }
+                screenshot("material-you-${theme.name.lowercase()}")
+            }
+        }
+    }
 
     @Test fun workspaceOrdersAnswerFilesAndActivityAndRetainsActions() = runBlocking {
         val saved = c.settings.settings.first()

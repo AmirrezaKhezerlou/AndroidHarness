@@ -7,25 +7,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-/** The neutral surfaces and restrained type of the Workspace chat concept. */
+/** Compact conversation typography that preserves the app's Material You palette. */
 @Composable
 internal fun ChatAppearance(content: @Composable () -> Unit) {
     val base = MaterialTheme.colorScheme
     val dark = base.surface.luminance() < 0.5f
-    // Keep the user's AMOLED surface while retaining contrast between chat layers.
-    val background = if (base.surface == Color.Black) Color.Black else if (dark) Color(0xFF141517) else Color(0xFFFCFCFD)
-    val panel = if (dark) Color(0xFF202226) else Color(0xFFF1F2F5)
-    val ink = if (dark) Color(0xFFECEEF2) else Color(0xFF22252B)
-    val muted = if (dark) Color(0xFFADB2BC) else Color(0xFF626773)
-    val line = if (dark) Color(0xFF33363D) else Color(0xFFE2E4E9)
-    val accent = if (dark) Color(0xFFB3BFFF) else Color(0xFF435CCD)
+    val background = base.surface
     val view = LocalView.current
     val window = generateSequence(view.context) { (it as? ContextWrapper)?.baseContext }
         .filterIsInstance<Activity>().firstOrNull()?.window
@@ -54,17 +47,7 @@ internal fun ChatAppearance(content: @Composable () -> Unit) {
     }
     val type = MaterialTheme.typography
     MaterialTheme(
-        colorScheme = base.copy(
-            background = background, onBackground = ink,
-            surface = background, onSurface = ink, onSurfaceVariant = muted,
-            surfaceContainerLowest = background, surfaceContainerLow = panel,
-            surfaceContainer = panel, surfaceContainerHigh = panel,
-            surfaceContainerHighest = if (dark) Color(0xFF2A2D33) else Color(0xFFE9EBF0),
-            outlineVariant = line, primary = accent,
-            onPrimary = if (dark) Color(0xFF141517) else Color.White,
-            primaryContainer = if (dark) Color(0xFF2C3351) else Color(0xFFE9EDFF),
-            onPrimaryContainer = accent,
-        ),
+        colorScheme = base,
         typography = type.copy(
             bodyLarge = type.bodyLarge.copy(fontFamily = FontFamily.SansSerif, fontSize = 14.sp, lineHeight = 22.sp, letterSpacing = 0.sp),
             bodyMedium = type.bodyMedium.copy(fontFamily = FontFamily.SansSerif, fontSize = 14.sp, lineHeight = 22.sp, letterSpacing = 0.sp),
