@@ -62,6 +62,9 @@ class ProjectSidebarDeviceTest {
                 activity.setContent {
                 HarnessTheme(if (dark) ThemeMode.DARK else ThemeMode.LIGHT, dynamicColor = false) {
                     Surface(Modifier.fillMaxSize()) {
+                        var projectsView by remember { mutableStateOf(false) }
+                        var projectPins by remember { mutableStateOf(emptySet<String>()) }
+                        var projectArchives by remember { mutableStateOf(emptySet<String>()) }
                         var query by remember { mutableStateOf("") }
                         var pinned by remember { mutableStateOf(setOf("picker", "release")) }
                         var archived by remember { mutableStateOf(emptySet<String>()) }
@@ -79,7 +82,13 @@ class ProjectSidebarDeviceTest {
                                     }, onBuild = { destination.set("Build") }, onTerminal = { destination.set("Terminal") },
                                     onAutomation = { destination.set("Scheduled tasks") }, onProviders = { destination.set("Providers") },
                                     onSettings = { destination.set("Settings") }, workspaceLabel = "Workspaces for this chat", workspaceSummary = "1 workspace · Primary: AndroidHarness",
-                                    onWorkspaces = { destination.set("Workspaces") }, onCollapse = { destination.set("Collapse") }, currentRoute = null)
+                                    onWorkspaces = { destination.set("Workspaces") }, onCollapse = { destination.set("Collapse") }, currentRoute = null,
+                                    projectsView = projectsView, onProjectsViewChange = { projectsView = it },
+                                    projectPins = projectPins, projectArchives = projectArchives,
+                                    onProjectAction = { project, value ->
+                                        if (value == SidebarProjectAction.PIN) projectPins = if (project.id in projectPins) projectPins - project.id else projectPins + project.id
+                                        if (value == SidebarProjectAction.ARCHIVE) projectArchives = if (project.id in projectArchives) projectArchives - project.id else projectArchives + project.id
+                                    })
                             }
                         }
                     }
@@ -87,20 +96,36 @@ class ProjectSidebarDeviceTest {
             } }
             await { find("AndroidHarness icon") != null }
             assertWithin("AndroidHarness icon")
-            screenshot("projects-first")
+            screenshot("chats-view")
+            assertNull(find("Collapse AndroidHarness"))
             scrollTo("Working"); assertNotNull(find("Working"))
             scrollTo("Needs you"); assertNotNull(find("Needs you"))
+            tap("Projects")
+            scrollTo("Expand AndroidHarness")
+            screenshot("projects-view")
+            tap("Expand AndroidHarness")
+            screenshot("projects-expanded")
             scrollTo("Expand Frame"); tap("Expand Frame")
             scrollTo("Actions for Fix the mobile menu"); tap("Actions for Fix the mobile menu"); tap("Chat details")
             assertEquals("menu" to SidebarChatAction.DETAILS, action.get())
             assertNull(chosen.get())
             tap("Actions for Fix the mobile menu"); tap("Pin")
             await { action.get() == ("menu" to SidebarChatAction.PIN) }
-            tap("New chat in SanuFlix")
+            scrollTo("Actions for project SanuFlix"); tap("Actions for project SanuFlix"); tap("New chat in SanuFlix")
             assertEquals("c", projectChat.get())
             assertNull(chosen.get())
+            scrollTo("Actions for project Frame"); tap("Actions for project Frame"); tap("Pin project")
+            tap("Actions for project Frame"); tap("Archive project")
+            await { find("Actions for project Frame") == null }
+            tap("Show archived projects")
+            scrollTo("Actions for project Frame")
+            screenshot("archived-projects")
+            tap("Actions for project Frame"); tap("Restore project")
+            await { find("Actions for project Frame") == null }
+            tap("Back to active projects")
+            tap("Chats")
             search("Fix the mobile menu")
-            await { find("Open Fix the mobile menu") != null }
+            scrollTo("Open Fix the mobile menu")
             assertNull(find("Open Give the sidebar more room"))
             tap("Open Fix the mobile menu")
             assertEquals("menu", chosen.get())
@@ -127,6 +152,7 @@ class ProjectSidebarDeviceTest {
         val original = c.sessions.createSession("Original sidebar chat", a.id)
         c.sessions.addMessage(original, ChatMessage(Role.USER, "Unique sidebar search message anchor"))
         c.workspace.setActiveProject(b.id)
+        c.settings.setSidebarProjects(false)
         c.settings.setWorkspaceLayout(WorkspaceLayoutMode.PHONE)
         c.settings.setOnboardingDone(true); c.settings.setResumeLastChat(true); c.settings.setLastActiveSessionId(original)
         val activity = instrumentation.startActivitySync(Intent(c.appContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
@@ -135,7 +161,8 @@ class ProjectSidebarDeviceTest {
             assertNull("A closed drawer must not expose its search field", find("Search chats and messages"))
             tap("Open navigation")
             await { find("AndroidHarness icon") != null }
-            scrollTo("New chat in ${b.name}"); tap("New chat in ${b.name}")
+            tap("Projects")
+            scrollTo("Actions for project ${b.name}"); tap("Actions for project ${b.name}"); tap("New chat in ${b.name}")
             await { runBlocking { c.settings.settings.first().lastActiveSessionId?.let { it != original && c.sessions.session(it)?.projectId == b.id } == true } }
             val created = requireNotNull(c.settings.settings.first().lastActiveSessionId)
             assertEquals(a.id, c.sessions.session(original)?.projectId)
@@ -146,6 +173,16 @@ class ProjectSidebarDeviceTest {
             await { runBlocking { c.settings.settings.first().lastActiveSessionId == original } }
             assertEquals(a.id, c.sessions.session(original)?.projectId)
             tap("Open navigation")
+            tap("Projects")
+            scrollTo("Actions for project ${b.name}"); tap("Actions for project ${b.name}"); tap("Pin project")
+            await { runBlocking { b.id in c.settings.settings.first().pinnedProjects } }
+            tap("Actions for project ${b.name}"); tap("Archive project")
+            await { runBlocking { b.id in c.settings.settings.first().archivedProjects } }
+            assertEquals(b.id, c.sessions.session(created)?.projectId)
+            tap("Undo")
+            await { runBlocking { b.id !in c.settings.settings.first().archivedProjects } }
+            assertTrue(c.settings.settings.first().sidebarProjects)
+            tap("Chats")
             scrollTo("Actions for Original sidebar chat"); tap("Actions for Original sidebar chat"); tap("Pin")
             await { runBlocking { original in c.settings.settings.first().pinnedSessions } }
             tap("Actions for Original sidebar chat"); tap("Archive")
@@ -161,6 +198,8 @@ class ProjectSidebarDeviceTest {
             instrumentation.runOnMainSync { activity.finish() }
             c.sessions.sessions.first().filter { it.projectId in setOf(a.id, b.id) }.forEach { c.sessions.deleteSession(it) }
             c.workspace.deleteProject(a); c.workspace.deleteProject(b); c.workspace.setActiveProject(previous.id)
+            c.settings.setProjectPinned(b.id, false); c.settings.setProjectArchived(b.id, false)
+            c.settings.setSidebarProjects(saved.sidebarProjects)
             c.settings.restorePortable(saved); c.settings.setOnboardingDone(saved.onboardingDone); c.settings.setLastActiveSessionId(saved.lastActiveSessionId)
             root.deleteRecursively()
         }

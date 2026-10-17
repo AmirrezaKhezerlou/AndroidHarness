@@ -155,6 +155,7 @@ class DesktopInputDeviceTest {
         val first = c.sessions.createSession("Native input chat", project.id)
         val second = c.sessions.createSession("Native other chat", project.id)
         try {
+            c.settings.setSidebarProjects(false)
             c.settings.setWorkspaceLayout(WorkspaceLayoutMode.DESKTOP)
             c.settings.setOnboardingDone(true)
             c.settings.setResumeLastChat(true)
@@ -172,6 +173,7 @@ class DesktopInputDeviceTest {
             listOf(first, second).forEach { sid -> c.sessions.session(sid)?.let { c.sessions.deleteSession(it) } }
             c.workspace.deleteProject(project)
             c.settings.setWorkspaceLayout(saved.workspaceLayout)
+            c.settings.setSidebarProjects(saved.sidebarProjects)
             c.settings.setOnboardingDone(saved.onboardingDone)
             c.settings.setResumeLastChat(saved.resumeLastChat)
             c.settings.setLastActiveSessionId(saved.lastActiveSessionId)

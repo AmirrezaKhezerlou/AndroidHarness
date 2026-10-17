@@ -41,6 +41,9 @@ data class AppSettings(
     /** Drawer: pinned / archived session ids (DataStore, no DB migration). */
     val pinnedSessions: Set<String> = emptySet(),
     val archivedSessions: Set<String> = emptySet(),
+    val sidebarProjects: Boolean = false,
+    val pinnedProjects: Set<String> = emptySet(),
+    val archivedProjects: Set<String> = emptySet(),
     /** First-run setup was finished or skipped; stops the setup gate. */
     val onboardingDone: Boolean = false,
     /**
@@ -132,6 +135,9 @@ class SettingsRepository(private val context: Context) {
         val KEEP_ALIVE = booleanPreferencesKey("keep_alive")
         val PINNED = stringSetPreferencesKey("pinned_sessions")
         val ARCHIVED = stringSetPreferencesKey("archived_sessions")
+        val SIDEBAR_PROJECTS = booleanPreferencesKey("sidebar_projects")
+        val PINNED_PROJECTS = stringSetPreferencesKey("pinned_projects")
+        val ARCHIVED_PROJECTS = stringSetPreferencesKey("archived_projects")
         val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
         val ACTIVE_MODEL = stringPreferencesKey("active_model")
         val SAME_MODEL_ACROSS_CHATS = booleanPreferencesKey("same_model_across_chats")
@@ -185,6 +191,9 @@ class SettingsRepository(private val context: Context) {
             keepAlive = prefs[Keys.KEEP_ALIVE] ?: true,
             pinnedSessions = prefs[Keys.PINNED] ?: emptySet(),
             archivedSessions = prefs[Keys.ARCHIVED] ?: emptySet(),
+            sidebarProjects = prefs[Keys.SIDEBAR_PROJECTS] ?: false,
+            pinnedProjects = prefs[Keys.PINNED_PROJECTS] ?: emptySet(),
+            archivedProjects = prefs[Keys.ARCHIVED_PROJECTS] ?: emptySet(),
             onboardingDone = prefs[Keys.ONBOARDING_DONE] ?: false,
             activeModel = prefs[Keys.ACTIVE_MODEL],
             sameModelAcrossChats = prefs[Keys.SAME_MODEL_ACROSS_CHATS] ?: true,
@@ -441,6 +450,24 @@ class SettingsRepository(private val context: Context) {
         context.settingsStore.edit { prefs ->
             val current = prefs[Keys.PINNED] ?: emptySet()
             prefs[Keys.PINNED] = if (pinned) current + sessionId else current - sessionId
+        }
+    }
+
+    suspend fun setSidebarProjects(projects: Boolean) {
+        context.settingsStore.edit { it[Keys.SIDEBAR_PROJECTS] = projects }
+    }
+
+    suspend fun setProjectPinned(projectId: String, pinned: Boolean) {
+        context.settingsStore.edit { prefs ->
+            val current = prefs[Keys.PINNED_PROJECTS] ?: emptySet()
+            prefs[Keys.PINNED_PROJECTS] = if (pinned) current + projectId else current - projectId
+        }
+    }
+
+    suspend fun setProjectArchived(projectId: String, archived: Boolean) {
+        context.settingsStore.edit { prefs ->
+            val current = prefs[Keys.ARCHIVED_PROJECTS] ?: emptySet()
+            prefs[Keys.ARCHIVED_PROJECTS] = if (archived) current + projectId else current - projectId
         }
     }
 

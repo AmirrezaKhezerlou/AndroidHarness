@@ -12,6 +12,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.automirrored.outlined.MenuOpen
@@ -44,6 +45,7 @@ import com.androidharness.app.ui.common.HarnessMark
 import com.androidharness.app.ui.theme.LocalStatusColors
 import com.androidharness.app.ui.common.formatRelativeTime
 
+internal enum class SidebarProjectAction { OPEN, RENAME, PIN, ARCHIVE }
 internal enum class SidebarChatAction { RENAME, PIN, ARCHIVE, DETAILS, DELETE }
 internal enum class SidebarActivity { WORKING, NEEDS_YOU }
 
@@ -70,7 +72,7 @@ internal data class SidebarChats(
     }
 }
 
-/** Shared phone drawer / desktop sidebar, matching the Projects first concept. */
+/** Separate conversation and project views, shared by phone and desktop. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun ProjectNavigationSidebar(
@@ -86,18 +88,19 @@ internal fun ProjectNavigationSidebar(
     onCollapse: () -> Unit, currentRoute: String?, projectCreationEnabled: Boolean = true,
     changesSummary: String? = null, onChanges: () -> Unit = {},
     snackbar: SnackbarHostState = remember { SnackbarHostState() },
+    projectsView: Boolean = false, onProjectsViewChange: (Boolean) -> Unit = {},
+    projectPins: Set<String> = emptySet(), projectArchives: Set<String> = emptySet(),
+    onProjectAction: (ProjectEntity, SidebarProjectAction) -> Unit = { _, _ -> },
 ) {
     val scheme = MaterialTheme.colorScheme
-    var expandedProjects by rememberSaveable { mutableStateOf<List<String>?>(null) }
-    var collapsedGroups by rememberSaveable { mutableStateOf(listOf("archived")) }
+    var expandedProjects by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    var showArchived by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(projectsView) { showArchived = false }
     var toolsOpen by rememberSaveable { mutableStateOf(false) }
     val density = LocalDensity.current
     var footerHeight by remember { mutableStateOf(0.dp) }
     val currentProject = sessions.firstOrNull { it.id == selectedSession }?.projectId ?: selectedProject
-    val expanded = expandedProjects ?: listOfNotNull(currentProject ?: projects.firstOrNull()?.id)
-    LaunchedEffect(selectedSession, currentProject) {
-        if (currentProject != null) expandedProjects = (expanded + currentProject).distinct()
-    }
+    val expanded = expandedProjects
     val grouped = remember(projects, sessions, pinned, archived) { SidebarChats.of(projects, sessions, pinned, archived) }
     val matching = remember(sessions, projects, query) {
         val names = projects.associate { it.id to it.name }
@@ -109,9 +112,6 @@ internal fun ProjectNavigationSidebar(
             projectName = if (showProject) projects.firstOrNull { it.id == chat.projectId }?.name else null,
             indented = indented, onClick = { keyboard?.hide(); onChat(chat.id) }, onActions = { onChatActions(chat) },
             onAction = { onAction(chat, it) })
-    }
-    @Composable fun Section(label: String, key: String) = SidebarSectionHeader(label, key !in collapsedGroups) {
-        collapsedGroups = if (key in collapsedGroups) collapsedGroups - key else collapsedGroups + key
     }
     @Composable fun Footer() {
         Column(Modifier.fillMaxWidth().onSizeChanged { footerHeight = with(density) { it.height.toDp() } }
@@ -132,46 +132,72 @@ internal fun ProjectNavigationSidebar(
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val short = maxHeight < 440.dp
             val narrow = maxWidth < 280.dp
-            Column(Modifier.fillMaxSize()) {
-                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(start = 18.dp, end = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                    HarnessMark(26.dp, Modifier.semantics { contentDescription = "AndroidHarness icon" })
-                    Text("AndroidHarness", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    IconButton(onClick = onCollapse) { Icon(Icons.AutoMirrored.Outlined.MenuOpen, "Collapse sidebar", Modifier.size(19.dp)) }
-                }
-                Button(onClick = onNewChat, enabled = projectCreationEnabled, shape = RoundedCornerShape(11.dp),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp).heightIn(min = 44.dp)) {
-                    Icon(Icons.Outlined.EditNote, null, Modifier.size(19.dp)); Spacer(Modifier.width(8.dp))
-                    Text("New chat", style = MaterialTheme.typography.labelLarge)
-                }
-                BasicTextField(query, onQueryChange, singleLine = true, textStyle = MaterialTheme.typography.bodyMedium.copy(color = scheme.onSurface),
-                    cursorBrush = SolidColor(scheme.primary), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp)
-                        .semantics { contentDescription = "Search chats and messages" },
-                    decorationBox = { field ->
-                        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).background(scheme.surfaceContainerHigh, RoundedCornerShape(10.dp))
-                            .padding(start = 12.dp, end = if (query.isBlank()) 12.dp else 0.dp, top = 4.dp, bottom = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.Search, null, Modifier.size(18.dp), tint = scheme.onSurfaceVariant)
-                            Spacer(Modifier.width(8.dp))
-                            Box(Modifier.weight(1f)) {
-                                if (query.isEmpty()) Text(if (narrow) "Search chats" else "Search chats and messages",
-                                    style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant, maxLines = 1)
-                                field()
+            @Composable fun Header() {
+                Column {
+                    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(start = 18.dp, end = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                        HarnessMark(26.dp, Modifier.semantics { contentDescription = "AndroidHarness icon" })
+                        Text("AndroidHarness", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        IconButton(onClick = onCollapse) { Icon(Icons.AutoMirrored.Outlined.MenuOpen, "Collapse sidebar", Modifier.size(19.dp)) }
+                    }
+                    Button(onClick = onNewChat, enabled = projectCreationEnabled, shape = RoundedCornerShape(11.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp).heightIn(min = 44.dp)) {
+                        Icon(Icons.Outlined.EditNote, null, Modifier.size(19.dp)); Spacer(Modifier.width(8.dp))
+                        Text("New chat", style = MaterialTheme.typography.labelLarge)
+                    }
+                    BasicTextField(query, onQueryChange, singleLine = true, textStyle = MaterialTheme.typography.bodyMedium.copy(color = scheme.onSurface),
+                        cursorBrush = SolidColor(scheme.primary), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp)
+                            .semantics { contentDescription = "Search chats and messages" },
+                        decorationBox = { field ->
+                            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).background(scheme.surfaceContainerHigh, RoundedCornerShape(10.dp))
+                                .padding(start = 12.dp, end = if (query.isBlank()) 12.dp else 0.dp, top = 4.dp, bottom = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Outlined.Search, null, Modifier.size(18.dp), tint = scheme.onSurfaceVariant)
+                                Spacer(Modifier.width(8.dp))
+                                Box(Modifier.weight(1f)) {
+                                    if (query.isEmpty()) Text(if (narrow) "Search chats" else "Search chats and messages",
+                                        style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant, maxLines = 1)
+                                    field()
+                                }
+                                if (query.isNotEmpty()) IconButton(onClick = { onQueryChange("") }) {
+                                    Icon(Icons.Outlined.Close, "Clear search", Modifier.size(17.dp))
+                                }
                             }
-                            if (query.isNotEmpty()) IconButton(onClick = { onQueryChange("") }) {
-                                Icon(Icons.Outlined.Close, "Clear search", Modifier.size(17.dp))
+                        })
+                    Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, top = 2.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.weight(1f).background(scheme.surfaceContainer, RoundedCornerShape(12.dp)).padding(3.dp)) {
+                            listOf(false to "Chats", true to "Projects").forEach { (projectTab, label) ->
+                                Surface(onClick = { onProjectsViewChange(projectTab) }, shape = RoundedCornerShape(9.dp),
+                                    color = if (projectsView == projectTab) scheme.secondaryContainer else scheme.surfaceContainer,
+                                    modifier = Modifier.weight(1f).semantics { role = Role.Tab; selected = projectsView == projectTab }) {
+                                    Box(Modifier.heightIn(min = 42.dp).padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
+                                        Text(label, style = MaterialTheme.typography.labelLarge,
+                                            color = if (projectsView == projectTab) scheme.onSecondaryContainer else scheme.onSurfaceVariant)
+                                    }
+                                }
                             }
                         }
-                    })
-                if (query.isNotBlank()) TextButton(onClick = onFuzzyChange,
-                    modifier = Modifier.padding(horizontal = 14.dp).semantics { stateDescription = if (fuzzy) "Contains text" else "Match words" }) {
-                    Icon(Icons.Outlined.Tune, null, Modifier.size(15.dp)); Spacer(Modifier.width(6.dp))
-                    Text(if (fuzzy) "Contains text" else "Match words", style = MaterialTheme.typography.labelSmall)
+                        IconButton(onClick = { onQueryChange(""); showArchived = !showArchived }) {
+                            Icon(if (showArchived) Icons.AutoMirrored.Outlined.ArrowBack else Icons.Outlined.Archive,
+                                if (showArchived) "Back to active ${if (projectsView) "projects" else "chats"}" else "Show archived ${if (projectsView) "projects" else "chats"}",
+                                Modifier.size(19.dp), tint = if (showArchived) scheme.primary else scheme.onSurfaceVariant)
+                        }
+                    }
+                    if (query.isNotBlank()) TextButton(onClick = onFuzzyChange,
+                        modifier = Modifier.padding(horizontal = 14.dp).semantics { stateDescription = if (fuzzy) "Contains text" else "Match words" }) {
+                        Icon(Icons.Outlined.Tune, null, Modifier.size(15.dp)); Spacer(Modifier.width(6.dp))
+                        Text(if (fuzzy) "Contains text" else "Match words", style = MaterialTheme.typography.labelSmall)
+                    }
                 }
+            }
+            Column(Modifier.fillMaxSize()) {
+                if (!short) Header()
                 LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(top = 2.dp, bottom = 10.dp)) {
+                    if (short) item(key = "sidebar-header") { Header() }
                     if (query.isNotBlank()) {
                         if (matching.isNotEmpty()) {
                             item { SidebarSectionHeader("Chats", true, null) }
@@ -187,61 +213,60 @@ internal fun ProjectNavigationSidebar(
                             Text("No chats found. Try another title or message.", Modifier.padding(20.dp),
                                 style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                         }
-                    } else {
-                        if (grouped.pinned.isNotEmpty()) {
-                            item { Section("Pinned", "pinned") }
-                            if ("pinned" !in collapsedGroups) items(grouped.pinned, key = { "pinned:${it.id}" }) { Chat(it, showProject = true) }
-                        }
+                    } else if (projectsView) {
                         item {
-                            Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp).heightIn(min = 44.dp),
-                                verticalAlignment = Alignment.CenterVertically) {
-                                TextButton(onClick = onProjects, modifier = Modifier.weight(1f)) {
-                                    Box(Modifier.fillMaxWidth()) { Text("Projects", style = MaterialTheme.typography.labelSmall,
-                                        color = scheme.onSurfaceVariant) }
-                                }
-                                IconButton(onClick = onProjects) { Icon(Icons.Outlined.FolderCopy, "Manage projects", Modifier.size(18.dp)) }
+                            Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text(if (showArchived) "Archived projects" else "Your projects", Modifier.weight(1f),
+                                    style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
+                                TextButton(onClick = onProjects) { Text("Manage projects", style = MaterialTheme.typography.labelSmall) }
                             }
                         }
-                        projects.forEach { project ->
-                            val chats = grouped.projects[project.id].orEmpty()
+                        val visibleProjects = projects.filter { (it.id in projectArchives) == showArchived }
+                            .sortedBy { if (it.id in projectPins) 0 else 1 }
+                        visibleProjects.forEachIndexed { index, project ->
+                            val chats = sessions.filter { it.projectId == project.id && it.id !in archived }
+                                .sortedBy { if (it.id in pinned) 0 else 1 }
+                            if (!showArchived && project.id in projectPins && index == 0) item { SidebarSectionHeader("Pinned", true, null) }
+                            if (!showArchived && project.id !in projectPins && index > 0 && visibleProjects[index - 1].id in projectPins)
+                                item { SidebarSectionHeader("All projects", true, null) }
                             item(key = "project:${project.id}") {
-                                Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Surface(onClick = { expandedProjects = if (project.id in expanded) expanded - project.id else expanded + project.id },
-                                        color = scheme.surface, modifier = Modifier.weight(1f)
-                                            .semantics { contentDescription = "${if (project.id in expanded) "Collapse" else "Expand"} ${project.name}" }) {
-                                        Row(Modifier.heightIn(min = 48.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                                            Icon(if (project.id in expanded) Icons.Outlined.KeyboardArrowDown else Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                                                null, Modifier.size(16.dp), tint = scheme.onSurfaceVariant)
-                                            Icon(Icons.Outlined.Folder, null, Modifier.size(17.dp), tint = scheme.onSurfaceVariant)
-                                            Text(project.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                            Text(chats.size.toString(), style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
-                                        }
-                                    }
-                                    IconButton(onClick = { onProjectChat(project) }, enabled = projectCreationEnabled) {
-                                        Icon(Icons.Outlined.Add, "New chat in ${project.name}", Modifier.size(18.dp))
-                                    }
-                                }
+                                SidebarProjectRow(project, project.id in expanded, project.id in projectPins, project.id in projectArchives,
+                                    project.id == currentProject, chats.size,
+                                    onExpand = { expandedProjects = if (project.id in expanded) expanded - project.id else expanded + project.id },
+                                    onNewChat = { onProjectChat(project) }, creationEnabled = projectCreationEnabled,
+                                    onAction = { onProjectAction(project, it) })
                             }
                             if (project.id in expanded) {
                                 items(chats, key = { "project-chat:${it.id}" }) { Chat(it, indented = true) }
                                 if (chats.isEmpty()) item(key = "empty:${project.id}") {
-                                    Text("No other chats", Modifier.padding(start = 47.dp, top = 4.dp, bottom = 12.dp),
+                                    Text("No chats yet", Modifier.padding(start = 54.dp, top = 4.dp, bottom = 12.dp),
                                         style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
                                 }
                             }
                         }
-                        if (projects.isEmpty()) item {
-                            TextButton(onClick = onProjects, Modifier.padding(horizontal = 18.dp)) { Text("Add a project") }
+                        if (visibleProjects.isEmpty()) item {
+                            Text(if (showArchived) "No archived projects" else "Add a project to organize its chats and workspace.",
+                                Modifier.padding(20.dp), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                         }
-                        if (grouped.other.isNotEmpty()) {
-                            item { Section("Other chats", "other") }
-                            if ("other" !in collapsedGroups) items(grouped.other, key = { "other:${it.id}" }) { Chat(it) }
+                    } else if (showArchived) {
+                        item { SidebarSectionHeader("Archived chats", true, null) }
+                        items(grouped.archived, key = { "archive:${it.id}" }) { Chat(it, showProject = true) }
+                        if (grouped.archived.isEmpty()) item {
+                            Text("No archived chats", Modifier.padding(20.dp), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                         }
-                        if (grouped.archived.isNotEmpty()) {
-                            item { Section("Archived", "archived") }
-                            if ("archived" !in collapsedGroups) items(grouped.archived, key = { "archive:${it.id}" }) { Chat(it, showProject = true) }
+                    } else {
+                        if (grouped.pinned.isNotEmpty()) {
+                            item { SidebarSectionHeader("Pinned", true, null) }
+                            items(grouped.pinned, key = { "pinned:${it.id}" }) { Chat(it, showProject = true) }
+                        }
+                        val recent = sessions.filter { it.id !in pinned && it.id !in archived }
+                        if (recent.isNotEmpty()) {
+                            item { SidebarSectionHeader("Recent chats", true, null) }
+                            items(recent, key = { "chat:${it.id}" }) { Chat(it, showProject = true) }
+                        }
+                        if (recent.isEmpty() && grouped.pinned.isEmpty()) item {
+                            Text("Your conversations will appear here.", Modifier.padding(20.dp),
+                                style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                         }
                     }
                     if (short) item { HorizontalDivider(color = scheme.outlineVariant); Footer() }
@@ -249,6 +274,48 @@ internal fun ProjectNavigationSidebar(
                 if (!short) { HorizontalDivider(color = scheme.outlineVariant); Footer() }
             }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = if (short) 8.dp else footerHeight + 8.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SidebarProjectRow(project: ProjectEntity, expanded: Boolean, pinned: Boolean, archived: Boolean,
+    selected: Boolean, count: Int, onExpand: () -> Unit, onNewChat: () -> Unit, creationEnabled: Boolean,
+    onAction: (SidebarProjectAction) -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    var menu by remember { mutableStateOf(false) }
+    Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp)
+        .background(if (selected) scheme.surfaceContainer else scheme.surface, RoundedCornerShape(10.dp)),
+        verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).secondaryClick { menu = true }
+            .combinedClickable(onClick = onExpand, onLongClick = { menu = true })
+            .semantics { contentDescription = "${if (expanded) "Collapse" else "Expand"} ${project.name}"; stateDescription = if (expanded) "Expanded" else "Collapsed" }
+            .heightIn(min = 48.dp).padding(start = 8.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            Icon(if (expanded) Icons.Outlined.KeyboardArrowDown else Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                null, Modifier.size(15.dp), tint = scheme.onSurfaceVariant)
+            Box(Modifier.size(26.dp).background(scheme.secondaryContainer, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Outlined.Folder, null, Modifier.size(16.dp), tint = scheme.onSecondaryContainer)
+            }
+            Text(project.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium,
+                maxLines = if (LocalDensity.current.fontScale > 1.3f) 2 else 1, overflow = TextOverflow.Ellipsis)
+            if (pinned) Icon(Icons.Outlined.PushPin, null, Modifier.size(12.dp), tint = scheme.onSurfaceVariant)
+            Text(count.toString(), style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
+        }
+        Box {
+            IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreHoriz, "Actions for project ${project.name}", Modifier.size(18.dp), tint = scheme.onSurfaceVariant) }
+            DropdownMenu(menu, { menu = false }) {
+                if (!archived) DropdownMenuItem(text = { Text("New chat") }, leadingIcon = { Icon(Icons.Outlined.Add, null) },
+                    enabled = creationEnabled, modifier = Modifier.semantics { contentDescription = "New chat in ${project.name}" },
+                    onClick = { menu = false; onNewChat() })
+                listOf(Triple(SidebarProjectAction.OPEN, "Open project", Icons.Outlined.FolderOpen),
+                    Triple(SidebarProjectAction.RENAME, "Rename project", Icons.Outlined.Edit),
+                    Triple(SidebarProjectAction.PIN, if (pinned) "Unpin project" else "Pin project", Icons.Outlined.PushPin),
+                    Triple(SidebarProjectAction.ARCHIVE, if (archived) "Restore project" else "Archive project", Icons.Outlined.Archive)).forEach { (action, label, icon) ->
+                    DropdownMenuItem(text = { Text(label) }, leadingIcon = { Icon(icon, null) }, onClick = { menu = false; onAction(action) })
+                }
+            }
         }
     }
 }

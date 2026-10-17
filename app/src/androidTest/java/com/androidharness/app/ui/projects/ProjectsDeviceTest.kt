@@ -61,7 +61,7 @@ class ProjectsDeviceTest {
         fixture { _, a, b, sa, _ ->
             awaitText("Alpha project chat")
             setText("Keep this unsent draft")
-            tap("Open navigation"); tap("Projects"); awaitText("Add project")
+            tap("Open navigation"); tap("Projects"); tap("Manage projects"); awaitText("Add project")
             screenshot("projects-list")
             assertEquals(b.id, c.workspace.currentProjectOnce().id)
             tap(a.name); awaitText("Project memory")
@@ -101,7 +101,7 @@ class ProjectsDeviceTest {
             File(a.uri!!, "alpha-only.txt").writeText("Alpha workspace content")
             File(b.uri!!, "beta-only.txt").writeText("Beta workspace content")
             val before = c.sessions.sessions.first().map { it.id }.toSet()
-            awaitText("Alpha project chat"); tap("Open navigation"); tap("Projects"); tap(a.name)
+            awaitText("Alpha project chat"); tap("Open navigation"); tap("Projects"); tap("Manage projects"); tap(a.name)
             awaitText("Build & Test"); awaitText("No checks run yet")
             screenshot("project-overview")
             tap("Files"); awaitText("alpha-only.txt")
@@ -123,7 +123,7 @@ class ProjectsDeviceTest {
             val fs = c.workspace.fsFor(a)
             ProjectMemory.save(fs, "", "Alpha memory")
             ProjectMemory.save(c.workspace.fsFor(b), "", "Beta memory")
-            awaitText("Open navigation"); tap("Open navigation"); tap("Projects"); tap(a.name); tap("Project memory")
+            awaitText("Open navigation"); tap("Open navigation"); tap("Projects"); tap("Manage projects"); tap(a.name); tap("Project memory")
             awaitText("Alpha memory")
             setText("My pending notes")
             shell("input keyevent 4")
@@ -184,6 +184,7 @@ class ProjectsDeviceTest {
             c.automation.repository.tasks.value.filter { it.projectId == a.id || it.projectId == b.id }.forEach { c.automation.delete(it.id) }
             c.sessions.sessions.first().filter { it.projectId == a.id || it.projectId == b.id }.forEach { c.sessions.deleteSession(it) }
             c.workspace.deleteProject(a); c.workspace.deleteProject(b); c.workspace.setActiveProject(previous.id)
+            c.settings.setSidebarProjects(saved.sidebarProjects)
             c.settings.setLastActiveSessionId(saved.lastActiveSessionId); c.settings.setResumeLastChat(saved.resumeLastChat)
             c.settings.setOnboardingDone(saved.onboardingDone); roots.deleteRecursively()
         }

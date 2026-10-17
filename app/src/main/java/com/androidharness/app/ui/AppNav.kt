@@ -76,6 +76,7 @@ import com.androidharness.app.data.AppSettings
 import com.androidharness.app.data.MessageHit
 import com.androidharness.app.data.db.ChatSearch
 import com.androidharness.app.data.db.SessionEntity
+import com.androidharness.app.data.db.ProjectEntity
 import com.androidharness.app.ui.chat.ChatViewModel
 import com.androidharness.app.ui.projects.ProjectsScreen
 import com.androidharness.app.ui.projects.ProjectScreen
@@ -236,6 +237,8 @@ fun AppNav(container: AppContainer) {
 
     var actionsSession by remember { mutableStateOf<SessionEntity?>(null) }
     var renamingSession by remember { mutableStateOf<SessionEntity?>(null) }
+    var renamingProject by remember { mutableStateOf<ProjectEntity?>(null) }
+    var projectName by remember { mutableStateOf("") }
     var detailsSession by remember { mutableStateOf<SessionEntity?>(null) }
     var deletingSession by remember { mutableStateOf<SessionEntity?>(null) }
     val sidebarSnackbar = remember { androidx.compose.material3.SnackbarHostState() }
@@ -347,6 +350,20 @@ fun AppNav(container: AppContainer) {
             changesSummary = changes.takeIf { it.isNotEmpty() }?.let { "${it.size} files changed" },
             onChanges = { currentSessionId?.let { sid -> navigateFromSidebar { nav.navigate("changes/${encode(sid)}") } } },
             snackbar = sidebarSnackbar,
+            projectsView = settings.sidebarProjects,
+            onProjectsViewChange = { scope.launch { container.settings.setSidebarProjects(it) } },
+            projectPins = settings.pinnedProjects, projectArchives = settings.archivedProjects,
+            onProjectAction = { project, action -> when (action) {
+                SidebarProjectAction.OPEN -> navigateFromSidebar { nav.navigate("project/${encode(project.id)}") { launchSingleTop = true } }
+                SidebarProjectAction.RENAME -> { projectName = project.name; renamingProject = project }
+                SidebarProjectAction.PIN -> scope.launch { container.settings.setProjectPinned(project.id, project.id !in settings.pinnedProjects) }
+                SidebarProjectAction.ARCHIVE -> scope.launch {
+                    val wasArchived = project.id in settings.archivedProjects
+                    container.settings.setProjectArchived(project.id, !wasArchived)
+                    if (sidebarSnackbar.showSnackbar(if (wasArchived) "Project restored" else "Project archived", actionLabel = "Undo") ==
+                        androidx.compose.material3.SnackbarResult.ActionPerformed) container.settings.setProjectArchived(project.id, wasArchived)
+                }
+            } },
         )
     }
 
@@ -810,6 +827,16 @@ fun AppNav(container: AppContainer) {
                 Text("Tokens used: ${formatTokens(session.totalInputTokens + session.totalOutputTokens)}")
                 Text("Updated: ${formatRelativeTime(session.updatedAt)}")
             } }, confirmButton = { TextButton(onClick = { detailsSession = null }) { Text("Close") } })
+    }
+
+    renamingProject?.let { project ->
+        AlertDialog(onDismissRequest = { renamingProject = null }, title = { Text("Rename project") },
+            text = { OutlinedTextField(projectName, { projectName = it }, singleLine = true, label = { Text("Project name") }) },
+            confirmButton = { TextButton(enabled = projectName.isNotBlank(), onClick = { scope.launch {
+                try { container.workspace.renameProject(project.id, projectName); renamingProject = null }
+                catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; workspaceError = e.message }
+            } }) { Text("Save") } },
+            dismissButton = { TextButton(onClick = { renamingProject = null }) { Text("Cancel") } })
     }
 
     renamingSession?.let { session ->
