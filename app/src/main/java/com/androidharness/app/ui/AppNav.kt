@@ -9,104 +9,62 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.outlined.Difference
-import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.FolderOpen
-import androidx.compose.material.icons.outlined.ForkRight
-import androidx.compose.material.icons.outlined.AutoMode
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.Modifier
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import com.androidharness.app.ui.common.formatTokens
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -123,8 +81,6 @@ import com.androidharness.app.ui.projects.ProjectsScreen
 import com.androidharness.app.ui.projects.ProjectScreen
 import com.androidharness.app.ui.projects.ProjectMemoryScreen
 import com.androidharness.app.ui.buildtest.BuildTestScreen
-import com.androidharness.app.ui.common.HarnessMark
-import com.androidharness.app.ui.common.ProviderMark
 import com.androidharness.app.ui.common.formatRelativeTime
 import com.androidharness.app.ui.files.ChangesScreen
 import com.androidharness.app.ui.files.CodeEditorScreen
@@ -134,22 +90,11 @@ import com.androidharness.app.ui.settings.SettingsScreen
 import com.androidharness.app.ui.settings.SkillsScreen
 import com.androidharness.app.ui.setup.SetupScreen
 import com.androidharness.app.ui.terminal.TerminalScreen
-import com.androidharness.app.ui.theme.fastEffectsSpec
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
-import java.util.Calendar
-
-private enum class SessionGroup(val label: String) {
-    PINNED("Pinned"),
-    TODAY("Today"),
-    YESTERDAY("Yesterday"),
-    THIS_WEEK("This week"),
-    OLDER("Older"),
-    ARCHIVED("Archived"),
-}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -196,12 +141,10 @@ fun AppNav(container: AppContainer) {
     val desktopFocus = remember { FocusRequester() }
     val desktopKeyboard = remember { DesktopKeyboardRouter() }
     androidx.compose.runtime.LaunchedEffect(desktopNavigation) {
-        if (desktopNavigation) { androidx.compose.runtime.withFrameNanos { }; desktopFocus.requestFocus() }
+        if (desktopNavigation) { drawerState.close(); androidx.compose.runtime.withFrameNanos { }; desktopFocus.requestFocus() }
     }
 
     var searchQuery by remember { mutableStateOf("") }
-    var searchOpen by remember { mutableStateOf(false) }
-    val searchFocus = remember { FocusRequester() }
     var fuzzySearch by remember { mutableStateOf(false) }
     var messageHits by remember { mutableStateOf<List<MessageHit>>(emptyList()) }
 
@@ -233,7 +176,6 @@ fun AppNav(container: AppContainer) {
             keyboard?.hide()
         } else {
             // Drawer closed: collapse search so it starts fresh next open.
-            searchOpen = false
             searchQuery = ""
         }
     }
@@ -294,7 +236,9 @@ fun AppNav(container: AppContainer) {
 
     var actionsSession by remember { mutableStateOf<SessionEntity?>(null) }
     var renamingSession by remember { mutableStateOf<SessionEntity?>(null) }
-    var collapsedGroups by remember { mutableStateOf(setOf(SessionGroup.OLDER, SessionGroup.ARCHIVED)) }
+    var detailsSession by remember { mutableStateOf<SessionEntity?>(null) }
+    var deletingSession by remember { mutableStateOf<SessionEntity?>(null) }
+    val sidebarSnackbar = remember { androidx.compose.material3.SnackbarHostState() }
     var showWorkspaceSheet by remember { mutableStateOf(false) }
     var showAddWorkspace by remember { mutableStateOf(false) }
 
@@ -341,6 +285,71 @@ fun AppNav(container: AppContainer) {
         }
     }
 
+    fun navigateFromSidebar(action: () -> Unit) {
+        val navigate = { scope.launch { drawerState.close() }; action() }
+        if (desktopNavigation) desktopGuard.navigate(navigate) else navigate()
+    }
+    fun sidebarAction(session: SessionEntity, action: SidebarChatAction) {
+        when (action) {
+            SidebarChatAction.RENAME -> renamingSession = session
+            SidebarChatAction.DETAILS -> detailsSession = session
+            SidebarChatAction.DELETE -> deletingSession = session
+            SidebarChatAction.PIN -> scope.launch { container.settings.setPinned(session.id, session.id !in settings.pinnedSessions) }
+            SidebarChatAction.ARCHIVE -> scope.launch {
+                val wasArchived = session.id in settings.archivedSessions
+                container.settings.setArchived(session.id, !wasArchived)
+                if (sidebarSnackbar.showSnackbar(if (wasArchived) "Chat restored" else "Chat archived", actionLabel = "Undo") ==
+                    androidx.compose.material3.SnackbarResult.ActionPerformed) container.settings.setArchived(session.id, wasArchived)
+            }
+        }
+    }
+    @Composable fun Sidebar(onCollapse: () -> Unit) {
+        val changes by remember(currentSessionId) {
+            currentSessionId?.let(container.sessions::fileChangesFor) ?: kotlinx.coroutines.flow.flowOf(emptyList())
+        }.collectAsStateWithLifecycle(initialValue = emptyList())
+        ProjectNavigationSidebar(
+            projects = allWorkspaces, sessions = sessions, selectedSession = currentSessionId, selectedProject = currentWorkspace?.id,
+            pinned = settings.pinnedSessions.toSet(), archived = settings.archivedSessions.toSet(), query = searchQuery,
+            onQueryChange = { searchQuery = it }, messageHits = messageHits, fuzzy = fuzzySearch, onFuzzyChange = { fuzzySearch = !fuzzySearch },
+            activity = { session ->
+                if (session.id in runningSessionIds) {
+                    val live by remember(session.id) { container.runManager.live(session.id) }.collectAsStateWithLifecycle()
+                    sidebarActivity(true, session.pendingPlan, live)
+                } else sidebarActivity(false, session.pendingPlan)
+            },
+            onNewChat = { navigateFromSidebar {
+                scope.launch { currentWorkspace?.id?.let { container.workspace.setActiveProject(it) }; openChat(null) }
+            } }, onChat = { sid -> navigateFromSidebar { openChat(sid) } },
+            onMessage = { hit -> navigateFromSidebar { openChat(hit.sessionId, hit.messageId) } },
+            onProjectChat = { project -> if (!creatingProjectChat) {
+                creatingProjectChat = true
+                val create = { scope.launch {
+                    try { openChat(container.sessions.createSession("New chat", project.id)) }
+                    catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; workspaceError = e.message ?: "Could not create chat." }
+                    finally { creatingProjectChat = false }
+                }; Unit }
+                if (desktopNavigation) {
+                    // A cancelled editor guard must not leave every new-chat button disabled.
+                    creatingProjectChat = false
+                    desktopGuard.navigate { creatingProjectChat = true; create() }
+                } else create()
+            } },
+            onProjects = { navigateFromSidebar { nav.navigate("projects") { launchSingleTop = true } } },
+            onChatActions = { actionsSession = it }, onAction = ::sidebarAction,
+            onBuild = { navigateFromSidebar { nav.navigate("build-test?session=${encode(workspaceSessionId.orEmpty())}&project=${encode(workspaceProjectId.orEmpty())}") } },
+            onTerminal = { navigateFromSidebar { nav.navigate("terminal?session=${encode(workspaceSessionId.orEmpty())}&project=${encode(workspaceProjectId.orEmpty())}") } },
+            onAutomation = { navigateFromSidebar { nav.navigate("automation") { launchSingleTop = true } } },
+            onProviders = { navigateFromSidebar { nav.navigate("providers") { launchSingleTop = true } } },
+            onSettings = { navigateFromSidebar { nav.navigate("settings") { launchSingleTop = true } } },
+            workspaceLabel = if (chatWorkspaceContext) "Workspaces for this chat" else "Workspace", workspaceSummary = workspaceSummary,
+            onWorkspaces = { scope.launch { drawerState.close() }; showWorkspaceSheet = true }, onCollapse = onCollapse,
+            currentRoute = currentRoute, projectCreationEnabled = !creatingProjectChat,
+            changesSummary = changes.takeIf { it.isNotEmpty() }?.let { "${it.size} files changed" },
+            onChanges = { currentSessionId?.let { sid -> navigateFromSidebar { nav.navigate("changes/${encode(sid)}") } } },
+            snackbar = sidebarSnackbar,
+        )
+    }
+
     androidx.compose.runtime.CompositionLocalProvider(
         LocalDesktopLayout provides desktopNavigation,
         LocalDesktopInput provides (settings.workspaceLayout == com.androidharness.app.data.WorkspaceLayoutMode.DESKTOP),
@@ -351,348 +360,8 @@ fun AppNav(container: AppContainer) {
         drawerState = drawerState,
         gesturesEnabled = !desktopNavigation && drawerGesturesEnabled,
         drawerContent = {
-            ModalDrawerSheet(
-                drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            ) {
-                Column(Modifier.fillMaxSize()) {
-                    // ----- Wordmark header -----
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 14.dp),
-                    ) {
-                        HarnessMark(size = 36.dp)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                "AndroidHarness",
-                                style = MaterialTheme.typography.titleMediumEmphasized,
-                            )
-                            Text(
-                                "Workspace agent",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-
-                    if (!searchOpen) {
-                        Surface(
-                            onClick = {
-                                searchOpen = true
-                                scope.launch {
-                                    delay(120)
-                                    runCatching { searchFocus.requestFocus() }
-                                    keyboard?.show()
-                                }
-                            },
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
-                            ) {
-                                Icon(
-                                    Icons.Outlined.Search,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(19.dp),
-                                )
-                                Spacer(Modifier.width(10.dp))
-                                Text(
-                                    "Search chats and messages",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
-
-                    // ----- Search field -----
-                    AnimatedVisibility(
-                        visible = searchOpen,
-                        enter = fadeIn(tween(150)) + expandVertically(tween(180)),
-                        exit = fadeOut(tween(120)) + shrinkVertically(tween(150)),
-                    ) {
-                        Column(Modifier.fillMaxWidth()) {
-                            OutlinedTextField(
-                                value = searchQuery,
-                                onValueChange = { searchQuery = it },
-                                placeholder = { Text("Search chats and messages") },
-                                singleLine = true,
-                                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                                trailingIcon = {
-                                    IconButton(onClick = {
-                                        searchOpen = false
-                                        searchQuery = ""
-                                        focusManager.clearFocus(force = true)
-                                        keyboard?.hide()
-                                    }) {
-                                        Icon(
-                                            Icons.Filled.Close,
-                                            contentDescription = "Close search",
-                                            modifier = Modifier.size(18.dp),
-                                        )
-                                    }
-                                },
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                                keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
-                                shape = RoundedCornerShape(14.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    unfocusedBorderColor = Color.Transparent,
-                                    focusedBorderColor = Color.Transparent,
-                                ),
-                                textStyle = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp)
-                                    .focusRequester(searchFocus),
-                            )
-                            FuzzySearchRow(
-                                fuzzy = fuzzySearch,
-                                onToggle = { fuzzySearch = !fuzzySearch },
-                            )
-                        }
-                    }
-
-                    // ----- New chat -----
-                    Button(
-                        onClick = { openChat(null) },
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                            .heightIn(min = 46.dp),
-                    ) {
-                        Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(19.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("New chat", style = MaterialTheme.typography.titleSmall)
-                    }
-                    Spacer(Modifier.height(8.dp))
-
-                    DrawerRow(
-                        icon = { Icon(Icons.Outlined.Folder, contentDescription = null) },
-                        title = "Projects",
-                        selected = currentRoute?.startsWith("project") == true,
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            nav.navigate("projects") { launchSingleTop = true }
-                        },
-                    )
-                    DrawerRow(
-                        icon = { Icon(Icons.Outlined.FolderOpen, contentDescription = null) },
-                        title = if (chatWorkspaceContext) "Workspaces for this chat" else "Workspace",
-                        subtitle = workspaceSummary,
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            showWorkspaceSheet = true
-                        },
-                    )
-
-                    // ----- Files-changed pill for the open chat -----
-                    // Live per-session aggregate; hidden until the agent (or an
-                    // in-app save) touches something in this conversation.
-                    if (currentSessionId != null) {
-                        val sessionChanges by container.sessions
-                            .fileChangesFor(currentSessionId!!)
-                            .collectAsStateWithLifecycle(initialValue = emptyList())
-                        if (sessionChanges.isNotEmpty()) {
-                            val adds = sessionChanges.sumOf { it.added }
-                            val dels = sessionChanges.sumOf { it.removed }
-                            val sid = currentSessionId!!
-                            Surface(
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 2.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .combinedClickable(onClick = {
-                                        scope.launch { drawerState.close() }
-                                        nav.navigate("changes/${encode(sid)}")
-                                    }),
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.Difference,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(17.dp),
-                                        tint = MaterialTheme.colorScheme.primary,
-                                    )
-                                    Spacer(Modifier.width(10.dp))
-                                    Text(
-                                        "${sessionChanges.size} files changed",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    com.androidharness.app.ui.files.DiffStatText(adds, dels)
-                                }
-                            }
-                        }
-                    }
-
-                    val boundaries = remember { DateBoundaries.now() }
-                    val filteredSessions = remember(sessions, searchQuery) {
-                        if (searchQuery.isBlank()) sessions else sessions.filter {
-                            it.title.contains(searchQuery, ignoreCase = true)
-                        }
-                    }
-                    val groupedSessions = remember(filteredSessions, settings.pinnedSessions, settings.archivedSessions) {
-                        filteredSessions.groupBy { sessionGroup(it, settings, boundaries) }
-                    }
-
-                    LazyColumn(
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                    ) {
-                        val filtered = filteredSessions
-
-                        if (searchQuery.isNotBlank()) {
-                            // Search mode: title matches on top, message hits
-                            // from the FTS/fuzzy search underneath.
-                            if (filtered.isNotEmpty()) {
-                                stickyHeader {
-                                    DrawerGroupHeader(label = "Chats", collapsible = false, collapsed = false, onClick = {})
-                                }
-                                items(filtered, key = { "s-${it.id}" }) { session ->
-                                    SessionRow(
-                                        session = session,
-                                        selected = session.id == currentSessionId,
-                                        pinned = session.id in settings.pinnedSessions,
-                                        running = session.id in runningSessionIds,
-                                        onClick = { openChat(session.id) },
-                                        onLongClick = { actionsSession = session },
-                                    )
-                                }
-                            }
-                            if (messageHits.isNotEmpty()) {
-                                stickyHeader {
-                                    DrawerGroupHeader(label = "Messages", collapsible = false, collapsed = false, onClick = {})
-                                }
-                                items(messageHits, key = { "m-${it.messageId}" }) { hit ->
-                                    MessageHitRow(
-                                        hit = hit,
-                                        query = searchQuery,
-                                        fuzzy = fuzzySearch,
-                                        onClick = { openChat(hit.sessionId, hit.messageId) },
-                                    )
-                                }
-                            }
-                            if (filtered.isEmpty() && messageHits.isEmpty()) {
-                                item {
-                                    Text(
-                                        "Nothing matches \"$searchQuery\".",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(20.dp),
-                                    )
-                                }
-                            }
-                        } else {
-                            val grouped = groupedSessions
-                            val order = SessionGroup.entries
-                            order.forEach { group ->
-                                val items = grouped[group].orEmpty()
-                                if (items.isEmpty()) return@forEach
-                                val collapsed = group in collapsedGroups
-                                stickyHeader {
-                                    DrawerGroupHeader(
-                                        label = group.label,
-                                        collapsible = group == SessionGroup.OLDER || group == SessionGroup.ARCHIVED,
-                                        collapsed = collapsed,
-                                        onClick = {
-                                            collapsedGroups = if (collapsed) collapsedGroups - group
-                                            else collapsedGroups + group
-                                        },
-                                    )
-                                }
-                                if (!collapsed) {
-                                    items(items, key = { it.id }) { session ->
-                                        SessionRow(
-                                            session = session,
-                                            selected = session.id == currentSessionId,
-                                            pinned = session.id in settings.pinnedSessions,
-                                            running = session.id in runningSessionIds,
-                                            onClick = { openChat(session.id) },
-                                            onLongClick = { actionsSession = session },
-                                        )
-                                    }
-                                }
-                            }
-
-                            if (filtered.isEmpty()) {
-                                item {
-                                    Text(
-                                        "No chats yet.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(20.dp),
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    HorizontalDivider(
-                        Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                    )
-                    Text(
-                        "TOOLS",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(start = 20.dp, bottom = 6.dp),
-                    )
-                    QuickActionStrip(
-                        buildSelected = currentRoute?.startsWith("build-test") == true,
-                        automationSelected = currentRoute == "automation",
-                        terminalSelected = currentRoute?.startsWith("terminal") == true,
-                        onBuild = {
-                            scope.launch { drawerState.close() }
-                            nav.navigate("build-test?session=${encode(workspaceSessionId.orEmpty())}&project=${encode(workspaceProjectId.orEmpty())}")
-                        },
-                        onAutomation = {
-                            scope.launch { drawerState.close() }
-                            nav.navigate("automation")
-                        },
-                        onTerminal = {
-                            scope.launch { drawerState.close() }
-                            nav.navigate("terminal?session=${encode(workspaceSessionId.orEmpty())}&project=${encode(workspaceProjectId.orEmpty())}")
-                        },
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    ProviderDrawerRow(
-                        selected = currentRoute == "providers",
-                        subtitle = run {
-                            val active = providers.firstOrNull { it.id == settings.activeProviderId }
-                            if (active == null) "Connect a model provider"
-                            else "${active.name} · ${settings.activeModel?.takeIf { it.isNotBlank() } ?: active.model}"
-                        },
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            nav.navigate("providers")
-                        },
-                    )
-                    DrawerRow(
-                        icon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
-                        title = "Settings",
-                        subtitle = "Agent, workspace and appearance",
-                        selected = currentRoute == "settings",
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            nav.navigate("settings")
-                        },
-                    )
-                    Spacer(Modifier.height(12.dp))
-                }
+            if (!desktopNavigation) ModalDrawerSheet(drawerContainerColor = MaterialTheme.colorScheme.surface) {
+                Sidebar { scope.launch { drawerState.close() } }
             }
         },
     ) {
@@ -710,28 +379,7 @@ fun AppNav(container: AppContainer) {
         }.then(if (desktopNavigation) Modifier.focusable() else Modifier).then(if (desktopNavigation) Modifier.statusBarsPadding().navigationBarsPadding() else Modifier)) {
             RetainedWorkspaceContent(desktopNavigation && sidebarVisible,
                 Modifier.width(if (desktopNavigation && sidebarVisible) 232.dp else 0.dp)) {
-                DesktopNavigationSidebar(allWorkspaces, sessions, currentSessionId, currentWorkspace?.id,
-                    runningSessionIds, currentRoute,
-                    onNewChat = { desktopGuard.navigate {
-                        scope.launch {
-                            currentWorkspace?.id?.let { container.workspace.setActiveProject(it) }
-                            openChat(null)
-                        }
-                    } },
-                    onChat = { sid -> desktopGuard.navigate { openChat(sid) } },
-                    onChatActions = { actionsSession = it },
-                    onProjectChat = { project -> desktopGuard.navigate {
-                        scope.launch {
-                            val sid = container.sessions.createSession("New chat", project.id)
-                            openChat(sid)
-                        }
-                    } },
-                    onProjects = { desktopGuard.navigate { nav.navigate("projects") { launchSingleTop = true } } },
-                    workspaceLabel = if (chatWorkspaceContext) "Workspaces for this chat" else "Workspace",
-                    workspaceSummary = workspaceSummary,
-                    onWorkspaces = { showWorkspaceSheet = true },
-                    onAutomation = { desktopGuard.navigate { nav.navigate("automation") { launchSingleTop = true } } },
-                    onSettings = { desktopGuard.navigate { nav.navigate("settings") { launchSingleTop = true } } })
+                Sidebar { sidebarVisible = false }
             }
             Column(Modifier.weight(1f).fillMaxHeight()) {
         if (currentRoute?.startsWith("project") != true) {
@@ -1115,24 +763,16 @@ fun AppNav(container: AppContainer) {
                         actionsSession = null
                     }
                     SessionAction(if (pinned) "Unpin" else "Pin") {
-                        scope.launch { container.settings.setPinned(session.id, !pinned) }
+                        sidebarAction(session, SidebarChatAction.PIN)
                         actionsSession = null
                     }
                     SessionAction(if (archived) "Unarchive" else "Archive") {
-                        scope.launch { container.settings.setArchived(session.id, !archived) }
+                        sidebarAction(session, SidebarChatAction.ARCHIVE)
                         actionsSession = null
                     }
+                    SessionAction("Chat details") { detailsSession = session; actionsSession = null }
                     SessionAction("Delete", destructive = true) {
-                        val remove = {
-                            scope.launch {
-                                container.runManager.stopAndJoin(session.id)
-                                container.sessions.deleteSession(session)
-                                if (session.id == currentSessionId) openChat(null)
-                                else if (session.id == settings.lastActiveSessionId) container.settings.setLastActiveSessionId(null)
-                            }
-                            Unit
-                        }
-                        if (desktopNavigation && session.id == currentSessionId) desktopGuard.navigate(remove) else remove()
+                        deletingSession = session
                         actionsSession = null
                     }
                 }
@@ -1141,6 +781,35 @@ fun AppNav(container: AppContainer) {
                 TextButton(onClick = { actionsSession = null }) { Text("Close") }
             },
         )
+    }
+
+    deletingSession?.let { session ->
+        AlertDialog(onDismissRequest = { deletingSession = null }, title = { Text("Delete chat?") },
+            text = { Text("Delete \"${session.title}\" and its conversation history?") },
+            confirmButton = { TextButton(onClick = {
+                val remove = { scope.launch {
+                    container.runManager.stopAndJoin(session.id)
+                    container.sessions.deleteSession(session)
+                    if (session.id == currentSessionId) openChat(null)
+                    else if (session.id == settings.lastActiveSessionId) container.settings.setLastActiveSessionId(null)
+                }; Unit }
+                deletingSession = null
+                if (desktopNavigation && session.id == currentSessionId) desktopGuard.navigate(remove) else remove()
+            }) { Text("Delete chat", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { deletingSession = null }) { Text("Keep chat") } })
+    }
+    detailsSession?.let { session ->
+        val choice = if (settings.sameModelAcrossChats) com.androidharness.app.data.ChatModelSelection.from(settings, providers).active
+            else runCatching { com.androidharness.app.data.ChatModelSelection.decode(session.modelSelectionJson)?.active
+                ?: com.androidharness.app.data.ChatModelSelection.from(settings, providers).active }.getOrNull()
+        AlertDialog(onDismissRequest = { detailsSession = null }, title = { Text("Chat details") },
+            text = { Column(Modifier.heightIn(max = 340.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(session.title, style = MaterialTheme.typography.titleSmall)
+                Text("Workspace: ${allWorkspaces.firstOrNull { it.id == session.projectId }?.name ?: "Other chats"}")
+                Text("Model: ${choice?.model ?: "Unavailable"}")
+                Text("Tokens used: ${formatTokens(session.totalInputTokens + session.totalOutputTokens)}")
+                Text("Updated: ${formatRelativeTime(session.updatedAt)}")
+            } }, confirmButton = { TextButton(onClick = { detailsSession = null }) { Text("Close") } })
     }
 
     renamingSession?.let { session ->
@@ -1171,209 +840,8 @@ fun AppNav(container: AppContainer) {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Drawer building blocks
-
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun DrawerGroupHeader(
-    label: String,
-    collapsible: Boolean,
-    collapsed: Boolean,
-    onClick: () -> Unit,
-) {
-    val rotation by animateFloatAsState(
-        targetValue = if (collapsed) -90f else 0f,
-        animationSpec = fastEffectsSpec(),
-        label = "group chevron",
-    )
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(onClick = onClick)
-            .padding(start = 24.dp, end = 20.dp, top = 14.dp, bottom = 4.dp),
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f),
-        )
-        if (collapsible) {
-            Icon(
-                Icons.Filled.KeyboardArrowDown,
-                contentDescription = if (collapsed) "Expand" else "Collapse",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .size(20.dp)
-                    .rotate(rotation),
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun SessionRow(
-    session: SessionEntity,
-    selected: Boolean,
-    pinned: Boolean,
-    running: Boolean,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-) {
-    val scheme = MaterialTheme.colorScheme
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 2.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) scheme.surfaceContainerHigh else Color.Transparent)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(horizontal = 12.dp, vertical = 11.dp),
-    ) {
-        if (pinned) {
-            Icon(
-                Icons.Filled.PushPin,
-                contentDescription = "Pinned",
-                tint = scheme.onSurfaceVariant,
-                modifier = Modifier.size(14.dp),
-            )
-            Spacer(Modifier.width(6.dp))
-        }
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (session.title.startsWith("Fork of ")) {
-                    Icon(
-                        Icons.Outlined.ForkRight,
-                        contentDescription = "Forked session",
-                        tint = scheme.primary,
-                        modifier = Modifier.size(14.dp),
-                    )
-                    Spacer(Modifier.width(4.dp))
-                }
-                Text(
-                    session.title,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = scheme.onSurface,
-                )
-            }
-            if (running) {
-                RunningSessionStatus(session.totalInputTokens + session.totalOutputTokens)
-            } else {
-                Text(
-                    buildString {
-                        append(formatRelativeTime(session.updatedAt))
-                        val total = session.totalInputTokens + session.totalOutputTokens
-                        if (total > 0) {
-                            append(" · ")
-                            append(formatTokens(total))
-                            append(" tokens")
-                        }
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = scheme.onSurfaceVariant,
-                )
-            }
-        }
-        if (selected) {
-            Icon(
-                Icons.Filled.Check,
-                contentDescription = "Current chat",
-                tint = scheme.primary,
-                modifier = Modifier.size(16.dp),
-            )
-        } else if (running) {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(scheme.primaryContainer.copy(alpha = 0.8f))
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
-            ) {
-                Text(
-                    "Running",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = scheme.onPrimaryContainer,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun RunningSessionStatus(totalTokens: Long) {
-    val scheme = MaterialTheme.colorScheme
-    val infiniteTransition = rememberInfiniteTransition(label = "running pulse")
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "running alpha",
-    )
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(top = 2.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(7.dp)
-                .alpha(alpha)
-                .background(scheme.primary, CircleShape),
-        )
-        Spacer(Modifier.width(5.dp))
-        Text(
-            "Working…",
-            style = MaterialTheme.typography.labelSmall,
-            color = scheme.primary,
-            fontWeight = FontWeight.SemiBold,
-        )
-        if (totalTokens > 0) {
-            Text(
-                " · ${formatTokens(totalTokens)} tokens",
-                style = MaterialTheme.typography.labelSmall,
-                color = scheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun FuzzySearchRow(fuzzy: Boolean, onToggle: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 2.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
-            .combinedClickable(onClick = onToggle)
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text("Fuzzy search", style = MaterialTheme.typography.labelLarge)
-            Text(
-                if (fuzzy) "Find text anywhere in messages" else "Whole-word matches",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Switch(checked = fuzzy, onCheckedChange = { onToggle() })
-    }
-}
-
-@Composable
-private fun MessageHitRow(
+internal fun MessageHitRow(
     hit: MessageHit,
     query: String,
     fuzzy: Boolean,
@@ -1440,216 +908,6 @@ private fun SessionAction(
             else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.fillMaxWidth(),
         )
-    }
-}
-
-@Composable
-private fun QuickActionStrip(
-    buildSelected: Boolean,
-    automationSelected: Boolean,
-    terminalSelected: Boolean,
-    onBuild: () -> Unit,
-    onAutomation: () -> Unit,
-    onTerminal: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        QuickActionButton(
-            icon = Icons.Outlined.CheckCircle,
-            label = "Build",
-            selected = buildSelected,
-            onClick = onBuild,
-        )
-        QuickActionButton(
-            icon = Icons.Outlined.AutoMode,
-            label = "Automate",
-            selected = automationSelected,
-            onClick = onAutomation,
-        )
-        QuickActionButton(
-            icon = Icons.Outlined.Terminal,
-            label = "Terminal",
-            selected = terminalSelected,
-            onClick = onTerminal,
-        )
-    }
-}
-
-@Composable
-private fun RowScope.QuickActionButton(
-    icon: ImageVector,
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    val scheme = MaterialTheme.colorScheme
-    Surface(
-        onClick = onClick,
-        color = if (selected) scheme.secondaryContainer else scheme.surfaceContainer,
-        contentColor = if (selected) scheme.onSecondaryContainer else scheme.onSurfaceVariant,
-        shape = RoundedCornerShape(14.dp),
-        modifier = Modifier.weight(1f),
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 9.dp),
-        ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.height(4.dp))
-            Text(
-                label,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                maxLines = 1,
-            )
-        }
-    }
-}
-
-@Composable
-private fun ProviderDrawerRow(
-    selected: Boolean,
-    subtitle: String,
-    onClick: () -> Unit,
-) {
-    val scheme = MaterialTheme.colorScheme
-    Surface(
-        onClick = onClick,
-        color = if (selected) scheme.secondaryContainer else scheme.surfaceContainerHigh,
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 2.dp),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
-        ) {
-            ProviderMark(size = 38.dp)
-            Spacer(Modifier.width(11.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "Provider",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = if (selected) scheme.onSecondaryContainer else scheme.onSurface,
-                )
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (selected) scheme.onSecondaryContainer.copy(alpha = 0.76f)
-                    else scheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Icon(
-                Icons.Filled.KeyboardArrowDown,
-                contentDescription = null,
-                tint = if (selected) scheme.onSecondaryContainer else scheme.onSurfaceVariant,
-                modifier = Modifier
-                    .size(18.dp)
-                    .rotate(-90f),
-            )
-        }
-    }
-}
-
-@Composable
-private fun DrawerRow(
-    icon: @Composable () -> Unit,
-    title: String,
-    subtitle: String? = null,
-    selected: Boolean = false,
-    onClick: () -> Unit,
-) {
-    val scheme = MaterialTheme.colorScheme
-    Surface(
-        onClick = onClick,
-        color = if (selected) scheme.secondaryContainer else Color.Transparent,
-        shape = RoundedCornerShape(14.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 2.dp),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-        ) {
-            Surface(
-                color = if (selected) Color.Transparent else scheme.surfaceContainer,
-                contentColor = if (selected) scheme.onSecondaryContainer else scheme.onSurfaceVariant,
-                shape = RoundedCornerShape(9.dp),
-            ) {
-                Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
-                    Box(Modifier.size(19.dp), contentAlignment = Alignment.Center) { icon() }
-                }
-            }
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = if (selected) scheme.onSecondaryContainer else scheme.onSurface,
-                )
-                if (subtitle != null) {
-                    Text(
-                        subtitle,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (selected) scheme.onSecondaryContainer.copy(alpha = 0.76f)
-                        else scheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            Icon(
-                Icons.Filled.KeyboardArrowDown,
-                contentDescription = null,
-                tint = if (selected) scheme.onSecondaryContainer else scheme.onSurfaceVariant,
-                modifier = Modifier
-                    .size(18.dp)
-                    .rotate(-90f),
-            )
-        }
-    }
-}
-
-data class DateBoundaries(
-    val todayStart: Long,
-    val yesterdayStart: Long,
-    val weekStart: Long,
-) {
-    companion object {
-        fun now(): DateBoundaries {
-            val cal = Calendar.getInstance()
-            cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
-            cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
-            val todayStart = cal.timeInMillis
-            val yesterdayStart = todayStart - 24L * 60 * 60 * 1000
-            cal.add(Calendar.DAY_OF_YEAR, -(cal.get(Calendar.DAY_OF_WEEK) - cal.firstDayOfWeek))
-            val weekStart = cal.timeInMillis
-            return DateBoundaries(todayStart, yesterdayStart, weekStart)
-        }
-    }
-}
-
-private fun sessionGroup(
-    session: SessionEntity,
-    settings: AppSettings,
-    boundaries: DateBoundaries,
-): SessionGroup {
-    if (session.id in settings.pinnedSessions) return SessionGroup.PINNED
-    if (session.id in settings.archivedSessions) return SessionGroup.ARCHIVED
-
-    return when {
-        session.updatedAt >= boundaries.todayStart -> SessionGroup.TODAY
-        session.updatedAt >= boundaries.yesterdayStart -> SessionGroup.YESTERDAY
-        session.updatedAt >= boundaries.weekStart -> SessionGroup.THIS_WEEK
-        else -> SessionGroup.OLDER
     }
 }
 

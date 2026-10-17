@@ -191,13 +191,15 @@ class ProjectsDeviceTest {
     private fun find(node: AccessibilityNodeInfo? = instrumentation.uiAutomation.rootInActiveWindow,
         predicate: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo? {
         node ?: return null
-        if (predicate(node)) return node
+        // A closed navigation drawer retains its search field off screen.
+        if (node.isVisibleToUser && predicate(node)) return node
         for (i in 0 until node.childCount) find(node.getChild(i), predicate)?.let { return it }
         return null
     }
     private fun await(predicate: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo {
         val deadline = SystemClock.uptimeMillis() + 20000
         while (SystemClock.uptimeMillis() < deadline) {
+            if (android.os.Build.VERSION.SDK_INT >= 33) instrumentation.uiAutomation.clearCache()
             // An existing Shizuku setup may legitimately show its disconnected warning on entry.
             if (find { it.text?.toString() == "Shizuku is disabled" } != null) {
                 var action = find { it.text?.toString() == "OK" }
@@ -211,7 +213,7 @@ class ProjectsDeviceTest {
     }
     private fun awaitText(text: String): AccessibilityNodeInfo = try {
         await { it.text?.toString() == text || it.contentDescription?.toString() == text }
-    } catch (e: IllegalStateException) { error("Missing UI text: $text") }
+    } catch (e: IllegalStateException) { screenshot("projects-failure"); error("Missing UI text: $text") }
     private fun tap(text: String) {
         awaitText(text); SystemClock.sleep(400)
         var target = awaitText(text)
@@ -232,6 +234,7 @@ class ProjectsDeviceTest {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
         }))
         SystemClock.sleep(300)
+        awaitText(text)
     }
     private fun scrollTo(text: String) {
         repeat(8) {

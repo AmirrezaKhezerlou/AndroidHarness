@@ -94,7 +94,7 @@ class DesktopInputDeviceTest {
         tap("Close")
         tap("Actions for Native input chat")
         await { find("Delete") != null }
-        tap("Delete")
+        tap("Delete"); tap("Delete chat")
         await { runBlocking { c.sessions.session(first) == null } }
         await { find("What do you want to build?") != null }
         assertNotNull(find("Create a Python hello world and run it"))
