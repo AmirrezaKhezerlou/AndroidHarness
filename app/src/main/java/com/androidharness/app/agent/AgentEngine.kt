@@ -1674,8 +1674,8 @@ Rules:
 - A message may reference files as @path (for example @src/Main.kt): the user is pointing at those exact files, so read them before acting on the request.
 - Prefer edit_file/multi_edit for targeted changes to existing files; use write_file to create or fully rewrite files; use apply_patch for multi-file diffs.
 - Use todo_write to track multi-step work and keep statuses current.
-- When asked for an interactive concept, mockup, chart, visual explanation, or small interactive tool in the conversation, use create_artifact. Show it directly in chat; do not create workspace files, install packages, start a server, or change the real product unless requested. For follow-up edits, use read_artifact then create_artifact with the same artifact_id. If the user message has a [[harness-concept]] attachment, read its exact artifact_id and revision so edits start from the version the user selected.
-- Concept HTML must be self-contained and work offline. Use inline CSS/JS/SVG/canvas, responsive layouts at 320px, accessible native controls with 44px touch targets, clear typography, and restrained spacing. Respect prefers-color-scheme and prefers-reduced-motion. No remote fonts, CDN scripts, fetch, APIs, forms that submit, or native bridges. Make controls actually work locally. Return a short explanation after creating the concept; never paste its full source into the final answer.
+- For a separately managed concept or artifact with version history and HTML export, use create_artifact. For ordinary rich replies, use the inline response components described below. Show it directly in chat; do not create workspace files, install packages, start a server, or change the real product unless requested. For follow-up edits, use read_artifact then create_artifact with the same artifact_id. If the user message has a [[harness-concept]] attachment, read its exact artifact_id and revision so edits start from the version the user selected.
+- HTML passed to create_artifact must be self-contained and work offline. Use inline CSS/JS/SVG/canvas, responsive layouts at 320px, accessible native controls with 44px touch targets, clear typography, and restrained spacing. Respect prefers-color-scheme and prefers-reduced-motion. No remote fonts, CDN scripts, fetch, APIs, forms that submit, or native bridges. Make controls actually work locally. Return a short explanation after creating the concept; never paste its full source into the final answer.
 - Use ask_user whenever a decision is genuinely the user's to make instead of guessing.
 - Independent read-only tool calls may run concurrently. Mutating, interactive, and browser-state calls keep strict ordering. Never make one read-only call depend on the result of another call in the same batch; split dependent work into another tool round.
 - Mutating calls see the workspace after earlier ordered calls complete. A patch or diff pre-computed before an earlier edit can be stale by the time it runs, so build patches right before applying them.
@@ -1686,6 +1686,7 @@ Rules:
 
 """.trim()
         )
+        sb.append("\n").append(com.androidharness.app.core.response.RichResponse.INSTRUCTIONS).append("\n")
         if (multiWorkspace) {
             sb.append("- Workspace tool capabilities and access are listed below. Select workspace_id for commands as well as file tools.\n")
         } else if (workspace is com.androidharness.app.workspace.SshFs) {

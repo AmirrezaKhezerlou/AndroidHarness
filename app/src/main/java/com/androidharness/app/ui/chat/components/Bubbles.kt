@@ -162,9 +162,10 @@ internal fun AssistantText(
     showPreviewChip: Boolean = false,
     onOpenUrl: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier,
+    onFollowUp: ((com.androidharness.app.core.response.RichResponse.FollowUp) -> Unit)? = null,
 ) {
     val primaryTarget = remember(text, streaming) {
-        if (!streaming && text.isNotBlank()) WebResourceExtractor.findPrimaryPreviewTarget(text) else null
+        if (!streaming && text.isNotBlank()) WebResourceExtractor.findPrimaryPreviewTarget(com.androidharness.app.core.response.RichResponse.markdownText(text)) else null
     }
     var targetLive by remember(text, streaming) { mutableStateOf<Boolean?>(null) }
     if (showPreviewChip && primaryTarget != null && onOpenUrl != null) {
@@ -187,11 +188,7 @@ internal fun AssistantText(
         } else {
             Row(verticalAlignment = Alignment.Top) {
                 Box(Modifier.weight(1f)) {
-                    if (streaming) {
-                        MarkdownText(text, streaming = true, onOpenUrl = onOpenUrl)
-                    } else {
-                        SelectionContainer { MarkdownText(text, streaming = false, onOpenUrl = onOpenUrl) }
-                    }
+                    com.androidharness.app.ui.chat.rich.RichResponseContent(text, streaming, onOpenUrl, onFollowUp)
                 }
                 if (streaming) {
                     Spacer(Modifier.width(4.dp))

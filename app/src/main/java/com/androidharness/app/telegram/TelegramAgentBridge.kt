@@ -133,13 +133,13 @@ internal class AndroidTelegramAgentBridge(private val c: AppContainer, private v
             else -> null
         } else null
         val output = rows.filter { it.turnId == (request.turnId ?: archived?.turnId ?: saved.turnId) && it.role == Role.ASSISTANT && it.toolCallId == null && it.text.isNotBlank() }
-            .joinToString("\n\n") { it.text }
+            .joinToString("\n\n") { com.androidharness.app.core.response.RichResponse.plainText(it.text) }
         if (archived != null && (archived.completed || archived.cancelled)) return TelegramRunSnapshot(
             matches = true, started = true, completed = archived.completed, cancelled = archived.cancelled, turnId = archived.turnId, output = output)
         return TelegramRunSnapshot(running && matches, matches, started, matches && saved.completed,
             matches && !running && saved.resumable, matches && live.cancelled,
             saved.turnId.takeIf { matches }, if (matches) runs.actionText(live) ?: "Working…" else "Waiting for this chat's current task",
-            if (matches) live.streamingText.orEmpty() else "", output,
+            if (matches) com.androidharness.app.core.response.RichResponse.plainText(live.streamingText.orEmpty(), streaming = true) else "", output,
             if (matches) saved.reason ?: live.error else if (started) "This chat has moved to another task. Review the saved request in AndroidHarness." else null, decision)
     }
     override suspend fun isBusy(sessionId: String) = runs.isRunning(sessionId) || runs.hasPendingFollowUp(sessionId) || runs.controls.flow(sessionId).value.resumable

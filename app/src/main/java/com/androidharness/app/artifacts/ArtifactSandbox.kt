@@ -4,7 +4,7 @@ package com.androidharness.app.artifacts
 object ArtifactSandbox {
     const val CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none'; frame-src 'none'; object-src 'none'; worker-src 'none'; base-uri 'none'; form-action 'none'"
 
-    fun sourceDocument(artifact: ChatArtifact, dark: Boolean): String {
+    fun sourceDocument(artifact: ChatArtifact, dark: Boolean, responseLayout: Boolean = false): String {
         artifact.validated()
         val bg = if (dark) "#141517" else "#fcfcfd"
         val fg = if (dark) "#eceef2" else "#22252b"
@@ -15,11 +15,24 @@ object ArtifactSandbox {
         return """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="$CSP"><style>
             :root{color-scheme:${if (dark) "dark" else "light"};--background:$bg;--foreground:$fg;--muted:$muted;--surface:$panel;--border:$border;--accent:$accent;font:14px/1.55 system-ui,sans-serif;background:$bg;color:$fg}
             *{box-sizing:border-box}body{margin:0;padding:16px;overflow-wrap:anywhere}img,svg,canvas,video{max-width:100%}button,input,select,textarea{font:inherit}button{min-height:44px;padding:8px 14px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--foreground)}input,select,textarea{max-width:100%;min-height:44px}button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
-            </style></head><body>${artifact.html}</body></html>""".trimIndent()
+            </style></head><body>${artifact.html}${if (responseLayout) MEASURE_CONTENT else ""}</body></html>""".trimIndent()
     }
 
-    fun frameDocument(artifact: ChatArtifact, dark: Boolean): String =
-        """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:${if (dark) "#141517" else "#fcfcfd"}}iframe{width:100%;height:100%;border:0;display:block}</style></head><body><iframe title="${escape(artifact.title)}" sandbox="allow-scripts" referrerpolicy="no-referrer" srcdoc="${escape(sourceDocument(artifact, dark))}"></iframe></body></html>"""
+    fun frameDocument(artifact: ChatArtifact, dark: Boolean, responseLayout: Boolean = false): String =
+        """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:${if (dark) "#141517" else "#fcfcfd"}}iframe{width:100%;height:100%;border:0;display:block}</style></head><body><iframe id="response" title="${escape(artifact.title)}" sandbox="allow-scripts" referrerpolicy="no-referrer" srcdoc="${escape(sourceDocument(artifact, dark, responseLayout))}"></iframe>${if (responseLayout) LAYOUT_HOST else ""}</body></html>"""
+
+    // Only bounded presentation metadata crosses this boundary. No tool calls, navigation, or native execution.
+    private const val MEASURE_CONTENT = """<script>(function(){
+      let queued=false;function report(){if(queued)return;queued=true;requestAnimationFrame(function(){queued=false;let b=document.body;parent.postMessage({type:'harness:height',height:Math.ceil(Math.max(b.scrollHeight,b.getBoundingClientRect().height))},'*')})}
+      if(typeof ResizeObserver!=='undefined')new ResizeObserver(report).observe(document.body);
+      addEventListener('load',report);if(document.fonts)document.fonts.ready.then(report);report();
+    })();</script>"""
+    private const val LAYOUT_HOST = """<script>(function(){let height=220,summary='';const frame=document.getElementById('response');
+      addEventListener('message',function(e){if(e.source!==frame.contentWindow||!e.data)return;
+        if(e.data.type==='harness:height'&&typeof e.data.height==='number'&&Number.isFinite(e.data.height))height=Math.max(80,Math.min(12000,Math.round(e.data.height)));
+        else if(e.data.type==='harness:state'&&typeof e.data.summary==='string')summary=e.data.summary.slice(0,1500);else return;
+        document.title='harness-response:'+JSON.stringify({height:height,summary:summary});
+      });})();</script>"""
 
     fun origin(artifact: ChatArtifact) = "https://concept-${artifact.id}-${artifact.revision}.invalid/"
 

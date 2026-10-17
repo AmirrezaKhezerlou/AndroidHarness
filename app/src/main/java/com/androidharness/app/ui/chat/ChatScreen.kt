@@ -2,6 +2,8 @@ package com.androidharness.app.ui.chat
 
 import androidx.compose.foundation.layout.widthIn
 import com.androidharness.app.artifacts.ArtifactAttachment
+import com.androidharness.app.core.response.ResponseAttachment
+import com.androidharness.app.core.response.UserMessageContent
 import androidx.compose.ui.res.painterResource
 import com.androidharness.app.R
 import com.androidharness.app.ui.chat.components.ChatAppearance
@@ -222,6 +224,8 @@ private fun ChatScreenContent(
     val composerText = composerValue.text
     var attachedConceptJson by rememberSaveable(state.sessionId) { mutableStateOf<String?>(null) }
     val attachedConcept = remember(attachedConceptJson) { ArtifactAttachment.decode(attachedConceptJson) }
+    var attachedResponseJson by rememberSaveable(state.sessionId) { mutableStateOf<String?>(null) }
+    val attachedResponse = remember(attachedResponseJson) { ResponseAttachment.decode(attachedResponseJson) }
     val scheduleKeyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     var scheduleDraft by remember { mutableStateOf<com.androidharness.app.automation.AutomationTask?>(null) }
     var scheduledComposerText by remember { mutableStateOf<String?>(null) }
@@ -547,7 +551,7 @@ private fun ChatScreenContent(
             title = { Text("Your message") },
             text = {
                 Text(
-                    ArtifactAttachment.visibleText(msg.text).let { if (it.length > 200) it.take(200) + "…" else it },
+                    UserMessageContent.visibleText(msg.text).let { if (it.length > 200) it.take(200) + "…" else it },
                     maxLines = 6,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyMedium,
@@ -556,7 +560,7 @@ private fun ChatScreenContent(
             confirmButton = {
                 Row {
                     TextButton(onClick = {
-                        clipboard.setText(AnnotatedString(ArtifactAttachment.visibleText(msg.text)))
+                        clipboard.setText(AnnotatedString(UserMessageContent.visibleText(msg.text)))
                         actionsMessage = null
                     }) { Text("Copy") }
                     TextButton(onClick = {
@@ -586,7 +590,7 @@ private fun ChatScreenContent(
 
     // Prefilled editor for a user message.
     editingMessage?.let { msg ->
-        var text by remember(msg) { mutableStateOf(ArtifactAttachment.visibleText(msg.text)) }
+        var text by remember(msg) { mutableStateOf(UserMessageContent.visibleText(msg.text)) }
         AlertDialog(
             onDismissRequest = { editingMessage = null },
             title = { Text("Edit message") },
@@ -601,7 +605,7 @@ private fun ChatScreenContent(
             confirmButton = {
                 Button(onClick = {
                     if (text.isNotBlank()) {
-                        confirmingEdit = msg to ArtifactAttachment.attach(text, ArtifactAttachment.fromPrompt(msg.text))
+                        confirmingEdit = msg to UserMessageContent.edit(text, msg.text)
                         editingMessage = null
                     }
                 }) { Text("Continue") }
@@ -1196,6 +1200,7 @@ private fun ChatScreenContent(
                                     revisions = state.messages.mapNotNull { it.artifact }.filter { it.id == artifact.id },
                                     loadRevisions = { state.sessionId?.let { viewModel.container.sessions.artifacts(it) }.orEmpty() },
                                     onRevise = { selected ->
+                                        attachedResponseJson = null
                                         attachedConceptJson = ArtifactAttachment.from(selected).encode()
                                         if (composerText.isBlank()) setComposerText("Revise this concept: ")
                                     },
@@ -1207,14 +1212,15 @@ private fun ChatScreenContent(
                                 Box(Modifier.animateItem(fadeInSpec = fastEffectsSpec(), placementSpec = null, fadeOutSpec = null)) {
                                     Column(horizontalAlignment = Alignment.End) {
                                         val (visibleText, fileChips) = FileAttachments.splitForDisplay(
-                                            slashSkillInstruction(ArtifactAttachment.visibleText(message.text))
-                                                ?.ifBlank { "/${slashInvokedSkillName(ArtifactAttachment.visibleText(message.text))}" }
-                                                ?: ArtifactAttachment.visibleText(message.text),
+                                            slashSkillInstruction(UserMessageContent.visibleText(message.text))
+                                                ?.ifBlank { "/${slashInvokedSkillName(UserMessageContent.visibleText(message.text))}" }
+                                                ?: UserMessageContent.visibleText(message.text),
                                         )
-                                        slashInvokedSkillName(ArtifactAttachment.visibleText(message.text))?.let { skillName ->
+                                        slashInvokedSkillName(UserMessageContent.visibleText(message.text))?.let { skillName ->
                                             SkillUsedBadge(skillName)
                                         }
                                         ArtifactAttachment.fromPrompt(message.text)?.let { SkillUsedBadge("Concept · ${it.title}") }
+                                        ResponseAttachment.fromPrompt(message.text)?.let { SkillUsedBadge("Response · ${it.title}") }
                                         UserBubble(
                                             visibleText,
                                             message.images,
@@ -1261,6 +1267,11 @@ private fun ChatScreenContent(
                                                 AssistantText(
                                                     message.text,
                                                     showPreviewChip = isTurnFinal && !isTurnRunning,
+                                                    onFollowUp = { action ->
+                                                        attachedConceptJson = null
+                                                        attachedResponseJson = ResponseAttachment(action.title, action.context).encode()
+                                                        setComposerText(listOf(composerText.trim(), action.prompt).filter { it.isNotBlank() }.joinToString("\n\n"))
+                                                    },
                                                     onOpenUrl = { url ->
                                                         webPreviewUrl = url
                                                         showWebPreview = true
@@ -1630,6 +1641,7 @@ private fun ChatScreenContent(
                 )
 
                 if (desktopLayout) {
+                    attachedResponse?.let { ref -> com.androidharness.app.ui.chat.rich.ResponseContextChip(ref.title) { attachedResponseJson = null } }
                     attachedConcept?.let { concept ->
                         com.androidharness.app.ui.chat.components.ConceptAttachmentChip(concept) { attachedConceptJson = null }
                     }
@@ -1647,6 +1659,7 @@ private fun ChatScreenContent(
                 }
                 MessageComposer(
                     attachments = {
+                        attachedResponse?.let { ref -> com.androidharness.app.ui.chat.rich.ResponseContextChip(ref.title) { attachedResponseJson = null } }
                         attachedConcept?.let { concept ->
                             com.androidharness.app.ui.chat.components.ConceptAttachmentChip(concept) { attachedConceptJson = null }
                         }
@@ -1674,14 +1687,15 @@ private fun ChatScreenContent(
                     },
                     onClearSkill = { attachedSkill = null },
                     onSend = {
-                        val payload = ArtifactAttachment.attach(SlashCommands.composeSend(attachedSkill,
-                            composerText.ifBlank { if (attachedConcept != null) "Revise this concept." else "" }), attachedConcept)
+                        val payload = ResponseAttachment.attach(ArtifactAttachment.attach(SlashCommands.composeSend(attachedSkill,
+                            composerText.ifBlank { if (attachedConcept != null) "Revise this concept." else if (attachedResponse != null) "Help me with this response." else "" }), attachedConcept), attachedResponse)
                         if (payload.isNotBlank() || state.fileAttachments.isNotEmpty()) {
                             // Keep the draft when a selection is still loading/saving or unavailable.
                             if (viewModel.send(payload)) {
                                 setComposerText("")
                                 attachedSkill = null
                                 attachedConceptJson = null
+                                attachedResponseJson = null
                                 slashExpanded = false
                             }
                         }
@@ -1701,6 +1715,7 @@ private fun ChatScreenContent(
                     scheduleUnavailableReason = when {
                         composerText.isBlank() -> "Write a message first"
                         attachedConcept != null -> "Remove the concept attachment to schedule a message"
+                        attachedResponse != null -> "Remove the response context to schedule a message"
                         attachedSkill != null || state.attachments.isNotEmpty() || state.fileAttachments.isNotEmpty() -> "Schedule a text message without attachments"
                         currentProject == null -> "Choose a workspace first"
                         else -> null
@@ -1761,7 +1776,7 @@ private fun ChatScreenContent(
                             setComposerText(newText)
                         }
                     },
-                    hasAttachments = state.fileAttachments.isNotEmpty() || state.attachments.isNotEmpty() || attachedConcept != null,
+                    hasAttachments = state.fileAttachments.isNotEmpty() || state.attachments.isNotEmpty() || attachedConcept != null || attachedResponse != null,
                 )
             }
 
@@ -1794,7 +1809,7 @@ internal fun CopyIconButton(text: String) {
     // No size override: IconButton's own 48dp touch target is what makes these
     // reachable with a thumb. The glyph stays small, the row just gets taller.
     IconButton(onClick = {
-        clipboard.setText(AnnotatedString(text))
+        clipboard.setText(AnnotatedString(com.androidharness.app.core.response.RichResponse.plainText(text)))
         copied = true
     }) {
         Icon(

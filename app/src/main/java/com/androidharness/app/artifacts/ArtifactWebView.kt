@@ -16,9 +16,12 @@ class ArtifactWebView(
     private val onLoading: (Boolean) -> Unit = {},
     private val onError: (String) -> Unit = {},
     private val onUnavailable: (String) -> Unit = {},
+    private val onResponseLayout: ((Int, String) -> Unit)? = null,
 ) : WebView(context) {
     var isReleased = false
         private set
+    private var responseContentHeight = 0
+    private var responseLayoutActive = false
     var revisionKey: String? = null
         private set
 
@@ -51,7 +54,7 @@ class ArtifactWebView(
         removeJavascriptInterface("accessibilityTraversal")
         isVerticalScrollBarEnabled = true
         isHorizontalScrollBarEnabled = false
-        contentDescription = "Interactive concept preview"
+        contentDescription = if (onResponseLayout == null) "Interactive concept preview" else "Interactive response preview"
         webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest): Boolean =
                 request.url.toString() !in setOf("about:blank", "about:srcdoc")
@@ -71,6 +74,16 @@ class ArtifactWebView(
             }
         }
         webChromeClient = object : WebChromeClient() {
+            override fun onReceivedTitle(view: WebView?, title: String?) {
+                if (onResponseLayout == null || title == null || !title.startsWith("harness-response:") || title.length > 10_000) return
+                runCatching {
+                    val data = kotlinx.serialization.json.Json.parseToJsonElement(title.removePrefix("harness-response:")) as kotlinx.serialization.json.JsonObject
+                    val height = (data["height"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.toIntOrNull() ?: return
+                    val summary = (data["summary"] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty()
+                    responseContentHeight = height.coerceIn(80, 12_000)
+                    onResponseLayout(responseContentHeight, summary.take(1500))
+                }
+            }
             override fun onPermissionRequest(request: PermissionRequest?) { request?.deny() }
             override fun onGeolocationPermissionsShowPrompt(origin: String?, callback: GeolocationPermissions.Callback?) { callback?.invoke(origin, false, false) }
             override fun onCreateWindow(view: WebView?, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message?) = false
@@ -90,17 +103,18 @@ class ArtifactWebView(
         setDownloadListener { _, _, _, _, _ -> onError("Use Save HTML to export this concept.") }
     }
 
-    fun show(artifact: ChatArtifact, dark: Boolean) {
-        val key = "${artifact.revision}:$dark"
+    fun show(artifact: ChatArtifact, dark: Boolean, responseLayout: Boolean = false) {
+        val key = "${artifact.revision}:$dark:$responseLayout"
         if (revisionKey == key) return
         revisionKey = key
+        responseLayoutActive = responseLayout
         onLoading(true)
-        loadDataWithBaseURL(ArtifactSandbox.origin(artifact), ArtifactSandbox.frameDocument(artifact, dark), "text/html", "UTF-8", null)
+        loadDataWithBaseURL(ArtifactSandbox.origin(artifact), ArtifactSandbox.frameDocument(artifact, dark, responseLayout), "text/html", "UTF-8", null)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> parent?.requestDisallowInterceptTouchEvent(true)
+            MotionEvent.ACTION_DOWN -> parent?.requestDisallowInterceptTouchEvent(!responseLayoutActive || responseContentHeight > height / resources.displayMetrics.density + 8)
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> parent?.requestDisallowInterceptTouchEvent(false)
         }
         return super.onTouchEvent(event)

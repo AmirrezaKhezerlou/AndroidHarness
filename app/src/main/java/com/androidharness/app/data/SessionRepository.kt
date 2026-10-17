@@ -449,7 +449,7 @@ class SessionRepository(
                 messageId = row.id,
                 sessionId = row.sessionId,
                 sessionTitle = titles[row.sessionId].orEmpty(),
-                text = com.androidharness.app.artifacts.ArtifactAttachment.visibleText(row.text),
+                text = if (row.role == Role.ASSISTANT.name) com.androidharness.app.core.response.RichResponse.plainText(row.text) else com.androidharness.app.core.response.UserMessageContent.visibleText(row.text),
                 createdAt = row.createdAt,
             )
         }
