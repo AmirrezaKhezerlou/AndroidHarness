@@ -194,7 +194,8 @@ private fun ChatScreenContent(
     onNavigateToSession: (sessionId: String) -> Unit = {},
     searchMessageId: String? = null,
 ) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
+    // Lazy list content and its derived lookup maps must use the same snapshot.
+    val state = viewModel.state.collectAsStateWithLifecycle().value
     val desktopLayout = com.androidharness.app.ui.LocalDesktopLayout.current
     val currentProject by viewModel.activeWorkspace.collectAsStateWithLifecycle(initialValue = null)
     var githubProject by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -1423,9 +1424,8 @@ private fun ChatScreenContent(
                                             }
                                         }
                                     } else {
-                                        for (call in otherCalls) {
-                                            indexedItem(key = if (state.showLiveCode && call.name in com.androidharness.app.agent.LiveCodePreview.tools)
-                                                "live-code-${message.turnId}-${call.id}" else "message-$messageKey-tool-${call.id}", contentType = ChatListContentType.Tool) {
+                                        for ((callIndex, call) in otherCalls.withIndex()) {
+                                            indexedItem(key = "message-$messageKey-tool-$callIndex-${call.id}", contentType = ChatListContentType.Tool) {
                                                 Box(Modifier.animateItem(fadeInSpec = fastEffectsSpec(), placementSpec = null, fadeOutSpec = null)) {
                                                     ToolCallCard(
                                                         call = call,
@@ -1493,7 +1493,7 @@ private fun ChatScreenContent(
 
                     if (state.showLiveCode) {
                         state.codeDrafts.values.filter { it.id !in committedCallIds }.forEach { draft ->
-                            indexedItem(key = "live-code-${state.currentTurnId}-${draft.id}", contentType = ChatListContentType.Tool) {
+                            indexedItem(key = "draft-code-${state.currentTurnId}-${draft.id}", contentType = ChatListContentType.Tool) {
                                 com.androidharness.app.ui.chat.components.LiveCodeCard(
                                     draft = draft,
                                     awaitingApproval = state.pendingApproval?.call?.id == draft.id,
