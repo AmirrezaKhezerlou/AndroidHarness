@@ -988,6 +988,7 @@ private fun ChatScreenContent(
             }
             val thinkingLevels = thinking?.spec?.levels.orEmpty()
             var editingReasoning by remember { mutableStateOf<com.androidharness.app.llm.ProviderConfig?>(null) }
+            var addingReasoning by remember { mutableStateOf(false) }
             editingReasoning?.let { config ->
                 val key = com.androidharness.app.agent.CustomReasoning.key(config)
                 com.androidharness.app.ui.chat.components.CustomReasoningSheet(
@@ -997,6 +998,7 @@ private fun ChatScreenContent(
                     onDismiss = { editingReasoning = null },
                     onSave = { viewModel.saveReasoningConfig(config, it); editingReasoning = null },
                     onDetectLevels = { viewModel.detectReasoningLevels(config) },
+                    startAdding = addingReasoning,
                 )
             }
 
@@ -1020,7 +1022,12 @@ private fun ChatScreenContent(
                 dualPlanning = state.dualPlanning,
                 thinkingLevel = thinking?.level ?: state.thinkingLevel,
                 thinkingResolved = thinking,
-                onCustomizeThinking = currentProvider?.let { provider -> { editingReasoning = provider.copy(model = currentModel.orEmpty()) } },
+                onCustomizeThinking = currentProvider?.let { provider -> {
+                    addingReasoning = false; editingReasoning = provider.copy(model = currentModel.orEmpty())
+                } },
+                onAddThinkingLevel = currentProvider?.let { provider -> {
+                    addingReasoning = true; editingReasoning = provider.copy(model = currentModel.orEmpty())
+                } },
                 onSetCustomThinking = { name -> currentProvider?.let { viewModel.setCustomThinking(it.copy(model = currentModel.orEmpty()), name) } },
                 thinkingLevels = thinkingLevels,
                 permissionMode = state.permissionMode,

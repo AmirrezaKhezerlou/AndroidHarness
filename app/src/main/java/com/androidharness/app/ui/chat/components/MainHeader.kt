@@ -40,6 +40,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -47,10 +48,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.LayoutDirection
 import com.androidharness.app.R
 import com.androidharness.app.agent.AgentMode
 import com.androidharness.app.agent.PermissionMode
@@ -91,6 +104,7 @@ internal fun MainHeader(
     workspaceName: String? = null,
     thinkingResolved: com.androidharness.app.agent.ThinkingSpecs.ResolvedThinking? = null,
     onCustomizeThinking: (() -> Unit)? = null,
+    onAddThinkingLevel: (() -> Unit)? = null,
     onSetCustomThinking: (String) -> Unit = {},
 ) {
     var menu by remember { mutableStateOf(false) }
@@ -102,7 +116,7 @@ internal fun MainHeader(
     if (com.androidharness.app.ui.LocalDesktopLayout.current) {
         DesktopConversationHeader(sessionTitle, busy, pickerLabel, thinkingLevel, thinkingLevels, mode,
             permissionMode, onPickModel, onSetThinking, onSetMode, onSetPermission,
-            onOpenContext, onOpenUndo, canUndo, onOpenGitHub, canOpenGitHub, onOpenWebPreview, thinkingResolved, onCustomizeThinking, onSetCustomThinking)
+            onOpenContext, onOpenUndo, canUndo, onOpenGitHub, canOpenGitHub, onOpenWebPreview, thinkingResolved, onCustomizeThinking, onSetCustomThinking, onAddThinkingLevel)
         return
     }
 
@@ -296,7 +310,7 @@ internal fun MainHeader(
                         if (thinkingResolved?.customConfig != null || thinkingLevels.isNotEmpty() || thinkingResolved?.spec?.style == com.androidharness.app.agent.ThinkingSpecs.Style.AUTOMATIC) {
                             Spacer(Modifier.width(8.dp))
                             HeaderThinkingControl(thinkingLevel, thinkingLevels, thinkingMenu,
-                                { thinkingMenu = it }, onSetThinking, onPickModel, thinkingResolved, busy, onCustomizeThinking, onSetCustomThinking)
+                                { thinkingMenu = it }, onSetThinking, onPickModel, thinkingResolved, busy, onCustomizeThinking, onSetCustomThinking, onAddThinkingLevel)
                         }
                     }
                     Spacer(Modifier.width(8.dp))
@@ -321,6 +335,7 @@ private fun DesktopConversationHeader(
     thinkingResolved: com.androidharness.app.agent.ThinkingSpecs.ResolvedThinking?,
     onCustomizeThinking: (() -> Unit)?,
     onSetCustomThinking: (String) -> Unit,
+    onAddThinkingLevel: (() -> Unit)?,
 ) {
     val scheme = MaterialTheme.colorScheme
     var menu by remember { mutableStateOf(false) }
@@ -333,7 +348,7 @@ private fun DesktopConversationHeader(
             if (busy) androidx.compose.material3.CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 1.5.dp)
             HeaderModelPicker(model, onModel, Modifier.widthIn(max = 180.dp))
             if (thinkingResolved?.customConfig != null || levels.isNotEmpty() || thinkingResolved?.spec?.style == com.androidharness.app.agent.ThinkingSpecs.Style.AUTOMATIC)
-                HeaderThinkingControl(thinking, levels, thinkingMenu, { thinkingMenu = it }, onThinking, onModel, thinkingResolved, busy, onCustomizeThinking, onSetCustomThinking)
+                HeaderThinkingControl(thinking, levels, thinkingMenu, { thinkingMenu = it }, onThinking, onModel, thinkingResolved, busy, onCustomizeThinking, onSetCustomThinking, onAddThinkingLevel)
             TextButton(onClick = { onMode(if (mode == AgentMode.PLAN) AgentMode.ACT else AgentMode.PLAN) }) {
                 Text(if (mode == AgentMode.PLAN) "Plan" else "Act", style = MaterialTheme.typography.labelMedium)
             }
@@ -393,10 +408,24 @@ private fun HeaderThinkingControl(
     appliesNext: Boolean = false,
     onCustomize: (() -> Unit)? = null,
     onCustomLevel: (String) -> Unit = {},
+    onAddLevel: (() -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     val thinkingOn = resolved?.active ?: (thinkingLevel != ThinkingLevel.OFF)
-    Box {
+    val density = LocalDensity.current
+    val layoutDirection = LocalLayoutDirection.current
+    val windowWidth = LocalWindowInfo.current.containerSize.width
+    val edgeMargin = with(density) { 12.dp.roundToPx() }
+    val maxMenuWidth = with(density) { (windowWidth - 2 * edgeMargin).coerceAtLeast(0).toDp() }.coerceAtMost(320.dp)
+    var anchorBounds by remember { mutableStateOf(Rect.Zero) }
+    var menuWidth by remember(density) { mutableIntStateOf(with(density) { 248.dp.roundToPx() }) }
+    // Center on the badge, then keep the menu inset from either window edge.
+    // The default start/end candidates can both fail and snap a wide menu to x = 0.
+    val menuLeft = (anchorBounds.center.x - menuWidth / 2f)
+        .coerceIn(edgeMargin.toFloat(), (windowWidth - edgeMargin - menuWidth).coerceAtLeast(edgeMargin).toFloat())
+    val horizontalOffset = if (layoutDirection == LayoutDirection.Ltr) menuLeft - anchorBounds.left
+        else anchorBounds.right - menuLeft - menuWidth
+    Box(Modifier.onGloballyPositioned { anchorBounds = it.boundsInWindow() }) {
         // The visible badge stays small; clickable expands its touch target as needed.
         Box(
             Modifier.widthIn(max = 148.dp).heightIn(min = 36.dp).clip(RoundedCornerShape(8.dp)).clickable { onMenuChange(true) },
@@ -420,47 +449,45 @@ private fun HeaderThinkingControl(
         DropdownMenu(
             expanded = thinkingMenu,
             onDismissRequest = { onMenuChange(false) },
+            offset = DpOffset(with(density) { horizontalOffset.toDp() }, 4.dp),
+            modifier = Modifier.widthIn(min = 248.dp.coerceAtMost(maxMenuWidth), max = maxMenuWidth)
+                .onSizeChanged { menuWidth = it.width }
+                .semantics { paneTitle = "Thinking options" },
         ) {
-            Row(Modifier.widthIn(min = 240.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Thinking level", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
-                if (onCustomize != null) IconButton(onClick = { onMenuChange(false); onCustomize() }) {
-                    Icon(Icons.Filled.Add, "Customize thinking", Modifier.size(19.dp))
-                }
-            }
+            Text("Thinking level", Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant)
             if (appliesNext) {
                 Text("Applies to your next message", Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                     style = MaterialTheme.typography.labelSmall, color = scheme.primary)
             }
-            resolved?.detail?.let { detail ->
-                Text(detail, Modifier.widthIn(max = 280.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+            if (resolved?.customConfig == null && thinkingLevels.isEmpty()) {
+                Text(if (resolved?.spec?.reasoningSupported == true) "This model manages its own effort." else "Levels aren't reported for this model.",
+                    Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             }
             resolved?.customConfig?.levels?.forEach { name ->
-                DropdownMenuItem(text = { Text(com.androidharness.app.agent.CustomReasoning.label(name)) },
-                    trailingIcon = { if (resolved.customLevel == com.androidharness.app.agent.CustomReasoning.wire(name))
-                        Icon(Icons.Filled.Check, "Selected", tint = scheme.primary) },
-                    onClick = { onCustomLevel(name); onMenuChange(false) })
+                ThinkingMenuOption(com.androidharness.app.agent.CustomReasoning.label(name),
+                    resolved.customLevel == com.androidharness.app.agent.CustomReasoning.wire(name)) {
+                    onCustomLevel(name); onMenuChange(false)
+                }
             }
             if (resolved?.customConfig == null) thinkingLevels.forEach { entry ->
-                DropdownMenuItem(
-                    text = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(resolved?.optionLabel(entry) ?: entry.label, Modifier.weight(1f))
-                            if (entry == (resolved?.level ?: thinkingLevel)) {
-                                Icon(Icons.Filled.Check, contentDescription = "Selected", tint = scheme.primary)
-                            }
-                        }
-                    },
-                    onClick = {
-                        onSetThinking(entry)
-                        onMenuChange(false)
-                    },
-                )
+                ThinkingMenuOption(resolved?.optionLabel(entry) ?: entry.label, entry == (resolved?.level ?: thinkingLevel)) {
+                    onSetThinking(entry); onMenuChange(false)
+                }
             }
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
+            if (onCustomize != null) DropdownMenuItem(
+                text = { Text("Customize thinking") },
+                leadingIcon = { Icon(Icons.Outlined.EditNote, null, tint = scheme.onSurfaceVariant) },
+                onClick = { onMenuChange(false); onCustomize() },
+            )
+            val addLevel = onAddLevel ?: onCustomize
+            if (addLevel != null) DropdownMenuItem(
+                text = { Text("Add thinking level") },
+                leadingIcon = { Icon(Icons.Filled.Add, null, tint = scheme.primary) },
+                onClick = { onMenuChange(false); addLevel() },
+            )
             DropdownMenuItem(
                 text = { Text("Switch model…") },
                 leadingIcon = {
@@ -473,6 +500,20 @@ private fun HeaderThinkingControl(
             )
         }
     }
+}
+
+@Composable
+private fun ThinkingMenuOption(label: String, isSelected: Boolean, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    DropdownMenuItem(
+        modifier = Modifier.padding(horizontal = 6.dp).clip(RoundedCornerShape(10.dp))
+            .background(if (isSelected) scheme.secondaryContainer else Color.Transparent)
+            .semantics { selected = isSelected },
+        text = { Text(label, color = if (isSelected) scheme.onSecondaryContainer else scheme.onSurface,
+            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal) },
+        trailingIcon = { if (isSelected) Icon(Icons.Filled.Check, "Selected", tint = scheme.onSecondaryContainer) },
+        onClick = onClick,
+    )
 }
 
 /** Accent for the Full access permission mode, warning orange, distinct from error red. */

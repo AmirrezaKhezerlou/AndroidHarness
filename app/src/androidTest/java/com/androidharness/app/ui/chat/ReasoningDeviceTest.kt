@@ -40,6 +40,64 @@ class ReasoningDeviceTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val context get() = instrumentation.targetContext
 
+    @Test fun thinkingPopupStaysCenteredOnItsButtonAndInsetFromWindowEdges() {
+        val label = mutableStateOf("deepseek-v4-1-flash")
+        val direction = mutableStateOf(androidx.compose.ui.unit.LayoutDirection.Ltr)
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            scenario.onActivity { it.setContent { HarnessTheme {
+                androidx.compose.runtime.CompositionLocalProvider(
+                    androidx.compose.ui.platform.LocalLayoutDirection provides direction.value,
+                    com.androidharness.app.ui.LocalDesktopLayout provides
+                        (InstrumentationRegistry.getArguments().getString("desktop") == "true"),
+                ) {
+                    Surface(Modifier.fillMaxSize()) {
+                        Column {
+                            MainHeader("Popup position", false, label.value, AgentMode.ACT,
+                                thinkingLevel = ThinkingLevel.MAX,
+                                thinkingLevels = listOf(ThinkingLevel.LOW, ThinkingLevel.HIGH, ThinkingLevel.MAX),
+                                permissionMode = PermissionMode.CONFIRM_ALL, canUndo = false,
+                                onOpenDrawer = {}, onPickModel = {}, onOpenTerminal = {}, onSetThinking = {},
+                                onSetPermission = {}, onSetMode = {}, onOpenContext = {}, onOpenUndo = {},
+                                onOpenFiles = {}, onOpenGitHub = {}, onCustomizeThinking = {}, onAddThinkingLevel = {})
+                        }
+                    }
+                }
+            } } }
+            val margin = (12 * context.resources.displayMetrics.density).toInt()
+            val screenWidth = context.resources.displayMetrics.widthPixels
+            for (rtl in listOf(false, true)) {
+                for ((index, model) in listOf("deepseek-v4-1-flash", "M", "A very long model name with a dated version").withIndex()) {
+                    scenario.onActivity {
+                        label.value = model
+                        direction.value = if (rtl) androidx.compose.ui.unit.LayoutDirection.Rtl else androidx.compose.ui.unit.LayoutDirection.Ltr
+                    }
+                    await(model)
+                    instrumentation.waitForIdleSync()
+                    SystemClock.sleep(100)
+                    var anchor = await("Thinking level")
+                    while (!anchor.isClickable) anchor = requireNotNull(anchor.parent)
+                    val anchorBounds = Rect().also { anchor.getBoundsInScreen(it) }
+                    tap("Thinking level")
+                    await("Thinking options")
+                    instrumentation.waitForIdleSync()
+                    SystemClock.sleep(300)
+                    val popup = Rect().also { await("Thinking options").getBoundsInScreen(it) }
+                    screenshot("popup-position-${if (rtl) "rtl" else "ltr"}-$index")
+                    val expectedLeft = (anchorBounds.centerX() - popup.width() / 2)
+                        .coerceIn(margin, screenWidth - margin - popup.width())
+                    assertTrue("Popup must keep its left inset: $popup", popup.left >= margin - 1)
+                    assertTrue("Popup must keep its right inset: $popup", popup.right <= screenWidth - margin + 1)
+                    assertEquals("Popup should center on $model (RTL=$rtl): $popup / $anchorBounds", expectedLeft.toDouble(), popup.left.toDouble(), 2.0)
+                    // Accessibility expands the badge's 36dp layout to a 48dp touch target.
+                    assertTrue("Popup must open below the visible badge: $popup / $anchorBounds",
+                        popup.top >= anchorBounds.bottom - margin)
+                    tap("High")
+                    awaitHidden("Switch model…")
+                }
+            }
+        }
+    }
+
     @Test fun modelSelectionDetectsLevelsForNormalMenuAndCustomEditorWithoutReplacingOverrides() = runBlocking {
         val c = (context.applicationContext as com.androidharness.app.HarnessApp).container
         val original = c.settings.settings.first()
@@ -103,6 +161,7 @@ class ReasoningDeviceTest {
                 } } }
                 tap("Thinking level"); await("Low"); await("High"); tap("Max")
                 withTimeout(10000) { model.state.first { it.thinkingLevel == ThinkingLevel.MAX } }
+                awaitHidden("Switch model…")
                 tap("Thinking level"); tap("Customize thinking")
                 await("Detected from provider"); await("Low"); await("High"); await("Max")
                 screenshot("detected-levels-editor")
@@ -150,20 +209,22 @@ class ReasoningDeviceTest {
         val draft = CustomReasoningConfig(listOf("Low", "High"), mapping)
         val detected = listOf("Minimal", "Low", "Medium", "High", "X-High", "Max", "Ultra", "Extreme")
         val saved = mutableStateOf<CustomReasoningConfig?>(null)
+        val firstCheck = kotlinx.coroutines.CompletableDeferred<Unit>()
         var checks = 0
         ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
             scenario.onActivity { it.setContent { HarnessTheme {
                 Surface(Modifier.fillMaxSize()) {
                     CustomReasoningSheet(config, draft, ThinkingSpecs.forProvider(config), onDismiss = {},
                         onSave = { saved.value = it }, onDetectLevels = {
-                            kotlinx.coroutines.delay(400)
                             checks++
                             if (checks > 1) error("This provider does not report reasoning levels for this model.")
+                            firstCheck.await()
                             detected
                         })
                 }
             } } }
             tap("Auto-detect levels"); await("Checking provider…")
+            firstCheck.complete(Unit)
             await("Detected 8 levels. Save to apply.")
             reveal("Extreme"); reveal("X-High", backwards = true)
             screenshot("force-detection-all-levels")
@@ -266,7 +327,7 @@ class ReasoningDeviceTest {
                 scenario.onActivity { provider.value = provider.value.copy(baseUrl = "https://custom.example/v1", model = "custom-model") }
                 await("Thinking")
                 tap("Thinking level")
-                await("Reasoning support is unverified", contains = true)
+                await("Levels aren't reported for this model.")
                 assertNull(find(instrumentation.uiAutomation.rootInActiveWindow, "Low"))
                 screenshot("automatic")
             }
@@ -284,6 +345,7 @@ class ReasoningDeviceTest {
         val saved = mutableStateOf(false)
         val editing = mutableStateOf(false)
         val githubOpens = mutableStateOf(0)
+        val adding = mutableStateOf(false)
         try {
             ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
                 scenario.onActivity { it.setContent { HarnessTheme {
@@ -300,9 +362,11 @@ class ReasoningDeviceTest {
                             onOpenDrawer = {}, onPickModel = {}, onOpenTerminal = {}, onSetThinking = {},
                             onSetPermission = {}, onSetMode = {}, onOpenContext = {}, onOpenUndo = {},
                             onOpenFiles = {}, onOpenGitHub = { githubOpens.value++ }, thinkingResolved = resolved,
-                            onCustomizeThinking = { editing.value = true }, onSetCustomThinking = { selected.value = CustomReasoning.wire(it) })
+                            onCustomizeThinking = { adding.value = false; editing.value = true },
+                            onAddThinkingLevel = { adding.value = true; editing.value = true },
+                            onSetCustomThinking = { selected.value = CustomReasoning.wire(it) })
                         }
-                        if (editing.value) CustomReasoningSheet(config, custom.value, ThinkingSpecs.forProvider(config), selectedLevel = selected.value,
+                        if (editing.value) CustomReasoningSheet(config, custom.value, ThinkingSpecs.forProvider(config), selectedLevel = selected.value, startAdding = adding.value,
                             onDismiss = { editing.value = false }, onSave = { custom.value = it; saved.value = true; editing.value = false })
                     } }
                 } } }
@@ -325,10 +389,17 @@ class ReasoningDeviceTest {
                 tap(actionLabel); tap("GitHub")
                 instrumentation.waitForIdleSync()
                 assertEquals(2, githubOpens.value)
-                tap("Thinking level"); tap("Customize thinking")
-                await("Reasoning levels (low to high)")
-                await(CustomReasoning.LEVEL_HELP)
+                tap("Thinking level")
+                val addBounds = Rect().also { await("Add thinking level").getBoundsInScreen(it) }
+                val switchBounds = Rect().also { await("Switch model…").getBoundsInScreen(it) }
+                assertTrue("Add thinking level must sit directly above Switch model", addBounds.bottom <= switchBounds.top)
+                screenshot("thinking-dropdown")
+                tap("Customize thinking")
+                await("Reasoning levels")
+                assertNull(find(instrumentation.uiAutomation.rootInActiveWindow, "CEL expression (optional)"))
+                tap("About reasoning levels"); await(CustomReasoning.LEVEL_HELP); tap("Got it")
                 screenshot("custom-editor")
+                reveal("Advanced request mapping"); tap("Advanced request mapping")
                 reveal("Using inherited model/provider mapping")
                 reveal("Edit inherited mapping"); tap("Edit inherited mapping")
                 reveal("Using custom CEL mapping")
@@ -345,12 +416,38 @@ class ReasoningDeviceTest {
                 prefs.setReasoningConfig(key, custom.value)
                 assertEquals(custom.value, prefs.settings.first().reasoningConfigs[key])
                 tap("Thinking level"); tap("High")
+                awaitHidden("Switch model…")
                 val chosen = RequestOptions(customReasoning = mapOf(key to custom.value!!), customThinkingLevels = mapOf(key to selected.value))
                 val request = OpenAiCompatProvider(okhttp3.OkHttpClient(), ProviderFactory.json)
                     .buildRequestBody(config, "fixture", emptyList(), emptyList(), chosen)
                 assertEquals("high", request["reasoning_effort"]!!.jsonPrimitive.content)
                 tap("Thinking level"); tap("Customize thinking"); tap("Use defaults")
                 assertNull(custom.value)
+                saved.value = false
+                tap("Thinking level"); tap("Add thinking level")
+                fun editable(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+                    if (node == null) return null
+                    if (node.isEditable) return node
+                    for (i in 0 until node.childCount) editable(node.getChild(i))?.let { return it }
+                    return null
+                }
+                val input = editable(await("Level 2 name"))
+                    ?: editable(instrumentation.uiAutomation.rootInActiveWindow) ?: error("No level name input")
+                assertTrue(input.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, android.os.Bundle().apply {
+                    putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "max")
+                }))
+                await("max")
+                tap("Done editing level"); tap("Save")
+                val addUntil = SystemClock.uptimeMillis() + 10000
+                while (!saved.value && SystemClock.uptimeMillis() < addUntil) SystemClock.sleep(100)
+                assertEquals(listOf("On", "Max"), custom.value!!.levels)
+                tap("Thinking level"); tap("Customize thinking")
+                tap("Level 1 actions"); tap("Move down")
+                tap("Level 2 actions"); tap("Remove")
+                tap("Save")
+                val reorderUntil = SystemClock.uptimeMillis() + 10000
+                while (custom.value?.levels?.size != 1 && SystemClock.uptimeMillis() < reorderUntil) SystemClock.sleep(100)
+                assertEquals(listOf("Max"), custom.value!!.levels)
             }
         } finally { prefs.restorePortable(original) }
     }
@@ -408,7 +505,8 @@ class ReasoningDeviceTest {
 
     private fun find(node: AccessibilityNodeInfo?, text: String, contains: Boolean = false): AccessibilityNodeInfo? {
         if (node == null) return null
-        val values = listOf(node.text?.toString(), node.contentDescription?.toString())
+        val values = listOf(node.text?.toString(), node.contentDescription?.toString(),
+            if (android.os.Build.VERSION.SDK_INT >= 28) node.paneTitle?.toString() else null)
         if (values.any { it != null && if (contains) it.contains(text, ignoreCase = true) else it == text }) return node
         for (i in 0 until node.childCount) find(node.getChild(i), text, contains)?.let { return it }
         return null
@@ -431,7 +529,18 @@ class ReasoningDeviceTest {
         val bounds = Rect().also { await(text).getBoundsInScreen(it) }
         instrumentation.uiAutomation.executeShellCommand("input tap ${bounds.centerX()} ${bounds.centerY()}").close()
     }
+    private fun awaitHidden(text: String) {
+        val deadline = SystemClock.uptimeMillis() + 10000
+        while (SystemClock.uptimeMillis() < deadline) {
+            if (android.os.Build.VERSION.SDK_INT >= 33) instrumentation.uiAutomation.clearCache()
+            if (find(instrumentation.uiAutomation.rootInActiveWindow, text) == null) return
+            SystemClock.sleep(50)
+        }
+        error("UI did not close: $text")
+    }
     private fun screenshot(name: String) {
+        instrumentation.waitForIdleSync()
+        SystemClock.sleep(250)
         val dir = File(context.getExternalFilesDir(null), "qa/reasoning").apply { mkdirs() }
         val bitmap = instrumentation.uiAutomation.takeScreenshot() ?: error("No screenshot")
         File(dir, "$name.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }

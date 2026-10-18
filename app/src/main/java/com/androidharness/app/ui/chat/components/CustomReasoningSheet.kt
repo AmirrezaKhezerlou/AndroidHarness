@@ -3,20 +3,32 @@ package com.androidharness.app.ui.chat.components
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.androidharness.app.agent.*
@@ -40,19 +52,27 @@ internal fun CustomReasoningSheet(
     onSave: (CustomReasoningConfig?) -> Unit,
     selectedLevel: String? = null,
     onDetectLevels: (suspend () -> List<String>)? = null,
+    startAdding: Boolean = false,
 ) {
     val defaults = remember(spec) {
         CustomReasoning.defaultLevels(spec)
     }
-    var levels by rememberSaveable(config.id, config.model) { mutableStateOf(ArrayList(saved?.levels ?: defaults)) }
-    var levelsEdited by rememberSaveable(config.id, config.model) { mutableStateOf(false) }
+    val initialLevels = saved?.levels ?: defaults
+    var levels by rememberSaveable(config.id, config.model) {
+        mutableStateOf(ArrayList(initialLevels + if (startAdding && initialLevels.size < 16) listOf("") else emptyList()))
+    }
+    var levelsEdited by rememberSaveable(config.id, config.model) { mutableStateOf(startAdding) }
     var detecting by remember { mutableStateOf(false) }
     var detectionMessage by remember { mutableStateOf<String?>(null) }
     var detectionFailed by remember { mutableStateOf(false) }
     LaunchedEffect(defaults) {
         if (saved == null && !levelsEdited && !detecting) levels = ArrayList(defaults)
     }
-    var editingLevel by rememberSaveable { mutableStateOf<Int?>(null) }
+    var editingLevel by rememberSaveable { mutableStateOf<Int?>(if (startAdding && initialLevels.size < 16) initialLevels.size else null) }
+    var advancedExpanded by rememberSaveable { mutableStateOf(false) }
+    var showLevelHelp by remember { mutableStateOf(false) }
+    val levelFocus = remember { FocusRequester() }
+    LaunchedEffect(editingLevel) { if (editingLevel != null) levelFocus.requestFocus() }
     var mapping by rememberSaveable(config.id, config.model) { mutableStateOf(saved?.mapping.orEmpty()) }
     var error by remember { mutableStateOf<String?>(null) }
     var preview by remember { mutableStateOf<String?>(null) }
@@ -80,19 +100,30 @@ internal fun CustomReasoningSheet(
     }
     fun editLevels(change: MutableList<String>.() -> Unit) {
         levelsEdited = true
+        detectionMessage = null
         levels = ArrayList(levels.toMutableList().apply(change)); error = null
     }
+    if (showLevelHelp) AlertDialog(onDismissRequest = { showLevelHelp = false },
+        title = { Text("About reasoning levels") }, text = { Text(CustomReasoning.LEVEL_HELP) },
+        confirmButton = { TextButton(onClick = { showLevelHelp = false }) { Text("Got it") } })
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().imePadding().padding(horizontal = 20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Customize thinking", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
                 IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, "Close thinking settings") }
             }
-            Text("${config.name} · ${config.model}", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
-            Text("Saved for this provider and model. Changes apply to your next message.",
+            Text("${config.name} · ${config.model}", maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+            Text("Changes apply to your next message.",
                 Modifier.padding(top = 6.dp, bottom = 12.dp), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Reasoning levels (low to high)", style = MaterialTheme.typography.titleSmall)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Reasoning levels", style = MaterialTheme.typography.titleSmall)
+                        Text("Lowest effort first", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                    }
+                    IconButton(onClick = { showLevelHelp = true }) { Icon(Icons.Outlined.Info, "About reasoning levels", Modifier.size(20.dp)) }
+                }
                 if (onDetectLevels != null && !localControl) {
                     TextButton(enabled = !validating && !detecting, onClick = {
                         detecting = true; levelsEdited = true; detectionMessage = null; detectionFailed = false
@@ -119,44 +150,74 @@ internal fun CustomReasoningSheet(
                     detectionMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall,
                         color = if (detectionFailed) scheme.error else scheme.primary) }
                 }
-                if (saved == null && spec.reportedLevels != null) Text("Detected from provider",
+                if (saved == null && !levelsEdited && spec.reportedLevels != null) Text("Detected from provider",
                     style = MaterialTheme.typography.bodySmall, color = scheme.primary)
-                Text(CustomReasoning.LEVEL_HELP, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Surface(shape = MaterialTheme.shapes.large, color = scheme.surfaceContainerLow) {
+                  Column {
                     levels.forEachIndexed { index, name ->
-                        FilterChip(selected = editingLevel == index, enabled = !validating && !detecting,
-                            onClick = { editingLevel = if (editingLevel == index) null else index },
-                            label = { Text(name.takeIf { it.isNotBlank() }?.let(CustomReasoning::label) ?: "New level") })
+                        var actions by remember(index) { mutableStateOf(false) }
+                        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                            .clickable(enabled = !validating && !detecting) { editingLevel = index }
+                            .padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("${index + 1}", Modifier.width(28.dp).clearAndSetSemantics {}, style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+                            if (editingLevel == index) {
+                                OutlinedTextField(name, { value -> editLevels { set(index, value.take(32)) } },
+                                    modifier = Modifier.weight(1f).focusRequester(levelFocus)
+                                        .semantics { contentDescription = "Level ${index + 1} name" }, singleLine = true,
+                                    enabled = !validating && !detecting, label = { Text("Level name") })
+                                IconButton(onClick = { editingLevel = null }) { Icon(Icons.Outlined.Check, "Done editing level", Modifier.size(20.dp)) }
+                            } else Text(name.takeIf { it.isNotBlank() }?.let(CustomReasoning::label) ?: "New level",
+                                Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                            Box {
+                                IconButton(onClick = { actions = true }, enabled = !validating && !detecting) {
+                                    Icon(Icons.Outlined.MoreVert, "Level ${index + 1} actions", Modifier.size(20.dp))
+                                }
+                                DropdownMenu(actions, { actions = false }) {
+                                    DropdownMenuItem(text = { Text("Rename") }, onClick = { actions = false; editingLevel = index })
+                                    DropdownMenuItem(text = { Text("Move up") }, enabled = index > 0,
+                                        leadingIcon = { Icon(Icons.Outlined.ArrowUpward, null) }, onClick = {
+                                            actions = false; editLevels { java.util.Collections.swap(this, index, index - 1) }; editingLevel = null
+                                        })
+                                    DropdownMenuItem(text = { Text("Move down") }, enabled = index < levels.lastIndex,
+                                        leadingIcon = { Icon(Icons.Outlined.ArrowDownward, null) }, onClick = {
+                                            actions = false; editLevels { java.util.Collections.swap(this, index, index + 1) }; editingLevel = null
+                                        })
+                                    DropdownMenuItem(text = { Text("Remove", color = scheme.error) },
+                                        leadingIcon = { Icon(Icons.Outlined.DeleteOutline, null, tint = scheme.error) }, onClick = {
+                                            actions = false; editLevels { removeAt(index) }; editingLevel = null
+                                        })
+                                }
+                            }
+                        }
+                        if (index < levels.lastIndex) HorizontalDivider(Modifier.padding(start = 42.dp, end = 14.dp), color = scheme.outlineVariant.copy(alpha = .5f))
                     }
-                    IconButton(onClick = {
+                    TextButton(onClick = {
                         editLevels { add("") }; editingLevel = levels.lastIndex
                     }, enabled = !validating && !detecting && levels.size < 16) {
-                        Icon(Icons.Filled.Add, "Add reasoning level", Modifier.size(20.dp))
+                        Icon(Icons.Filled.Add, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Add level")
                     }
+                  }
                 }
-                editingLevel?.takeIf { it in levels.indices }?.let { index ->
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(levels[index], { value -> editLevels { set(index, value.take(32)) } },
-                            modifier = Modifier.weight(1f), singleLine = true, enabled = !validating && !detecting,
-                            label = { Text("Level ${index + 1}") })
-                        IconButton(onClick = {
-                            editLevels { java.util.Collections.swap(this, index, index - 1) }; editingLevel = index - 1
-                        }, enabled = !validating && !detecting && index > 0) {
-                            Icon(Icons.Outlined.ArrowUpward, "Move level ${index + 1} up", Modifier.size(18.dp))
-                        }
-                        IconButton(onClick = {
-                            editLevels { java.util.Collections.swap(this, index, index + 1) }; editingLevel = index + 1
-                        }, enabled = !validating && !detecting && index < levels.lastIndex) {
-                            Icon(Icons.Outlined.ArrowDownward, "Move level ${index + 1} down", Modifier.size(18.dp))
-                        }
-                        IconButton(onClick = { editLevels { removeAt(index) }; editingLevel = null }, enabled = !validating && !detecting) {
-                            Icon(Icons.Outlined.Close, "Remove level ${index + 1}", Modifier.size(18.dp))
-                        }
-                    }
-                }
-                Text("Tap a level to rename, reorder, or remove it. Names ignore case: max → Max, HIGH → High.",
+                Text("Tap a name to edit. Only add levels your model supports.",
                     style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
-                HorizontalDivider()
+                Surface(modifier = Modifier.semantics {
+                    contentDescription = "Advanced request mapping"
+                    stateDescription = if (advancedExpanded) "Expanded" else "Collapsed"
+                }, shape = MaterialTheme.shapes.large, color = scheme.surfaceContainerLow,
+                    onClick = { advancedExpanded = !advancedExpanded }) {
+                    Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Code, null, Modifier.size(20.dp), tint = scheme.onSurfaceVariant)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Advanced request mapping", style = MaterialTheme.typography.titleSmall)
+                            Text(if (mapping.isBlank()) "Optional · provider defaults" else "Custom CEL mapping is active",
+                                style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                        }
+                        Icon(if (advancedExpanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
+                            null)
+                    }
+                }
+                if (advancedExpanded) {
                 Text("Reasoning parameter mapping (optional)", style = MaterialTheme.typography.titleSmall)
                 Text("Leave blank to inherit this model/provider’s default mapping. Enter a CEL expression to override it. The JSON object it returns is merged into the outgoing request body.",
                     style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
@@ -164,7 +225,7 @@ internal fun CustomReasoningSheet(
                     style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                 OutlinedTextField(mapping, { mapping = it.take(8_192); error = null },
                     Modifier.fillMaxWidth().semantics { contentDescription = "CEL expression (optional)" },
-                    minLines = 5, maxLines = 9, enabled = !validating && !localControl,
+                    minLines = 4, maxLines = 8, enabled = !validating && !localControl,
                     placeholder = { Text(inheritedMapping ?: if (localControl) "Native on/off control" else "No inherited mapping. Enter a CEL expression.",
                         maxLines = 6, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, fontFamily = FontFamily.Monospace) },
                     textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace))
@@ -196,6 +257,7 @@ internal fun CustomReasoningSheet(
                             style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
                     }
                 }
+                }
                 Spacer(Modifier.height(4.dp))
             }
             error?.let { Text(it, Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall, color = scheme.error) }
@@ -208,7 +270,10 @@ internal fun CustomReasoningSheet(
                         validating = true
                         val result = withContext(Dispatchers.Default) { runCatching { ReasoningMapping.validate(draft, requestConfig, spec) } }
                         validating = false
-                        result.onSuccess(onSave).onFailure { error = it.message ?: "Check your reasoning settings." }
+                        result.onSuccess(onSave).onFailure {
+                            error = it.message ?: "Check your reasoning settings."
+                            if (error.orEmpty().contains("mapping", ignoreCase = true) || error.orEmpty().contains("CEL")) advancedExpanded = true
+                        }
                     }
                 }
                 Column {
