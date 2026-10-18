@@ -511,7 +511,6 @@ private fun ChatScreenContent(
     if (state.showEnvSheet) {
         EnvSheet(
             container = viewModel.container,
-            envState = state.envState,
             onDismiss = viewModel::dismissEnvSheet,
         )
     }
@@ -1515,7 +1514,7 @@ private fun ChatScreenContent(
                         }
                     }
 
-                    state.pendingEnvironment?.let { request ->
+                    (state.pendingEnvironment ?: state.installingEnvironment)?.let { request ->
                         indexedItem(key = "env-install", contentType = ChatListContentType.Environment) {
                             Box(Modifier.animateItem(fadeInSpec = fastEffectsSpec(), placementSpec = null, fadeOutSpec = null)) {
                                 EnvironmentInstallCard(
@@ -1523,6 +1522,7 @@ private fun ChatScreenContent(
                                     envState = state.envState,
                                     onInstall = viewModel::approveEnvironmentInstall,
                                     onSkip = viewModel::denyEnvironmentInstall,
+                                    installStarted = state.installingEnvironment != null,
                                 )
                             }
                         }

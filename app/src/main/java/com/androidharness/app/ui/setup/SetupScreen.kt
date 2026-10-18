@@ -210,15 +210,14 @@ fun SetupScreen(
                     title = "Linux environment",
                     status = when (val s = envState) {
                         EnvState.Ready -> "Ready: bash, git, python, node and npm for real commands"
-                        is EnvState.Downloading -> "Downloading ${s.pkg} (${s.index}/${s.total})"
-                        is EnvState.Installing -> "Installing ${s.pkg} (${s.index}/${s.total})"
-                        is EnvState.Preparing -> "Resolving packages…"
+                        is EnvState.Downloading, is EnvState.Installing, EnvState.Preparing -> ""
                         is EnvState.Failed -> s.message.take(80)
                         EnvState.NotInstalled -> "Optional: bash, git, python, pip, node, npm for real commands"
                     },
                     complete = envDone,
                     optional = true,
                     busy = envState is EnvState.Downloading || envState is EnvState.Installing || envState is EnvState.Preparing,
+                    progress = { com.androidharness.app.ui.common.PackageInstallProgress(envState) },
                 ) {
                     when (envState) {
                         EnvState.NotInstalled, is EnvState.Failed ->
@@ -279,6 +278,7 @@ private fun SetupStep(
     complete: Boolean,
     optional: Boolean,
     busy: Boolean = false,
+    progress: (@Composable () -> Unit)? = null,
     trailing: @Composable () -> Unit = {},
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -310,7 +310,7 @@ private fun SetupStep(
                         )
                     }
                 }
-                Text(
+                if (status.isNotEmpty()) Text(
                     status,
                     style = MaterialTheme.typography.bodySmall,
                     color = if (complete) success else scheme.onSurfaceVariant,
@@ -318,7 +318,7 @@ private fun SetupStep(
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (busy) {
-                    ThinLinearProgress(modifier = Modifier.fillMaxWidth())
+                    if (progress != null) progress() else ThinLinearProgress(modifier = Modifier.fillMaxWidth())
                 }
             }
             Spacer(Modifier.width(8.dp))

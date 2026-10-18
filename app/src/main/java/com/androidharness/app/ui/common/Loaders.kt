@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -101,8 +103,7 @@ fun DotLoading(
 }
 
 /**
- * Thin 3dp progress line with round caps. Replaces the wavy M3 Expressive
- * `LinearWavyProgressIndicator`.
+ * Thin 3dp progress line with round caps for measured operations.
  */
 @Composable
 fun ThinLinearProgress(
@@ -115,6 +116,19 @@ fun ThinLinearProgress(
             .clip(RoundedCornerShape(50)),
         color = color,
         trackColor = color.copy(alpha = 0.15f),
+    )
+}
+
+/** Uses Material's native wave proportions, motion, and dynamic track color. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun ToolCallProgress(
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.primary,
+) {
+    LinearWavyProgressIndicator(
+        modifier = modifier,
+        color = color,
     )
 }
 

@@ -52,7 +52,8 @@ import androidx.compose.ui.unit.dp
 import com.androidharness.app.agent.ApprovalRequest
 import com.androidharness.app.agent.describeToolCall
 import com.androidharness.app.data.env.EnvState
-import com.androidharness.app.ui.common.ThinLinearProgress
+import com.androidharness.app.ui.common.PackageInstallProgress
+import com.androidharness.app.ui.common.packageProgress
 import com.androidharness.app.ui.common.VisualDiffViewer
 import com.androidharness.app.ui.theme.LocalStatusColors
 
@@ -216,18 +217,23 @@ internal fun EnvironmentInstallCard(
     envState: EnvState,
     onInstall: () -> Unit,
     onSkip: () -> Unit,
+    installStarted: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
     val repair = request.repair
+    val installing = installStarted || envState.packageProgress() != null
+    val progressState = if (installStarted && envState.packageProgress() == null && envState !is EnvState.Failed) EnvState.Preparing else envState
     ActionCard(
-        title = if (repair) {
+        title = if (installing) {
+            if (repair) "Repairing Linux environment" else "Installing Linux environment"
+        } else if (repair) {
             "Linux environment needs repair"
         } else {
             "Linux environment needed"
         },
         icon = Icons.Outlined.Terminal,
         actions = {
-            if (!repair || envState is EnvState.Ready || envState is EnvState.Failed) {
+            if (!installing) {
                 TextButton(onClick = onSkip) { Text("Skip") }
                 Button(onClick = onInstall) { Text(if (repair) "Repair" else "Install now") }
             }
@@ -266,38 +272,15 @@ internal fun EnvironmentInstallCard(
                 color = scheme.primary,
             )
         }
-        when (envState) {
-            is EnvState.Downloading -> {
+        when (progressState) {
+            is EnvState.Downloading, is EnvState.Installing, is EnvState.Preparing -> {
                 Spacer(Modifier.height(10.dp))
-                Text(
-                    "Downloading ${envState.pkg} (${envState.index + 1}/${envState.total})…",
-                    style = MaterialTheme.typography.labelMedium,
-                )
-                Spacer(Modifier.height(6.dp))
-                ThinLinearProgress(modifier = Modifier.fillMaxWidth())
-            }
-            is EnvState.Installing -> {
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    "Installing ${envState.pkg} (${envState.index + 1}/${envState.total})…",
-                    style = MaterialTheme.typography.labelMedium,
-                )
-                Spacer(Modifier.height(6.dp))
-                ThinLinearProgress(modifier = Modifier.fillMaxWidth())
-            }
-            is EnvState.Preparing -> {
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    "Resolving packages…",
-                    style = MaterialTheme.typography.labelMedium,
-                )
-                Spacer(Modifier.height(6.dp))
-                ThinLinearProgress(modifier = Modifier.fillMaxWidth())
+                PackageInstallProgress(progressState)
             }
             is EnvState.Failed -> {
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "Install failed: ${envState.message}",
+                    "Install failed: ${progressState.message}",
                     style = MaterialTheme.typography.labelMedium,
                     color = scheme.error,
                 )

@@ -224,7 +224,11 @@ sealed interface EnvState {
     data object NotInstalled : EnvState
     /** Fetching the package index and resolving the closure; no bytes yet. */
     data object Preparing : EnvState
-    data class Downloading(val index: Int, val total: Int, val pkg: String) : EnvState
+    data class Downloading(
+        val index: Int, val total: Int, val pkg: String,
+        val downloadedBytes: Long = 0L,
+        val totalBytes: Long? = null,
+    ) : EnvState
     data class Installing(val index: Int, val total: Int, val pkg: String) : EnvState
     data object Ready : EnvState
     data class Failed(val message: String) : EnvState
@@ -289,6 +293,7 @@ internal fun gitSystemAttributesEnvOf(
 class LinuxEnvironmentManager(
     private val context: Context,
     private val packageIndexLoader: (suspend () -> Map<String, PkgMeta>)? = null,
+    private val packageHttpClient: OkHttpClient? = null,
     /** Master GitHub token from the app's encrypted settings (never stored in the prefix). */
     private val githubTokenProvider: () -> String? = { null },
 ) {
@@ -384,7 +389,7 @@ class LinuxEnvironmentManager(
             .onFailure { Log.e(TAG, "periodic deployed-copy verification failed", it) }
     }
 
-    private val client = OkHttpClient.Builder()
+    private val client = packageHttpClient ?: OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
@@ -535,9 +540,8 @@ class LinuxEnvironmentManager(
                 return Result.success(Unit)
             }
 
-            _state.value = EnvState.Downloading(0, closure.size, closure.first().name)
             closure.forEachIndexed { i, pkg ->
-                _state.value = EnvState.Downloading(i, closure.size, pkg.name)
+                _state.value = EnvState.Downloading(i, closure.size, pkg.name, totalBytes = pkg.size.takeIf { it > 0 })
                 // The index is parsed from the network response, so its Filename
                 // field is untrusted: keep the download URL inside the repo pool
                 // and the local file inside this temp dir.
@@ -548,7 +552,10 @@ class LinuxEnvironmentManager(
                     !debBase.endsWith(".deb")
                 ) throw IllegalStateException("Unsafe package filename in the index: $fileField")
                 val debFile = File(tempDir, debBase)
-                downloadVerified("$BASE_URL/$fileField", debFile, pkg.sha256)
+                downloadVerified("$BASE_URL/$fileField", debFile, pkg.sha256) { downloaded, total ->
+                    _state.value = EnvState.Downloading(i, closure.size, pkg.name, downloaded,
+                        total ?: pkg.size.takeIf { it > 0 })
+                }
                 _state.value = EnvState.Installing(i, closure.size, pkg.name)
                 prefixChanged = true
                 val installedPaths = extractDeb(debFile)
@@ -1607,10 +1614,17 @@ class LinuxEnvironmentManager(
         return visited.mapNotNull { index[it] }
     }
 
-    private fun downloadVerified(url: String, dest: File, expectedSha256: String) {
+    private fun downloadVerified(
+        url: String, dest: File, expectedSha256: String,
+        onProgress: ((Long, Long?) -> Unit)? = null,
+    ) {
         client.newCall(Request.Builder().url(url).build()).execute().use { resp ->
             if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code} downloading $url")
             val body = resp.body ?: throw IllegalStateException("Empty download")
+            val totalBytes = body.contentLength().takeIf { it > 0L }
+            var downloaded = 0L
+            var lastProgressAt = System.nanoTime()
+            onProgress?.invoke(0L, totalBytes)
             val digest = MessageDigest.getInstance("SHA-256")
             dest.outputStream().use { out ->
                 body.byteStream().use { input ->
@@ -1620,9 +1634,16 @@ class LinuxEnvironmentManager(
                         if (n < 0) break
                         out.write(buf, 0, n)
                         digest.update(buf, 0, n)
+                        downloaded += n
+                        val now = System.nanoTime()
+                        if (now - lastProgressAt >= 100_000_000L) {
+                            onProgress?.invoke(downloaded, totalBytes)
+                            lastProgressAt = now
+                        }
                     }
                 }
             }
+            onProgress?.invoke(downloaded, totalBytes)
             val actual = digest.digest().joinToString("") { "%02x".format(it) }
             if (expectedSha256.isNotBlank() && !actual.equals(expectedSha256, ignoreCase = true)) {
                 dest.delete()

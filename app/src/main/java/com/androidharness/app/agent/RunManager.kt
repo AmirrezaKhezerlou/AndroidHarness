@@ -88,6 +88,7 @@ class RunManager(
         val pendingApproval: ApprovalRequest? = null,
         val pendingQuestion: QuestionRequest? = null,
         val pendingEnvironment: EnvironmentRequest? = null,
+        val installingEnvironment: EnvironmentRequest? = null,
         val currentToolAction: String? = null,
         /** Live progress lines per running subagent (task tool), newest last. */
         val subagentSteps: Map<String, List<String>> = emptyMap(),
@@ -235,6 +236,7 @@ class RunManager(
     fun actionText(s: LiveRunState): String? = when {
         s.pendingQuestion != null -> "Waiting for your answer"
         s.pendingApproval != null -> "Waiting for your approval"
+        s.installingEnvironment != null -> "Installing Linux environment"
         s.pendingEnvironment != null -> "Linux environment needs your attention"
         s.retryStatus != null -> s.retryStatus
         s.runningCalls.isNotEmpty() -> s.currentToolAction ?: describeToolCall(s.runningCalls.last())
@@ -916,7 +918,8 @@ class RunManager(
             val pending = current.pendingEnvironment ?: return false
             if (current.turnId != turnId || pending.call.id != callId) return false
             if (fingerprint != null && RemotePromptIdentity.environment(pending) != fingerprint) return false
-            if (!live.compareAndSet(current, current.copy(pendingEnvironment = null))) continue
+            if (!live.compareAndSet(current, current.copy(pendingEnvironment = null,
+                    installingEnvironment = if (allow) pending else current.installingEnvironment))) continue
             if (allow) installEnvironment(sessionId, pending) else pending.response.complete(false)
             return true
         }
@@ -947,7 +950,7 @@ class RunManager(
                 live.update { it.copy(error = "Linux environment install failed: ${e.message}") }
                 pending.response.complete(false)
             } finally {
-                live.update { if (it.pendingEnvironment === pending) it.copy(pendingEnvironment = null) else it }
+                live.update { if (it.installingEnvironment === pending) it.copy(installingEnvironment = null) else it }
             }
         }
     }

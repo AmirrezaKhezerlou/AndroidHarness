@@ -48,12 +48,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -70,6 +68,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -98,6 +97,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.painterResource
 import com.androidharness.app.R
@@ -160,6 +161,8 @@ internal fun MessageComposer(
     val focusManager = LocalFocusManager.current
     val haptics = LocalHapticFeedback.current
     var focused by remember { mutableStateOf(false) }
+    var inputLineCount by remember { mutableIntStateOf(1) }
+    val inputAlignment = if (inputLineCount > 1) Alignment.Bottom else Alignment.CenterVertically
 
     val isGroq = voiceEngine == AppSettings.VOICE_ENGINE_GROQ
     val isGroqActive = isGroq && groqRecordState != GroqRecordState.IDLE
@@ -289,7 +292,7 @@ internal fun MessageComposer(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = if (!desktop || desktopInput) 8.dp else 16.dp, vertical = 2.dp),
+                        .padding(horizontal = if (!desktop || desktopInput) 8.dp else 16.dp),
                 ) {
                     if (!attachedSkill.isNullOrBlank()) {
                         Surface(
@@ -319,58 +322,75 @@ internal fun MessageComposer(
                         Spacer(Modifier.width(6.dp))
                     }
 
-                    Box(
-                        modifier = Modifier.weight(1f),
-                        contentAlignment = if (desktopInput) Alignment.TopStart else Alignment.CenterStart,
-                    ) {
-                        if (value.text.isEmpty()) {
-                            Text(
-                                text = when {
-                                    isInbuiltListening -> "Listening…"
-                                    !attachedSkill.isNullOrBlank() -> "Add a note, or send…"
-                                    busy -> "Queue message"
-                                    desktop -> "Describe a task…"
-                                    else -> "Message…"
-                                },
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = if (isInbuiltListening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(vertical = if (!desktop) 8.dp else if (desktopInput) 10.dp else 12.dp),
-                            )
-                        }
-                        BasicTextField(
-                            value = value,
-                            onValueChange = onValueChange,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = if (desktopInput) 44.dp else if (desktop) 72.dp else 44.dp,
-                                    max = if (desktopInput || !desktop) 140.dp else 180.dp)
-                                .verticalScroll(rememberScrollState())
-                                .then(inputFocus?.let { Modifier.focusRequester(it) } ?: Modifier)
-                                .semantics { contentDescription = "Message input" }
-                                .onFocusChanged { focused = it.isFocused }
-                                .onPreviewKeyEvent { event ->
-                                    if (desktopInput && !event.isCtrlPressed && event.key == Key.Tab) {
-                                        if (event.type == KeyEventType.KeyDown) focusManager.moveFocus(
-                                            if (event.isShiftPressed) FocusDirection.Previous else FocusDirection.Next)
-                                        true
-                                    } else if (desktop && event.isCtrlPressed && (event.key == Key.Enter || event.key == Key.NumPadEnter)) {
-                                        if (event.type == KeyEventType.KeyUp && canSend) onSend()
-                                        true
-                                    } else false
-                                }
-                                .padding(vertical = if (!desktop) 8.dp else if (desktopInput) 10.dp else 12.dp),
-                            textStyle = MaterialTheme.typography.bodyLarge.copy(
-                                color = MaterialTheme.colorScheme.onSurface,
-                            ),
-                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                            keyboardOptions = KeyboardOptions(
-                                capitalization = KeyboardCapitalization.Sentences,
-                                imeAction = ImeAction.Default,
-                            ),
-                        )
-                    }
+                    val inputTextStyle = MaterialTheme.typography.bodyLarge.copy(
+                        color = MaterialTheme.colorScheme.onSurface,
+                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                        lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
+                    )
+                    val inputPadding = if (desktop && !desktopInput) 12.dp else 10.dp
+                    val heightLimit = if (desktopInput || !desktop) 140.dp else 180.dp
+                    var measuredLineHeight by remember(density, inputTextStyle) { mutableStateOf<Dp?>(null) }
+                    val lineHeight = measuredLineHeight ?: with(density) { inputTextStyle.lineHeight.toDp() }
+                    val visibleLines = ((heightLimit - inputPadding * 2) / lineHeight).toInt().coerceIn(1, 6)
+                    BasicTextField(
+                        value = value,
+                        onValueChange = onValueChange,
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(max = lineHeight * visibleLines + inputPadding * 2)
+                            .then(inputFocus?.let { Modifier.focusRequester(it) } ?: Modifier)
+                            .semantics { contentDescription = "Message input" }
+                            .onFocusChanged { focused = it.isFocused }
+                            .onPreviewKeyEvent { event ->
+                                if (desktopInput && !event.isCtrlPressed && event.key == Key.Tab) {
+                                    if (event.type == KeyEventType.KeyDown) focusManager.moveFocus(
+                                        if (event.isShiftPressed) FocusDirection.Previous else FocusDirection.Next)
+                                    true
+                                } else if (desktop && event.isCtrlPressed && (event.key == Key.Enter || event.key == Key.NumPadEnter)) {
+                                    if (event.type == KeyEventType.KeyUp && canSend) onSend()
+                                    true
+                                } else false
+                            },
+                        textStyle = inputTextStyle,
+                        onTextLayout = {
+                            inputLineCount = it.lineCount
+                            if (it.lineCount > 0) measuredLineHeight = with(density) {
+                                (it.getLineBottom(0) - it.getLineTop(0)).toDp()
+                            }
+                        },
+                        minLines = 1,
+                        maxLines = visibleLines,
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Sentences,
+                            imeAction = ImeAction.Default,
+                        ),
+                        decorationBox = { innerTextField ->
+                            // Placeholder, glyphs and cursor share one padded viewport.
+                            // BasicTextField owns scrolling, selection and IME composition.
+                            Box(
+                                Modifier.fillMaxWidth()
+                                    .heightIn(min = if (desktop && !desktopInput) 72.dp else 44.dp)
+                                    .padding(vertical = inputPadding),
+                                contentAlignment = Alignment.CenterStart,
+                            ) {
+                                if (value.text.isEmpty()) Text(
+                                    text = when {
+                                        isInbuiltListening -> "Listening…"
+                                        !attachedSkill.isNullOrBlank() -> "Add a note, or send…"
+                                        busy -> "Queue message"
+                                        desktop -> "Describe a task…"
+                                        else -> "Message…"
+                                    },
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = inputTextStyle,
+                                    color = if (isInbuiltListening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                innerTextField()
+                            }
+                        },
+                    )
                 }
                 Box(
                     modifier = Modifier
@@ -575,7 +595,7 @@ internal fun MessageComposer(
                 .border(1.dp, if (focused) scheme.primary else scheme.outlineVariant,
                     RoundedCornerShape(14.dp))
                 .padding(horizontal = 6.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.Bottom,
+            verticalAlignment = inputAlignment,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Box(Modifier.padding(bottom = 6.dp)) { leading() }
@@ -591,7 +611,7 @@ internal fun MessageComposer(
                 .padding(4.dp),
         ) {
             attachments()
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = inputAlignment) {
                 leading()
                 field()
                 if (!isGroqLocked && !showStopOnly) voice()
@@ -611,7 +631,7 @@ internal fun MessageComposer(
                 .then(if (desktop) Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(14.dp))
                     .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f), RoundedCornerShape(14.dp))
                     .padding(horizontal = 8.dp, vertical = 6.dp) else Modifier),
-            verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = inputAlignment, horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) { leading(); field(); trailing() }
     }
 

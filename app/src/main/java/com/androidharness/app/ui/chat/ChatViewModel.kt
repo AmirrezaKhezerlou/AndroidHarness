@@ -185,6 +185,7 @@ data class ChatUiState(
     val pendingEnvironment: com.androidharness.app.agent.EnvironmentRequest? = null,
     val envState: com.androidharness.app.data.env.EnvState =
         com.androidharness.app.data.env.EnvState.NotInstalled,
+    val installingEnvironment: com.androidharness.app.agent.EnvironmentRequest? = null,
     val shizukuState: com.androidharness.app.data.env.ShizukuState =
         com.androidharness.app.data.env.ShizukuState.NOT_INSTALLED,
 ) {
@@ -621,6 +622,7 @@ class ChatViewModel(
                 pendingApproval = live.pendingApproval,
                 pendingQuestion = live.pendingQuestion,
                 pendingEnvironment = live.pendingEnvironment,
+                installingEnvironment = live.installingEnvironment,
                 currentToolAction = live.currentToolAction,
                 subagentSteps = live.subagentSteps,
                 thinkingStartedAt = live.thinkingStartedAt,
@@ -709,6 +711,7 @@ class ChatViewModel(
     private fun ChatUiState.computeCurrentAction(): String? = when {
         pendingQuestion != null -> "Waiting for your answer"
         pendingApproval != null -> "Waiting for your approval"
+        installingEnvironment != null -> "Installing Linux environment"
         pendingEnvironment != null -> when {
             envState is com.androidharness.app.data.env.EnvState.NotInstalled -> "Waiting for your approval"
             envState is com.androidharness.app.data.env.EnvState.Failed -> "Linux install failed"

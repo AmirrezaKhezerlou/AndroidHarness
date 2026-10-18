@@ -36,6 +36,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.androidharness.app.AppContainer
 import com.androidharness.app.data.env.EnvState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.androidharness.app.ui.common.PackageInstallProgress
 import kotlinx.coroutines.launch
 
 /**
@@ -48,7 +50,6 @@ import kotlinx.coroutines.launch
 @Composable
 fun EnvSheet(
     container: AppContainer,
-    envState: EnvState,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -58,6 +59,7 @@ fun EnvSheet(
     var confirmUninstall by remember { mutableStateOf(false) }
     var showPackagesSheet by remember { mutableStateOf(false) }
     val linuxEnv = container.linuxEnv
+    val envState = linuxEnv.state.collectAsStateWithLifecycle().value
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
@@ -72,8 +74,8 @@ fun EnvSheet(
                 when (envState) {
                     is EnvState.Ready -> "Installed"
                     is EnvState.Preparing -> "Resolving packages…"
-                    is EnvState.Downloading -> "Downloading ${envState.pkg} (${envState.index + 1}/${envState.total})…"
-                    is EnvState.Installing -> "Installing ${envState.pkg} (${envState.index + 1}/${envState.total})…"
+                    is EnvState.Downloading -> "Downloading packages…"
+                    is EnvState.Installing -> "Installing packages…"
                     is EnvState.Failed -> "Failed: ${envState.message}"
                     EnvState.NotInstalled -> "Not installed"
                 },
@@ -143,7 +145,7 @@ fun EnvSheet(
                     ) { Text(if (envState is EnvState.Failed) "Retry install" else "Install full environment") }
                 }
                 is EnvState.Downloading, is EnvState.Installing, is EnvState.Preparing -> {
-                    com.androidharness.app.ui.common.ThinLinearProgress(Modifier.fillMaxWidth())
+                    PackageInstallProgress(envState)
                 }
             }
             Spacer(Modifier.height(4.dp))

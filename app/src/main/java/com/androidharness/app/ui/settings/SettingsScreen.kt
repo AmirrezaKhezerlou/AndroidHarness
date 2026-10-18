@@ -1724,7 +1724,7 @@ private fun LinuxEnvironmentCard(
                 StatusText(
                     when (envState) {
                         is com.androidharness.app.data.env.EnvState.Ready -> "Installed"
-                        is com.androidharness.app.data.env.EnvState.Downloading -> "Installing…"
+                        is com.androidharness.app.data.env.EnvState.Downloading -> "Downloading…"
                         is com.androidharness.app.data.env.EnvState.Installing -> "Installing…"
                         is com.androidharness.app.data.env.EnvState.Preparing -> "Resolving…"
                         is com.androidharness.app.data.env.EnvState.Failed -> "Failed"
@@ -1811,13 +1811,7 @@ private fun LinuxEnvironmentCard(
                 is com.androidharness.app.data.env.EnvState.Downloading,
                 is com.androidharness.app.data.env.EnvState.Installing,
                 is com.androidharness.app.data.env.EnvState.Preparing -> {
-                    val pkgName = (envState as? com.androidharness.app.data.env.EnvState.Downloading)?.pkg
-                        ?: (envState as? com.androidharness.app.data.env.EnvState.Installing)?.pkg
-                    Text(
-                        if (pkgName != null) "Setting up $pkgName …" else "Installing environment…",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    ThinLinearProgress(Modifier.fillMaxWidth())
+                    com.androidharness.app.ui.common.PackageInstallProgress(envState)
                 }
             }
         }

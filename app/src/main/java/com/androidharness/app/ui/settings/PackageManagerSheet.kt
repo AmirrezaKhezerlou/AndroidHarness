@@ -53,7 +53,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androidharness.app.AppContainer
 import com.androidharness.app.data.env.EnvState
 import com.androidharness.app.data.env.PkgMeta
-import com.androidharness.app.ui.common.ThinLinearProgress
+import com.androidharness.app.ui.common.PackageInstallProgress
+import com.androidharness.app.ui.common.packageProgress
 import com.androidharness.app.ui.theme.HarnessMono
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -95,14 +96,33 @@ fun PackageManagerSheet(
     var searching by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var installedList by remember { mutableStateOf(linuxEnv.installedPackages()) }
+    var requestedPackage by remember { mutableStateOf<String?>(null) }
 
-    val isBusy = envState is EnvState.Downloading || envState is EnvState.Installing || envState is EnvState.Preparing
+    val isBusy = requestedPackage != null || envState.packageProgress() != null
+    val activePackage = (envState as? EnvState.Downloading)?.pkg ?: (envState as? EnvState.Installing)?.pkg
 
-    // Keep installed list fresh when state transitions to Ready
-    LaunchedEffect(envState) {
-        if (envState is EnvState.Ready) {
-            installedList = linuxEnv.installedPackages()
+    fun installPackage(name: String) {
+        if (isBusy) return
+        requestedPackage = name
+        errorMessage = null
+        scope.launch {
+            try {
+                linuxEnv.install(listOf(name)).getOrThrow()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                errorMessage = e.message ?: "Failed to install $name"
+            } finally {
+                installedList = linuxEnv.installedPackages()
+                requestedPackage = null
+            }
         }
+    }
+
+    // Refresh after each completed package, without rereading storage for every byte update.
+    val packageIndex = (envState as? EnvState.Downloading)?.index ?: (envState as? EnvState.Installing)?.index
+    LaunchedEffect(envState is EnvState.Ready, packageIndex) {
+        installedList = linuxEnv.installedPackages()
     }
 
     // Debounced search
@@ -152,27 +172,13 @@ fun PackageManagerSheet(
 
             // Installation progress indicator
             if (isBusy) {
-                val pkgName = (envState as? EnvState.Downloading)?.pkg
-                    ?: (envState as? EnvState.Installing)?.pkg
-                val stepText = when (val s = envState) {
-                    is EnvState.Downloading -> "Downloading ${s.pkg} (${s.index + 1}/${s.total})…"
-                    is EnvState.Installing -> "Installing ${s.pkg} (${s.index + 1}/${s.total})…"
-                    is EnvState.Preparing -> "Resolving dependencies…"
-                    else -> "Setting up packages…"
-                }
                 Surface(
                     color = scheme.surfaceContainerHigh,
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
                 ) {
                     Column(Modifier.padding(10.dp)) {
-                        Text(
-                            stepText,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = scheme.primary,
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        ThinLinearProgress(Modifier.fillMaxWidth())
+                        PackageInstallProgress(if (envState.packageProgress() != null) envState else EnvState.Preparing)
                     }
                 }
             }
@@ -268,17 +274,8 @@ fun PackageManagerSheet(
                                 isInstalled = pkg.name in installedList,
                                 isCore = pkg.name in linuxEnv.fullPackages,
                                 isBusy = isBusy,
-                                onInstall = {
-                                    errorMessage = null
-                                    scope.launch {
-                                        try {
-                                            linuxEnv.install(listOf(pkg.name)).getOrThrow()
-                                            installedList = linuxEnv.installedPackages()
-                                        } catch (e: Exception) {
-                                            errorMessage = e.message ?: "Failed to install ${pkg.name}"
-                                        }
-                                    }
-                                },
+                                isInstalling = pkg.name == activePackage || pkg.name == requestedPackage,
+                                onInstall = { installPackage(pkg.name) },
                                 onReviewRemoval = { container.pendingSettingsScroll.value = "storage"; onDismiss() },
                             )
                         }
@@ -304,17 +301,8 @@ fun PackageManagerSheet(
                             isInstalled = name in installedList,
                             isCore = name in linuxEnv.fullPackages,
                             isBusy = isBusy,
-                            onInstall = {
-                                errorMessage = null
-                                scope.launch {
-                                    try {
-                                        linuxEnv.install(listOf(name)).getOrThrow()
-                                        installedList = linuxEnv.installedPackages()
-                                    } catch (e: Exception) {
-                                        errorMessage = e.message ?: "Failed to install $name"
-                                    }
-                                }
-                            },
+                            isInstalling = name == activePackage || name == requestedPackage,
+                            onInstall = { installPackage(name) },
                             onReviewRemoval = { container.pendingSettingsScroll.value = "storage"; onDismiss() },
                         )
                     }
@@ -354,6 +342,7 @@ private fun PackageItemRow(
     isInstalled: Boolean,
     isCore: Boolean,
     isBusy: Boolean,
+    isInstalling: Boolean,
     onInstall: () -> Unit,
     onReviewRemoval: () -> Unit,
 ) {
@@ -412,7 +401,9 @@ private fun PackageItemRow(
 
             Spacer(Modifier.width(10.dp))
 
-            if (isInstalled) {
+            if (isInstalling) {
+                Text("Installing…", style = MaterialTheme.typography.labelMedium, color = scheme.primary)
+            } else if (isInstalled) {
                 Surface(
                     color = scheme.primaryContainer.copy(alpha = 0.5f),
                     shape = RoundedCornerShape(8.dp),

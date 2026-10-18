@@ -58,8 +58,7 @@ import com.androidharness.app.agent.toolPresentation
 import com.androidharness.app.core.ChatMessage
 import com.androidharness.app.core.ImageRef
 import com.androidharness.app.core.ToolCallData
-import com.androidharness.app.ui.common.DotLoading
-import com.androidharness.app.ui.common.ThinLinearProgress
+import com.androidharness.app.ui.common.ToolCallProgress
 import com.androidharness.app.ui.common.VisualDiffViewer
 import com.androidharness.app.ui.theme.HarnessMono
 import com.androidharness.app.ui.theme.LocalStatusColors
@@ -77,9 +76,8 @@ import java.io.File
  * One tool call = one compact, quiet row.
  *
  * Flat hairline card, neutral icon tile, monospace tool name, one-line summary.
- * Status is a small slot on the right (dots while running, green check on
- * success, red cross on failure) and a thin 3dp line under the header while
- * running, no tinted circles, no wavy bars. The whole row toggles details.
+ * A Material expressive wave indicates active calls. The right-hand status
+ * slot shows a check on success or a cross on failure. The whole row toggles details.
  */
 @Composable
 internal fun ToolCallCard(
@@ -182,7 +180,6 @@ internal fun ToolCallCard(
                     label = "tool status",
                 ) { key ->
                     when (key) {
-                        0 -> DotLoading(Modifier.size(width = 20.dp, height = 12.dp))
                         1 -> Icon(
                             Icons.Filled.CheckCircle,
                             contentDescription = "Done",
@@ -209,7 +206,11 @@ internal fun ToolCallCard(
                 )
             }
             if (active) {
-                ThinLinearProgress(modifier = Modifier.fillMaxWidth())
+                ToolCallProgress(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
+                )
             }
             result?.images?.takeIf { call.name != "read_image" && it.isNotEmpty() }?.let { imgs ->
                 Column(
@@ -352,7 +353,7 @@ internal fun ToolGroupCard(
                     label = "tool group status",
                 ) { running ->
                     when {
-                        running -> DotLoading(Modifier.size(width = 20.dp, height = 12.dp))
+                        running -> Spacer(Modifier.size(18.dp))
                         failedCount > 0 -> Icon(
                             Icons.Filled.Close,
                             contentDescription = "Failed",
@@ -378,7 +379,11 @@ internal fun ToolGroupCard(
                 )
             }
             if (anyRunning) {
-                ThinLinearProgress(modifier = Modifier.fillMaxWidth())
+                ToolCallProgress(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
+                )
             }
             calls.filter { it.name != "read_image" }.flatMap { results[it.id]?.images.orEmpty() }
                 .takeIf { it.isNotEmpty() }?.let { imgs ->
