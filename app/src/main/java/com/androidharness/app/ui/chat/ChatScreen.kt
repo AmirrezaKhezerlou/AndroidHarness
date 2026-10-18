@@ -996,6 +996,7 @@ private fun ChatScreenContent(
                         state.catalogs[config.id].orEmpty().firstOrNull { it.id == config.model }),
                     onDismiss = { editingReasoning = null },
                     onSave = { viewModel.saveReasoningConfig(config, it); editingReasoning = null },
+                    onDetectLevels = { viewModel.detectReasoningLevels(config) },
                 )
             }
 

@@ -6,6 +6,25 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ThinkingSpecsTest {
+    @Test fun `provider effort metadata overrides stale presets and supplies custom editor choices`() {
+        val c = config("deepseek-flash")
+        ModelsDev.replaceForTesting(mapOf("deepseek" to mapOf(c.model to entry("high", toggle = true))))
+        val reported = ModelEntry(c.model, reasoning = true, reasoningEfforts = listOf("low", "high", "max"), defaultReasoningEffort = "low")
+        val spec = ThinkingSpecs.forProvider(c, reported)
+        assertEquals(listOf(ThinkingLevel.OFF, ThinkingLevel.LOW, ThinkingLevel.HIGH, ThinkingLevel.MAX), spec.levels)
+        assertEquals(listOf("Disabled", "Low", "High", "Max"), CustomReasoning.defaultLevels(spec))
+        assertEquals("max", ThinkingSpecs.resolve(c, ThinkingLevel.MAX, modelEntry = reported).effort)
+        assertEquals("none", ThinkingSpecs.resolve(c, ThinkingLevel.OFF, modelEntry = reported).effort)
+        val unknownEndpoint = c.copy(baseUrl = "https://custom.example/v1", model = "unknown")
+        assertEquals("low", ThinkingSpecs.resolve(unknownEndpoint, ThinkingLevel.OFF,
+            modelEntry = reported.copy(id = "unknown")).effort)
+        val narrower = reported.copy(reasoningEfforts = listOf("low", "high"))
+        assertFalse(ThinkingLevel.MAX in ThinkingSpecs.forProvider(c, narrower).levels)
+        assertEquals("high", ThinkingSpecs.resolve(c, ThinkingLevel.MAX, modelEntry = narrower).effort)
+        assertTrue(ThinkingSpecs.forProvider(c, reported.copy(reasoningEfforts = emptyList())).levels.isEmpty())
+        assertEquals("max", ThinkingSpecs.resolve(c, ThinkingLevel.MAX,
+            modelEntry = reported.copy(reasoningEfforts = listOf("low", "max", "ultra"))).effort)
+    }
     private fun config(model: String, type: ProviderType = ProviderType.OPENAI_COMPAT,
         url: String = "https://api.deepseek.com/v1") = ProviderConfig("test", "Test", type, url, model)
     private fun entry(vararg values: String, toggle: Boolean = false, reasoning: Boolean = true,

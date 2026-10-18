@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.filterNotNull
@@ -354,6 +355,14 @@ class ChatViewModel(
         viewModelScope.launch {
             c.providers.catalogs.collect { catalogs ->
                 _state.update { it.copy(catalogs = catalogs) }
+            }
+        }
+        viewModelScope.launch {
+            _state.map { state ->
+                state.activeProvider?.takeIf { state.modelSelectionReady }
+                    ?.let { it.copy(model = state.effectiveModel ?: it.model) }
+            }.distinctUntilChanged().collect { selected ->
+                if (selected != null) launch { c.providers.refreshCatalog(selected.id, automatic = true) }
             }
         }
         viewModelScope.launch {
@@ -1750,6 +1759,7 @@ class ChatViewModel(
         editModelSelection {
             val sid = if (s.sameModelAcrossChats) sessionId else ensureSession()
             c.chatModels.select(sid, com.androidharness.app.data.ChatModelTarget.valueOf(target.name), providerId, model)
+            viewModelScope.launch { c.providers.refreshCatalog(providerId, automatic = true) }
             if (target == ModelSelectionTarget.ACTIVE && s.dualPlanning) {
                 val chosen = (model ?: s.providers.firstOrNull { it.id == providerId }?.model)?.substringAfterLast('/') ?: "default"
                 _state.update { it.copy(dualPlanning = false, mode = AgentMode.ACT,
@@ -1844,18 +1854,10 @@ class ChatViewModel(
      * failure, null on success (catalog persisted and published to state).
      */
     suspend fun refreshCatalog(providerId: String): String? {
-        val provider = _state.value.providers.firstOrNull { it.id == providerId }
-            ?: return "Unknown provider"
-        val apiKey = provider.effectiveApiKey(c.providers.apiKey(providerId))
-        if (apiKey.isBlank()) return "No API key for this provider"
-        return when (val result = com.androidharness.app.llm.ModelCatalog.listModels(provider, apiKey)) {
-            is com.androidharness.app.llm.ModelCatalog.Result.Models -> {
-                c.providers.saveCatalog(providerId, result.models)
-                null
-            }
-            is com.androidharness.app.llm.ModelCatalog.Result.Failed -> result.message
-        }
+        return c.providers.refreshCatalog(providerId)
     }
+
+    suspend fun detectReasoningLevels(config: ProviderConfig): List<String> = c.providers.detectReasoningLevels(config)
 
     fun dismissError() {
         _state.update { it.copy(error = null) }

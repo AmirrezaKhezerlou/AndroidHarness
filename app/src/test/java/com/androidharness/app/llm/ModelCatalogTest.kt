@@ -1,6 +1,7 @@
 package com.androidharness.app.llm
 
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -10,6 +11,42 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ModelCatalogTest {
+    @Test fun providerReportedEffortsReachNativeRequestsAndCustomDefaults() = runBlocking {
+        val config = ProviderConfig("detected", "DeepSeek", ProviderType.OPENAI_COMPAT, "https://api.deepseek.com/v1", "new-model")
+        val response = """{"data":[{"id":"new-model","effort":{"supported_levels":["low","high","max"],"default_level":"high"}}]}"""
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                .body(response.toResponseBody("application/json".toMediaType())).build()
+        }.build()
+        val entry = (ModelCatalog.listModels(config, "fixture", client) as ModelCatalog.Result.Models).models.single()
+        assertEquals(listOf("low", "high", "max"), entry.reasoningEfforts)
+        assertEquals("high", entry.defaultReasoningEffort)
+        assertEquals(true, entry.reasoning)
+        val options = RequestOptions(thinking = com.androidharness.app.agent.ThinkingLevel.MAX,
+            modelCatalogs = mapOf(config.id to listOf(entry)))
+        val resolved = options.resolveThinking(config)
+        assertEquals("Max", resolved.label)
+        assertEquals("max", resolved.effort)
+        assertEquals(listOf("Low", "High", "Max"), com.androidharness.app.agent.CustomReasoning.defaultLevels(resolved.spec))
+        val body = OpenAiCompatProvider(client, ProviderFactory.json).buildRequestBody(config, "fixture", emptyList(), emptyList(), options)
+        assertEquals("max", body["reasoning_effort"]!!.jsonPrimitive.content)
+        assertEquals("enabled", body["thinking"]!!.jsonObject["type"]!!.jsonPrimitive.content)
+        val restored = ProviderFactory.json.decodeFromString(ModelEntry.serializer(), ProviderFactory.json.encodeToString(ModelEntry.serializer(), entry))
+        assertEquals(entry, restored)
+    }
+
+    @Test fun malformedEffortListsStayUnknownAndUnavailableDefaultsAreDiscarded() {
+        val models = ModelCatalog.parseCatalog(ProviderType.OPENAI_COMPAT, """{"data":[
+            {"id":"malformed","effort":{"supported_levels":["high",null]}},
+            {"id":"empty","effort":{"supported_levels":[]}},
+            {"id":"case","supported_reasoning_levels":[{"effort":"LOW"},"High","high"],"default_reasoning_effort":"max"}
+        ]}""").associateBy { it.id }
+        assertNull(models.getValue("malformed").reasoningEfforts)
+        assertNull(models.getValue("malformed").reasoning)
+        assertEquals(emptyList<String>(), models.getValue("empty").reasoningEfforts)
+        assertEquals(listOf("low", "high"), models.getValue("case").reasoningEfforts)
+        assertNull(models.getValue("case").defaultReasoningEffort)
+    }
     // Relevant fields captured from llm7.io /v1/models for issue #19.
     private val llm7Catalog = """{"object":"list","data":[
         {"id":"DeepSeek-V4-Flash-0731","reasoning":true,

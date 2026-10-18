@@ -98,10 +98,11 @@ data class RequestOptions(
         require(from.id == to.id && from.model == to.model && from.baseUrl.trimEnd('/') == to.baseUrl.trimEnd('/'))
         val source = com.androidharness.app.agent.CustomReasoning.key(from)
         val target = com.androidharness.app.agent.CustomReasoning.key(to)
-        val custom = customReasoning[source] ?: return this
         if (source == target) return this
+        val custom = customReasoning[source]
         val selection = customThinkingLevels[source]
-        return copy(customReasoning = customReasoning + (target to custom),
+        if (custom == null && selection == null) return this
+        return copy(customReasoning = if (custom == null) customReasoning else customReasoning + (target to custom),
             customThinkingLevels = if (selection == null) customThinkingLevels else customThinkingLevels + (target to selection))
     }
 

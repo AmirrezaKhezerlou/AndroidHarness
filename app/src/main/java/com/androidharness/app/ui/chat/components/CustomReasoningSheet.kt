@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -38,12 +39,19 @@ internal fun CustomReasoningSheet(
     onDismiss: () -> Unit,
     onSave: (CustomReasoningConfig?) -> Unit,
     selectedLevel: String? = null,
+    onDetectLevels: (suspend () -> List<String>)? = null,
 ) {
     val defaults = remember(spec) {
-        spec.levels.map { if (spec.style == ThinkingSpecs.Style.TOGGLE && it != ThinkingLevel.OFF) "On" else it.label }
-            .ifEmpty { listOf("On") }
+        CustomReasoning.defaultLevels(spec)
     }
     var levels by rememberSaveable(config.id, config.model) { mutableStateOf(ArrayList(saved?.levels ?: defaults)) }
+    var levelsEdited by rememberSaveable(config.id, config.model) { mutableStateOf(false) }
+    var detecting by remember { mutableStateOf(false) }
+    var detectionMessage by remember { mutableStateOf<String?>(null) }
+    var detectionFailed by remember { mutableStateOf(false) }
+    LaunchedEffect(defaults) {
+        if (saved == null && !levelsEdited && !detecting) levels = ArrayList(defaults)
+    }
     var editingLevel by rememberSaveable { mutableStateOf<Int?>(null) }
     var mapping by rememberSaveable(config.id, config.model) { mutableStateOf(saved?.mapping.orEmpty()) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -71,6 +79,7 @@ internal fun CustomReasoningSheet(
         }
     }
     fun editLevels(change: MutableList<String>.() -> Unit) {
+        levelsEdited = true
         levels = ArrayList(levels.toMutableList().apply(change)); error = null
     }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
@@ -84,35 +93,63 @@ internal fun CustomReasoningSheet(
                 Modifier.padding(top = 6.dp, bottom = 12.dp), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Reasoning levels (low to high)", style = MaterialTheme.typography.titleSmall)
+                if (onDetectLevels != null && !localControl) {
+                    TextButton(enabled = !validating && !detecting, onClick = {
+                        detecting = true; levelsEdited = true; detectionMessage = null; detectionFailed = false
+                        scope.launch {
+                            try {
+                                val detected = CustomReasoning.normalized(CustomReasoningConfig(onDetectLevels())).levels
+                                val selected = levels.getOrNull(previewLevel)?.let(CustomReasoning::wire)
+                                levelsEdited = true; levels = ArrayList(detected); editingLevel = null
+                                previewLevel = detected.indexOfFirst { CustomReasoning.wire(it) == selected }.coerceAtLeast(0)
+                                error = null
+                                detectionMessage = "Detected ${detected.size} levels. Save to apply."
+                            } catch (e: kotlinx.coroutines.CancellationException) { throw e
+                            } catch (e: Exception) {
+                                detectionFailed = true
+                                detectionMessage = e.message ?: "Could not detect levels. Try again."
+                            } finally { detecting = false }
+                        }
+                    }) {
+                        if (detecting) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                        else Icon(Icons.Outlined.Refresh, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (detecting) "Checking provider…" else "Auto-detect levels")
+                    }
+                    detectionMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall,
+                        color = if (detectionFailed) scheme.error else scheme.primary) }
+                }
+                if (saved == null && spec.reportedLevels != null) Text("Detected from provider",
+                    style = MaterialTheme.typography.bodySmall, color = scheme.primary)
                 Text(CustomReasoning.LEVEL_HELP, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     levels.forEachIndexed { index, name ->
-                        FilterChip(selected = editingLevel == index, enabled = !validating,
+                        FilterChip(selected = editingLevel == index, enabled = !validating && !detecting,
                             onClick = { editingLevel = if (editingLevel == index) null else index },
                             label = { Text(name.takeIf { it.isNotBlank() }?.let(CustomReasoning::label) ?: "New level") })
                     }
                     IconButton(onClick = {
                         editLevels { add("") }; editingLevel = levels.lastIndex
-                    }, enabled = !validating && levels.size < 16) {
+                    }, enabled = !validating && !detecting && levels.size < 16) {
                         Icon(Icons.Filled.Add, "Add reasoning level", Modifier.size(20.dp))
                     }
                 }
                 editingLevel?.takeIf { it in levels.indices }?.let { index ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(levels[index], { value -> editLevels { set(index, value.take(32)) } },
-                            modifier = Modifier.weight(1f), singleLine = true, enabled = !validating,
+                            modifier = Modifier.weight(1f), singleLine = true, enabled = !validating && !detecting,
                             label = { Text("Level ${index + 1}") })
                         IconButton(onClick = {
                             editLevels { java.util.Collections.swap(this, index, index - 1) }; editingLevel = index - 1
-                        }, enabled = !validating && index > 0) {
+                        }, enabled = !validating && !detecting && index > 0) {
                             Icon(Icons.Outlined.ArrowUpward, "Move level ${index + 1} up", Modifier.size(18.dp))
                         }
                         IconButton(onClick = {
                             editLevels { java.util.Collections.swap(this, index, index + 1) }; editingLevel = index + 1
-                        }, enabled = !validating && index < levels.lastIndex) {
+                        }, enabled = !validating && !detecting && index < levels.lastIndex) {
                             Icon(Icons.Outlined.ArrowDownward, "Move level ${index + 1} down", Modifier.size(18.dp))
                         }
-                        IconButton(onClick = { editLevels { removeAt(index) }; editingLevel = null }, enabled = !validating) {
+                        IconButton(onClick = { editLevels { removeAt(index) }; editingLevel = null }, enabled = !validating && !detecting) {
                             Icon(Icons.Outlined.Close, "Remove level ${index + 1}", Modifier.size(18.dp))
                         }
                     }
@@ -176,12 +213,12 @@ internal fun CustomReasoningSheet(
                 }
                 Column {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        if (!stacked) TextButton(onClick = { onSave(null) }, enabled = !validating) { Text("Use defaults") }
+                        if (!stacked) TextButton(onClick = { onSave(null) }, enabled = !validating && !detecting) { Text("Use defaults") }
                         Spacer(Modifier.weight(1f))
                         TextButton(onClick = onDismiss, enabled = !validating) { Text("Cancel", maxLines = 1) }
-                        Button(enabled = !validating, onClick = saveAction) { Text(if (validating) "Checking…" else "Save", maxLines = 1) }
+                        Button(enabled = !validating && !detecting, onClick = saveAction) { Text(if (validating) "Checking…" else "Save", maxLines = 1) }
                     }
-                    if (stacked) TextButton(onClick = { onSave(null) }, enabled = !validating) { Text("Use defaults") }
+                    if (stacked) TextButton(onClick = { onSave(null) }, enabled = !validating && !detecting) { Text("Use defaults") }
                 }
             }
         }

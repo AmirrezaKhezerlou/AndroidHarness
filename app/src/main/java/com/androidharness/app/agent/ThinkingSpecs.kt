@@ -19,6 +19,8 @@ object ThinkingSpecs {
         val defaultLevel: ThinkingLevel? = null,
         val outputLimitManaged: Boolean = false,
         val reasoningSupported: Boolean = false,
+        /** Ordered provider-reported vocabulary, also seeds the custom editor. */
+        val reportedLevels: List<String>? = null,
     )
 
     data class ResolvedThinking(
@@ -80,8 +82,8 @@ object ThinkingSpecs {
         if (level == null || spec == null) return level
         if (spec.style == Style.NONE || spec.style == Style.AUTOMATIC) return ThinkingLevel.OFF
         val enabled = spec.levels.filter { it != ThinkingLevel.OFF }
-        if (level == ThinkingLevel.MAX || level == ThinkingLevel.ULTRA) return enabled.maxByOrNull { it.rank }
         if (level in spec.levels) return level
+        if (level == ThinkingLevel.MAX || level == ThinkingLevel.ULTRA) return enabled.maxByOrNull { it.rank }
         if (level == ThinkingLevel.OFF) return spec.defaultLevel?.takeIf { it in enabled } ?: enabled.firstOrNull()
         return enabled.filter { it.rank <= level.rank }.maxByOrNull { it.rank } ?: enabled.firstOrNull()
     }
@@ -100,9 +102,29 @@ object ThinkingSpecs {
     }
 
     fun forProvider(rawConfig: ProviderConfig, modelEntry: ModelEntry? = null): Spec {
-        val spec = nativeProviderSpec(rawConfig, modelEntry)
+        val native = nativeProviderSpec(rawConfig, modelEntry)
+        val spec = reportedSpec(rawConfig, modelEntry, native)
         val known = modelEntry?.reasoning == true || ModelsDev.entry(ModelsDev.providerKeyFor(rawConfig.baseUrl), rawConfig.model)?.reasoning == true
         return spec.copy(reasoningSupported = spec.reasoningSupported || known || spec.style !in setOf(Style.NONE, Style.AUTOMATIC))
+    }
+
+    private fun reportedSpec(rawConfig: ProviderConfig, entry: ModelEntry?, native: Spec): Spec {
+        val reported = entry?.reasoningEfforts ?: return native
+        if (entry.reasoning == false || ReasoningDefaults.isLocal(rawConfig)) return native
+        if (reported.isEmpty()) return automatic.copy(outputMax = native.outputMax, reportedLevels = emptyList())
+        val config = routedConfig(rawConfig)
+        val levels = reported.mapNotNull(CustomReasoning::native).distinct()
+        val toggle = native.toggleField ?: "thinking".takeIf {
+            config.type == ProviderType.OPENAI_COMPAT && ModelsDev.providerKeyFor(config.baseUrl) == "deepseek"
+        }
+        val off = ThinkingLevel.OFF in native.levels &&
+            (toggle != null || native.style == Style.ADAPTIVE)
+        val available = (if (off) listOf(ThinkingLevel.OFF) + levels else levels).distinct()
+        val names = (if (off) listOf("Disabled") + reported else reported).map(CustomReasoning::label).distinct()
+        return native.copy(style = if (config.type == ProviderType.ANTHROPIC) Style.ADAPTIVE else Style.EFFORT,
+            levels = available, toggleField = toggle, reasoningSupported = true, reportedLevels = names,
+            defaultLevel = entry.defaultReasoningEffort?.let(CustomReasoning::native)?.takeIf { it in available }
+                ?: native.defaultLevel?.takeIf { it in available })
     }
 
     private fun nativeProviderSpec(rawConfig: ProviderConfig, modelEntry: ModelEntry? = null): Spec {

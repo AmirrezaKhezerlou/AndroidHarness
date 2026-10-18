@@ -153,20 +153,31 @@ object ModelCatalog {
                     val obj = el as? JsonObject ?: return@mapNotNull null
                     val id = (obj["id"] as? JsonPrimitive)?.takeIf { it.isString }
                         ?.contentOrNull?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                    val effort = obj["effort"] as? JsonObject
+                    val efforts = reportedEfforts(effort?.get("supported_levels")
+                        ?: obj["supported_reasoning_efforts"] ?: obj["supported_reasoning_levels"])
+                    val defaultEffort = ((effort?.get("default_level") ?: obj["default_reasoning_effort"]
+                        ?: obj["default_reasoning_level"]) as? JsonPrimitive)?.takeIf { it.isString }
+                        ?.content?.trim()?.lowercase(java.util.Locale.ROOT)?.takeIf { it in efforts.orEmpty() }
                     // OpenRouter-style capability reporting; absent elsewhere.
-                    val reasoning = obj["supported_parameters"]?.jsonArrayOrAbsent()?.let { params ->
+                    val reasoning = (obj["reasoning"] as? JsonPrimitive)?.booleanOrNull
+                        ?: (obj["capabilities"]?.jsonObjectOrAbsent()?.get("reasoning") as? JsonPrimitive)?.booleanOrNull
+                        ?: efforts?.any { it !in setOf("none", "disabled", "off") }
+                        ?: obj["supported_parameters"]?.jsonArrayOrAbsent()?.let { params ->
                         params.any { p ->
                             (p as? JsonPrimitive)?.contentOrNull?.contains("reasoning") == true
                         }
-                    } ?: (obj["reasoning"] as? JsonPrimitive)?.booleanOrNull
-                        ?: (obj["capabilities"]?.jsonObjectOrAbsent()?.get("reasoning") as? JsonPrimitive)?.booleanOrNull
+                    }
                     // llm7 reports {"tokens":400000,"chars":null} rather than
                     // a scalar context_window. Unknown metadata must not block setup.
                     val window = obj["context_window"]
                     val ctx = sequenceOf(obj["context_length"], obj["max_tokens"], window,
                         window.jsonObjectOrAbsent()?.get("tokens"))
                         .mapNotNull { (it as? JsonPrimitive)?.longOrNull }.firstOrNull()
-                    ModelEntry(id, reasoning, ctx, tools = reportedTools(obj), imageInput = reportedImageInput(obj))
+                    ModelEntry(id, reasoning, ctx,
+                        reasoningEfforts = efforts, defaultReasoningEffort = defaultEffort,
+                        reasoningReported = efforts != null,
+                        tools = reportedTools(obj), imageInput = reportedImageInput(obj))
                 } ?: emptyList()
 
             ProviderType.GEMINI ->
@@ -178,6 +189,18 @@ object ModelCatalog {
                     ModelEntry(name, reasoning = thinking, reasoningReported = thinking != null)
                 } ?: emptyList()
         }.sortedBy { it.id }
+    }
+
+    private fun reportedEfforts(value: JsonElement?): List<String>? {
+        val array = value as? JsonArray ?: return null
+        if (array.size > 16) return null
+        val names = array.map { item ->
+            val name = ((if (item is JsonObject) item["effort"] else item) as? JsonPrimitive)
+                ?.takeIf { it.isString }?.content?.trim() ?: return null
+            if (name.isBlank() || name.length > 32 || name.any(Char::isISOControl)) return null
+            name.lowercase(java.util.Locale.ROOT)
+        }
+        return names.distinct()
     }
 
     internal fun reportedTools(obj: JsonObject): Boolean? {

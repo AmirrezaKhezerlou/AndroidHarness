@@ -10,6 +10,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CustomReasoningTest {
+    @Test fun `future provider vocabulary is selectable without saving an override and custom settings still win`() {
+        val c = ProviderConfig("future", "Future", ProviderType.OPENAI_COMPAT, "https://custom.example/v1", "new-model")
+        val entry = ModelEntry(c.model, reasoning = true, reasoningEfforts = listOf("low", "high", "extreme"), defaultReasoningEffort = "high")
+        val opts = RequestOptions(thinking = ThinkingLevel.MAX, modelCatalogs = mapOf(c.id to listOf(entry)))
+        assertEquals("Extreme", opts.resolveThinking(c).label)
+        assertEquals("extreme", OpenAiCompatProvider(client, json).buildRequestBody(c, "fixture", user, emptyList(), opts)["reasoning_effort"]!!.jsonPrimitive.content)
+        val key = CustomReasoning.key(c)
+        val chosen = opts.copy(customThinkingLevels = mapOf(key to "low"))
+        assertEquals("Low", chosen.resolveThinking(c).label)
+        val custom = CustomReasoningConfig(listOf("Only mine"), """{"reasoning_effort":"high"}""")
+        val saved = opts.copy(customReasoning = mapOf(key to custom))
+        assertEquals(listOf("Only mine"), saved.resolveThinking(c).customConfig!!.levels)
+        assertEquals("high", OpenAiCompatProvider(client, json).buildRequestBody(c, "fixture", user, emptyList(), saved)["reasoning_effort"]!!.jsonPrimitive.content)
+        assertTrue(opts.customReasoning.isEmpty())
+        assertEquals("Max", opts.copy(modelCatalogs = mapOf(c.id to listOf(entry.copy(reasoningEfforts = listOf("low", "max", "extreme")))))
+            .resolveThinking(c).label)
+    }
     private val config = ProviderConfig("deepseek", "DeepSeek", ProviderType.OPENAI_COMPAT, "https://api.deepseek.com/v1", "deepseek-v4-flash")
     private val user = listOf(ChatMessage(Role.USER, "Check"))
     private val client = OkHttpClient()

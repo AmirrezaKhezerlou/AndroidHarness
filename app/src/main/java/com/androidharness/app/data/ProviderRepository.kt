@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import java.util.UUID
@@ -32,6 +34,8 @@ class ProviderRepository(
     private val json = Json { ignoreUnknownKeys = true }
     private val listKey = stringPreferencesKey("provider_list")
     private val headersRevision = longPreferencesKey("provider_headers_revision")
+    private val catalogRefreshLocks = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
+    private val automaticCatalogChecks = java.util.concurrent.ConcurrentHashMap<ProviderConfig, Long>()
 
     val providers: Flow<List<ProviderConfig>> = kotlinx.coroutines.flow.combine(context.providerStore.data, localModels.installed, chatGpt.state) { prefs, installed, accounts ->
         HarnessProvider.restoreModels(harnessModels(prefs))
@@ -85,10 +89,15 @@ class ProviderRepository(
                     json.decodeFromString(ListSerializer(ModelEntry.serializer()), value as String)
                 }.getOrDefault(emptyList())
                 if (customList.isNotEmpty()) {
-                    val base = catalogMap[providerId].orEmpty().filterNot { baseEntry ->
+                    val fetched = catalogMap[providerId].orEmpty()
+                    val enriched = customList.map { custom -> fetched.firstOrNull { it.id == custom.id }?.let { reported ->
+                        reported.copy(custom = true, reasoning = reported.reasoning ?: custom.reasoning,
+                            note = custom.note ?: reported.note)
+                    } ?: custom }
+                    val base = fetched.filterNot { baseEntry ->
                         customList.any { it.id == baseEntry.id }
                     }
-                    catalogMap[providerId] = customList + base
+                    catalogMap[providerId] = enriched + base
                 }
             }
 
@@ -103,14 +112,48 @@ class ProviderRepository(
     suspend fun catalog(providerId: String): List<ModelEntry> =
         catalogs.first()[providerId].orEmpty()
 
-    suspend fun refreshCatalog(providerId: String): String? {
-        val provider = current().firstOrNull { it.id == providerId } ?: return "Provider unavailable"
-        val key = if (providerId == HarnessProvider.ID) harnessApiKey()
-            else provider.effectiveApiKey(apiKey(providerId))
-        return when (val result = ModelCatalog.listModels(provider, key)) {
-            is ModelCatalog.Result.Models -> { saveCatalog(providerId, result.models); null }
-            is ModelCatalog.Result.Failed -> result.message
+    suspend fun refreshCatalog(providerId: String, automatic: Boolean = false): String? =
+        catalogRefreshLocks.getOrPut(providerId) { Mutex() }.withLock {
+            val provider = current().firstOrNull { it.id == providerId } ?: return@withLock "Provider unavailable"
+            if (com.androidharness.app.local.LocalModelCatalog.isLocal(providerId)) return@withLock null
+            val connection = provider.copy(name = "", model = "", enabled = true)
+            val now = System.nanoTime()
+            if (automatic && automaticCatalogChecks[connection]?.let { now - it < 300_000_000_000L } == true)
+                return@withLock null
+            // Cache failures briefly too: switching models must not repeatedly hit an unavailable /models endpoint.
+            automaticCatalogChecks[connection] = now
+            val key = if (providerId == HarnessProvider.ID) harnessApiKey()
+                else provider.effectiveApiKey(apiKey(providerId))
+            val result = try { ModelCatalog.listModels(provider, key) }
+            catch (e: kotlinx.coroutines.CancellationException) {
+                automaticCatalogChecks.remove(connection)
+                throw e
+            }
+            when (result) {
+                is ModelCatalog.Result.Models -> {
+                    if (result.models.isEmpty()) return@withLock "No model capabilities reported"
+                    val currentConnection = current().firstOrNull { it.id == providerId }?.copy(name = "", model = "", enabled = true)
+                    if (currentConnection != connection) return@withLock "Provider connection changed. Try again."
+                    saveCatalog(providerId, result.models)
+                    null
+                }
+                is ModelCatalog.Result.Failed -> result.message
+            }
         }
+
+    suspend fun detectReasoningLevels(config: ProviderConfig): List<String> {
+        fun sameConnection(provider: ProviderConfig?) = provider?.let {
+            it.type == config.type && it.baseUrl.trimEnd('/') == config.baseUrl.trimEnd('/') && it.headers == config.headers
+        } == true
+        check(sameConnection(current().firstOrNull { it.id == config.id })) { "Provider connection changed. Reopen thinking settings." }
+        check(!com.androidharness.app.llm.ReasoningDefaults.isLocal(config)) { "This model uses native on/off control." }
+        refreshCatalog(config.id)?.let { error(it) } // Explicit check always bypasses the automatic refresh cache.
+        check(sameConnection(current().firstOrNull { it.id == config.id })) { "Provider connection changed. Reopen thinking settings." }
+        val entry = catalog(config.id).firstOrNull { it.id == config.model }
+        check(entry?.reasoningEfforts != null) { "This provider does not report reasoning levels for this model. Keep your levels or edit them manually." }
+        val levels = com.androidharness.app.agent.ThinkingSpecs.forProvider(config, entry).reportedLevels
+        check(!levels.isNullOrEmpty()) { "No adjustable reasoning levels reported for this model." }
+        return levels
     }
 
     suspend fun customModels(providerId: String): List<ModelEntry> {
@@ -199,6 +242,7 @@ class ProviderRepository(
     }
 
     suspend fun update(config: ProviderConfig, apiKey: String?) {
+        automaticCatalogChecks.keys.removeIf { it.id == config.id }
         if (com.androidharness.app.chatgpt.ChatGptProtocol.isProvider(config.id)) return
         if (com.androidharness.app.local.LocalModelCatalog.isLocal(config.id)) return
         if (config.id == HarnessProvider.ID) {
@@ -215,6 +259,7 @@ class ProviderRepository(
     }
 
     suspend fun delete(id: String) {
+        automaticCatalogChecks.keys.removeIf { it.id == id }
         if (com.androidharness.app.chatgpt.ChatGptProtocol.isProvider(id)) return
         if (com.androidharness.app.local.LocalModelCatalog.isLocal(id)) {
             localModels.remove(id.removePrefix(com.androidharness.app.local.LocalModelCatalog.PROVIDER_PREFIX))

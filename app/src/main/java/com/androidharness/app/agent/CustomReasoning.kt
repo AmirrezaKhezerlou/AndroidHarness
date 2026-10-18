@@ -44,26 +44,37 @@ object CustomReasoning {
         return config.copy(levels = levels, mapping = config.mapping.trim())
     }
 
+    fun defaultLevels(spec: ThinkingSpecs.Spec): List<String> = spec.reportedLevels
+        ?: spec.levels.map { if (spec.style == ThinkingSpecs.Style.TOGGLE && it != ThinkingLevel.OFF) "On" else it.label }
+            .ifEmpty { listOf("On") }
+
     fun resolve(provider: ProviderConfig, requested: ThinkingLevel, maxOutput: Int, entry: com.androidharness.app.llm.ModelEntry?,
         config: CustomReasoningConfig?, selected: String?): ThinkingSpecs.ResolvedThinking {
         val base = ThinkingSpecs.resolve(provider, requested, maxOutput, entry)
-        if (config == null || config.levels.isEmpty()) return base
-        val choice = config.levels.firstOrNull { wire(it) == selected?.let(::wire) }
-            ?: config.levels.firstOrNull { native(it) == base.level }
-            ?: config.levels.last()
+        // Preserve newly reported vocabularies even before a future app adds enum presets for them.
+        val effective = config ?: base.spec.reportedLevels?.takeIf { names -> names.any { native(it) == null } }
+            ?.let { CustomReasoningConfig(it) }
+        if (effective == null || effective.levels.isEmpty()) return base
+        val choice = effective.levels.firstOrNull { wire(it) == selected?.let(::wire) }
+            ?: effective.levels.firstOrNull { config == null && native(it) == requested }
+            ?: effective.levels.firstOrNull { config == null && wire(it) == entry?.defaultReasoningEffort?.let(::wire) && requested == ThinkingLevel.OFF }
+            ?: effective.levels.firstOrNull { config == null && requested == ThinkingLevel.OFF && wire(it) != "disabled" }
+            ?: effective.levels.lastOrNull { config == null && requested in setOf(ThinkingLevel.MAX, ThinkingLevel.ULTRA) && wire(it) != "disabled" }
+            ?: effective.levels.firstOrNull { native(it) == base.level }
+            ?: effective.levels.last()
         val name = wire(choice)
         if (com.androidharness.app.llm.ReasoningDefaults.isLocal(provider)) return base.copy(
             level = if (name == "disabled") ThinkingLevel.OFF else ThinkingLevel.HIGH,
-            customConfig = config, customLevel = name)
-        val expression = com.androidharness.app.llm.ReasoningDefaults.effective(config, provider, base.spec)
+            customConfig = effective, customLevel = name)
+        val expression = com.androidharness.app.llm.ReasoningDefaults.effective(effective, provider, base.spec)
         val native = native(choice)
-        val budget = if (config.mapping.isBlank() && base.spec.style == ThinkingSpecs.Style.BUDGET)
+        val budget = if (effective.mapping.isBlank() && base.spec.style == ThinkingSpecs.Style.BUDGET)
             com.androidharness.app.llm.ReasoningDefaults.budgetFor(base.spec, name) else null
         val output = if (budget != null && budget > 0) maxOf(base.maxOutputTokens, budget + 4_096)
             .let { base.spec.outputMax?.let(it::coerceAtMost) ?: it } else base.maxOutputTokens
         // The selected string goes through the inherited/custom map without native-level clamping.
         return base.copy(level = native ?: if (name == "disabled") ThinkingLevel.OFF else ThinkingLevel.HIGH,
             spec = base.spec.copy(style = ThinkingSpecs.Style.AUTOMATIC), effort = null, budget = null,
-            maxOutputTokens = output, customConfig = config, customLevel = name, requestMapping = expression)
+            maxOutputTokens = output, customConfig = effective, customLevel = name, requestMapping = expression)
     }
 }

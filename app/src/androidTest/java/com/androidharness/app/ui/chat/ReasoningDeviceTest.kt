@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.viewModelScope
 import androidx.compose.ui.Modifier
 import androidx.room.Room
 import androidx.test.core.app.ActivityScenario
@@ -24,6 +27,8 @@ import com.androidharness.app.ui.chat.components.*
 import com.androidharness.app.ui.theme.HarnessTheme
 import java.io.File
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
@@ -34,6 +39,146 @@ import org.junit.runner.RunWith
 class ReasoningDeviceTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val context get() = instrumentation.targetContext
+
+    @Test fun modelSelectionDetectsLevelsForNormalMenuAndCustomEditorWithoutReplacingOverrides() = runBlocking {
+        val c = (context.applicationContext as com.androidharness.app.HarnessApp).container
+        val original = c.settings.settings.first()
+        val socket = java.net.ServerSocket(0)
+        val requests = java.util.concurrent.atomic.AtomicInteger()
+        val responseDelay = java.util.concurrent.atomic.AtomicLong()
+        val body = """{"data":[{"id":"new-model","effort":{"supported_levels":["low","high","max"],"default_level":"high"}}]}"""
+        val responseBody = java.util.concurrent.atomic.AtomicReference(body)
+        val server = Thread {
+            while (!socket.isClosed) try {
+                socket.accept().use { client ->
+                    client.soTimeout = 5000
+                    val reader = client.getInputStream().bufferedReader()
+                    val request = reader.readLine().orEmpty()
+                    while (!reader.readLine().isNullOrEmpty()) { }
+                    if (request.startsWith("GET /v1/models ")) requests.incrementAndGet()
+                    Thread.sleep(responseDelay.get())
+                    val bytes = responseBody.get().toByteArray()
+                    client.getOutputStream().apply {
+                        write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n".toByteArray())
+                        write(bytes); flush()
+                    }
+                }
+            } catch (_: java.io.IOException) { }
+        }.apply { isDaemon = true; start() }
+        val config = c.providers.add("Detected thinking fixture", ProviderType.OPENAI_COMPAT,
+            "http://127.0.0.1:${socket.localPort}/v1", "new-model", "fixture")
+        val sid = c.sessions.createSession("Detected reasoning fixture")
+        var vm: ChatViewModel? = null
+        try {
+            c.providers.addCustomModel(config.id, config.model)
+            c.providers.saveCatalog(config.id, listOf(ModelEntry(config.model)))
+            c.settings.setModelSelectionScope(true)
+            c.settings.setActiveSelection(config.id, config.model)
+            instrumentation.runOnMainSync { vm = ChatViewModel(c, sid) }
+            val model = requireNotNull(vm)
+            withTimeout(15000) { model.state.first { it.catalogs[config.id]?.singleOrNull()?.reasoningEfforts != null } }
+            val entry = model.state.value.catalogs.getValue(config.id).single()
+            assertTrue(entry.custom)
+            assertEquals(listOf("low", "high", "max"), entry.reasoningEfforts)
+            val editing = mutableStateOf(false)
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { it.setContent { HarnessTheme {
+                    val state by model.state.collectAsState()
+                    val options = RequestOptions(thinking = state.thinkingLevel, modelCatalogs = state.catalogs,
+                        customReasoning = state.reasoningConfigs, customThinkingLevels = state.customThinkingLevels)
+                    val resolved = options.resolveThinking(config)
+                    Surface(Modifier.fillMaxSize()) { Column {
+                        MainHeader("Detected reasoning", false, config.model, AgentMode.ACT,
+                            thinkingLevel = resolved.level, thinkingLevels = resolved.spec.levels,
+                            permissionMode = PermissionMode.CONFIRM_ALL, canUndo = false,
+                            onOpenDrawer = {}, onPickModel = {}, onOpenTerminal = {}, onSetThinking = model::setThinkingLevel,
+                            onSetPermission = {}, onSetMode = {}, onOpenContext = {}, onOpenUndo = {},
+                            onOpenFiles = {}, onOpenGitHub = {}, thinkingResolved = resolved, onCustomizeThinking = { editing.value = true },
+                            onSetCustomThinking = { model.setCustomThinking(config, it) })
+                        if (editing.value) CustomReasoningSheet(config, state.reasoningConfigs[CustomReasoning.key(config)],
+                            ThinkingSpecs.forProvider(config, entry), onDismiss = { editing.value = false },
+                            onSave = { model.saveReasoningConfig(config, it); editing.value = false },
+                            onDetectLevels = { model.detectReasoningLevels(config) })
+                    } }
+                } } }
+                tap("Thinking level"); await("Low"); await("High"); tap("Max")
+                withTimeout(10000) { model.state.first { it.thinkingLevel == ThinkingLevel.MAX } }
+                tap("Thinking level"); tap("Customize thinking")
+                await("Detected from provider"); await("Low"); await("High"); await("Max")
+                screenshot("detected-levels-editor")
+                responseDelay.set(800)
+                tap("Auto-detect levels"); await("Checking provider…")
+                await("Detected 3 levels. Save to apply.")
+                assertEquals(2, requests.get())
+                responseDelay.set(0)
+                screenshot("force-detected-editor")
+                tap("Close thinking settings")
+            }
+            val opts = RequestOptions(thinking = model.state.value.thinkingLevel, modelCatalogs = model.state.value.catalogs)
+            assertEquals("max", OpenAiCompatProvider(okhttp3.OkHttpClient(), ProviderFactory.json)
+                .buildRequestBody(config, "fixture", emptyList(), emptyList(), opts)["reasoning_effort"]!!.jsonPrimitive.content)
+            assertNull(model.state.value.reasoningConfigs[CustomReasoning.key(config)])
+            c.providers.refreshCatalog(config.id, automatic = true)
+            assertEquals(2, requests.get())
+            val custom = CustomReasoningConfig(listOf("My level"), """{"reasoning_effort":"high"}""")
+            c.settings.setReasoningConfig(CustomReasoning.key(config), custom)
+            assertNull(c.providers.refreshCatalog(config.id))
+            assertEquals(custom, c.settings.settings.first().reasoningConfigs[CustomReasoning.key(config)])
+            assertEquals(3, requests.get())
+            responseBody.set("""{"data":[{"id":"new-model","effort":{"supported_levels":["low","high","max","extreme"]}}]}""")
+            assertEquals(listOf("Low", "High", "Max", "Extreme"), model.detectReasoningLevels(config))
+            assertEquals(4, requests.get())
+            assertEquals(custom, c.settings.settings.first().reasoningConfigs[CustomReasoning.key(config)])
+            responseBody.set("{}")
+            c.providers.update(config, null)
+            assertNotNull(c.providers.refreshCatalog(config.id, automatic = true))
+            assertEquals(listOf("low", "high", "max", "extreme"), c.providers.catalog(config.id).single().reasoningEfforts)
+            assertEquals(custom, c.settings.settings.first().reasoningConfigs[CustomReasoning.key(config)])
+        } finally {
+            instrumentation.runOnMainSync { vm?.viewModelScope?.cancel() }
+            c.sessions.session(sid)?.let { c.sessions.deleteSession(it) }
+            c.providers.delete(config.id)
+            c.settings.restorePortable(original)
+            socket.close(); server.join(1000)
+        }
+    }
+
+    @Test fun forceDetectionKeepsCelAndKeepsTheDraftWhenRetryFails() {
+        val config = ProviderConfig("force-detection-fixture", "Fixture", ProviderType.OPENAI_COMPAT,
+            "https://fixture.invalid/v1", "new-model")
+        val mapping = """{"reasoning_effort": reasoningLevel}"""
+        val draft = CustomReasoningConfig(listOf("Low", "High"), mapping)
+        val detected = listOf("Minimal", "Low", "Medium", "High", "X-High", "Max", "Ultra", "Extreme")
+        val saved = mutableStateOf<CustomReasoningConfig?>(null)
+        var checks = 0
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            scenario.onActivity { it.setContent { HarnessTheme {
+                Surface(Modifier.fillMaxSize()) {
+                    CustomReasoningSheet(config, draft, ThinkingSpecs.forProvider(config), onDismiss = {},
+                        onSave = { saved.value = it }, onDetectLevels = {
+                            kotlinx.coroutines.delay(400)
+                            checks++
+                            if (checks > 1) error("This provider does not report reasoning levels for this model.")
+                            detected
+                        })
+                }
+            } } }
+            tap("Auto-detect levels"); await("Checking provider…")
+            await("Detected 8 levels. Save to apply.")
+            reveal("Extreme"); reveal("X-High", backwards = true)
+            screenshot("force-detection-all-levels")
+            reveal("Auto-detect levels", backwards = true)
+            tap("Auto-detect levels")
+            await("This provider does not report reasoning levels for this model.")
+            reveal("Extreme"); reveal("X-High", backwards = true)
+            tap("Save")
+            val until = SystemClock.uptimeMillis() + 10000
+            while (saved.value == null && SystemClock.uptimeMillis() < until) SystemClock.sleep(100)
+            assertEquals(detected, saved.value?.levels)
+            assertEquals(mapping, saved.value?.mapping)
+            assertEquals(2, checks)
+        }
+    }
 
     @Test fun migrationReopenBackupAndForkKeepReasoningWithoutLosingOldChats() = runBlocking {
         val name = "reasoning-${System.nanoTime()}.db"
@@ -241,7 +386,7 @@ class ReasoningDeviceTest {
         } finally { db.close(); context.deleteDatabase(name); prefs.restorePortable(original) }
     }
 
-    private fun reveal(text: String, contains: Boolean = false): AccessibilityNodeInfo {
+    private fun reveal(text: String, contains: Boolean = false, backwards: Boolean = false): AccessibilityNodeInfo {
         val deadline = SystemClock.uptimeMillis() + 10_000
         while (SystemClock.uptimeMillis() < deadline) {
             if (android.os.Build.VERSION.SDK_INT >= 33) instrumentation.uiAutomation.clearCache()
@@ -253,7 +398,7 @@ class ReasoningDeviceTest {
                 for (i in 0 until node.childCount) scrollable(node.getChild(i))?.let { return it }
                 return null
             }
-            scrollable(root)?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+            scrollable(root)?.performAction(if (backwards) AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD else AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
             instrumentation.waitForIdleSync()
             SystemClock.sleep(100)
         }
