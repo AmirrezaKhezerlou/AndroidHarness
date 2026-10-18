@@ -356,6 +356,9 @@ class AgentEngine(
             var thinking = StringBuilder()
             var calls = mutableListOf<ToolCallData>()
             var outputTokens = 0
+            var responseState: com.androidharness.app.core.ProviderMessageState? = null
+            var reasoningTokens: Int? = null
+            var reasoningSetting: String? = null
             var responseStarted = false
             var requestStartedNs = System.nanoTime()
             var firstTokenNs = 0L
@@ -395,6 +398,8 @@ class AgentEngine(
                         text.append(event.text)
                         emit(AgentEvent.Text(event.text))
                     }
+                    is StreamEvent.ResponseState -> responseState = event.state
+                    is StreamEvent.ThinkingConfigured -> reasoningSetting = event.label
                     is StreamEvent.ThinkingDelta -> {
                         if (event.text.isNotEmpty()) {
                             val now = System.nanoTime()
@@ -434,6 +439,7 @@ class AgentEngine(
                         }
                     }
                     is StreamEvent.Usage -> {
+                        reasoningTokens = event.reasoningTokens
                         outputTokens = event.outputTokens
                         emit(
                             AgentEvent.Usage(
@@ -464,6 +470,9 @@ class AgentEngine(
                     responseStarted = false
                     requestStartedNs = System.nanoTime()
                     outputTokens = 0
+                    responseState = null
+                    reasoningTokens = null
+                    reasoningSetting = null
                     firstTokenNs = 0L
                     lastTokenNs = 0L
                     text = StringBuilder()
@@ -495,6 +504,9 @@ class AgentEngine(
                         responseStarted = false
                         requestStartedNs = System.nanoTime()
                         outputTokens = 0
+                        responseState = null
+                        reasoningTokens = null
+                        reasoningSetting = null
                         firstTokenNs = 0L
                         lastTokenNs = 0L
                         text = StringBuilder()
@@ -533,7 +545,8 @@ class AgentEngine(
                     generationMs = ((System.nanoTime() - requestStartedNs) / 1_000_000).coerceAtLeast(1),
                     firstTokenMs = if (firstTokenNs > 0L) ((firstTokenNs - requestStartedNs) / 1_000_000).coerceAtLeast(1) else 0,
                     streamMs = if (lastTokenNs > firstTokenNs) ((lastTokenNs - firstTokenNs) / 1_000_000).coerceAtLeast(1) else 0,
-                )
+                    generation = com.androidharness.app.core.GenerationMetadata(reasoningTokens = reasoningTokens, reasoningSetting = reasoningSetting),
+                ).let { it.copy(generation = it.generation.copy(state = responseState?.boundTo(it))) }
                 working += assistant
                 emit(AgentEvent.AssistantCommitted(assistant))
             }
@@ -545,7 +558,7 @@ class AgentEngine(
                 }
                 wantsNudge -> continue
                 calls.isEmpty() -> {
-                    emit(AgentEvent.Finished(emptyAnswerReason(text.toString(), thinking.toString(), lastFinishReason)))
+                    emit(AgentEvent.Finished(emptyAnswerReason(text.toString(), thinking.toString(), lastFinishReason, reasoningTokens)))
                     break
                 }
             }
@@ -1282,6 +1295,9 @@ class AgentEngine(
             val text = StringBuilder()
             val calls = mutableListOf<ToolCallData>()
             val subThinking = StringBuilder()
+            var subState: com.androidharness.app.core.ProviderMessageState? = null
+            var subReasoningTokens: Int? = null
+            var subReasoningSetting: String? = null
             val managedFallback = kotlin.coroutines.coroutineContext[com.androidharness.app.llm.FallbackRun]?.policy()?.enabled == true
 
             // Same transient-failure retry policy as the main loop. Unlike the
@@ -1295,6 +1311,9 @@ class AgentEngine(
                     text.clear()
                     calls.clear()
                     subThinking.setLength(0)
+                    subState = null
+                    subReasoningTokens = null
+                    subReasoningSetting = null
                 },
                 hasOutput = { text.isNotEmpty() || calls.isNotEmpty() },
                 handleEvent = { event ->
@@ -1307,6 +1326,8 @@ class AgentEngine(
                         is StreamEvent.Retrying -> emitEvent(AgentEvent.Retrying(event.attempt, event.delayMs, event.reason))
                         is StreamEvent.TextDelta -> text.append(event.text)
                         is StreamEvent.ThinkingDelta -> subThinking.append(event.text)
+                        is StreamEvent.ResponseState -> subState = event.state
+                        is StreamEvent.ThinkingConfigured -> subReasoningSetting = event.label
                         is StreamEvent.ToolCallReady -> calls += workspaceCall(event.call, workspace)
                         is StreamEvent.ToolCallBatch -> calls += event.calls.map { workspaceCall(it, workspace) }
                         is StreamEvent.Batch -> event.events.forEach { nested ->
@@ -1318,16 +1339,17 @@ class AgentEngine(
                                 else -> {}
                             }
                         }
-                        is StreamEvent.Usage -> emitEvent(
-                            AgentEvent.Usage(
+                        is StreamEvent.Usage -> {
+                            subReasoningTokens = event.reasoningTokens
+                            emitEvent(AgentEvent.Usage(
                                 event.inputTokens, event.outputTokens,
                                 event.cachedInputTokens, event.cacheWriteTokens,
                                 config.model, config.name, cacheReported = event.cacheReported,
                                 cachePrices = if (com.androidharness.app.chatgpt.ChatGptProtocol.isProvider(config.id)) null else com.androidharness.app.llm.ModelsDev.exactCachePrices(config.baseUrl, config.model),
                                 parentCallId = parentCallId,
                                 providerKey = com.androidharness.app.llm.ModelsDev.providerKeyFor(config.baseUrl),
-                            )
-                        )
+                            ))
+                        }
                         else -> {}
                     }
                 },
@@ -1359,24 +1381,12 @@ class AgentEngine(
                 )
             }
 
-            history += ChatMessage(
-                role = Role.ASSISTANT,
-                text = text.toString(),
-                toolCalls = calls.toList(),
-                thinking = subThinking.toString(),
-            )
-            emitEvent(
-                AgentEvent.SubagentMessageCommitted(
-                    parentCallId,
-                    ChatMessage(
-                        role = Role.ASSISTANT,
-                        text = text.toString(),
-                        toolCalls = calls.toList(),
-                        thinking = subThinking.toString(),
-                        toolCallId = parentCallId,
-                    ),
-                )
-            )
+            val assistant = ChatMessage(
+                role = Role.ASSISTANT, text = text.toString(), toolCalls = calls.toList(), thinking = subThinking.toString(),
+                generation = com.androidharness.app.core.GenerationMetadata(reasoningTokens = subReasoningTokens, reasoningSetting = subReasoningSetting),
+            ).let { it.copy(generation = it.generation.copy(state = subState?.boundTo(it))) }
+            history += assistant
+            emitEvent(AgentEvent.SubagentMessageCommitted(parentCallId, assistant.copy(toolCallId = parentCallId)))
 
             if (calls.isEmpty()) {
                 // No more tool calls: this is the subagent's final answer.
@@ -1484,14 +1494,14 @@ class AgentEngine(
      * the stop looks normal. An answer WITH text is always normal, regardless
      * of how much reasoning accompanied it.
      */
-    private fun emptyAnswerReason(text: String, thinking: String?, finishReason: String?): String? {
+    private fun emptyAnswerReason(text: String, thinking: String?, finishReason: String?, reasoningTokens: Int? = null): String? {
         if (text.isNotBlank()) return null
-        val cutOff = finishReason.equals("length", ignoreCase = true) ||
-            finishReason.equals("max_tokens", ignoreCase = true)
+        val cutOff = finishReason?.lowercase() in setOf("length", "max_tokens", "max_output_tokens")
+        val reasoned = !thinking.isNullOrBlank() || (reasoningTokens ?: 0) > 0
         return when {
-            !thinking.isNullOrBlank() && cutOff ->
-                "Model spent its entire token budget on reasoning without producing an answer."
-            !thinking.isNullOrBlank() ->
+            reasoned && cutOff ->
+                "Model reached the output limit while reasoning. Increase the output limit or lower thinking, then retry."
+            reasoned ->
                 "Model stopped after reasoning without producing an answer."
             cutOff -> "Model hit the token limit before producing output."
             else -> "Model returned no output at all: the model may be down, rate-limited, or incompatible."

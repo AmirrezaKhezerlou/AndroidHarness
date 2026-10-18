@@ -56,6 +56,7 @@ data class MessageEntity(
     val turnId: String? = null,
     val createdAt: Long,
     val artifactJson: String? = null,
+    val generationJson: String? = null,
 )
 
 /** Stable ordering even when several messages share a millisecond. No schema change. */
@@ -504,13 +505,19 @@ interface HarnessDao {
         SessionFileChangeEntity::class,
         MessageFtsEntity::class,
     ],
-    version = 17,
+    version = 18,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun dao(): HarnessDao
 
     companion object {
+        val MIGRATION_17_18 = object : androidx.room.migration.Migration(17, 18) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN generationJson TEXT")
+            }
+        }
+
         val MIGRATION_16_17 = object : androidx.room.migration.Migration(16, 17) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE messages ADD COLUMN artifactJson TEXT")

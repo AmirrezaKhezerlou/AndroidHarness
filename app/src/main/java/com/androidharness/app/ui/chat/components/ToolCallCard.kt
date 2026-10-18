@@ -490,8 +490,9 @@ internal fun TurnActivityCard(
                     if (workedLabel.isNotBlank()) Text("Worked for $workedLabel", style = MaterialTheme.typography.labelSmall,
                         color = scheme.onSurfaceVariant)
                     activity.forEach { message ->
-                        if (message.thinking.isNotBlank()) {
-                            ThinkingBlock(message.thinking, durationMs = message.thinkingMs)
+                        if (message.thinking.isNotBlank() || (message.generation.reasoningTokens ?: 0) > 0) {
+                            ThinkingBlock(message.thinking, durationMs = message.thinkingMs,
+                                reportedTokens = message.generation.reasoningTokens, setting = message.generation.reasoningSetting)
                         }
                         if (message.text.isNotBlank()) AssistantText(message.text)
                         message.toolCalls.forEach { call ->

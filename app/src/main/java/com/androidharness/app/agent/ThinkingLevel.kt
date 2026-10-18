@@ -1,10 +1,8 @@
 package com.androidharness.app.agent
 
 /**
- * Canonical reasoning-effort ladder, ordered low→high like Hermes'
- * EFFORT_LADDER. This ONE enum is the vocabulary every surface speaks; what a
- * given provider/model actually accepts is decided by ThinkingSpecs and
- * clamped at request time, never invented per call site.
+ * Persisted reasoning intent. ThinkingSpecs resolves this to a model's native
+ * choices for both the UI and request. Ultra remains readable for older settings.
  */
 enum class ThinkingLevel(val label: String) {
     OFF("Off"),
@@ -22,8 +20,8 @@ enum class ThinkingLevel(val label: String) {
 
     /**
      * Budget in tokens for providers that take an explicit thinking budget.
-     * Budget families (Claude/Gemini natively) take every ladder rung;
-     * MINIMAL gets a tiny budget, ULTRA rides with MAX.
+     * Intermediate presets only. ThinkingSpecs supplies the real minimum and
+     * maximum from the provider/model and removes duplicate UI choices.
      */
     fun budgetTokens(@Suppress("UNUSED_PARAMETER") maxOutputTokens: Int): Int = when (this) {
         OFF -> 0
@@ -35,19 +33,4 @@ enum class ThinkingLevel(val label: String) {
         MAX, ULTRA -> 32_768
     }
 
-    /**
-     * OpenAI-compatible reasoning_effort string, or null to omit. Top-tier
-     * rungs fold onto "xhigh": whether the endpoint accepts the extended
-     * value (or prefers a native "max") is decided at request time from the
-     * model id (see OpenAiCompatProvider.supportsExtendedEffort).
-     */
-    val reasoningEffort: String?
-        get() = when (this) {
-            OFF -> null
-            MINIMAL -> "minimal"
-            LOW -> "low"
-            MEDIUM -> "medium"
-            HIGH -> "high"
-            XHIGH, MAX, ULTRA -> "xhigh"
-        }
 }

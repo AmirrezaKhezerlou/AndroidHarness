@@ -37,6 +37,103 @@ class GeminiProvider(
         tools: List<ToolSchema>,
         options: RequestOptions,
     ): Flow<StreamEvent> {
+        val thinking = options.resolveThinking(config)
+        val body = buildRequestBody(config, systemPrompt, messages, tools, options, thinking)
+
+        val url = config.baseUrl.trimEnd('/') +
+            "/models/${config.model}:streamGenerateContent?alt=sse"
+        val request = Request.Builder()
+            .url(url)
+            .header("x-goog-api-key", apiKey)
+            .post(body.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+            .apply { ProviderHeaders.apply(this, config) }
+            .build()
+
+
+        // usageMetadata arrives on every chunk with CUMULATIVE counts; keep the
+        // latest and emit exactly one Usage event when the stream ends so
+        // session totals aren't inflated by per-chunk additions and aren't
+        // truncated by a usage-only chunk after the final candidate.
+        var inputTokens = 0
+        var thoughtTokens: Int? = null
+        var outputTokens = 0
+        var cachedTokens = 0
+        var cacheReported = false
+        var finishReason: String? = null
+
+        return flow {
+            var callCounter = 0
+            val nativeParts = mutableListOf<JsonObject>()
+            emit(StreamEvent.ThinkingConfigured(thinking.detail))
+            ProviderFactory.sseJson(request, ProviderHeaders.client(config, client)).collect { el ->
+                val chunk = el as? JsonObject ?: return@collect
+
+                chunk["error"]?.jsonObjectOrAbsent()?.get("message")?.jsonPrimitive?.contentOrNull
+                    ?.let {
+                        emit(StreamEvent.Failure(it, code = providerErrorStatus(chunk["error"]?.jsonObjectOrAbsent()),
+                            errorCode = providerErrorCode(chunk["error"]?.jsonObjectOrAbsent())))
+                        return@collect
+                    }
+
+                chunk["usageMetadata"]?.jsonObjectOrAbsent()?.let { usage ->
+                    inputTokens = usage["promptTokenCount"]?.jsonPrimitive?.intOrNull ?: inputTokens
+                    outputTokens = usage["candidatesTokenCount"]?.jsonPrimitive?.intOrNull ?: outputTokens
+                    thoughtTokens = usage["thoughtsTokenCount"]?.jsonPrimitive?.intOrNull ?: thoughtTokens
+                    cacheReported = cacheReported || usage["cachedContentTokenCount"]?.jsonPrimitive?.intOrNull != null
+                    cachedTokens = usage["cachedContentTokenCount"]?.jsonPrimitive?.intOrNull ?: cachedTokens
+                }
+
+                val candidate = chunk["candidates"]?.jsonArrayOrAbsent()?.firstOrNull()?.jsonObjectOrAbsent()
+                // Sits on the candidate, a sibling of content, read it before
+                // the parts extraction below, which may come up empty.
+                candidate?.get("finishReason")?.jsonPrimitive?.contentOrNull
+                    ?.let { finishReason = it }
+                val parts = candidate?.get("content")?.jsonObjectOrAbsent()
+                    ?.get("parts")?.jsonArrayOrAbsent()
+                    ?: return@collect
+
+                val events = mutableListOf<StreamEvent>()
+                for (partEl in parts) {
+                    val part = partEl.jsonObjectOrAbsent() ?: continue
+                    nativeParts += part
+                    val isThought = part["thought"]?.jsonPrimitive?.booleanOrNull == true
+                    part["text"]?.jsonPrimitive?.contentOrNull?.let { text ->
+                        events += if (isThought) StreamEvent.ThinkingDelta(text)
+                        else StreamEvent.TextDelta(text)
+                    }
+                    part["functionCall"]?.jsonObjectOrAbsent()?.let { fc ->
+                        val name = fc["name"]?.jsonPrimitive?.contentOrNull ?: return@let
+                        val args = fc["args"]?.toString() ?: "{}"
+                        callCounter++
+                        events += StreamEvent.ToolCallReady(
+                            ToolCallData(
+                                id = fc["id"]?.jsonPrimitive?.contentOrNull ?: "gemini_${name}_$callCounter",
+                                name = name,
+                                argumentsJson = args,
+                            )
+                        )
+                    }
+                }
+                when {
+                    events.isEmpty() -> {}
+                    events.size == 1 -> emit(events.first())
+                    else -> emit(StreamEvent.Batch(events))
+                }
+            }
+
+            if (inputTokens > 0) {
+                emit(StreamEvent.Usage(inputTokens, outputTokens + (thoughtTokens ?: 0), cachedTokens,
+                    cacheReported = cacheReported, reasoningTokens = thoughtTokens))
+            }
+            if (nativeParts.isNotEmpty()) emit(StreamEvent.ResponseState(
+                com.androidharness.app.core.ProviderMessageState.of(config, "gemini", nativeParts)))
+            emit(StreamEvent.Done(finishReason))
+        }
+    }
+
+    internal fun buildRequestBody(config: ProviderConfig, systemPrompt: String, messages: List<ChatMessage>,
+        tools: List<ToolSchema>, options: RequestOptions,
+        thinking: com.androidharness.app.agent.ThinkingSpecs.ResolvedThinking = options.resolveThinking(config)): JsonObject {
         val body = buildJsonObject {
             putJsonObject("systemInstruction") {
                 putJsonArray("parts") {
@@ -44,7 +141,7 @@ class GeminiProvider(
                 }
             }
             putJsonArray("contents") {
-                serializeMessages(messages).forEach { add(it) }
+                serializeMessages(messages, config).forEach { add(it) }
             }
             if (tools.isNotEmpty()) {
                 putJsonArray("tools") {
@@ -62,120 +159,25 @@ class GeminiProvider(
                 }
             }
             putJsonObject("generationConfig") {
-                val model = config.model.substringAfterLast('/').lowercase()
-                val level = options.thinking
-                val off = level == com.androidharness.app.agent.ThinkingLevel.OFF
-                val catalog = ModelsDev.entry("google", config.model)
-                val supported = catalog?.reasoning != false &&
-                    (model.startsWith("gemini-2.5") || model.startsWith("gemini-3"))
-                val ceiling = catalog?.budgetMax ?: if ("pro" in model) 32_768 else 24_576
-                val budget = level.budgetTokens(options.maxOutputTokens).coerceAtMost(ceiling)
-                put("maxOutputTokens", if (supported && !off) maxOf(options.maxOutputTokens, budget + 4_096) else options.maxOutputTokens)
-                if (supported) {
+                put("maxOutputTokens", thinking.maxOutputTokens)
+                if (thinking.spec.style == com.androidharness.app.agent.ThinkingSpecs.Style.EFFORT ||
+                    thinking.spec.style == com.androidharness.app.agent.ThinkingSpecs.Style.BUDGET) {
                     putJsonObject("thinkingConfig") {
-                        if (model.startsWith("gemini-3")) {
-                            put("thinkingLevel", when (level) {
-                                com.androidharness.app.agent.ThinkingLevel.OFF,
-                                com.androidharness.app.agent.ThinkingLevel.MINIMAL -> if ("flash" in model) "minimal" else "low"
-                                com.androidharness.app.agent.ThinkingLevel.LOW -> "low"
-                                com.androidharness.app.agent.ThinkingLevel.MEDIUM -> if ("flash" in model) "medium" else "low"
-                                else -> "high"
-                            })
-                        } else {
-                            // Gemini 2.5 Pro cannot disable thinking.
-                            put("thinkingBudget", if ("pro" in model) maxOf(128, budget) else budget)
-                        }
-                        put("includeThoughts", !off)
+                        thinking.effort?.let { put("thinkingLevel", it) }
+                        thinking.budget?.let { put("thinkingBudget", it) }
+                        put("includeThoughts", thinking.level != com.androidharness.app.agent.ThinkingLevel.OFF)
                     }
                 }
             }
         }
 
-        val url = config.baseUrl.trimEnd('/') +
-            "/models/${config.model}:streamGenerateContent?alt=sse"
-        val request = Request.Builder()
-            .url(url)
-            .header("x-goog-api-key", apiKey)
-            .post(body.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
-            .apply { ProviderHeaders.apply(this, config) }
-            .build()
-
-        var callCounter = 0
-
-        // usageMetadata arrives on every chunk with CUMULATIVE counts; keep the
-        // latest and emit exactly one Usage event when the stream ends so
-        // session totals aren't inflated by per-chunk additions and aren't
-        // truncated by a usage-only chunk after the final candidate.
-        var inputTokens = 0
-        var outputTokens = 0
-        var cachedTokens = 0
-        var cacheReported = false
-        var finishReason: String? = null
-
-        return flow {
-            ProviderFactory.sseJson(request, ProviderHeaders.client(config, client)).collect { el ->
-                val chunk = el as? JsonObject ?: return@collect
-
-                chunk["error"]?.jsonObjectOrAbsent()?.get("message")?.jsonPrimitive?.contentOrNull
-                    ?.let {
-                        emit(StreamEvent.Failure(it, code = providerErrorStatus(chunk["error"]?.jsonObjectOrAbsent()),
-                            errorCode = providerErrorCode(chunk["error"]?.jsonObjectOrAbsent())))
-                        return@collect
-                    }
-
-                chunk["usageMetadata"]?.jsonObjectOrAbsent()?.let { usage ->
-                    inputTokens = usage["promptTokenCount"]?.jsonPrimitive?.intOrNull ?: inputTokens
-                    outputTokens = usage["candidatesTokenCount"]?.jsonPrimitive?.intOrNull ?: outputTokens
-                    cacheReported = cacheReported || usage["cachedContentTokenCount"]?.jsonPrimitive?.intOrNull != null
-                    cachedTokens = usage["cachedContentTokenCount"]?.jsonPrimitive?.intOrNull ?: cachedTokens
-                }
-
-                val candidate = chunk["candidates"]?.jsonArrayOrAbsent()?.firstOrNull()?.jsonObjectOrAbsent()
-                // Sits on the candidate, a sibling of content, read it before
-                // the parts extraction below, which may come up empty.
-                candidate?.get("finishReason")?.jsonPrimitive?.contentOrNull
-                    ?.let { finishReason = it }
-                val parts = candidate?.get("content")?.jsonObjectOrAbsent()
-                    ?.get("parts")?.jsonArrayOrAbsent()
-                    ?: return@collect
-
-                val events = mutableListOf<StreamEvent>()
-                for (partEl in parts) {
-                    val part = partEl.jsonObjectOrAbsent() ?: continue
-                    val isThought = part["thought"]?.jsonPrimitive?.booleanOrNull == true
-                    part["text"]?.jsonPrimitive?.contentOrNull?.let { text ->
-                        events += if (isThought) StreamEvent.ThinkingDelta(text)
-                        else StreamEvent.TextDelta(text)
-                    }
-                    part["functionCall"]?.jsonObjectOrAbsent()?.let { fc ->
-                        val name = fc["name"]?.jsonPrimitive?.contentOrNull ?: return@let
-                        val args = fc["args"]?.toString() ?: "{}"
-                        callCounter++
-                        events += StreamEvent.ToolCallReady(
-                            ToolCallData(
-                                id = "gemini_${name}_$callCounter",
-                                name = name,
-                                argumentsJson = args,
-                            )
-                        )
-                    }
-                }
-                when {
-                    events.isEmpty() -> {}
-                    events.size == 1 -> emit(events.first())
-                    else -> emit(StreamEvent.Batch(events))
-                }
-            }
-
-            if (inputTokens > 0) {
-                emit(StreamEvent.Usage(inputTokens, outputTokens, cachedTokens, cacheReported = cacheReported))
-            }
-            emit(StreamEvent.Done(finishReason))
-        }
+        return options.applyReasoningMapping(config, body)
     }
 
-    private fun serializeMessages(messages: List<ChatMessage>): List<JsonObject> {
+    internal fun serializeMessages(messages: List<ChatMessage>, config: ProviderConfig): List<JsonObject> {
         val out = ArrayList<JsonObject>(messages.size)
+        val nativeCallIds = messages.flatMap { m -> m.generation.state?.takeIf { it.matches(config, "gemini", m) }?.items.orEmpty() }
+            .mapNotNull { it["functionCall"]?.jsonObjectOrAbsent()?.get("id")?.jsonPrimitive?.contentOrNull }.toSet()
         var i = 0
         while (i < messages.size) {
             when (messages[i].role) {
@@ -202,7 +204,9 @@ class GeminiProvider(
                     val m = messages[i]
                     out += buildJsonObject {
                         put("role", "model")
-                        putJsonArray("parts") {
+                        val native = m.generation.state?.takeIf { it.matches(config, "gemini", m) }
+                        if (native != null) put("parts", kotlinx.serialization.json.JsonArray(native.items))
+                        else putJsonArray("parts") {
                             if (m.text.isNotBlank()) {
                                 add(buildJsonObject { put("text", m.text) })
                             }
@@ -228,6 +232,7 @@ class GeminiProvider(
                             val t = messages[i]
                             add(buildJsonObject {
                                 putJsonObject("functionResponse") {
+                                    t.toolCallId?.takeIf { it in nativeCallIds }?.let { put("id", it) }
                                     put("name", t.toolName ?: "unknown")
                                     putJsonObject("response") {
                                         put("output", t.text)

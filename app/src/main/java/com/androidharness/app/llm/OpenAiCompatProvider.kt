@@ -49,41 +49,111 @@ class OpenAiCompatProvider(
         tools: List<ToolSchema>,
         options: RequestOptions,
     ): Flow<StreamEvent> {
+        // GPT-6 tool use with reasoning requires Responses on the official OpenAI endpoint.
+        val nativeOpenAi = runCatching { java.net.URI(config.baseUrl).host == "api.openai.com" }.getOrDefault(false)
+        if (nativeOpenAi && config.model.substringAfterLast('/').startsWith("gpt-6") && tools.isNotEmpty()) {
+            return OpenAiResponsesProvider(client, json).streamChat(config.copy(type = ProviderType.OPENAI_RESPONSES),
+                apiKey, systemPrompt, messages, tools, options)
+        }
+        val thinking = options.resolveThinking(config)
+        val body = buildRequestBody(config, systemPrompt, messages, tools, options, thinking)
+
+        val request = buildRequest(
+            config,
+            apiKey,
+            body.toString().toRequestBody("application/json; charset=utf-8".toMediaType()),
+            options,
+        )
+
+        // Accumulates streamed tool-call fragments, keyed by CALL ID (with the
+        // stream index only as a fallback). Some gateways stream parallel tool
+        // calls with every fragment carrying index 0, keying by index merged
+        // them into one garbled call, silently dropping the second subagent.
+        return flow {
+            emit(StreamEvent.ThinkingConfigured(thinking.detail))
+            val acc = LinkedHashMap<String, Triple<StringBuilder, StringBuilder, StringBuilder>>()
+            val indexToId = HashMap<Int, String>()
+            // Some gateways attach a usage block to many (or every) SSE chunk
+            // instead of only the final one. Counting each would multiply the
+            // session totals, so keep the LAST usage seen, final counts are
+            // the authoritative ones, and emit exactly one Usage per request.
+            var pendingUsage: StreamEvent.Usage? = null
+            val reasoningDetails = mutableListOf<JsonObject>()
+            val reasoningText = StringBuilder()
+            var completed = false
+            var doneSeen = false
+            var failed = false
+            ProviderFactory.sseJson(request, ProviderHeaders.client(config, client), onDone = { completed = true }).takeWhile { el ->
+                val delta = (el as? JsonObject)?.get("choices")?.jsonArrayOrAbsent()?.firstOrNull()
+                    ?.jsonObjectOrAbsent()?.get("delta")?.jsonObjectOrAbsent()
+                delta?.get("reasoning_details")?.jsonArrayOrAbsent()?.forEach { item ->
+                    (item as? JsonObject)?.let { reasoningDetails += it }
+                }
+                ((delta?.get("reasoning_content") ?: delta?.get("reasoning")) as? JsonPrimitive)
+                    ?.contentOrNull?.let(reasoningText::append)
+                val events = parseChunk(el, acc, indexToId)
+                events.forEach { event ->
+                    if (event is StreamEvent.Done) doneSeen = true
+                    if (event is StreamEvent.Failure) failed = true
+                    if (event is StreamEvent.Usage) pendingUsage = event else emit(event)
+                }
+                // An in-band error terminates this attempt, just like a failed
+                // HTTP response. Never consume trailing deltas after it.
+                events.none { it is StreamEvent.Failure }
+            }.collect { }
+            pendingUsage?.let { emit(it) }
+            val state = buildJsonObject {
+                if (reasoningDetails.isNotEmpty()) put("reasoning_details", mergeReasoningDetails(reasoningDetails))
+                if (reasoningText.isNotEmpty()) put("reasoning_content", reasoningText.toString())
+            }
+            if (state.isNotEmpty()) emit(StreamEvent.ResponseState(
+                com.androidharness.app.core.ProviderMessageState.of(config, "chat_completions", listOf(state))))
+            // Some gateways close the stream after [DONE] without ever sending
+            // a finish_reason chunk, flush whatever fragments accumulated so
+            // requested tool calls aren't silently dropped.
+            val leftover = drainAccumulated(acc)
+            when {
+                leftover.size == 1 -> emit(StreamEvent.ToolCallReady(leftover.first()))
+                leftover.size > 1 -> emit(StreamEvent.ToolCallBatch(leftover))
+            }
+            // [DONE] is an explicit completion even when a gateway omits finish_reason.
+            if (completed && !doneSeen && !failed) emit(StreamEvent.Done())
+        }
+    }
+
+    internal fun buildRequestBody(config: ProviderConfig, systemPrompt: String, messages: List<ChatMessage>,
+        tools: List<ToolSchema>, options: RequestOptions,
+        thinking: com.androidharness.app.agent.ThinkingSpecs.ResolvedThinking = options.resolveThinking(config)): JsonObject {
         val host = config.baseUrl.lowercase()
         val body = buildJsonObject {
             put("model", config.model)
             put("stream", true)
             // o-series / gpt-5 models reject legacy max_tokens outright.
             if (usesMaxCompletionTokens(host, config.model)) {
-                put("max_completion_tokens", options.maxOutputTokens)
+                put("max_completion_tokens", thinking.maxOutputTokens)
             } else {
-                put("max_tokens", options.maxOutputTokens)
+                put("max_tokens", thinking.maxOutputTokens)
             }
-            // Reasoning/thinking. OpenRouter takes the unified `reasoning`
-            // object and normalizes it across every provider it fronts, this
-            // is the ONLY way to reach Claude/Gemini thinking through the
-            // OpenAI-compatible API, whose native budget parameters live on
-            // their own protocols. The models.dev catalog supplies the exact
-            // per-model effort vocabulary (or a bare enabled toggle); the
-            // shipped family table is the offline fallback. Other remote
-            // OpenAI-compat hosts get `reasoning_effort` for models with an
-            // enumerated/known vocabulary; inherent reasoners (DeepSeek) get
-            // nothing and bare-local servers never see an unknown field.
-            run {
-                if ("openrouter.ai" in host) {
-                    com.androidharness.app.agent.ThinkingSpecs
-                        .openRouterReasoning(config.model, options.thinking)
-                        ?.let { reasoning ->
-                            putJsonObject("reasoning") {
-                                reasoning.effort?.let { put("effort", it) }
-                                reasoning.enabled?.let { put("enabled", it) }
-                            }
-                        }
-                } else if (!Companion.isLocalHost(host)) {
-                    com.androidharness.app.agent.ThinkingSpecs
-                        .effortWire(config.model, options.thinking, ModelsDev.providerKeyFor(host))
-                        ?.let { put("reasoning_effort", it) }
+            if (com.androidharness.app.agent.ThinkingSpecs.usesRouterReasoning(config)) {
+                com.androidharness.app.agent.ThinkingSpecs.routerReasoning(config, options.thinking, thinking)?.let { reasoning ->
+                    putJsonObject("reasoning") {
+                        reasoning.effort?.let { put("effort", it) }
+                        reasoning.enabled?.let { put("enabled", it) }
+                        reasoning.maxTokens?.let { put("max_tokens", it) }
+                    }
                 }
+            } else {
+                thinking.spec.toggleField?.let { field ->
+                    putJsonObject(field) {
+                        put("type", if (thinking.level == com.androidharness.app.agent.ThinkingLevel.OFF) "disabled" else "enabled")
+                        if (thinking.level != com.androidharness.app.agent.ThinkingLevel.OFF) {
+                            if (ModelsDev.providerKeyFor(config.baseUrl)?.substringBefore("-coding-plan") in setOf("zhipuai", "zai")) put("clear_thinking", false)
+                            if (ModelsDev.providerKeyFor(config.baseUrl) in setOf("moonshotai", "moonshotai-cn") && config.model.startsWith("kimi-k2.6")) put("keep", "all")
+                        }
+                    }
+                }
+                thinking.effort?.takeUnless { it == "none" && thinking.spec.toggleField != null }
+                    ?.let { put("reasoning_effort", it) }
             }
             // Pins all requests of one session to the same cache shard where
             // the endpoint supports it; gated by host so strict OpenAI-compat
@@ -116,7 +186,7 @@ class OpenAiCompatProvider(
                         put("content", systemPrompt)
                     })
                 }
-                CompatHistory.normalize(messages).forEach { add(serializeMessage(it)) }
+                CompatHistory.normalize(messages).forEach { add(serializeMessage(it, config)) }
             }
             if (tools.isNotEmpty()) {
                 putJsonArray("tools") {
@@ -134,51 +204,7 @@ class OpenAiCompatProvider(
             }
         }
 
-        val request = buildRequest(
-            config,
-            apiKey,
-            body.toString().toRequestBody("application/json; charset=utf-8".toMediaType()),
-            options,
-        )
-
-        // Accumulates streamed tool-call fragments, keyed by CALL ID (with the
-        // stream index only as a fallback). Some gateways stream parallel tool
-        // calls with every fragment carrying index 0, keying by index merged
-        // them into one garbled call, silently dropping the second subagent.
-        return flow {
-            val acc = LinkedHashMap<String, Triple<StringBuilder, StringBuilder, StringBuilder>>()
-            val indexToId = HashMap<Int, String>()
-            // Some gateways attach a usage block to many (or every) SSE chunk
-            // instead of only the final one. Counting each would multiply the
-            // session totals, so keep the LAST usage seen, final counts are
-            // the authoritative ones, and emit exactly one Usage per request.
-            var pendingUsage: StreamEvent.Usage? = null
-            var completed = false
-            var doneSeen = false
-            var failed = false
-            ProviderFactory.sseJson(request, ProviderHeaders.client(config, client), onDone = { completed = true }).takeWhile { el ->
-                val events = parseChunk(el, acc, indexToId)
-                events.forEach { event ->
-                    if (event is StreamEvent.Done) doneSeen = true
-                    if (event is StreamEvent.Failure) failed = true
-                    if (event is StreamEvent.Usage) pendingUsage = event else emit(event)
-                }
-                // An in-band error terminates this attempt, just like a failed
-                // HTTP response. Never consume trailing deltas after it.
-                events.none { it is StreamEvent.Failure }
-            }.collect { }
-            pendingUsage?.let { emit(it) }
-            // Some gateways close the stream after [DONE] without ever sending
-            // a finish_reason chunk, flush whatever fragments accumulated so
-            // requested tool calls aren't silently dropped.
-            val leftover = drainAccumulated(acc)
-            when {
-                leftover.size == 1 -> emit(StreamEvent.ToolCallReady(leftover.first()))
-                leftover.size > 1 -> emit(StreamEvent.ToolCallBatch(leftover))
-            }
-            // [DONE] is an explicit completion even when a gateway omits finish_reason.
-            if (completed && !doneSeen && !failed) emit(StreamEvent.Done())
-        }
+        return options.applyReasoningMapping(config, body)
     }
 
     /**
@@ -243,7 +269,9 @@ class OpenAiCompatProvider(
                 ?: 0
             if (input != null || output != null) {
                 println("HarnessUsage: Parsed usage: input=$input, output=$output, cached=$cached, cacheWrite=$cacheWrite, raw=$usage")
-                events += StreamEvent.Usage(input ?: 0, output ?: 0, cached ?: 0, cacheWrite, cacheReported = cached != null)
+                events += StreamEvent.Usage(input ?: 0, output ?: 0, cached ?: 0, cacheWrite, cacheReported = cached != null,
+                    reasoningTokens = (usage["completion_tokens_details"] ?: usage["output_tokens_details"])
+                        ?.jsonObjectOrAbsent()?.get("reasoning_tokens")?.primitiveOrAbsent()?.intOrNull)
             }
         }
 
@@ -275,6 +303,13 @@ class OpenAiCompatProvider(
             }
         }
 
+        if (delta?.get("reasoning_content") == null && delta?.get("reasoning") == null) {
+            delta?.get("reasoning_details")?.jsonArrayOrAbsent()?.forEach { item ->
+                val detail = item.jsonObjectOrAbsent() ?: return@forEach
+                (detail["text"] ?: detail["summary"])?.primitiveOrAbsent()?.contentOrNull
+                    ?.takeIf { it.isNotEmpty() }?.let { events += StreamEvent.ThinkingDelta(it) }
+            }
+        }
         delta?.get("tool_calls")?.jsonArrayOrAbsent()?.forEach { tcEl ->
             val tc = tcEl.jsonObjectOrAbsent() ?: return@forEach
             val index = tc["index"]?.primitiveOrAbsent()?.intOrNull ?: 0
@@ -388,7 +423,23 @@ class OpenAiCompatProvider(
      */
     internal fun supportsUsageAccounting(baseUrl: String): Boolean = !Companion.isLocalHost(baseUrl)
 
-    private fun serializeMessage(m: ChatMessage): JsonObject = when (m.role) {
+    /** SSE details are fragments of indexed blocks; concatenation preserves encrypted signatures. */
+    internal fun mergeReasoningDetails(parts: List<JsonObject>): JsonArray {
+        val blocks = linkedMapOf<String, MutableMap<String, JsonElement>>()
+        parts.forEachIndexed { position, part ->
+            val key = part["type"].toString() + ":" + (part["index"]?.toString() ?: part["id"]?.toString() ?: "unindexed_$position")
+            val block = blocks.getOrPut(key) { linkedMapOf() }
+            part.forEach { (name, value) ->
+                val old = block[name] as? JsonPrimitive
+                if (name in setOf("text", "summary", "data") && old?.isString == true && (value as? JsonPrimitive)?.isString == true)
+                    block[name] = JsonPrimitive(old.content + value.content)
+                else block[name] = value
+            }
+        }
+        return JsonArray(blocks.values.map(::JsonObject))
+    }
+
+    private fun serializeMessage(m: ChatMessage, config: ProviderConfig): JsonObject = when (m.role) {
         Role.USER -> buildJsonObject {
             put("role", "user")
             if (m.imageData.isEmpty()) {
@@ -414,6 +465,12 @@ class OpenAiCompatProvider(
         Role.ASSISTANT -> buildJsonObject {
             put("role", "assistant")
             put("content", m.text)
+            val state = m.generation.state?.takeIf { it.matches(config, "chat_completions", m) }
+            state?.items?.firstOrNull()?.let { fields -> fields.forEach { (key, value) -> put(key, value) } }
+            if (ModelsDev.providerKeyFor(config.baseUrl) == "deepseek" && state == null) {
+                // Legacy messages have no provider-bound continuation; keep the required field present.
+                put("reasoning_content", "")
+            }
             if (m.toolCalls.isNotEmpty()) {
                 putJsonArray("tool_calls") {
                     m.toolCalls.forEach { call ->

@@ -5,6 +5,7 @@ import com.androidharness.app.core.ChatMessage
 import com.androidharness.app.core.Role
 import com.androidharness.app.core.ToolCallData
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -46,7 +47,7 @@ class OpenAiCompatStreamTest {
     private fun stream(provider: OpenAiCompatProvider) = provider.streamChat(
         config, "", "Help with coding.", listOf(ChatMessage(role = Role.USER, text = "Write a file.")),
         emptyList(), RequestOptions(),
-    )
+    ).filter { it !is StreamEvent.ThinkingConfigured && it !is StreamEvent.ResponseState }
 
     @Test fun `done sentinel completes text without a finish reason`() = runBlocking {
         val events = stream(provider(listOf("""{"choices":[{"delta":{"content":"complete summary"}}]}"""))).toList()

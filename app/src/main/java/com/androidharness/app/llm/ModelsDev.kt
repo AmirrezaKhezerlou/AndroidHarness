@@ -31,7 +31,7 @@ import kotlinx.serialization.json.doubleOrNull
  * provider API, which reports only *whether* reasoning exists, this
  * catalog enumerates each model's actual thinking vocabulary: effort values
  * ("low"/"high"/"xhigh"/"max"…), budget-token ranges, or a plain on/off
- * toggle. We fetch it weekly, cache it on disk, and let it override the
+ * toggle. We fetch it daily, cache it on disk, and let it override the
  * shipped [com.androidharness.app.agent.ThinkingSpecs] family table; when the
  * cache is absent or the model is unknown, the shipped table wins, so the app
  * degrades to today's behavior offline.
@@ -40,8 +40,8 @@ object ModelsDev {
 
     private const val API_URL = "https://models.dev/api.json"
     private const val CACHE_FILE = "models-dev.json"
-    /** Refetch at most weekly; the catalog moves fast but models ship faster. */
-    private const val STALE_MS = 7L * 24 * 60 * 60 * 1000
+    /** Refresh daily so model-specific reasoning vocabularies do not linger for a week. */
+    private const val STALE_MS = 24L * 60 * 60 * 1000
 
     /** List price in USD per 1,000,000 tokens for a model. */
     @Serializable
@@ -74,6 +74,8 @@ object ModelsDev {
         val cachePrices: CachePrices? = null,
         val tools: Boolean? = null,
         val imageInput: Boolean? = null,
+        val outputTokens: Int? = null,
+        val budgetMin: Int? = null,
     )
 
     /** One provider listed on models.dev: display name, endpoint, protocol hint. */
@@ -137,31 +139,38 @@ object ModelsDev {
 
     /** models.dev provider key for an endpoint, or null when unmapped. */
     fun providerKeyFor(baseUrl: String?): String? {
-        val host = baseUrl?.lowercase() ?: return null
-        val known = when {
-            "openrouter.ai" in host -> "openrouter"
-            "api.openai.com" in host -> "openai"
-            "api.anthropic.com" in host -> "anthropic"
-            "generativelanguage.googleapis.com" in host -> "google"
-            "api.deepseek.com" in host -> "deepseek"
-            "api.groq.com" in host -> "groq"
-            "api.mistral.ai" in host -> "mistral"
-            "api.moonshot" in host -> "moonshotai"
-            "bigmodel.cn" in host -> "zhipuai"
-            "dashscope" in host -> "alibaba"
-            "api.together.xyz" in host -> "togetherai"
-            "api.x.ai" in host -> "xai"
+        val endpoint = runCatching { java.net.URI(baseUrl ?: return null) }.getOrNull() ?: return null
+        val host = endpoint.host?.lowercase() ?: return null
+        val path = endpoint.path.orEmpty().trimEnd('/')
+        val known = when (host) {
+            "openrouter.ai" -> "openrouter"
+            "api.kilo.ai", "ai-gateway.kilo.ai" -> "kilo"
+            "api.openai.com" -> "openai"
+            "api.anthropic.com" -> "anthropic"
+            "generativelanguage.googleapis.com" -> "google"
+            "api.deepseek.com" -> "deepseek"
+            "api.groq.com" -> "groq"
+            "api.mistral.ai" -> "mistral"
+            "api.moonshot.ai" -> "moonshotai"
+            "api.moonshot.cn" -> "moonshotai-cn"
+            "api.kimi.com" -> "kimi-code-plan-cn"
+            "api.kimi.ai" -> "kimi-code-plan-global"
+            "open.bigmodel.cn" -> if (path.contains("/coding/")) "zhipuai-coding-plan" else "zhipuai"
+            "api.z.ai" -> if (path.contains("/coding/")) "zai-coding-plan" else "zai"
+            "dashscope.aliyuncs.com", "dashscope-intl.aliyuncs.com" -> "alibaba"
+            "api.together.xyz", "api.together.ai" -> "togetherai"
+            "api.x.ai" -> "xai"
+            "opencode.ai" -> if (path.startsWith("/zen/go") || path.startsWith("/inference/go")) "opencode-go"
+                else if (path.startsWith("/zen") || path.startsWith("/inference")) "opencode" else null
             else -> null
         }
-        if (known != null) return known
-        // Fallback: match by the catalog's own provider API host, so gateways
-        // we never hardcoded (there are ~180) still resolve their section.
-        val bare = host.substringAfter("://").substringBefore('/').substringBefore(':')
-        if (bare.isBlank()) return null
-        return providerInfos.firstOrNull { info ->
-            info.api?.lowercase()
-                ?.substringAfter("://")?.substringBefore('/')?.substringBefore(':') == bare
-        }?.id
+        // One host may expose several protocols/products. The most specific endpoint wins.
+        return providerInfos.mapNotNull { info ->
+            val api = runCatching { java.net.URI(info.api ?: "") }.getOrNull() ?: return@mapNotNull null
+            val apiPath = api.path.orEmpty().trimEnd('/')
+            if (api.host?.lowercase() == host && api.port == endpoint.port && api.scheme == endpoint.scheme &&
+                (path == apiPath || path.startsWith("$apiPath/"))) info.id to apiPath.length else null
+        }.maxByOrNull { it.second }?.first ?: known
     }
 
     /**
@@ -324,6 +333,7 @@ object ModelsDev {
                 var effort: List<String>? = null
                 var budget = false
                 var budgetMax: Int? = null
+                var budgetMin: Int? = null
                 var toggle = false
                 obj["reasoning_options"]?.jsonArray?.forEach { optEl ->
                     val opt = optEl.jsonObject
@@ -333,6 +343,7 @@ object ModelsDev {
                         "budget_tokens" -> {
                             budget = true
                             budgetMax = opt["max"]?.jsonPrimitive?.intOrNull
+                            budgetMin = opt["min"]?.jsonPrimitive?.intOrNull
                         }
                         "toggle" -> toggle = true
                     }
@@ -356,7 +367,8 @@ object ModelsDev {
                 }
                 val tools = (obj["tool_call"] as? JsonPrimitive)?.takeUnless { it.isString }?.booleanOrNull
                 val images = ModelCatalog.inputImages((obj["modalities"] as? JsonObject)?.get("input"))
-                models[modelId] = Entry(reasoning, effort, budget, budgetMax, toggle, ctx, cost, cachePrices, tools, images)
+                val output = obj["limit"]?.jsonObject?.get("output")?.jsonPrimitive?.intOrNull?.takeIf { it > 0 }
+                models[modelId] = Entry(reasoning, effort, budget, budgetMax, toggle, ctx, cost, cachePrices, tools, images, output, budgetMin)
             }
             entriesMap[providerId] = models
             providersList += ProviderInfo(

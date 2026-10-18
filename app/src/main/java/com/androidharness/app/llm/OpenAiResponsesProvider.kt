@@ -41,7 +41,8 @@ class OpenAiResponsesProvider(
         tools: List<ToolSchema>,
         options: RequestOptions,
     ): Flow<StreamEvent> {
-        val body = buildRequestBody(config, systemPrompt, messages, tools, options)
+        val thinking = options.resolveThinking(config)
+        val body = buildRequestBody(config, systemPrompt, messages, tools, options, thinking)
         val request = buildRequest(
             config,
             apiKey,
@@ -56,12 +57,27 @@ class OpenAiResponsesProvider(
             // Usage lands once on response.completed, hold it and emit after
             // the stream so each request tallies exactly once.
             var pendingUsage: StreamEvent.Usage? = null
+            val reasoningItems = linkedMapOf<String, JsonObject>()
+            emit(StreamEvent.ThinkingConfigured(thinking.detail))
             ProviderFactory.sseJson(request, ProviderHeaders.client(config, client)).collect { el ->
+                val event = el as? JsonObject
+                val item = event?.get("item") as? JsonObject
+                if (event?.get("type")?.jsonPrimitive?.contentOrNull == "response.output_item.done" &&
+                    item?.get("type")?.jsonPrimitive?.contentOrNull == "reasoning") {
+                    reasoningItems[item["id"]?.jsonPrimitive?.contentOrNull ?: reasoningItems.size.toString()] = item
+                }
+                (event?.get("response") as? JsonObject)?.get("output")?.jsonArrayOrAbsent()?.forEach { output ->
+                    val obj = output as? JsonObject ?: return@forEach
+                    if (obj["type"]?.jsonPrimitive?.contentOrNull == "reasoning")
+                        reasoningItems[obj["id"]?.jsonPrimitive?.contentOrNull ?: reasoningItems.size.toString()] = obj
+                }
                 parseEvent(el, acc).forEach { event ->
                     if (event is StreamEvent.Usage) pendingUsage = event else emit(event)
                 }
             }
             pendingUsage?.let { emit(it) }
+            if (reasoningItems.isNotEmpty()) emit(StreamEvent.ResponseState(
+                com.androidharness.app.core.ProviderMessageState.of(config, "responses", reasoningItems.values.toList())))
             // Defensive flush: a stream that ends without output_item.done.
             drainAccumulated(acc)?.let { emit(it) }
         }
@@ -91,30 +107,28 @@ class OpenAiResponsesProvider(
         messages: List<ChatMessage>,
         tools: List<ToolSchema>,
         options: RequestOptions,
-    ): JsonObject = buildJsonObject {
+        thinking: com.androidharness.app.agent.ThinkingSpecs.ResolvedThinking = options.resolveThinking(config),
+    ): JsonObject = options.applyReasoningMapping(config, buildJsonObject {
         put("model", config.model)
         put("stream", true)
         // Stateless: we resend full history every request, so nothing is kept server-side.
         put("store", false)
-        put("max_output_tokens", options.maxOutputTokens)
+        put("max_output_tokens", thinking.maxOutputTokens)
         put("instructions", systemPrompt)
         options.cacheKey?.takeIf { PromptCachePolicy.supportsKey(config.baseUrl) }?.let { key ->
             val cleanKey = key.take(64)
             put("prompt_cache_key", cleanKey)
             put("user", "pc_$cleanKey")
         }
-        run {
-            com.androidharness.app.agent.ThinkingSpecs
-                .effortWire(config.model, options.thinking, "openai")
-                ?.let { effort ->
-                    putJsonObject("reasoning") {
-                        put("effort", effort)
-                        if (effort != "none") put("summary", "auto")
-                    }
-                }
+        thinking.effort?.let { effort ->
+            putJsonObject("reasoning") {
+                put("effort", effort)
+                if (effort != "none") put("summary", "auto")
+            }
+            if (effort != "none") putJsonArray("include") { add(kotlinx.serialization.json.JsonPrimitive("reasoning.encrypted_content")) }
         }
         putJsonArray("input") {
-            messages.forEach { message -> serializeMessage(message).forEach { add(it) } }
+            messages.forEach { message -> serializeMessage(message, config).forEach { add(it) } }
         }
         if (tools.isNotEmpty()) {
             putJsonArray("tools") {
@@ -129,14 +143,14 @@ class OpenAiResponsesProvider(
                 }
             }
         }
-    }
+    })
 
     /**
      * One chat message → zero or more Responses input items. Tool calls and
      * their results are standalone items (`function_call` / `function_call_output`),
      * which is also the replay shape the API expects back.
      */
-    private fun serializeMessage(m: ChatMessage): List<JsonObject> = when (m.role) {
+    private fun serializeMessage(m: ChatMessage, config: ProviderConfig): List<JsonObject> = when (m.role) {
         Role.USER -> listOf(buildJsonObject {
             put("role", "user")
             putJsonArray("content") {
@@ -156,6 +170,7 @@ class OpenAiResponsesProvider(
         })
 
         Role.ASSISTANT -> buildList {
+            m.generation.state?.takeIf { it.matches(config, "responses", m) }?.items?.let { addAll(it) }
             if (m.text.isNotBlank()) {
                 add(buildJsonObject {
                     put("role", "assistant")
@@ -247,7 +262,7 @@ class OpenAiResponsesProvider(
                     ?.let { events += StreamEvent.TextDelta(it) }
 
             // Reasoning summaries stream as their own item type.
-            type == "response.reasoning_summary_text.delta" ->
+            type == "response.reasoning_summary_text.delta" || type == "response.reasoning_text.delta" ->
                 event["delta"]?.jsonPrimitive?.contentOrNull
                     ?.takeIf { it.isNotEmpty() }
                     ?.let { events += StreamEvent.ThinkingDelta(it) }
@@ -300,7 +315,8 @@ class OpenAiResponsesProvider(
                     val cacheWrite = inputDetails?.get("cache_creation_input_tokens")?.jsonPrimitive?.intOrNull
                         ?: usage["cache_creation_input_tokens"]?.jsonPrimitive?.intOrNull
                         ?: 0
-                    events += StreamEvent.Usage(input, output, cached ?: 0, cacheWrite, cacheReported = cached != null)
+                    events += StreamEvent.Usage(input, output, cached ?: 0, cacheWrite, cacheReported = cached != null,
+                        reasoningTokens = usage["output_tokens_details"]?.jsonObjectOrAbsent()?.get("reasoning_tokens")?.jsonPrimitive?.intOrNull)
                 }
                 drainAccumulated(acc)?.let { events += it }
                 val reason = if (type == "response.incomplete") {

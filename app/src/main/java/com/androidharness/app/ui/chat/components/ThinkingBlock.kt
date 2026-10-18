@@ -64,6 +64,8 @@ internal fun ThinkingBlock(
     live: Boolean = false,
     /** How long reasoning took, shown as "Thought for Ns" once committed. */
     durationMs: Long = 0,
+    reportedTokens: Int? = null,
+    setting: String? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val rotation by animateFloatAsState(
@@ -89,7 +91,7 @@ internal fun ThinkingBlock(
                 Text(
                     when {
                         live -> "Thinking…"
-                        durationMs > 0 -> "Thought for ${formatDuration(durationMs)}"
+                        durationMs > 0 -> "Thinking · ${formatDuration(durationMs)}"
                         else -> "Thinking"
                     },
                     style = MaterialTheme.typography.labelMedium,
@@ -98,7 +100,8 @@ internal fun ThinkingBlock(
                 )
                 if (!expanded) {
                     Text(
-                        "≈ ${com.androidharness.app.ui.common.formatTokens((thinking.length + 3) / 4)} tokens",
+                        if (reportedTokens != null) "${com.androidharness.app.ui.common.formatTokens(reportedTokens)} reasoning tokens"
+                        else "≈ ${com.androidharness.app.ui.common.formatTokens((thinking.length + 3) / 4)} text tokens",
                         style = MaterialTheme.typography.labelSmall,
                         color = scheme.onSurfaceVariant.copy(alpha = 0.7f),
                     )
@@ -147,7 +150,11 @@ internal fun ThinkingBlock(
                     )
                     Spacer(Modifier.width(10.dp))
                     Text(
-                        thinking,
+                        buildString {
+                            setting?.let { append(it).append("\n\n") }
+                            append(thinking.ifBlank { "The provider did not return a thinking summary." })
+                            if (durationMs > 0) append("\n\nDuration measures received thinking text.")
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         fontStyle = FontStyle.Italic,
                         color = scheme.onSurfaceVariant,

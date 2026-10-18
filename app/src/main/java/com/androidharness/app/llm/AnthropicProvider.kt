@@ -41,21 +41,45 @@ class AnthropicProvider(
         tools: List<ToolSchema>,
         options: RequestOptions,
     ): Flow<StreamEvent> {
+        val thinking = options.resolveThinking(config)
+        val body = buildRequestBody(config, systemPrompt, messages, tools, options, thinking)
+        val request = buildRequest(
+            config,
+            apiKey,
+            body.toString().toRequestBody("application/json; charset=utf-8".toMediaType()),
+            options,
+        )
+
+        return flow {
+            emit(StreamEvent.ThinkingConfigured(thinking.detail))
+            parseStream(ProviderFactory.sseJson(request, ProviderHeaders.client(config, client)), config).collect { emit(it) }
+        }
+    }
+
+    internal fun buildRequestBody(config: ProviderConfig, systemPrompt: String, messages: List<ChatMessage>,
+        tools: List<ToolSchema>, options: RequestOptions,
+        thinking: com.androidharness.app.agent.ThinkingSpecs.ResolvedThinking = options.resolveThinking(config)): JsonObject {
         val body = buildJsonObject {
             put("model", config.model)
-            // models.dev knows the model's true budget ceiling; clamp to it
-            // when present so X-High/Max never exceeds what the model accepts.
-            val catalogMax = ModelsDev.entry("anthropic", config.model)?.budgetMax
-            val budget = options.thinking.budgetTokens(options.maxOutputTokens)
-                .let { if (it == 0) 0 else maxOf(1_024, if (catalogMax != null) minOf(it, catalogMax) else it) }
-            // Anthropic requires max_tokens > thinking budget
-            put("max_tokens", if (budget > 0) maxOf(options.maxOutputTokens, budget + 4_096) else options.maxOutputTokens)
+            put("max_tokens", thinking.maxOutputTokens)
             put("stream", true)
-            if (budget > 0) {
-                putJsonObject("thinking") {
-                    put("type", "enabled")
-                    put("budget_tokens", budget)
+            when (thinking.spec.style) {
+                com.androidharness.app.agent.ThinkingSpecs.Style.ADAPTIVE -> {
+                    putJsonObject("thinking") {
+                        put("type", if (thinking.level == com.androidharness.app.agent.ThinkingLevel.OFF) "disabled" else if (ModelsDev.providerKeyFor(config.baseUrl) == "deepseek") "enabled" else "adaptive")
+                        if (thinking.level != com.androidharness.app.agent.ThinkingLevel.OFF && config.model.startsWith("claude-")) put("display", "summarized")
+                    }
+                    if (thinking.level != com.androidharness.app.agent.ThinkingLevel.OFF) {
+                        putJsonObject("output_config") { put("effort", thinking.effort!!) }
+                    }
                 }
+                com.androidharness.app.agent.ThinkingSpecs.Style.BUDGET -> {
+                    putJsonObject("thinking") {
+                        put("type", if (thinking.budget == 0) "disabled" else "enabled")
+                        thinking.budget?.takeIf { it > 0 }?.let { put("budget_tokens", it) }
+                    }
+                }
+                else -> {}
             }
             // System as a content array with a cache breakpoint, the system
             // prompt and tool schemas stay identical across turns, so they
@@ -68,7 +92,7 @@ class AnthropicProvider(
                 })
             }
             putJsonArray("messages") {
-                applyCacheBreakpoints(serializeMessages(messages)).forEach { add(it) }
+                applyCacheBreakpoints(serializeMessages(messages, config)).forEach { add(it) }
             }
             if (tools.isNotEmpty()) {
                 val sortedTools = tools.sortedBy { it.name }
@@ -91,19 +115,14 @@ class AnthropicProvider(
             }
         }
 
-        val request = buildRequest(
-            config,
-            apiKey,
-            body.toString().toRequestBody("application/json; charset=utf-8".toMediaType()),
-            options,
-        )
-
-        return parseStream(ProviderFactory.sseJson(request, ProviderHeaders.client(config, client)))
+        return options.applyReasoningMapping(config, body)
     }
 
-    internal fun parseStream(events: Flow<JsonElement>): Flow<StreamEvent> = flow {
+    internal fun parseStream(events: Flow<JsonElement>, config: ProviderConfig? = null): Flow<StreamEvent> = flow {
         // content block index -> (id, name, accumulated input json)
         val toolBlocks = TreeMap<Int, Triple<String, String, StringBuilder>>()
+        val nativeBlocks = TreeMap<Int, MutableMap<String, JsonElement>>()
+        val nativeInputs = mutableMapOf<Int, StringBuilder>()
         var uncachedTokens = 0
         var outputTokens = 0
         var pendingUsage: StreamEvent.Usage? = null
@@ -132,7 +151,33 @@ class AnthropicProvider(
 
         events.mapNotNull { el ->
             val event = el as? JsonObject ?: return@mapNotNull null
-            when (event["type"]?.jsonPrimitive?.contentOrNull) {
+            val type = event["type"]?.jsonPrimitive?.contentOrNull
+            val blockIndex = event["index"]?.jsonPrimitive?.intOrNull
+            if (blockIndex != null) {
+                when (type) {
+                    "content_block_start" -> event["content_block"]?.jsonObjectOrAbsent()?.let { nativeBlocks[blockIndex] = it.toMutableMap() }
+                    "content_block_delta" -> {
+                        val delta = event["delta"]?.jsonObjectOrAbsent()
+                        val block = nativeBlocks[blockIndex]
+                        if (delta != null && block != null) {
+                            listOf("text", "thinking", "signature").forEach { key ->
+                                delta[key]?.jsonPrimitive?.contentOrNull?.let { fragment ->
+                                    block[key] = JsonPrimitive((block[key] as? JsonPrimitive)?.content.orEmpty() + fragment)
+                                }
+                            }
+                            delta["partial_json"]?.jsonPrimitive?.contentOrNull?.let {
+                                nativeInputs.getOrPut(blockIndex) { StringBuilder() }.append(it)
+                            }
+                        }
+                    }
+                    "content_block_stop" -> nativeInputs.remove(blockIndex)?.let { input ->
+                        runCatching { json.parseToJsonElement(input.toString()) }.getOrNull()?.let {
+                            nativeBlocks[blockIndex]?.set("input", it)
+                        }
+                    }
+                }
+            }
+            when (type) {
                 "message_start" -> {
                     updateUsage(event["message"]?.jsonObjectOrAbsent()?.get("usage")?.jsonObjectOrAbsent())
                     null
@@ -210,6 +255,8 @@ class AnthropicProvider(
             if (event is StreamEvent.Done) {
                 pendingUsage?.let { emit(it) }
                 pendingUsage = null
+                if (config != null && nativeBlocks.isNotEmpty()) emit(StreamEvent.ResponseState(
+                    com.androidharness.app.core.ProviderMessageState.of(config, "anthropic", nativeBlocks.values.map(::JsonObject))))
             }
             emit(event)
         }
@@ -283,7 +330,7 @@ class AnthropicProvider(
         return JsonObject(msg.toMutableMap() + ("content" to marked))
     }
 
-    private fun serializeMessages(messages: List<ChatMessage>): List<JsonObject> {
+    internal fun serializeMessages(messages: List<ChatMessage>, config: ProviderConfig? = null): List<JsonObject> {
         val out = ArrayList<JsonObject>(messages.size)
         var i = 0
         while (i < messages.size) {
@@ -323,7 +370,9 @@ class AnthropicProvider(
                     val m = messages[i]
                     out += buildJsonObject {
                         put("role", "assistant")
-                        putJsonArray("content") {
+                        val native = config?.let { cfg -> m.generation.state?.takeIf { it.matches(cfg, "anthropic", m) } }
+                        if (native != null) put("content", JsonArray(native.items))
+                        else putJsonArray("content") {
                             if (m.text.isNotBlank()) {
                                 add(buildJsonObject {
                                     put("type", "text")

@@ -63,4 +63,5 @@ data class ChatMessage(
     val id: String? = null,
     val createdAt: Long = 0,
     val artifact: com.androidharness.app.artifacts.ChatArtifact? = null,
+    val generation: GenerationMetadata = GenerationMetadata(),
 )

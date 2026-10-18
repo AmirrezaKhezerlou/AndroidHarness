@@ -168,11 +168,12 @@ class OpenAiResponsesProviderTest {
     }
 
     @Test
-    fun `off thinking omits the reasoning object entirely`() {
+    fun `off thinking explicitly sends none when the model supports it`() {
         val body = provider.buildRequestBody(
             config, "sys", listOf(ChatMessage(role = Role.USER, text = "hi")), emptyList(),
             RequestOptions(thinking = ThinkingLevel.OFF),
         )
-        assertNull(body["reasoning"])
+        assertEquals("none", body["reasoning"]!!.jsonObject["effort"]!!.jsonPrimitive.content)
+        assertNull(body["reasoning"]!!.jsonObject["summary"])
     }
 }

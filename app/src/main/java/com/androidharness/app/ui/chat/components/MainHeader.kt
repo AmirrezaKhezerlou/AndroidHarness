@@ -1,6 +1,7 @@
 package com.androidharness.app.ui.chat.components
 
 import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.filled.Add
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -88,6 +89,9 @@ internal fun MainHeader(
     onOpenWebPreview: () -> Unit = {},
     modelScopeLabel: String? = null,
     workspaceName: String? = null,
+    thinkingResolved: com.androidharness.app.agent.ThinkingSpecs.ResolvedThinking? = null,
+    onCustomizeThinking: (() -> Unit)? = null,
+    onSetCustomThinking: (String) -> Unit = {},
 ) {
     var menu by remember { mutableStateOf(false) }
     var thinkingMenu by remember { mutableStateOf(false) }
@@ -98,7 +102,7 @@ internal fun MainHeader(
     if (com.androidharness.app.ui.LocalDesktopLayout.current) {
         DesktopConversationHeader(sessionTitle, busy, pickerLabel, thinkingLevel, thinkingLevels, mode,
             permissionMode, onPickModel, onSetThinking, onSetMode, onSetPermission,
-            onOpenContext, onOpenUndo, canUndo, onOpenGitHub, canOpenGitHub, onOpenWebPreview)
+            onOpenContext, onOpenUndo, canUndo, onOpenGitHub, canOpenGitHub, onOpenWebPreview, thinkingResolved, onCustomizeThinking, onSetCustomThinking)
         return
     }
 
@@ -145,7 +149,6 @@ internal fun MainHeader(
                             tint = scheme.onSurfaceVariant,
                         )
                     }
-
                     Box {
                         IconButton(onClick = { menu = true }) {
                             Icon(painterResource(R.drawable.ic_chat_ellipsis_vertical), contentDescription = "More options", modifier = Modifier.size(18.dp))
@@ -195,7 +198,7 @@ internal fun MainHeader(
                                 },
                             )
                             DropdownMenuItem(
-                                text = { Text("Thinking · ${thinkingLevel.label}") },
+                                text = { Text("Thinking · ${thinkingResolved?.label ?: thinkingLevel.label}") },
                                 leadingIcon = {
                                     Icon(
                                         painterResource(R.drawable.ic_chat_sparkles),
@@ -285,16 +288,23 @@ internal fun MainHeader(
                     }
                 }
                 Row(
-                        Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, bottom = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
+                    Modifier.fillMaxWidth().padding(start = 18.dp, end = 10.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                         HeaderModelPicker(pickerLabel, onPickModel, Modifier.weight(1f, fill = false), scopeLabel = modelScopeLabel)
-                        if (thinkingLevels.isNotEmpty()) {
+                        if (thinkingResolved?.customConfig != null || thinkingLevels.isNotEmpty() || thinkingResolved?.spec?.style == com.androidharness.app.agent.ThinkingSpecs.Style.AUTOMATIC) {
                             Spacer(Modifier.width(8.dp))
                             HeaderThinkingControl(thinkingLevel, thinkingLevels, thinkingMenu,
-                                { thinkingMenu = it }, onSetThinking, onPickModel)
+                                { thinkingMenu = it }, onSetThinking, onPickModel, thinkingResolved, busy, onCustomizeThinking, onSetCustomThinking)
                         }
                     }
+                    Spacer(Modifier.width(8.dp))
+                    IconButton(onClick = onOpenGitHub, enabled = canOpenGitHub) {
+                        Icon(painterResource(R.drawable.ic_github), contentDescription = "Open GitHub",
+                            modifier = Modifier.size(18.dp))
+                    }
+                }
             }
         }
         HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.5f))
@@ -308,6 +318,9 @@ private fun DesktopConversationHeader(
     onModel: () -> Unit, onThinking: (ThinkingLevel) -> Unit, onMode: (AgentMode) -> Unit,
     onPermission: (PermissionMode) -> Unit, onContext: () -> Unit, onUndo: () -> Unit,
     canUndo: Boolean, onGitHub: () -> Unit, canGitHub: Boolean, onPreview: () -> Unit,
+    thinkingResolved: com.androidharness.app.agent.ThinkingSpecs.ResolvedThinking?,
+    onCustomizeThinking: (() -> Unit)?,
+    onSetCustomThinking: (String) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     var menu by remember { mutableStateOf(false) }
@@ -319,9 +332,13 @@ private fun DesktopConversationHeader(
                 fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (busy) androidx.compose.material3.CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 1.5.dp)
             HeaderModelPicker(model, onModel, Modifier.widthIn(max = 180.dp))
-            if (levels.isNotEmpty()) HeaderThinkingControl(thinking, levels, thinkingMenu, { thinkingMenu = it }, onThinking, onModel)
+            if (thinkingResolved?.customConfig != null || levels.isNotEmpty() || thinkingResolved?.spec?.style == com.androidharness.app.agent.ThinkingSpecs.Style.AUTOMATIC)
+                HeaderThinkingControl(thinking, levels, thinkingMenu, { thinkingMenu = it }, onThinking, onModel, thinkingResolved, busy, onCustomizeThinking, onSetCustomThinking)
             TextButton(onClick = { onMode(if (mode == AgentMode.PLAN) AgentMode.ACT else AgentMode.PLAN) }) {
                 Text(if (mode == AgentMode.PLAN) "Plan" else "Act", style = MaterialTheme.typography.labelMedium)
+            }
+            IconButton(onClick = onGitHub, enabled = canGitHub, modifier = Modifier.size(36.dp)) {
+                Icon(painterResource(R.drawable.ic_github), "Open GitHub", Modifier.size(18.dp))
             }
             Box {
                 IconButton(onClick = { menu = true }, modifier = Modifier.size(36.dp)) {
@@ -372,13 +389,17 @@ private fun HeaderThinkingControl(
     onMenuChange: (Boolean) -> Unit,
     onSetThinking: (ThinkingLevel) -> Unit,
     onPickModel: () -> Unit,
+    resolved: com.androidharness.app.agent.ThinkingSpecs.ResolvedThinking? = null,
+    appliesNext: Boolean = false,
+    onCustomize: (() -> Unit)? = null,
+    onCustomLevel: (String) -> Unit = {},
 ) {
     val scheme = MaterialTheme.colorScheme
-    val thinkingOn = thinkingLevel != ThinkingLevel.OFF
+    val thinkingOn = resolved?.active ?: (thinkingLevel != ThinkingLevel.OFF)
     Box {
         // The visible badge stays small; clickable expands its touch target as needed.
         Box(
-            Modifier.heightIn(min = 36.dp).clip(RoundedCornerShape(8.dp)).clickable { onMenuChange(true) },
+            Modifier.widthIn(max = 148.dp).heightIn(min = 36.dp).clip(RoundedCornerShape(8.dp)).clickable { onMenuChange(true) },
             contentAlignment = Alignment.Center,
         ) {
             Surface(
@@ -391,7 +412,7 @@ private fun HeaderThinkingControl(
                     Icon(painterResource(R.drawable.ic_chat_sparkles), contentDescription = "Thinking level", modifier = Modifier.size(14.dp),
                         tint = if (thinkingOn) scheme.primary else scheme.onSurfaceVariant)
                     Spacer(Modifier.width(4.dp))
-                    Text(thinkingLevel.label, maxLines = 1, style = MaterialTheme.typography.labelSmall,
+                    Text(resolved?.label ?: thinkingLevel.label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Medium)
                 }
             }
@@ -400,26 +421,35 @@ private fun HeaderThinkingControl(
             expanded = thinkingMenu,
             onDismissRequest = { onMenuChange(false) },
         ) {
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        "Thinking level",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = scheme.onSurfaceVariant,
-                    )
-                },
-                onClick = {},
-                enabled = false,
-            )
-            thinkingLevels.forEach { entry ->
+            Row(Modifier.widthIn(min = 240.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Thinking level", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+                if (onCustomize != null) IconButton(onClick = { onMenuChange(false); onCustomize() }) {
+                    Icon(Icons.Filled.Add, "Customize thinking", Modifier.size(19.dp))
+                }
+            }
+            if (appliesNext) {
+                Text("Applies to your next message", Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.labelSmall, color = scheme.primary)
+            }
+            resolved?.detail?.let { detail ->
+                Text(detail, Modifier.widthIn(max = 280.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+            }
+            resolved?.customConfig?.levels?.forEach { name ->
+                DropdownMenuItem(text = { Text(com.androidharness.app.agent.CustomReasoning.label(name)) },
+                    trailingIcon = { if (resolved.customLevel == com.androidharness.app.agent.CustomReasoning.wire(name))
+                        Icon(Icons.Filled.Check, "Selected", tint = scheme.primary) },
+                    onClick = { onCustomLevel(name); onMenuChange(false) })
+            }
+            if (resolved?.customConfig == null) thinkingLevels.forEach { entry ->
                 DropdownMenuItem(
                     text = {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text(entry.label, Modifier.weight(1f))
-                            if (entry == thinkingLevel) {
+                            Text(resolved?.optionLabel(entry) ?: entry.label, Modifier.weight(1f))
+                            if (entry == (resolved?.level ?: thinkingLevel)) {
                                 Icon(Icons.Filled.Check, contentDescription = "Selected", tint = scheme.primary)
                             }
                         }

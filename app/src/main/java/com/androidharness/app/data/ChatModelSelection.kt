@@ -23,6 +23,7 @@ data class ChatModelSelection(
     val planning: ChatModelChoice? = null,
     val execution: ChatModelChoice? = null,
     val thinking: ThinkingLevel = ThinkingLevel.OFF,
+    val customThinkingLevels: Map<String, String> = emptyMap(),
 ) {
     fun choose(target: ChatModelTarget, choice: ChatModelChoice): ChatModelSelection = when (target) {
         ChatModelTarget.ACTIVE -> copy(active = choice)
@@ -55,7 +56,7 @@ data class ChatModelSelection(
             val active = choice(settings.activeProviderId, settings.activeModel, null)
             return ChatModelSelection(active,
                 choice(settings.planningProviderId, settings.planningModel, active),
-                choice(settings.executionProviderId, settings.executionModel, active), settings.thinkingLevel)
+                choice(settings.executionProviderId, settings.executionModel, active), settings.thinkingLevel, settings.customThinkingLevels)
         }
     }
 }
@@ -131,6 +132,19 @@ class ChatModelRepository(
             val selection = sessions.initializeModelSelection(sid,
                 ChatModelSelection.from(prefs, providers.providers.first()))
             sessions.saveModelSelection(sid, selection.copy(thinking = level))
+        }
+    }
+
+    suspend fun setCustomThinking(sessionId: String?, key: String, level: String?) = edits.withLock {
+        val prefs = settings.settings.first()
+        if (prefs.sameModelAcrossChats) settings.setCustomThinkingLevel(key, level)
+        else {
+            val sid = requireNotNull(sessionId) { "Open a chat before choosing its thinking level." }
+            val selection = sessions.initializeModelSelection(sid,
+                ChatModelSelection.from(prefs, providers.providers.first()))
+            val levels = selection.customThinkingLevels.toMutableMap()
+            if (level == null) levels.remove(key) else levels[key] = level
+            sessions.saveModelSelection(sid, selection.copy(customThinkingLevels = levels))
         }
     }
 

@@ -32,6 +32,8 @@ data class AppSettings(
     val disabledProviderIds: Set<String> = emptySet(),
     val fallbackPolicy: com.androidharness.app.llm.FallbackPolicy = com.androidharness.app.llm.FallbackPolicy(),
     val thinkingLevel: ThinkingLevel = ThinkingLevel.OFF,
+    val reasoningConfigs: Map<String, com.androidharness.app.agent.CustomReasoningConfig> = emptyMap(),
+    val customThinkingLevels: Map<String, String> = emptyMap(),
     val maxContextTokens: Int = DEFAULT_MAX_CONTEXT,
     val maxOutputTokens: Int = DEFAULT_MAX_OUTPUT,
     /** Tool-call iterations per run. 0 = unlimited. */
@@ -116,6 +118,28 @@ class SettingsRepository(private val context: Context) {
         context.settingsStore.edit { it[Keys.FALLBACK_POLICY] = encoded }
     }
 
+    private fun decodeReasoningConfigs(raw: String?): Map<String, com.androidharness.app.agent.CustomReasoningConfig> =
+        raw?.let { kotlinx.serialization.json.Json.decodeFromString(it) } ?: emptyMap()
+
+    private fun decodeCustomLevels(raw: String?): Map<String, String> =
+        raw?.let { kotlinx.serialization.json.Json.decodeFromString(it) } ?: emptyMap()
+
+    suspend fun setReasoningConfig(key: String, config: com.androidharness.app.agent.CustomReasoningConfig?) {
+        context.settingsStore.edit { prefs ->
+            val saved = decodeReasoningConfigs(prefs[Keys.REASONING_CONFIGS]).toMutableMap()
+            if (config == null) saved.remove(key) else saved[key] = config
+            prefs[Keys.REASONING_CONFIGS] = kotlinx.serialization.json.Json.encodeToString(saved)
+        }
+    }
+
+    suspend fun setCustomThinkingLevel(key: String, level: String?) {
+        context.settingsStore.edit { prefs ->
+            val saved = decodeCustomLevels(prefs[Keys.CUSTOM_THINKING_LEVELS]).toMutableMap()
+            if (level == null) saved.remove(key) else saved[key] = level
+            prefs[Keys.CUSTOM_THINKING_LEVELS] = kotlinx.serialization.json.Json.encodeToString(saved)
+        }
+    }
+
     private object Keys {
         val PERMISSION_MODE = stringPreferencesKey("permission_mode")
         val SUBAGENT_FULL_ACCESS = booleanPreferencesKey("subagent_full_access")
@@ -129,6 +153,8 @@ class SettingsRepository(private val context: Context) {
         val DISABLED_PROVIDERS = stringSetPreferencesKey("disabled_providers")
         val FALLBACK_POLICY = stringPreferencesKey("fallback_policy")
         val THINKING_LEVEL = stringPreferencesKey("thinking_level")
+        val REASONING_CONFIGS = stringPreferencesKey("reasoning_configs")
+        val CUSTOM_THINKING_LEVELS = stringPreferencesKey("custom_thinking_levels")
         val MAX_CONTEXT = intPreferencesKey("max_context_tokens")
         val MAX_OUTPUT = intPreferencesKey("max_output_tokens")
         val MAX_ITERATIONS = intPreferencesKey("max_iterations")
@@ -185,6 +211,8 @@ class SettingsRepository(private val context: Context) {
             thinkingLevel = prefs[Keys.THINKING_LEVEL]
                 ?.let { runCatching { ThinkingLevel.valueOf(it) }.getOrNull() }
                 ?: ThinkingLevel.OFF,
+            reasoningConfigs = decodeReasoningConfigs(prefs[Keys.REASONING_CONFIGS]),
+            customThinkingLevels = decodeCustomLevels(prefs[Keys.CUSTOM_THINKING_LEVELS]),
             maxContextTokens = prefs[Keys.MAX_CONTEXT] ?: AppSettings.DEFAULT_MAX_CONTEXT,
             maxOutputTokens = prefs[Keys.MAX_OUTPUT] ?: AppSettings.DEFAULT_MAX_OUTPUT,
             maxIterations = prefs[Keys.MAX_ITERATIONS] ?: AppSettings.DEFAULT_MAX_ITERATIONS,
@@ -238,6 +266,8 @@ class SettingsRepository(private val context: Context) {
             p[Keys.DISABLED_PROVIDERS] = s.disabledProviderIds
             p[Keys.FALLBACK_POLICY] = com.androidharness.app.llm.FallbackPolicy.encode(s.fallbackPolicy)
             p[Keys.THINKING_LEVEL] = s.thinkingLevel.name
+            p[Keys.REASONING_CONFIGS] = kotlinx.serialization.json.Json.encodeToString(s.reasoningConfigs)
+            p[Keys.CUSTOM_THINKING_LEVELS] = kotlinx.serialization.json.Json.encodeToString(s.customThinkingLevels)
             p[Keys.MAX_CONTEXT] = s.maxContextTokens
             p[Keys.MAX_OUTPUT] = s.maxOutputTokens
             p[Keys.MAX_ITERATIONS] = s.maxIterations
@@ -394,6 +424,7 @@ class SettingsRepository(private val context: Context) {
                     Keys.EXECUTION_PROVIDER to selection.execution?.providerId, Keys.EXECUTION_MODEL to selection.execution?.model
                 ).forEach { (key, value) -> if (value == null) prefs.remove(key) else prefs[key] = value }
                 prefs[Keys.THINKING_LEVEL] = selection.thinking.name
+                prefs[Keys.CUSTOM_THINKING_LEVELS] = kotlinx.serialization.json.Json.encodeToString(selection.customThinkingLevels)
             }
             prefs[Keys.SAME_MODEL_ACROSS_CHATS] = shared
         }

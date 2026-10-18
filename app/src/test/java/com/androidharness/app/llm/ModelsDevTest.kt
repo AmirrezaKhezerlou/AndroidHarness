@@ -51,6 +51,10 @@ class ModelsDevTest {
     }
     """.trimIndent()
 
+    @Test fun `budget minimum is retained from the catalog`() {
+        assertEquals(1024, ModelsDev.parse(sample).entries.getValue("anthropic").getValue("claude-sonnet-4-5").budgetMin)
+    }
+
     @Test
     fun `parse extracts effort vocabularies budgets toggles and non-reasoners`() {
         val parsed = ModelsDev.parse(sample).entries
@@ -180,7 +184,7 @@ class ModelsDevTest {
         assertEquals("anthropic", ModelsDev.providerKeyFor("https://api.anthropic.com"))
         assertEquals("google", ModelsDev.providerKeyFor("https://generativelanguage.googleapis.com/v1beta"))
         assertEquals("zhipuai", ModelsDev.providerKeyFor("https://open.bigmodel.cn/api/paas/v4"))
-        assertEquals("moonshotai", ModelsDev.providerKeyFor("https://api.moonshot.cn/v1"))
+        assertEquals("moonshotai-cn", ModelsDev.providerKeyFor("https://api.moonshot.cn/v1"))
         assertNull(ModelsDev.providerKeyFor("http://127.0.0.1:11434/v1"))
         assertNull(ModelsDev.providerKeyFor(null))
     }

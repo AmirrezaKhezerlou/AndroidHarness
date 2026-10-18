@@ -49,10 +49,11 @@ class ModelLockingDeviceTest {
                 it.execSQL("ALTER TABLE sessions DROP COLUMN modelSelectionJson")
                 it.execSQL("ALTER TABLE sessions DROP COLUMN workspaceSelectionJson")
                 it.execSQL("ALTER TABLE messages DROP COLUMN artifactJson")
+                it.execSQL("ALTER TABLE messages DROP COLUMN generationJson")
                 it.version = 14
             }
             db = Room.databaseBuilder(context, AppDatabase::class.java, name)
-                .addMigrations(AppDatabase.MIGRATION_14_15, AppDatabase.MIGRATION_15_16, AppDatabase.MIGRATION_16_17).build()
+                .addMigrations(AppDatabase.MIGRATION_14_15, AppDatabase.MIGRATION_15_16, AppDatabase.MIGRATION_16_17, AppDatabase.MIGRATION_17_18).build()
             sessions = SessionRepository(db)
             assertNull(sessions.session(sid)?.modelSelectionJson)
             assertEquals("Keep this history", sessions.messages(sid).single().text)

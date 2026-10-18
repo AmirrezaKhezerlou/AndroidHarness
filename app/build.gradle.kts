@@ -180,6 +180,8 @@ dependencies {
     implementation("org.bouncycastle:bcprov-jdk18on:1.85")
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
+    // CEL compiles and checks optional per-model reasoning request mappings on device.
+    implementation("dev.cel:cel:0.14.0")
     implementation(libs.coroutines.android)
     implementation(libs.commons.compress)
     implementation(libs.xz)

@@ -117,10 +117,14 @@ class ChatGptDeviceTest {
             clickText("High")
             assertEquals(ThinkingLevel.HIGH, picked.get())
             val closeDeadline = SystemClock.uptimeMillis() + 5_000
-            while (SystemClock.uptimeMillis() < closeDeadline &&
-                find(instrumentation.uiAutomation.rootInActiveWindow, "Max") != null) SystemClock.sleep(100)
-            waitForText("High")
-            assertNull("The menu should close after selecting High", find(instrumentation.uiAutomation.rootInActiveWindow, "Max"))
+            var closed = false
+            while (SystemClock.uptimeMillis() < closeDeadline) {
+                val window = instrumentation.uiAutomation.rootInActiveWindow
+                closed = window != null && find(window, "Max") == null && find(window, "High") != null
+                if (closed) break
+                SystemClock.sleep(100)
+            }
+            assertTrue("The menu should close and the header should show High", closed)
             instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
                 val folder = File(instrumentation.targetContext.getExternalFilesDir(null), "github-test-screenshots").apply { mkdirs() }
                 File(folder, "header-thinking.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }

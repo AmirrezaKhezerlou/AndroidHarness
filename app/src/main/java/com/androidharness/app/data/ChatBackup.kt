@@ -67,6 +67,7 @@ data class BackupMessage(
     val turnId: String? = null,
     val createdAt: Long,
     val artifactJson: String? = null,
+    val generationJson: String? = null,
 )
 
 /** Pure encode/decode plus file validation; no Android types, so JVM-testable. */
@@ -156,6 +157,7 @@ class ChatBackupManager(
                             generationMs = m.generationMs,
                             firstTokenMs = m.firstTokenMs,
                             streamMs = m.streamMs,
+                            generationJson = m.generationJson,
                             imagesJson = m.imagesJson,
                             artifactJson = m.artifactJson,
                             turnId = m.turnId,
@@ -217,6 +219,7 @@ class ChatBackupManager(
                             generationMs = m.generationMs,
                             firstTokenMs = m.firstTokenMs,
                             streamMs = m.streamMs,
+                            generationJson = m.generationJson,
                             imagesJson = m.imagesJson,
                             artifactJson = m.artifactJson,
                             turnId = m.turnId,

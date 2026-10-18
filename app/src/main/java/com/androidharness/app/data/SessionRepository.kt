@@ -226,6 +226,7 @@ class SessionRepository(
                 generationMs = message.generationMs,
                 firstTokenMs = message.firstTokenMs,
                 streamMs = message.streamMs,
+                generationJson = com.androidharness.app.core.GenerationMetadata.encode(message.generation),
                 imagesJson = json.encodeToString(imageList, message.images),
                 artifactJson = message.artifact?.let(com.androidharness.app.artifacts.ChatArtifact::encode),
                 turnId = turnId,
@@ -379,6 +380,7 @@ class SessionRepository(
                         generationMs = userMsg.generationMs,
                         firstTokenMs = userMsg.firstTokenMs,
                         streamMs = userMsg.streamMs,
+                        generationJson = userMsg.generationJson,
                         imagesJson = userMsg.imagesJson,
                         artifactJson = userMsg.artifactJson,
                         turnId = newTurnId,
@@ -403,6 +405,7 @@ class SessionRepository(
                     generationMs = targetAssistant.generationMs,
                     firstTokenMs = targetAssistant.firstTokenMs,
                     streamMs = targetAssistant.streamMs,
+                    generationJson = targetAssistant.generationJson,
                     imagesJson = targetAssistant.imagesJson,
                     artifactJson = targetAssistant.artifactJson,
                     turnId = newTurnId,
@@ -691,8 +694,8 @@ class SessionRepository(
     }
 
     private fun MessageEntity.toChatMessageCached(): ChatMessage = synchronized(messageCache) {
-        messageCache[id]?.takeIf { it.first == toolCallsJson }?.second
-            ?: toChatMessage().also { messageCache[id] = toolCallsJson to it }
+        messageCache[id]?.takeIf { it.first == toolCallsJson + generationJson }?.second
+            ?: toChatMessage().also { messageCache[id] = (toolCallsJson + generationJson) to it }
     }
 
     private fun MessageEntity.toChatMessage(): ChatMessage = ChatMessage(
@@ -710,6 +713,7 @@ class SessionRepository(
         generationMs = generationMs,
         firstTokenMs = firstTokenMs,
         streamMs = streamMs,
+        generation = com.androidharness.app.core.GenerationMetadata.decode(generationJson),
         artifact = com.androidharness.app.artifacts.ChatArtifact.decode(artifactJson),
         images = runCatching {
             json.decodeFromString(imageList, imagesJson)

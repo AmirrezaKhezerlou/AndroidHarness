@@ -17,6 +17,7 @@ object ChatGptThinking {
         "gpt-6-astra" to standard,
         "gpt-6-sol" to (listOf("none") + standard),
         "gpt-6-luna" to (listOf("none") + standard),
+        "gpt-5.6" to (listOf("none") + standard),
         "gpt-5.6-sol" to (listOf("none") + standard),
         "gpt-5.6-terra" to (listOf("none") + standard),
         "gpt-5.6-luna" to (listOf("none") + standard),
@@ -34,7 +35,7 @@ object ChatGptThinking {
         val efforts = model.reasoningEfforts ?: documented.entries.firstOrNull { (id, _) ->
             model.id == id || model.id.matches(Regex("${Regex.escape(id)}-\\d{4}-\\d{2}-\\d{2}"))
         }?.value ?: emptyList()
-        return efforts.mapNotNull { value -> wireNames.entries.firstOrNull { it.value == value }?.key }.distinct()
+        return efforts.mapNotNull { value -> wireNames.entries.firstOrNull { it.value == value }?.key }.distinct().sortedBy { it.rank }
     }
 
     fun selected(model: ModelEntry, requested: ThinkingLevel): ThinkingLevel? {

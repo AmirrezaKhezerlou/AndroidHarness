@@ -1,247 +1,174 @@
 package com.androidharness.app.agent
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
+import com.androidharness.app.llm.*
+import org.junit.After
+import org.junit.Assert.*
 import org.junit.Test
 
 class ThinkingSpecsTest {
+    private fun config(model: String, type: ProviderType = ProviderType.OPENAI_COMPAT,
+        url: String = "https://api.deepseek.com/v1") = ProviderConfig("test", "Test", type, url, model)
+    private fun entry(vararg values: String, toggle: Boolean = false, reasoning: Boolean = true,
+        output: Int? = null, budget: Int? = null) =
+        ModelsDev.Entry(reasoning, values.toList().takeIf { it.isNotEmpty() }, budget != null, budget, toggle, outputTokens = output)
+    @After fun reset() = ModelsDev.replaceForTesting(emptyMap())
 
-    @Test
-    fun `gpt-5 family uses effort style with minimal rung`() {
-        val spec = ThinkingSpecs.forModel("gpt-5.6-sol")
-        assertEquals(ThinkingSpecs.Style.EFFORT, spec.style)
-        assertEquals(
-            listOf(
-                ThinkingLevel.OFF, ThinkingLevel.MINIMAL, ThinkingLevel.LOW,
-                ThinkingLevel.MEDIUM, ThinkingLevel.HIGH, ThinkingLevel.XHIGH,
-            ),
-            spec.levels,
-        )
-        // MAX and ULTRA fold onto the family's highest wire value.
-        assertEquals("xhigh", ThinkingSpecs.effortWire("gpt-5.6-sol", ThinkingLevel.XHIGH))
-        assertEquals("xhigh", ThinkingSpecs.effortWire("gpt-5.6-sol", ThinkingLevel.MAX))
-        assertEquals("xhigh", ThinkingSpecs.effortWire("gpt-5.6-sol", ThinkingLevel.ULTRA))
-        assertEquals("minimal", ThinkingSpecs.effortWire("gpt-5.6-sol", ThinkingLevel.MINIMAL))
-    }
-
-    @Test
-    fun `openai o-series routes through effort table`() {
-        assertEquals(ThinkingSpecs.Style.EFFORT, ThinkingSpecs.forModel("o4-mini").style)
-        assertEquals("medium", ThinkingSpecs.effortWire("o4-mini", ThinkingLevel.MEDIUM))
-    }
-
-    @Test
-    fun `grok exposes only low and high efforts`() {
-        val spec = ThinkingSpecs.forModel("grok-4-fast")
-        assertEquals(ThinkingSpecs.Style.EFFORT, spec.style)
-        assertEquals(
-            listOf(ThinkingLevel.OFF, ThinkingLevel.LOW, ThinkingLevel.HIGH),
-            spec.levels,
-        )
-    }
-
-    @Test
-    fun `hermes clamp - non-native tier takes nearest weaker never stronger`() {
-        // Grok speaks only low/high: a Medium ask must NOT silently escalate
-        // cost (old behavior rounded UP to high); it clamps down to low.
-        assertEquals("low", ThinkingSpecs.effortWire("grok-4-fast", ThinkingLevel.MEDIUM))
-        assertEquals("high", ThinkingSpecs.effortWire("grok-4-fast", ThinkingLevel.XHIGH))
-        // Nothing weaker than MINIMAL exists -> floor keeps the ask enabled.
-        assertEquals("low", ThinkingSpecs.effortWire("grok-4-fast", ThinkingLevel.MINIMAL))
-        // ULTRA folds onto the family top.
-        assertEquals("high", ThinkingSpecs.effortWire("grok-4-fast", ThinkingLevel.ULTRA))
-    }
-
-    @Test
-    fun `resolveLevel is monotonic and never targets off`() {
-        val spec = ThinkingSpecs.forModel("grok-4-fast")
-        val seq = listOf(
-            ThinkingLevel.MINIMAL, ThinkingLevel.LOW, ThinkingLevel.MEDIUM,
-            ThinkingLevel.HIGH, ThinkingLevel.XHIGH, ThinkingLevel.MAX, ThinkingLevel.ULTRA,
-        )
-        val resolved = seq.mapNotNull { ThinkingSpecs.resolveLevel(it, spec) }
-        // A stronger request never resolves weaker than a weaker request.
-        assertTrue(resolved.zipWithNext().all { (a, b) -> b >= a })
-        // An enabled ask stays enabled.
-        assertTrue(resolved.none { it == ThinkingLevel.OFF })
-        // OFF passes through only when explicitly requested.
-        assertEquals(ThinkingLevel.OFF, ThinkingSpecs.resolveLevel(ThinkingLevel.OFF, spec))
-    }
-
-    @Test
-    fun `claude and gemini take budgets with all levels`() {
-        for (model in listOf("claude-sonnet-4-5", "gemini-2.5-flash")) {
-            val spec = ThinkingSpecs.forModel(model)
-            assertEquals(ThinkingSpecs.Style.BUDGET, spec.style)
-            assertEquals(ThinkingLevel.entries.toList(), spec.levels)
-            // Budget-style models take no effort parameter.
-            assertNull(ThinkingSpecs.effortWire(model, ThinkingLevel.HIGH))
+    @Test fun `offline DeepSeek Max is native max and all controls agree`() {
+        val c = config("deepseek-v4-flash")
+        assertEquals(listOf(ThinkingLevel.OFF, ThinkingLevel.LOW, ThinkingLevel.HIGH, ThinkingLevel.MAX), ThinkingSpecs.forProvider(c).levels)
+        for (level in ThinkingLevel.entries) {
+            val result = ThinkingSpecs.resolve(c, level)
+            assertTrue(result.level in result.spec.levels)
+            assertEquals(result.level.label, result.label)
         }
+        assertEquals("max", ThinkingSpecs.resolve(c, ThinkingLevel.MAX).effort)
+        assertEquals("max", ThinkingSpecs.resolve(c, ThinkingLevel.ULTRA).effort)
+        assertEquals("thinking", ThinkingSpecs.resolve(c, ThinkingLevel.OFF).spec.toggleField)
     }
 
-    @Test
-    fun `deepseek thinks on its own - no wire parameter`() {
-        val spec = ThinkingSpecs.forModel("deepseek-v4-flash")
-        assertEquals(ThinkingSpecs.Style.NONE, spec.style)
-        assertNull(ThinkingSpecs.effortWire("deepseek-v4-flash", ThinkingLevel.HIGH))
-        assertNull(ThinkingSpecs.effortWire("deepseek-v4-flash", ThinkingLevel.MAX))
+    @Test fun `endpoint vocabulary wins over another provider of the same model`() {
+        ModelsDev.replaceForTesting(mapOf(
+            "deepseek" to mapOf("deepseek-v4-flash" to entry("low", "high", "max", toggle = true)),
+            "openrouter" to mapOf("deepseek/deepseek-v4-flash" to entry("none", "high", "xhigh")),
+            "kilo" to mapOf("deepseek/deepseek-v4-flash" to entry("none", "low", "high", "max"))))
+        assertEquals("max", ThinkingSpecs.resolve(config("deepseek-v4-flash"), ThinkingLevel.MAX).effort)
+        val router = config("deepseek/deepseek-v4-flash", url = "https://openrouter.ai/api/v1")
+        assertEquals("xhigh", ThinkingSpecs.resolve(router, ThinkingLevel.MAX).effort)
+        assertEquals(ThinkingLevel.XHIGH, ThinkingSpecs.resolve(router, ThinkingLevel.MAX).level)
+        assertTrue(ThinkingSpecs.resolve(router, ThinkingLevel.MAX).detail.contains("Using X-High"))
+        val kilo = router.copy(baseUrl = "https://api.kilo.ai/api/gateway")
+        assertEquals("max", ThinkingSpecs.routerReasoning(kilo, ThinkingLevel.MAX)?.effort)
     }
 
-    @Test
-    fun `unknown models default to budget with every level`() {
-        val spec = ThinkingSpecs.forModel("some-future-model")
-        assertEquals(ThinkingSpecs.Style.BUDGET, spec.style)
-        assertEquals(ThinkingLevel.entries.toList(), spec.levels)
-    }
-
-    @Test
-    fun `off never sends a wire value`() {
-        assertNull(ThinkingSpecs.effortWire("gpt-5.6-sol", ThinkingLevel.OFF))
-    }
-
-    @Test
-    fun `openrouter unified effort reaches budget families`() {
-        // Claude/Gemini through the OpenAI-compatible API had NO dial before:
-        // the unified object clamps them to the standard vocabulary.
-        for (model in listOf("anthropic/claude-sonnet-4-5", "google/gemini-2.5-flash")) {
-            assertEquals("low", ThinkingSpecs.openRouterEffort(model, ThinkingLevel.LOW))
-            assertEquals("medium", ThinkingSpecs.openRouterEffort(model, ThinkingLevel.MEDIUM))
-            assertEquals("high", ThinkingSpecs.openRouterEffort(model, ThinkingLevel.HIGH))
-            assertEquals("high", ThinkingSpecs.openRouterEffort(model, ThinkingLevel.MAX))
-        }
-    }
-
-    @Test
-    fun `openrouter unified effort keeps exact values for effort families`() {
-        assertEquals("xhigh", ThinkingSpecs.openRouterEffort("openai/gpt-5.6-sol", ThinkingLevel.XHIGH))
-        assertEquals("xhigh", ThinkingSpecs.openRouterEffort("openai/gpt-5.6-sol", ThinkingLevel.MAX))
-        assertEquals("medium", ThinkingSpecs.openRouterEffort("openai/o4-mini", ThinkingLevel.MEDIUM))
-    }
-
-    @Test
-    fun `openrouter unified effort clamps like hermes`() {
-        // Effort families keep exact natives…
-        assertEquals("xhigh", ThinkingSpecs.openRouterEffort("openai/gpt-5.6-sol", ThinkingLevel.XHIGH))
-        assertEquals("medium", ThinkingSpecs.openRouterEffort("openai/o4-mini", ThinkingLevel.MEDIUM))
-        // …Grok speaks only low/high: Medium clamps DOWN (never escalates).
-        assertEquals("low", ThinkingSpecs.openRouterEffort("x-ai/grok-4-fast", ThinkingLevel.MEDIUM))
-        // MAX folds onto the family top.
-        assertEquals("high", ThinkingSpecs.openRouterEffort("x-ai/grok-4-fast", ThinkingLevel.MAX))
-    }
-
-    @Test
-    fun `openrouter unified effort leaves inherent reasoners alone`() {
-        assertNull(ThinkingSpecs.openRouterEffort("deepseek/deepseek-v4-flash", ThinkingLevel.HIGH))
-        assertNull(ThinkingSpecs.openRouterEffort("gpt-5.6-sol", ThinkingLevel.OFF))
-    }
-
-    @Test
-    fun `router-prefixed ids still match their family`() {
-        assertEquals(ThinkingSpecs.Style.EFFORT, ThinkingSpecs.forModel("openai/o3-mini").style)
-        assertTrue(ThinkingSpecs.forModel("deepseek/deepseek-r1").levels.contains(ThinkingLevel.MEDIUM))
-    }
-
-    // ---- models.dev dynamic layer -----------------------------------------
-
-    @org.junit.After
-    fun resetModelsDev() = com.androidharness.app.llm.ModelsDev.replaceForTesting(emptyMap())
-
-    @Test
-    fun `dynamic catalog vocabulary overrides the shipped table`() {
-        com.androidharness.app.llm.ModelsDev.replaceForTesting(
-            mapOf(
-                "openrouter" to mapOf(
-                    // Shipped table calls deepseek NONE (inherent); the catalog
-                    // says this lane takes an effort dial, catalog wins.
-                    "deepseek/deepseek-v4-flash" to com.androidharness.app.llm.ModelsDev.Entry(
-                        reasoning = true, effortValues = listOf("high", "xhigh"),
-                        budgetTokens = false, budgetMax = null, toggle = true,
-                    ),
-                ),
-            ),
-        )
-        val spec = ThinkingSpecs.forModel("deepseek/deepseek-v4-flash", "openrouter")
-        assertEquals(ThinkingSpecs.Style.EFFORT, spec.style)
-        assertEquals(
-            listOf(ThinkingLevel.OFF, ThinkingLevel.HIGH, ThinkingLevel.XHIGH),
-            spec.levels,
-        )
-        // Wire values come from the catalog vocabulary, clamping to nearest.
-        assertEquals("high", ThinkingSpecs.effortWire("deepseek/deepseek-v4-flash", ThinkingLevel.LOW, "openrouter"))
-        assertEquals("xhigh", ThinkingSpecs.effortWire("deepseek/deepseek-v4-flash", ThinkingLevel.MAX, "openrouter"))
-    }
-
-    @Test
-    fun `dynamic reasoning-false kills the dial entirely`() {
-        com.androidharness.app.llm.ModelsDev.replaceForTesting(
-            mapOf(
-                "openrouter" to mapOf(
-                    "some/fake-gpt" to com.androidharness.app.llm.ModelsDev.Entry(
-                        reasoning = false, effortValues = null,
-                        budgetTokens = false, budgetMax = null, toggle = false,
-                    ),
-                ),
-            ),
-        )
-        assertEquals(listOf(ThinkingLevel.OFF), ThinkingSpecs.forModel("some/fake-gpt", "openrouter").levels)
-        assertNull(ThinkingSpecs.openRouterReasoning("some/fake-gpt", ThinkingLevel.HIGH))
-    }
-
-    @Test
-    fun `dynamic toggle-only models send enabled on openrouter`() {
-        com.androidharness.app.llm.ModelsDev.replaceForTesting(
-            mapOf(
-                "openrouter" to mapOf(
-                    "z-ai/glm-5.2" to com.androidharness.app.llm.ModelsDev.Entry(
-                        reasoning = true, effortValues = null,
-                        budgetTokens = false, budgetMax = null, toggle = true,
-                    ),
-                ),
-            ),
-        )
-        val rr = ThinkingSpecs.openRouterReasoning("z-ai/glm-5.2", ThinkingLevel.HIGH)
-        assertEquals(true, rr?.enabled)
-        assertNull(rr?.effort)
-        // No dynamic entry → shipped table fallback still clamps as before.
-        com.androidharness.app.llm.ModelsDev.replaceForTesting(emptyMap())
-        assertEquals("high", ThinkingSpecs.openRouterReasoning("anthropic/claude-sonnet-4-5", ThinkingLevel.HIGH)?.effort)
-    }
-
-    @Test
-    fun `muse spark sends relay vocabulary up to xhigh - never max`() {
-        val m = "muse-spark-1.3-contributor-free"
-        assertEquals("xhigh", ThinkingSpecs.effortWire(m, ThinkingLevel.XHIGH, "openai"))
-        assertEquals("xhigh", ThinkingSpecs.effortWire(m, ThinkingLevel.MAX, "openai"))
-        assertEquals("high", ThinkingSpecs.effortWire(m, ThinkingLevel.HIGH, "openai"))
-        assertEquals("minimal", ThinkingSpecs.effortWire(m, ThinkingLevel.MINIMAL, "openai"))
-        assertNull(ThinkingSpecs.effortWire(m, ThinkingLevel.OFF, "openai"))
-    }
-    @Test
-    fun `catalog effort floors independently of order and ignores unknown values`() {
-        com.androidharness.app.llm.ModelsDev.replaceForTesting(mapOf("test" to mapOf(
-            "model" to com.androidharness.app.llm.ModelsDev.Entry(
-                reasoning = true, effortValues = listOf("high", "none", "unknown", "low"),
-                budgetTokens = false, budgetMax = null, toggle = true,
-            ),
-        )))
+    @Test fun `catalog cannot invent unknown efforts or a disable level`() {
+        ModelsDev.replaceForTesting(mapOf("test" to mapOf("model" to entry("high", "unknown", "low"))))
+        val spec = ThinkingSpecs.forModel("model", "test")
+        assertEquals(listOf(ThinkingLevel.LOW, ThinkingLevel.HIGH), spec.levels)
         assertEquals("low", ThinkingSpecs.effortWire("model", ThinkingLevel.MEDIUM, "test"))
-        assertEquals("low", ThinkingSpecs.effortWire("model", ThinkingLevel.MINIMAL, "test"))
-        assertEquals("none", ThinkingSpecs.effortWire("model", ThinkingLevel.OFF, "test"))
         assertEquals("high", ThinkingSpecs.effortWire("model", ThinkingLevel.ULTRA, "test"))
+        assertFalse(ThinkingLevel.OFF in spec.levels)
     }
 
-    @Test
-    fun `off explicitly disables openrouter reasoning`() {
-        assertEquals(false, ThinkingSpecs.openRouterReasoning("any-model", ThinkingLevel.OFF)?.enabled)
+    @Test fun `OpenAI documented families preserve native max offline`() {
+        for (model in listOf("gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-5.6", "gpt-5.6-sol")) {
+            val c = config(model, ProviderType.OPENAI_RESPONSES, "https://api.openai.com/v1")
+            assertEquals("max", ThinkingSpecs.resolve(c, ThinkingLevel.MAX).effort)
+            assertFalse(ThinkingLevel.MINIMAL in ThinkingSpecs.forProvider(c).levels)
+        }
+        assertEquals("xhigh", ThinkingSpecs.effortWire("gpt-5.5", ThinkingLevel.MAX))
+        assertEquals("medium", ThinkingSpecs.effortWire("gpt-6.1-sol", ThinkingLevel.OFF))
+        assertEquals("none", ThinkingSpecs.effortWire("gpt-6-sol", ThinkingLevel.OFF))
+        assertEquals("high", ThinkingSpecs.effortWire("o4-mini", ThinkingLevel.MAX))
     }
 
-    @Test
-    fun `output limit does not erase selected thinking budget`() {
-        assertEquals(512, ThinkingLevel.MINIMAL.budgetTokens(1_500))
-        assertEquals(4_096, ThinkingLevel.MEDIUM.budgetTokens(4_096))
-        assertEquals(16_384, ThinkingLevel.HIGH.budgetTokens(8_192))
-        assertEquals(32_768, ThinkingLevel.MAX.budgetTokens(8_192))
-        assertEquals(0, ThinkingLevel.OFF.budgetTokens(1_500))
+    @Test fun `unknown and automatic models have no artificial ladder`() {
+        for (model in listOf("some-custom-model", "deepseek-r1", "grok-4-fast", "qwen-custom")) {
+            val c = config(model, url = "https://custom.example/v1")
+            assertEquals("Thinking", ThinkingSpecs.resolve(c, ThinkingLevel.MAX).label)
+            assertTrue(ThinkingSpecs.forProvider(c).levels.isEmpty())
+            assertNull(ThinkingSpecs.resolve(c, ThinkingLevel.MAX).effort)
+        }
+        assertTrue(ThinkingSpecs.forProvider(config("gpt-6-sol", url = "http://localhost:1234/v1")).levels.isEmpty())
+    }
+
+    @Test fun `toggle-only models show On and Off and no fake strengths`() {
+        ModelsDev.replaceForTesting(mapOf("openrouter" to mapOf("z-ai/glm" to entry(toggle = true))))
+        val c = config("z-ai/glm", url = "https://openrouter.ai/api/v1")
+        val selected = ThinkingSpecs.resolve(c, ThinkingLevel.MAX)
+        assertEquals("On", selected.label)
+        assertEquals(listOf(ThinkingLevel.OFF, ThinkingLevel.HIGH), selected.spec.levels)
+        assertEquals("On", selected.optionLabel(ThinkingLevel.HIGH))
+        assertEquals(true, ThinkingSpecs.routerReasoning(c, ThinkingLevel.MAX)?.enabled)
+        assertEquals(false, ThinkingSpecs.routerReasoning(c, ThinkingLevel.OFF)?.enabled)
+        assertNull(ThinkingSpecs.routerReasoning(c, ThinkingLevel.MAX)?.effort)
+        val local = config("local:model", url = "local://model")
+        assertEquals("On", ThinkingSpecs.resolve(local, ThinkingLevel.ULTRA).label)
+    }
+
+    @Test fun `nonreasoning metadata disables controls and all parameters`() {
+        ModelsDev.replaceForTesting(mapOf("deepseek" to mapOf("model" to entry(reasoning = false))))
+        val result = ThinkingSpecs.resolve(config("model"), ThinkingLevel.MAX)
+        assertEquals(ThinkingSpecs.Style.NONE, result.spec.style)
+        assertFalse(result.active)
+        assertTrue(result.spec.levels.isEmpty())
+        assertNull(result.effort)
+    }
+
+    @Test fun `native Gemini levels match its actual model family`() {
+        fun levels(model: String) = ThinkingSpecs.forProvider(config(model, ProviderType.GEMINI,
+            "https://generativelanguage.googleapis.com/v1beta")).levels
+        assertEquals(listOf(ThinkingLevel.LOW, ThinkingLevel.HIGH), levels("gemini-3-pro-preview"))
+        assertEquals(listOf(ThinkingLevel.MINIMAL, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH), levels("gemini-3-flash-preview"))
+        assertEquals(listOf(ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH), levels("gemini-3.8-flash"))
+        assertEquals(listOf(ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH), levels("gemini-4-argon"))
+        assertFalse(ThinkingLevel.OFF in levels("gemini-2.5-pro"))
+    }
+
+    @Test fun `budgets leave room for the answer and never expose duplicate budgets`() {
+        ModelsDev.replaceForTesting(mapOf("anthropic" to mapOf("claude-sonnet-4-5" to entry(output = 64_000, budget = 60_000))))
+        val c = config("claude-sonnet-4-5", ProviderType.ANTHROPIC, "https://api.anthropic.com")
+        val selected = ThinkingSpecs.resolve(c, ThinkingLevel.MAX, 8_192)
+        assertEquals(59_904, selected.budget)
+        assertEquals(64_000, selected.maxOutputTokens)
+        assertTrue(selected.maxOutputTokens > selected.budget!!)
+        assertFalse(ThinkingLevel.MINIMAL in selected.spec.levels)
+        assertFalse(ThinkingLevel.ULTRA in selected.spec.levels)
+        val flash = config("gemini-2.5-flash", ProviderType.GEMINI, "https://generativelanguage.googleapis.com/v1beta")
+        assertEquals(24_576, ThinkingSpecs.resolve(flash, ThinkingLevel.MAX).budget)
+        assertFalse(ThinkingLevel.XHIGH in ThinkingSpecs.forProvider(flash).levels)
+    }
+
+    @Test fun `adaptive Claude uses effort with valid off support`() {
+        for (model in listOf("claude-opus-4-6", "claude-opus-4-8", "claude-sonnet-5", "claude-opus-5-5")) {
+            val c = config(model, ProviderType.ANTHROPIC, "https://api.anthropic.com")
+            val selected = ThinkingSpecs.resolve(c, ThinkingLevel.MAX)
+            assertEquals(ThinkingSpecs.Style.ADAPTIVE, selected.spec.style)
+            assertEquals("max", selected.effort)
+            assertNull(selected.budget)
+        }
+        for (model in listOf("claude-opus-5-5", "claude-sonnet-5-5", "claude-mythos-preview")) {
+            assertFalse(ThinkingLevel.OFF in ThinkingSpecs.forProvider(config(model, ProviderType.ANTHROPIC, "https://api.anthropic.com")).levels)
+        }
+        assertFalse(ThinkingLevel.XHIGH in ThinkingSpecs.forProvider(config("claude-opus-4-6", ProviderType.ANTHROPIC, "https://api.anthropic.com")).levels)
+    }
+
+    @Test fun `routed aliases do not claim adjustable effort`() {
+        assertEquals("Thinking", ThinkingSpecs.resolve(HarnessProvider.config, ThinkingLevel.MAX).label)
+        assertEquals("Thinking", ThinkingSpecs.resolve(config("kilo-auto/frontier", url = HarnessProvider.KILO_BASE_URL), ThinkingLevel.MAX).label)
+    }
+
+    @Test fun `resolution is monotonic and belongs to the displayed vocabulary`() {
+        val providers = listOf(
+            config("deepseek-v4-flash"), config("gpt-5.6-sol", ProviderType.OPENAI_RESPONSES, "https://api.openai.com/v1"),
+            config("claude-opus-4-6", ProviderType.ANTHROPIC, "https://api.anthropic.com"),
+            config("gemini-2.5-flash", ProviderType.GEMINI, "https://generativelanguage.googleapis.com/v1beta"),
+            config("gemini-3-flash", ProviderType.GEMINI, "https://generativelanguage.googleapis.com/v1beta"))
+        providers.forEach { c ->
+            val sequence = ThinkingLevel.entries.filter { it != ThinkingLevel.OFF }.map { ThinkingSpecs.resolve(c, it) }
+            assertTrue(sequence.all { it.level in it.spec.levels })
+            assertTrue(sequence.zipWithNext().all { (a,b) -> a.level.rank <= b.level.rank })
+            assertEquals(sequence.last().level, ThinkingSpecs.resolve(c, ThinkingLevel.MAX).level)
+        }
+    }
+
+    @Test fun `verified generic budgets honor the catalog range without fabricating effort values`() {
+        ModelsDev.replaceForTesting(mapOf("custom" to mapOf("budget-model" to
+            ModelsDev.Entry(true, null, true, 16_384, true, outputTokens = 32_768, budgetMin = 4_096))),
+            listOf(ModelsDev.ProviderInfo("custom", "Custom", "https://custom.example/v1", "@ai-sdk/anthropic", 1)))
+        val c = config("budget-model", ProviderType.ANTHROPIC, "https://custom.example/v1")
+        val max = ThinkingSpecs.resolve(c, ThinkingLevel.MAX)
+        assertEquals(16_384, max.budget)
+        assertEquals(ThinkingSpecs.Style.BUDGET, max.spec.style)
+        for (level in max.spec.levels.filter { it != ThinkingLevel.OFF })
+            assertTrue(ThinkingSpecs.resolve(c, level).budget!! in 4_096..16_384)
+        // A bare compat endpoint does not implement Anthropic's native budget field.
+        assertEquals("On", ThinkingSpecs.resolve(c.copy(type = ProviderType.OPENAI_COMPAT), ThinkingLevel.MAX).label)
+    }
+
+    @Test fun `provider host matching is exact and gateway aliases have catalog keys`() {
+        assertEquals("kilo", ModelsDev.providerKeyFor(HarnessProvider.KILO_BASE_URL))
+        assertEquals("kilo", ModelsDev.providerKeyFor("https://ai-gateway.kilo.ai/api/v1"))
+        assertNull(ModelsDev.providerKeyFor("https://api.openai.com.untrusted.example/v1"))
+        assertEquals("opencode-go", ModelsDev.providerKeyFor("https://opencode.ai/zen/go/v1"))
     }
 }

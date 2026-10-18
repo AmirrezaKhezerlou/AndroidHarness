@@ -91,7 +91,7 @@ class AppContainer(val appContext: Context) {
         .addMigrations(
             AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6,
             AppDatabase.MIGRATION_6_7, AppDatabase.MIGRATION_7_8,
-            AppDatabase.MIGRATION_8_9, AppDatabase.MIGRATION_9_10, AppDatabase.MIGRATION_10_11, AppDatabase.MIGRATION_11_12, AppDatabase.MIGRATION_12_13, AppDatabase.MIGRATION_13_14, AppDatabase.MIGRATION_14_15, AppDatabase.MIGRATION_15_16, AppDatabase.MIGRATION_16_17,
+            AppDatabase.MIGRATION_8_9, AppDatabase.MIGRATION_9_10, AppDatabase.MIGRATION_10_11, AppDatabase.MIGRATION_11_12, AppDatabase.MIGRATION_12_13, AppDatabase.MIGRATION_13_14, AppDatabase.MIGRATION_14_15, AppDatabase.MIGRATION_15_16, AppDatabase.MIGRATION_16_17, AppDatabase.MIGRATION_17_18,
         )
         .addCallback(AppDatabase.OVERSIZED_ROW_SANITIZER)
         // Only kicks in when no migration path exists (pre-v4 databases);
@@ -243,7 +243,7 @@ class AppContainer(val appContext: Context) {
 
     init {
         // models.dev thinking-capability catalog: serve the cached copy
-        // synchronously, then refresh in the background (weekly cadence).
+        // synchronously, then refresh in the background (daily cadence).
         com.androidharness.app.llm.ModelsDev.load(appContext)
         kotlinx.coroutines.CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             combine(settings.settings, providers.providers) { saved, available -> saved to available.map { it.id }.toSet() }

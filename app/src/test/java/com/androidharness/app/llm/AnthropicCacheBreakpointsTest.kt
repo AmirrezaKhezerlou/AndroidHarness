@@ -158,12 +158,7 @@ class AnthropicCacheBreakpointsTest {
             toolCallId = "call_123",
             imageData = listOf(com.androidharness.app.core.ImageData("image/png", "base64bytes")),
         )
-        // serializeMessages is private, test through applyCacheBreakpoints or reflection
-        val method = provider.javaClass.getDeclaredMethod("serializeMessages", List::class.java).apply {
-            isAccessible = true
-        }
-        @Suppress("UNCHECKED_CAST")
-        val serialized = method.invoke(provider, listOf(toolMsg)) as List<JsonObject>
+        val serialized = provider.serializeMessages(listOf(toolMsg))
         assertEquals(1, serialized.size)
         val userContent = serialized[0]["content"]!!.jsonArray
         assertEquals(1, userContent.size)

@@ -27,18 +27,19 @@ class ChatGptProvider(
     private class StreamFinished : RuntimeException(null, null, false, false)
 
     internal fun body(config: ProviderConfig, system: String, messages: List<ChatMessage>, tools: List<ToolSchema>, options: RequestOptions): JsonObject {
-        val body = responses.buildRequestBody(config, system, messages, tools, options).toMutableMap()
+        val body = responses.buildRequestBody(config, system, messages, tools, options.copy(customReasoning = emptyMap()),
+            options.resolveThinking(config, modelEntry(config.id, config.model))).toMutableMap()
         body.remove("max_output_tokens")
         body.remove("user")
         body.remove("reasoning")
-        ChatGptThinking.effort(modelEntry(config.id, config.model) ?: ModelEntry(config.model), options.thinking)?.let { effort ->
+        options.resolveThinking(config, modelEntry(config.id, config.model)).effort?.let { effort ->
             body["reasoning"] = buildJsonObject {
                 put("effort", effort)
                 if (effort != "none") put("summary", "auto")
             }
         }
         body["include"] = JsonArray(listOf(JsonPrimitive("reasoning.encrypted_content")))
-        val replayReasoning = messages.flatMap { it.toolCalls }.filter { it.responseProviderId == config.id }.associate { it.id to it.responseReasoning }
+        val replayReasoning = messages.filter { it.generation.state == null }.flatMap { it.toolCalls }.filter { it.responseProviderId == config.id }.associate { it.id to it.responseReasoning }
         body["input"] = JsonArray(body.getValue("input").jsonArray.flatMap { item ->
             val obj = item.jsonObject
             if (obj["type"]?.jsonPrimitive?.contentOrNull == "function_call") {
@@ -53,11 +54,12 @@ class ChatGptProvider(
                 put("tools", body.getValue("tools"))
             })
         }
-        return JsonObject(body)
+        return options.applyReasoningMapping(config, JsonObject(body))
     }
 
     override fun streamChat(config: ProviderConfig, apiKey: String, systemPrompt: String, messages: List<ChatMessage>, tools: List<ToolSchema>, options: RequestOptions): Flow<StreamEvent> = flow {
         val requestBody = body(config, systemPrompt, messages, tools, options)
+        emit(StreamEvent.ThinkingConfigured(options.resolveThinking(config, modelEntry(config.id, config.model)).detail))
         lastFailureType = null
         lastResponseSummary = null
         var retry = false
@@ -110,6 +112,8 @@ class ChatGptProvider(
                                         it["type"]?.jsonPrimitive?.contentOrNull == "reasoning" &&
                                             !it["encrypted_content"]?.jsonPrimitive?.contentOrNull.isNullOrBlank()
                                     }
+                                    if (reasoningItems.isNotEmpty()) emit(StreamEvent.ResponseState(
+                                        com.androidharness.app.core.ProviderMessageState.of(config, "responses", reasoningItems)))
                                     // Completed output is authoritative, including calls without earlier argument deltas.
                                     run {
                                         acc.clear()

@@ -318,6 +318,9 @@ class RunManager(
             previous.join()
         }
         val runConfig = providers.resolveHarnessConfig(config)
+        val reasoningPrefs = settings.settings.first()
+        val customLevels = if (reasoningPrefs.sameModelAcrossChats) reasoningPrefs.customThinkingLevels else
+            com.androidharness.app.data.ChatModelSelection.decode(sessions.session(sid)?.modelSelectionJson)?.customThinkingLevels.orEmpty()
         check(allowModelFallback || runConfig.model == config.model) {
             "This chat's model is no longer available. Choose another model in the picker."
         }
@@ -463,7 +466,9 @@ class RunManager(
                     },
                     sessionAllowedTools = allowedTools[sid] ?: mutableSetOf(),
                     workspace = runWorkspace,
-                    options = RequestOptions(maxOutputTokens = maxOutputTokens, thinking = thinking),
+                    options = RequestOptions(maxOutputTokens = maxOutputTokens, thinking = thinking,
+                        modelCatalogs = providers.catalogs.first(), customReasoning = reasoningPrefs.reasoningConfigs,
+                        customThinkingLevels = customLevels),
                     maxContextTokens = maxContextTokens,
                     mode = mode,
                     maxIterations = maxIterations,
@@ -627,7 +632,7 @@ class RunManager(
                     buf.dirty = true
                 }
                 live.update {
-                    // First answer text ends this turn's reasoning phase.
+                    // Answer text closes the latest received reasoning span.
                     if (it.thinkingStartedAt != null && it.thinkingEndedAt == null) {
                         it.copy(thinkingEndedAt = System.currentTimeMillis(), retryStatus = null)
                     } else if (it.retryStatus != null) {
@@ -645,6 +650,7 @@ class RunManager(
                 live.update {
                     it.copy(
                         thinkingStartedAt = it.thinkingStartedAt ?: System.currentTimeMillis(),
+                        thinkingEndedAt = null,
                         retryStatus = null,
                     )
                 }

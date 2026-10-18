@@ -21,11 +21,13 @@ class LocalModelProvider(private val manager: LocalModelManager,
         try {
             val id = config.id.removePrefix(LocalModelCatalog.PROVIDER_PREFIX)
             check(config.model == config.id) { "Choose this provider's installed model. Other model IDs cannot run locally." }
+            val thinking = options.resolveThinking(config)
+            emit(StreamEvent.ThinkingConfigured(thinking.detail))
             val enabled = agentContextEnabled()
             val chatMessages = if (enabled) messages else LocalChatCodec.plainChatMessages(messages)
             val chatTools = if (enabled) tools else emptyList()
             val request = LocalChatCodec.request(systemPrompt, chatMessages, chatTools,
-                options.thinking != com.androidharness.app.agent.ThinkingLevel.OFF, includeAgentContext = enabled)
+                thinking.level != com.androidharness.app.agent.ThinkingLevel.OFF, includeAgentContext = enabled)
             val images = chatMessages.flatMap { it.imageData }.map {
                 android.util.Base64.decode(it.base64, android.util.Base64.DEFAULT)
             }.toTypedArray()

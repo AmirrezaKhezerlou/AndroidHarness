@@ -102,6 +102,8 @@ data class ChatUiState(
     val error: String? = null,
     val permissionMode: PermissionMode = PermissionMode.CONFIRM_RISKY,
     val thinkingLevel: ThinkingLevel = ThinkingLevel.OFF,
+    val reasoningConfigs: Map<String, com.androidharness.app.agent.CustomReasoningConfig> = emptyMap(),
+    val customThinkingLevels: Map<String, String> = emptyMap(),
     val mode: AgentMode = AgentMode.ACT,
     val pendingPlan: String? = null,
     val queuedMessage: String? = null,
@@ -647,6 +649,8 @@ class ChatViewModel(
         _state.update { it.copy(
             permissionMode = settings.permissionMode,
             thinkingLevel = selection.thinking,
+            reasoningConfigs = settings.reasoningConfigs,
+            customThinkingLevels = selection.customThinkingLevels,
             maxContextTokens = settings.maxContextTokens,
             maxOutputTokens = settings.maxOutputTokens,
             maxIterations = settings.maxIterations,
@@ -1706,6 +1710,18 @@ class ChatViewModel(
     fun setPermissionMode(mode: PermissionMode) {
         _state.update { it.copy(permissionMode = mode) }
         viewModelScope.launch { c.settings.setPermissionMode(mode) }
+    }
+
+    fun saveReasoningConfig(config: ProviderConfig, custom: com.androidharness.app.agent.CustomReasoningConfig?) {
+        editModelSelection { c.settings.setReasoningConfig(com.androidharness.app.agent.CustomReasoning.key(config), custom) }
+    }
+
+    fun setCustomThinking(config: ProviderConfig, name: String) {
+        editModelSelection {
+            val sid = if (_state.value.sameModelAcrossChats) sessionId else ensureSession()
+            c.chatModels.setCustomThinking(sid, com.androidharness.app.agent.CustomReasoning.key(config),
+                com.androidharness.app.agent.CustomReasoning.wire(name))
+        }
     }
 
     fun setThinkingLevel(level: ThinkingLevel) {

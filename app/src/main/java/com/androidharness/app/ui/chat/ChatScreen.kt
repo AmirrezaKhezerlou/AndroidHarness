@@ -81,6 +81,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import com.androidharness.app.ui.common.formatTokenCount
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.LaunchedEffect
@@ -977,16 +978,26 @@ private fun ChatScreenContent(
         topBar = {
             val currentProvider = state.activeProvider
             val currentModel = state.effectiveModel ?: currentProvider?.model
-            val chatGptPlan = com.androidharness.app.chatgpt.ChatGptProtocol.isProvider(currentProvider?.id)
             val modelEntry = state.catalogs[currentProvider?.id].orEmpty().firstOrNull { it.id == currentModel }
                 ?: com.androidharness.app.llm.ModelEntry(currentModel.orEmpty())
-            val thinkingLevels = remember(currentModel, currentProvider, modelEntry) {
-                if (chatGptPlan) com.androidharness.app.chatgpt.ChatGptThinking.levels(modelEntry)
-                else com.androidharness.app.agent.ThinkingSpecs.visibleLevels(
-                    currentModel,
-                    com.androidharness.app.llm.ModelsDev.providerKeyFor(currentProvider?.baseUrl),
+            val reasoningRevision by com.androidharness.app.llm.ModelsDev.revision.collectAsState()
+            val thinking = remember(currentModel, currentProvider, modelEntry, state.thinkingLevel, state.maxOutputTokens, reasoningRevision, state.reasoningConfigs, state.customThinkingLevels) {
+                currentProvider?.let { com.androidharness.app.llm.RequestOptions(thinking = state.thinkingLevel, maxOutputTokens = state.maxOutputTokens,
+                    customReasoning = state.reasoningConfigs, customThinkingLevels = state.customThinkingLevels)
+                    .resolveThinking(it.copy(model = currentModel.orEmpty()), modelEntry) }
+            }
+            val thinkingLevels = thinking?.spec?.levels.orEmpty()
+            var editingReasoning by remember { mutableStateOf<com.androidharness.app.llm.ProviderConfig?>(null) }
+            editingReasoning?.let { config ->
+                val key = com.androidharness.app.agent.CustomReasoning.key(config)
+                com.androidharness.app.ui.chat.components.CustomReasoningSheet(
+                    config = config, saved = state.reasoningConfigs[key],
+                    spec = com.androidharness.app.agent.ThinkingSpecs.forProvider(config, modelEntry),
+                    onDismiss = { editingReasoning = null },
+                    onSave = { viewModel.saveReasoningConfig(config, it); editingReasoning = null },
                 )
             }
+
             Column {
             MainHeader(
                 sessionTitle = state.sessionTitle,
@@ -1005,8 +1016,10 @@ private fun ChatScreenContent(
                 modelScopeLabel = if (state.sameModelAcrossChats) null else "This chat",
                 mode = state.mode,
                 dualPlanning = state.dualPlanning,
-                thinkingLevel = if (chatGptPlan) com.androidharness.app.chatgpt.ChatGptThinking.selected(modelEntry, state.thinkingLevel)
-                    ?: com.androidharness.app.agent.ThinkingLevel.OFF else state.thinkingLevel,
+                thinkingLevel = thinking?.level ?: state.thinkingLevel,
+                thinkingResolved = thinking,
+                onCustomizeThinking = currentProvider?.let { provider -> { editingReasoning = provider.copy(model = currentModel.orEmpty()) } },
+                onSetCustomThinking = { name -> currentProvider?.let { viewModel.setCustomThinking(it.copy(model = currentModel.orEmpty()), name) } },
                 thinkingLevels = thinkingLevels,
                 permissionMode = state.permissionMode,
                 canUndo = state.turnsWithCheckpoints.isNotEmpty(),
@@ -1249,9 +1262,10 @@ private fun ChatScreenContent(
                                 val isSearchTurn = searchMessageId != null && message.turnId == searchTurnId
                                 val hasFinishedActivity = !isTurnRunning && !isSearchTurn && activity.isNotEmpty()
                                 if (hasFinishedActivity && !isTurnFinal) continue
-                                if (!hasFinishedActivity && message.thinking.isNotBlank()) {
+                                if (!hasFinishedActivity && (message.thinking.isNotBlank() || (message.generation.reasoningTokens ?: 0) > 0)) {
                                     indexedItem(key = "message-$messageKey-thinking", contentType = ChatListContentType.Thinking) {
-                                        Box(Modifier.animateItem(fadeInSpec = fastEffectsSpec(), placementSpec = null, fadeOutSpec = null)) { ThinkingBlock(message.thinking, durationMs = message.thinkingMs) }
+                                        Box(Modifier.animateItem(fadeInSpec = fastEffectsSpec(), placementSpec = null, fadeOutSpec = null)) { ThinkingBlock(message.thinking, durationMs = message.thinkingMs,
+                                            reportedTokens = message.generation.reasoningTokens, setting = message.generation.reasoningSetting) }
                                     }
                                 }
                                 if (message.text.isNotBlank() || hasFinishedActivity) {

@@ -52,6 +52,18 @@ class ChatGptProviderTest {
         assertEquals("low", effort("gpt-6-sol", com.androidharness.app.agent.ThinkingLevel.LOW))
     }
 
+    @Test fun `custom CEL is merged into the final account request after protocol shaping`() {
+        val c = config.copy(model = "gpt-6.1-sol")
+        val custom = com.androidharness.app.agent.CustomReasoningConfig(listOf("Low", "Max"),
+            """{"reasoning": {"effort": reasoningLevel, "summary": "auto"}, "max_output_tokens": 5000}""")
+        val key = com.androidharness.app.agent.CustomReasoning.key(c)
+        val opts = RequestOptions(customReasoning = mapOf(key to custom), customThinkingLevels = mapOf(key to "MAX"))
+        val body = provider("").body(c, "sys", emptyList(), tools, opts)
+        assertEquals("max", body["reasoning"]!!.jsonObject["effort"]!!.jsonPrimitive.content)
+        assertEquals(5000, body["max_output_tokens"]!!.jsonPrimitive.int)
+        assertEquals("namespace", body["tools"]!!.jsonArray.single().jsonObject["type"]!!.jsonPrimitive.content)
+    }
+
     @Test fun `complete response emits a local tool call and only sends OAuth to official endpoint`() = runBlocking {
         val provider = provider(sse("""{"type":"response.output_text.delta","delta":"Checking"}""", completed("[$call]"))) { request ->
             assertEquals("https://api.openai.com/v1/responses", request.url.toString())
@@ -63,6 +75,18 @@ class ChatGptProviderTest {
         assertEquals(20, events.filterIsInstance<StreamEvent.Usage>().single().inputTokens)
         assertEquals("stop", events.filterIsInstance<StreamEvent.Done>().single().finishReason)
         assertFalse(events.any { it is StreamEvent.Failure })
+    }
+
+    @Test fun `new continuation metadata prevents legacy reasoning from leaking after model switch`() {
+        val item = Json.parseToJsonElement("""{"type":"reasoning","id":"r1","encrypted_content":"model-bound","summary":[]}""").jsonObject
+        val c = config.copy(model = "gpt-6.1-sol")
+        val assistant = ChatMessage(Role.ASSISTANT, toolCalls = listOf(ToolCallData("call1", "read_file", "{}",
+            responseReasoning = listOf(item), responseProviderId = c.id)))
+        val saved = assistant.copy(generation = GenerationMetadata(ProviderMessageState.of(c, "responses", listOf(item)).boundTo(assistant)))
+        val same = provider("").body(c, "sys", listOf(saved), tools, RequestOptions())
+        assertEquals(1, same["input"]!!.jsonArray.count { it.jsonObject["type"]?.jsonPrimitive?.content == "reasoning" })
+        val changed = provider("").body(c.copy(model = "gpt-6-sol"), "sys", listOf(saved), tools, RequestOptions())
+        assertFalse(changed["input"]!!.jsonArray.any { it.jsonObject["type"]?.jsonPrimitive?.content == "reasoning" })
     }
 
     @Test fun `failed incomplete interrupted and foreign tool streams never release tools`() = runBlocking {

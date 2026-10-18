@@ -82,11 +82,33 @@ data class RequestOptions(
         com.androidharness.app.agent.ThinkingLevel.OFF,
     val cacheKey: String? = null,
     val allowAccountSwitch: Boolean = true,
-)
+    /** The same provider catalog snapshot used by the chat controls, also available to model overrides. */
+    val modelCatalogs: Map<String, List<ModelEntry>> = emptyMap(),
+    val customReasoning: Map<String, com.androidharness.app.agent.CustomReasoningConfig> = emptyMap(),
+    val customThinkingLevels: Map<String, String> = emptyMap(),
+) {
+    fun resolveThinking(config: ProviderConfig, entry: ModelEntry? = null) =
+        com.androidharness.app.agent.CustomReasoning.resolve(config, thinking, maxOutputTokens,
+            entry ?: modelCatalogs[config.id]?.firstOrNull { it.id == config.model },
+            customReasoning[com.androidharness.app.agent.CustomReasoning.key(config)],
+            customThinkingLevels[com.androidharness.app.agent.CustomReasoning.key(config)])
+
+    fun applyReasoningMapping(config: ProviderConfig, body: JsonObject): JsonObject {
+        val resolved = resolveThinking(config)
+        val custom = resolved.customConfig ?: return body
+        ReasoningMapping.validate(custom, config, com.androidharness.app.agent.ThinkingSpecs.forProvider(config,
+            modelCatalogs[config.id]?.firstOrNull { it.id == config.model }))
+        val expression = custom.mapping.takeIf { it.isNotBlank() } ?: return body
+        return ReasoningMapping.merge(body, ReasoningMapping.evaluate(expression, requireNotNull(resolved.customLevel)))
+    }
+}
 
 sealed interface StreamEvent {
     data class TextDelta(val text: String) : StreamEvent
     data class ThinkingDelta(val text: String) : StreamEvent
+    data class ResponseState(val state: com.androidharness.app.core.ProviderMessageState) : StreamEvent
+    /** Request configuration, not model output. A retry can replace it before any output arrives. */
+    data class ThinkingConfigured(val label: String) : StreamEvent
     /** Display-only argument fragments. These never authorize or execute a tool. */
     data class ToolCallDelta(val id: String, val name: String, val arguments: String, val replace: Boolean = false) : StreamEvent
     data class ToolCallReady(val call: ToolCallData) : StreamEvent
@@ -109,6 +131,7 @@ sealed interface StreamEvent {
         val cachedInputTokens: Int = 0,
         val cacheWriteTokens: Int = 0,
         val cacheReported: Boolean = false,
+        val reasoningTokens: Int? = null,
     ) : StreamEvent
     /** [code] is the provider's error status, even when the SSE HTTP response is 200. */
     data class Failure(val message: String, val code: Int? = null, val errorCode: String? = null,
