@@ -33,6 +33,8 @@ class ContextHygieneTest {
         val user = ChatMessage(role = Role.USER, text = "go")
         val out = ContextHygiene.shrinkToolResults(listOf(user, stale) + recent)
         assertTrue(out[1].text.contains("truncated"))
+        assertTrue(out[1].text.contains("read_tool_output"))
+        assertTrue(out[1].text.contains("tool_call_id=\"old\""))
         assertTrue(out[1].text.startsWith("START-"))
         assertTrue(out[1].text.endsWith("-END"))
         assertTrue(out[1].text.length < stale.text.length)

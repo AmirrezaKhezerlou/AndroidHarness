@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
@@ -191,8 +192,9 @@ class MoveFileTool : Tool {
                 if (!from.isFile) {
                     throw ToolFailure("Moving directories across folders is not supported; move the files individually.")
                 }
-                to.writeText(from.readText())
-                from.delete()
+                (from.openInputStream() ?: throw ToolFailure("Cannot read source file: $source")).use { to.writeFrom(it) }
+                if (!from.delete()) return@withContext ToolResult(false,
+                    "Copied $source to $destination, but could not delete the source. Both files remain; check permissions before retrying.")
                 ToolResult(
                     true,
                     buildString {
@@ -379,23 +381,31 @@ class TodoWriteTool(
         runCatching {
             val elements = json.parseToJsonElement(raw)
             if (elements is kotlinx.serialization.json.JsonArray) {
-                return elements.mapNotNull { el ->
+                return elements.map { el ->
                     val obj = el.jsonObject
-                    val content = obj["content"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                    TodoItem(content, parseStatus(obj["status"]?.jsonPrimitive?.contentOrNull))
+                    val content = obj["content"]?.jsonPrimitive?.content
+                        ?: throw ToolFailure("Each todo must include content.")
+                    val status = obj["status"]
+                    if (status != null && (status !is JsonPrimitive || !status.isString)) {
+                        throw ToolFailure("Invalid todo status. Use pending, in_progress, or completed.")
+                    }
+                    TodoItem(content, parseStatus(status?.jsonPrimitive?.content))
                 }
             }
-        }
+        }.onFailure { if (it is ToolFailure) throw it }
 
         // 2) regex fallback for malformed JSON: pair content/status in order
         val contentRegex = Regex("\"content\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"")
-        val statusRegex = Regex("\"status\"\\s*:\\s*\"([a-zA-Z_\\- ]+)\"")
+        val statusRegex = Regex("\"status\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"")
         val contents = contentRegex.findAll(raw).map { m ->
             m.groupValues[1]
                 .replace("\\\"", "\"").replace("\\n", "\n").replace("\\\\", "\\")
         }.toList()
         if (contents.isEmpty()) return null
         val statuses = statusRegex.findAll(raw).map { parseStatus(it.groupValues[1]) }.toList()
+        if (statuses.size != Regex("\"status\"\\s*:").findAll(raw).count()) {
+            throw ToolFailure("Invalid todo status. Use pending, in_progress, or completed.")
+        }
         return contents.mapIndexed { idx, content ->
             TodoItem(content, statuses.getOrElse(idx) { TodoItem.Status.PENDING })
         }
@@ -406,6 +416,7 @@ class TodoWriteTool(
             "completed", "complete", "done", "finished" -> TodoItem.Status.COMPLETED
             "in_progress", "inprogress", "in-progress", "active", "started", "working", "doing" ->
                 TodoItem.Status.IN_PROGRESS
-            else -> TodoItem.Status.PENDING // pending, waiting, todo, …
+            null, "pending", "waiting", "todo" -> TodoItem.Status.PENDING
+            else -> throw ToolFailure("Invalid todo status '$raw'. Use pending, in_progress, or completed.")
         }
 }

@@ -33,6 +33,18 @@ class LogcatToolTest {
 
     private val stubContext = ToolContext(workspace = StubWorkspace())
 
+    @Test fun `large requests report the cap and invalid levels never become verbose`() = runBlocking {
+        val runner = FakeLogcatRunner(LogcatRunResult(ok = true, output = "one log line"))
+        val tool = ReadLogcatTool(runner = runner)
+        val output = tool.execute(buildJsonObject { put("lines", 5000) }, stubContext).output
+        assertEquals(1000, runner.lastQuery?.lines)
+        assertTrue(output, output.contains("Requested 5000 lines; limited to 1000"))
+        for (input in listOf(buildJsonObject { put("level", "Z") }, buildJsonObject { put("lines", 0) })) {
+            try { tool.execute(input, stubContext); org.junit.Assert.fail("Invalid argument accepted") }
+            catch (e: ToolFailure) { assertTrue(e.message.orEmpty().contains("Invalid log level") || e.message.orEmpty().contains("greater than 0")) }
+        }
+    }
+
     @Test
     fun `tool metadata is correct and read-only`() {
         val tool = ReadLogcatTool()

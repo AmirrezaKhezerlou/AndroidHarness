@@ -73,6 +73,7 @@ class ToolRegistry(private val tools: List<Tool>) {
             browserController: com.androidharness.app.browser.BrowserController? = null,
             searchApi: () -> com.androidharness.app.tools.SearchApiConfig? = { null },
             artifactLoader: ArtifactLoader? = null,
+            toolOutputLoader: ToolOutputLoader? = null,
         ): ToolRegistry {
             val baseTools = mutableListOf<Tool>(
                 ListDirTool(),
@@ -129,6 +130,7 @@ class ToolRegistry(private val tools: List<Tool>) {
                 baseTools.add(CreateArtifactTool(artifactLoader))
                 baseTools.add(ReadArtifactTool(artifactLoader))
             }
+            if (toolOutputLoader != null) baseTools.add(ReadToolOutputTool(toolOutputLoader))
             if (imageStore != null) {
                 baseTools.add(ReadImageTool(imageStore))
             }

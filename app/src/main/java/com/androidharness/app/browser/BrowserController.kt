@@ -13,6 +13,8 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.JsResult
+import android.webkit.JsPromptResult
 import androidx.webkit.WebViewAssetLoader
 import com.androidharness.app.core.LocalPortProbe
 import com.androidharness.app.data.ImageStore
@@ -23,6 +25,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -85,6 +88,7 @@ data class BrowserState(
     val error: String? = null,
     val consoleErrorCount: Int = 0,
     val scrollY: Int = 0,
+    val notices: List<String> = emptyList(),
 )
 
 /**
@@ -104,7 +108,36 @@ data class BrowserEvalOutcome(
     val ok: Boolean,
     val value: String?,
     val error: String?,
+    val notices: List<String> = emptyList(),
 )
+
+/** Keep headless and visible browser automation consistent without hiding page dialogs. */
+open class AgentWebChromeClient(private val controller: BrowserController?) : WebChromeClient() {
+    override fun onJsAlert(view: WebView?, url: String?, message: String?, result: JsResult): Boolean {
+        controller?.reportBrowserNotice("JavaScript alert dismissed: ${message.orEmpty()}")
+        result.confirm()
+        return true
+    }
+    override fun onJsConfirm(view: WebView?, url: String?, message: String?, result: JsResult): Boolean {
+        controller?.reportBrowserNotice("JavaScript confirm cancelled (false): ${message.orEmpty()}")
+        result.cancel()
+        return true
+    }
+    override fun onJsPrompt(view: WebView?, url: String?, message: String?, defaultValue: String?, result: JsPromptResult): Boolean {
+        controller?.reportBrowserNotice("JavaScript prompt cancelled (null): ${message.orEmpty()}")
+        result.cancel()
+        return true
+    }
+    override fun onJsBeforeUnload(view: WebView?, url: String?, message: String?, result: JsResult): Boolean {
+        controller?.reportBrowserNotice("Before-unload dialog accepted to continue navigation: ${message.orEmpty()}")
+        result.confirm()
+        return true
+    }
+    override fun onCreateWindow(view: WebView?, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message?): Boolean {
+        controller?.reportBrowserNotice("Popup window blocked. Navigate its target in the current browser tab instead.")
+        return false
+    }
+}
 
 /**
  * Which element an action targets. Exactly one of the two is set, chosen by
@@ -147,6 +180,19 @@ class BrowserController(
 
     // Ring buffer of console logs (capped)
     private val consoleLogs = CopyOnWriteArrayList<BrowserConsoleLog>()
+    private val pendingNotices = mutableListOf<String>()
+
+    fun reportBrowserNotice(message: String) {
+        synchronized(pendingNotices) {
+            pendingNotices += message.take(2_000)
+            while (pendingNotices.size > 20) pendingNotices.removeAt(0)
+        }
+        recordConsoleMessage(ConsoleMessage(message.take(2_000), "browser automation", 0, ConsoleMessage.MessageLevel.WARNING))
+    }
+
+    private fun takeNotices(): List<String> = synchronized(pendingNotices) {
+        pendingNotices.toList().also { pendingNotices.clear() }
+    }
     private val logLock = Any()
     @Volatile
     private var lastLoggedMessage: String? = null
@@ -285,6 +331,17 @@ class BrowserController(
         }
     }
 
+    suspend fun close() = withContext(Dispatchers.Main) {
+        controlIdleJob?.cancel()
+        trackScope.cancel()
+        listOfNotNull(headlessWebView, activeWebViewRef?.get()).distinct().forEach { view ->
+            runCatching { (view.parent as? android.view.ViewGroup)?.removeView(view); view.destroy() }
+        }
+        headlessWebView = null
+        activeWebViewRef = null
+        _isAgentControlling.value = false
+    }
+
     /** Returns active browser URL if initialized or navigating. */
     fun getActiveUrl(): String? {
         return activeWebViewRef?.get()?.url ?: headlessWebView?.url
@@ -323,7 +380,9 @@ class BrowserController(
             // Ensure headless webview has layout bounds for screenshots/rendering
             layout(0, 0, 1080, 1920)
 
-            webChromeClient = object : WebChromeClient() {
+            settings.setSupportMultipleWindows(true)
+            settings.javaScriptCanOpenWindowsAutomatically = true
+            webChromeClient = object : AgentWebChromeClient(this@BrowserController) {
                 override fun onConsoleMessage(msg: ConsoleMessage?): Boolean {
                     recordConsoleMessage(msg, url.orEmpty())
                     return true
@@ -813,7 +872,7 @@ class BrowserController(
     suspend fun back(): BrowserState = historyStep(
         action = "back",
         canStep = { it.canGoBack() },
-        step = { it.goBack() },
+        step = { it.goBackOrForward(-1) },
     )
 
     /**
@@ -822,7 +881,7 @@ class BrowserController(
     suspend fun forward(): BrowserState = historyStep(
         action = "forward",
         canStep = { it.canGoForward() },
-        step = { it.goForward() },
+        step = { it.goBackOrForward(1) },
     )
 
     /** Shared body of [back] and [forward]; see [back] for why each guard exists. */
@@ -887,9 +946,10 @@ class BrowserController(
                 is HistoryStepOutcome.Correct -> {
                     // The step overshot the intended entry; walk it back so the
                     // caller gets the page one step away, not two.
-                    awaitLandOnIndex(decision.index, back = !back)
+                    val landed = awaitLandOnIndex(decision.index)
                     awaitScrollSettle()
-                    return extractState().withLoadNote(outcome)
+                    return extractState().withLoadNote(if (landed) outcome else outcome.copy(
+                        error = "The browser skipped the requested history entry and could not restore it. The displayed page is not the requested destination."))
                 }
 
                 HistoryStepOutcome.Bounce -> Unit // Step again from the new position.
@@ -936,16 +996,16 @@ class BrowserController(
     }
 
     /** Steps until [index] is the current entry, within the history-step budget. */
-    private suspend fun awaitLandOnIndex(index: Int, back: Boolean) {
-        var attempts = 0
-        while (attempts < MAX_HISTORY_STEPS && historyPosition()?.index != index) {
-            attempts++
-            withContext(Dispatchers.Main) {
-                val wv = getOrCreateWebView()
-                if (back) wv.goBack() else wv.goForward()
-            }
-            awaitHistoryIndex(index, timeoutMs = 3_000)
+    private suspend fun awaitLandOnIndex(index: Int): Boolean {
+        val current = historyPosition() ?: return false
+        if (current.index == index) return true
+        // Browser navigation can skip script-created entries. The page history
+        // API addresses the exact offset instead of applying that UI heuristic.
+        withContext(Dispatchers.Main) {
+            getOrCreateWebView().evaluateJavascript("history.go(${index - current.index});", null)
         }
+        awaitHistoryIndex(index, timeoutMs = 3_000)
+        return historyPosition()?.index == index
     }
 
     /**
@@ -1040,10 +1100,10 @@ class BrowserController(
                 outcome = awaitStagedPromise(awaitPromiseMs)
             }
             track("eval", detail, ok = outcome.ok)
-            outcome
+            outcome.copy(notices = takeNotices())
         } catch (e: Exception) {
             track("eval", detail, ok = false)
-            BrowserEvalOutcome(false, null, e.message ?: "Evaluation failed")
+            BrowserEvalOutcome(false, null, e.message ?: "Evaluation failed", notices = takeNotices())
         }
     }
 
@@ -1133,9 +1193,8 @@ class BrowserController(
     }
 
     private suspend fun evalRawOn(wv: WebView, code: String, timeoutMs: Long = 10_000): String = withContext(Dispatchers.Main) {
-        if (wv.url.isNullOrBlank()) {
-            wv.loadUrl("about:blank")
-        }
+        // url can briefly be null during history navigation. Loading a blank
+        // page here cancelled that navigation and created a fresh history entry.
         val deferred = CompletableDeferred<String>()
         wv.evaluateJavascript(code) { result ->
             deferred.complete(result ?: "null")
@@ -1288,7 +1347,7 @@ class BrowserController(
                 title = "",
                 error = "Failed to parse DOM state: ${it.message}",
             )
-        }
+        }.copy(notices = takeNotices())
     }
 
     companion object {

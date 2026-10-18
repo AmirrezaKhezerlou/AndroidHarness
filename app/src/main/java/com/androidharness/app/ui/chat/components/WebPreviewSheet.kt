@@ -1058,6 +1058,8 @@ private fun WebPageView(
                         @SuppressLint("SetJavaScriptEnabled")
                         settings.apply {
                             javaScriptEnabled = true
+                            setSupportMultipleWindows(true)
+                            javaScriptCanOpenWindowsAutomatically = true
                             domStorageEnabled = true
                             cacheMode = WebSettings.LOAD_DEFAULT
                             loadWithOverviewMode = true
@@ -1156,7 +1158,7 @@ private fun WebPageView(
                             }
                         }
 
-                        webChromeClient = object : WebChromeClient() {
+                        webChromeClient = object : com.androidharness.app.browser.AgentWebChromeClient(browserController) {
                             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                                 progress = newProgress
                                 if (newProgress == 100) isLoading = false

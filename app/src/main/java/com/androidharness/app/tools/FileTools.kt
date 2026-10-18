@@ -345,6 +345,7 @@ class FileInfoTool : Tool {
         withContext(Dispatchers.IO) {
             val path = args["path"]?.jsonPrimitive?.content
                 ?: throw ToolFailure("Missing required argument: path")
+            if (path.isBlank()) throw ToolFailure("path must not be empty. Use '.' explicitly for the workspace root.")
             try {
                 val node = ctx.workspace.resolve(path)
                 if (!node.exists) {
@@ -355,8 +356,11 @@ class FileInfoTool : Tool {
                 }
                 val sb = StringBuilder()
                 sb.append("path: ").append(path).append('\n')
-                sb.append("type: ").append(if (node.isDirectory) "directory" else "file").append('\n')
+                sb.append("type: ").append(node.fileType).append('\n')
                 sb.append("size_bytes: ").append(node.length).append('\n')
+                if (CaseCollision.insensitiveMount(ctx.workspace.shellRoot?.absolutePath, ctx.workspace.isSaf)) {
+                    sb.append("permissions_note: Shared/document storage does not provide normal Unix chmod protection; store private credentials in app-private storage.\n")
+                }
                 if (node.isFile) {
                     val info = inspectFileInfo(node)
                     if (info.isEmpty) {
@@ -414,6 +418,7 @@ class WriteFileTool : Tool {
         withContext(Dispatchers.IO) {
             val path = args["path"]?.jsonPrimitive?.content
                 ?: throw ToolFailure("Missing required argument: path")
+            if (path.isBlank()) throw ToolFailure("path must not be empty. Use a file path; use '.' explicitly for directory metadata.")
             val content = args["content"]?.jsonPrimitive?.content
                 ?: throw ToolFailure("Missing required argument: content")
             val file = ctx.workspace.resolve(path)
@@ -494,11 +499,14 @@ internal fun globMatcher(pattern: String): java.nio.file.PathMatcher = try {
 class SearchFilesTool : Tool {
     override val name = "search_files"
     override val description =
-        "Find files in the workspace whose name matches a glob pattern (e.g. \"*.kt\", \"**/*.gradle\")."
+        "Find files by glob, sorted by path. Use offset/limit to page through results and recursive=false for direct children only."
     override val parametersSchema = Schema.obj(
         mapOf(
             "pattern" to Schema.string("Glob pattern matched against file names/paths."),
             "path" to Schema.string("Subdirectory to search in. Defaults to the workspace root."),
+            "offset" to Schema.integer("1-based result to start at. Default 1."),
+            "limit" to Schema.integer("Results per page (1..300). Default 300."),
+            "recursive" to Schema.boolean("Search subdirectories too. Default true."),
         ),
         required = listOf("pattern"),
     )
@@ -509,6 +517,11 @@ class SearchFilesTool : Tool {
             val pattern = args["pattern"]?.jsonPrimitive?.content
                 ?: throw ToolFailure("Missing required argument: pattern")
             val path = args["path"]?.jsonPrimitive?.content ?: "."
+            val offset = args["offset"]?.jsonPrimitive?.intOrNull ?: 1
+            val limit = args["limit"]?.jsonPrimitive?.intOrNull ?: MAX_SEARCH_RESULTS
+            if (offset < 1) throw ToolFailure("offset must be greater than 0.")
+            if (limit !in 1..MAX_SEARCH_RESULTS) throw ToolFailure("limit must be between 1 and $MAX_SEARCH_RESULTS.")
+            val recursive = args["recursive"]?.jsonPrimitive?.booleanOrNull ?: true
 
             // Match against the file name via a synthetic path; ** patterns
             // additionally match against the workspace-relative path. When
@@ -521,8 +534,12 @@ class SearchFilesTool : Tool {
                 }.getOrNull()
             } else null
             val matches = mutableListOf<String>()
-            ctx.workspace.walk(path).forEach { node ->
-                if (matches.size >= MAX_SEARCH_RESULTS) return@forEach
+            val nodes = if (recursive) ctx.workspace.walk(path) else {
+                val root = ctx.workspace.resolve(path)
+                if (!root.exists) throw ToolFailure("Path does not exist: $path")
+                if (root.isDirectory) root.list().asSequence() else sequenceOf(root)
+            }
+            nodes.forEach { node ->
                 if (!node.isFile) return@forEach
                 val nameMatch = runCatching {
                     nameMatcher.matches(java.nio.file.Path.of(node.name))
@@ -537,11 +554,16 @@ class SearchFilesTool : Tool {
                 } else false
                 if (nameMatch || pathMatch || rootMatch) matches += node.relPath
             }
+            val sorted = matches.sorted()
+            val page = sorted.drop(offset - 1).take(limit)
             if (matches.isEmpty()) ToolResult(true, "No files matched \"$pattern\".")
+            else if (page.isEmpty()) ToolResult(true, "[offset $offset is beyond end of results: ${matches.size} files]")
             else ToolResult(
                 true,
-                matches.joinToString("\n") +
-                    if (matches.size >= MAX_SEARCH_RESULTS) "\n[truncated at $MAX_SEARCH_RESULTS results]" else "",
+                page.joinToString("\n") + if (offset > 1 || offset - 1 + page.size < sorted.size) {
+                    "\n[showing results $offset..${offset - 1 + page.size} of ${sorted.size}" +
+                        (if (offset - 1 + page.size < sorted.size) "; next offset=${offset + page.size}" else "") + "]"
+                } else "",
             )
         }
 }
@@ -752,6 +774,8 @@ class GrepTool(
             "pattern" to Schema.string("Regular expression to search for."),
             "path" to Schema.string("Subdirectory to search in. Defaults to the workspace root."),
             "include" to Schema.string("Optional glob to limit files, e.g. \"*.kt\"."),
+            "offset" to Schema.integer("1-based matching line to start at. Default 1."),
+            "limit" to Schema.integer("Matches per page (1..200). Default 200."),
         ),
         required = listOf("pattern"),
     )
@@ -774,6 +798,10 @@ class GrepTool(
             }
             val path = args["path"]?.jsonPrimitive?.content ?: "."
             val include = args["include"]?.jsonPrimitive?.content
+            val offset = args["offset"]?.jsonPrimitive?.intOrNull ?: 1
+            val limit = args["limit"]?.jsonPrimitive?.intOrNull ?: MAX_GREP_MATCHES
+            if (offset < 1) throw ToolFailure("offset must be greater than 0.")
+            if (limit !in 1..MAX_GREP_MATCHES) throw ToolFailure("limit must be between 1 and $MAX_GREP_MATCHES.")
             val includeMatcher = include?.let {
                 globMatcher(it)
             }
@@ -795,9 +823,10 @@ class GrepTool(
             val future = executor.submit(java.util.concurrent.Callable {
                 val matches = mutableListOf<String>()
                 val skipped = mutableListOf<String>()
+                var matchIndex = 0
                 val budget = RegexStepBudget(regexStepBudget, regexTimeoutMs)
-                for (node in ctx.workspace.walk(path)) {
-                    if (matches.size >= MAX_GREP_MATCHES) break
+                for (node in ctx.workspace.walk(path).sortedBy { it.relPath }) {
+                    if (matches.size > limit) break
                     if (!node.isFile) continue
                     // The include filter runs BEFORE the size/binary/skip
                     // bookkeeping. A file the caller excluded is not part of
@@ -811,7 +840,10 @@ class GrepTool(
                         skipped += "${node.relPath} (>2MB)"
                         continue
                     }
-                    if (node.isBinary()) continue
+                    if (node.isBinary()) {
+                        skipped += "${node.relPath} (binary)"
+                        continue
+                    }
                     val text = runCatching { node.readText() }.getOrNull()
                     if (text == null) {
                         skipped += "${node.relPath} (read failed)"
@@ -820,14 +852,15 @@ class GrepTool(
                     val lines = splitLines(text)
                     try {
                         lines.forEachIndexed { idx, line ->
-                            if (matches.size >= MAX_GREP_MATCHES) return@forEachIndexed
+                            if (matches.size > limit) return@forEachIndexed
                             val matchStart = if (line.length <= 65_536) {
                                 regex.find(BudgetedCharSequence(line, budget))?.range?.first
                             } else {
                                 findInLongLine(regex, line, budget)
                             }
                             if (matchStart != null) {
-                                matches += "${node.relPath}:${idx + 1}: " + grepExcerpt(line, matchStart)
+                                matchIndex++
+                                if (matchIndex >= offset) matches += "${node.relPath}:${idx + 1}: " + grepExcerpt(line, matchStart)
                             }
                         }
                     } catch (e: RegexBudgetExceeded) {
@@ -849,12 +882,15 @@ class GrepTool(
                     "\n[Skipped: $preview$extra]"
                 } else ""
 
-                if (matches.isEmpty()) ToolResult(true, "No matches for \"$pattern\".$skippedNote")
+                val page = matches.take(limit)
+                if (matches.isEmpty()) ToolResult(true,
+                    (if (offset > 1 && matchIndex > 0) "[offset $offset is beyond end of results: $matchIndex matches]"
+                    else "No matches for \"$pattern\".") + skippedNote)
                 else ToolResult(
                     true,
-                    "Found ${matches.size} match(es) for \"$pattern\":\n" +
-                        matches.joinToString("\n") +
-                        (if (matches.size >= MAX_GREP_MATCHES) "\n[truncated at $MAX_GREP_MATCHES matches]" else "") +
+                    "Found ${page.size} match(es) for \"$pattern\":\n" +
+                        page.joinToString("\n") +
+                        (if (matches.size > limit) "\n[more matches available; next offset=${offset + page.size}]" else "") +
                         skippedNote,
                 )
             })

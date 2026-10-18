@@ -23,6 +23,7 @@ internal fun formatBrowserState(state: BrowserState): String {
     if (!state.error.isNullOrBlank()) {
         sb.append("Warning: ").append(state.error).append("\n")
     }
+    state.notices.forEach { sb.append("Browser notice: ").append(it).append('\n') }
 
     if (state.interactiveElements.isNotEmpty()) {
         sb.append("\nInteractive Elements (use numeric id with browser_click or browser_type):\n")
@@ -249,10 +250,11 @@ class BrowserEvalTool(
 
         return try {
             val outcome = controller.evalUser(code)
+            val notices = outcome.notices.joinToString("") { "\nBrowser notice: $it" }
             if (outcome.ok) {
-                ToolResult(true, "Result: ${outcome.value}")
+                ToolResult(true, "Result: ${outcome.value}$notices")
             } else {
-                ToolResult(false, "JavaScript error: ${outcome.error}")
+                ToolResult(false, "JavaScript error: ${outcome.error}$notices")
             }
         } catch (e: Exception) {
             ToolResult(false, "Failed to execute JavaScript: ${e.message}")

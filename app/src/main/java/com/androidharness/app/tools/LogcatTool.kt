@@ -43,7 +43,9 @@ class ReadLogcatTool(
 
     override suspend fun execute(args: JsonObject, ctx: ToolContext): ToolResult =
         withContext(Dispatchers.IO) {
-            val linesCount = (args["lines"]?.jsonPrimitive?.intOrNull ?: 100).coerceIn(1, MAX_LINES)
+            val requestedLines = args["lines"]?.jsonPrimitive?.intOrNull ?: 100
+            if (requestedLines < 1) throw ToolFailure("lines must be greater than 0.")
+            val linesCount = requestedLines.coerceAtMost(MAX_LINES)
             val level = parseLevel(args["level"]?.jsonPrimitive?.content)
             val tag = args["tag"]?.jsonPrimitive?.content?.trim()?.takeIf { it.isNotEmpty() }
             val pkg = args["package_name"]?.jsonPrimitive?.content?.trim()?.takeIf { it.isNotEmpty() }
@@ -84,6 +86,7 @@ class ReadLogcatTool(
 
             val truncatedOutput = finalLines.joinToString("\n").trim()
             val prefixNote = buildString {
+                if (requestedLines > MAX_LINES) append("[Requested $requestedLines lines; limited to $MAX_LINES. Narrow the filters for more specific results.]\n")
                 if (runResult.tierNote != null) {
                     append(runResult.tierNote)
                     append("\n")
@@ -107,7 +110,8 @@ class ReadLogcatTool(
                 prefixNote + truncatedOutput
             }
 
-            ToolResult(true, finalOutput.take(MAX_OUTPUT_CHARS))
+            ToolResult(true, if (finalOutput.length <= MAX_OUTPUT_CHARS) finalOutput else
+                finalOutput.take(MAX_OUTPUT_CHARS) + "\n[Output limited to $MAX_OUTPUT_CHARS characters; narrow the filters or requested lines.]")
         }
 
     private fun parseLevel(raw: String?): String {
@@ -119,7 +123,7 @@ class ReadLogcatTool(
             "W", "WARN", "WARNING" -> "W"
             "E", "ERROR" -> "E"
             "F", "FATAL" -> "F"
-            else -> "V"
+            else -> throw ToolFailure("Invalid log level '$raw'. Use V, D, I, W, E, or F.")
         }
     }
 

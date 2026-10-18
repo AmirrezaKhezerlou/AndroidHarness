@@ -424,7 +424,8 @@ class FileToolsTest {
         val r = run(GrepTool(), "pattern" to "pattern")
         assertTrue(r.ok)
         assertTrue(r.output.contains("sample.txt"))
-        assertFalse(r.output.contains("sample.bin"))
+        assertTrue(r.output.contains("sample.bin (binary)"))
+        assertFalse(r.output.contains("sample.bin:1:"))
     }
 
     @Test

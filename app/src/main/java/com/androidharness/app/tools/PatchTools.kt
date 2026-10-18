@@ -120,6 +120,10 @@ class ApplyPatchTool : Tool {
 
             val files = parsePatch(patch)
             if (files.isEmpty()) throw ToolFailure("No file sections found in the patch. Did you use --- a/path / +++ b/path headers?")
+            val repeated = files.groupBy { ctx.workspace.resolve(it.path).relPath }.filterValues { it.size > 1 }.keys
+            if (repeated.isNotEmpty()) throw ToolFailure(
+                "Patch NOT applied: repeated file sections for ${repeated.joinToString()}. Combine each file's changes into one section.",
+            )
 
             // Phase 1: compute every planned write against CURRENT content.
             // Nothing touches the filesystem here: if any hunk (or a whole
@@ -355,8 +359,7 @@ class ApplyPatchTool : Tool {
         val endsWithNewline = trailingSep.isNotEmpty()
         val current = splitLines(text).toMutableList()
 
-        // Pass 1: locate every hunk against the original text, simulating the
-        // size shift each earlier hunk contributes. All failures are collected
+        // Pass 1: locate every hunk against original line numbers. All failures are collected
         // so the error names EVERY bad hunk with its reason, and the caller
         // never sees a partial application (atomic across hunks).
         data class Resolved(
@@ -366,11 +369,10 @@ class ApplyPatchTool : Tool {
         )
         val resolved = mutableListOf<Resolved>()
         val hunkFailures = mutableListOf<String>()
-        var shift = 0
         for ((hunkIdx, hunk) in hunks.withIndex()) {
             var hunkLines = hunk.lines
             var expectedOld = hunkLines.filter { it.first != '+' }.map { it.second }
-            var position = findPosition(current, expectedOld, hunk.oldStart - 1 + shift)
+            var position = findPosition(current, expectedOld, hunk.oldStart - 1)
 
             // Trailing-newline normalization: patches are sometimes written
             // with the file's final newline modeled as one extra empty
@@ -379,7 +381,7 @@ class ApplyPatchTool : Tool {
             // terminates the last line instead of starting a new one).
             if (position == null && expectedOld.size > 1 && expectedOld.last() == "") {
                 val trimmedExpected = expectedOld.dropLast(1)
-                val trimmedPos = findPosition(current, trimmedExpected, hunk.oldStart - 1 + shift)
+                val trimmedPos = findPosition(current, trimmedExpected, hunk.oldStart - 1)
                 if (trimmedPos != null) {
                     position = trimmedPos
                     hunkLines = dropLastOldEntry(hunkLines)
@@ -399,7 +401,12 @@ class ApplyPatchTool : Tool {
                 continue
             }
             resolved += Resolved(hunkLines, expectedOld, position)
-            shift += hunkLines.count { it.first == '+' } - hunkLines.count { it.first == '-' }
+        }
+
+        resolved.sortedBy { it.position }.zipWithNext().forEach { (first, second) ->
+            if (second.position < first.position + first.expectedOld.size || second.position == first.position) {
+                hunkFailures += "Overlapping hunks in $path near line ${second.position + 1}. Combine them into one hunk; no changes were written."
+            }
         }
 
         if (hunkFailures.isNotEmpty()) {

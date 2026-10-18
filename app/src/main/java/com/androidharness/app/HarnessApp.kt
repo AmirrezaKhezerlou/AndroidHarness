@@ -164,6 +164,7 @@ class AppContainer(val appContext: Context) {
         browserController = browser,
         searchApi = { searchApiConfig },
         artifactLoader = sessions::artifacts,
+        toolOutputLoader = sessions::toolOutput,
     )
     val mcp = com.androidharness.app.tools.mcp.McpManager(appContext, linuxEnv, keys, codeGraph)
     fun routedProvider(): com.androidharness.app.llm.LlmProvider =

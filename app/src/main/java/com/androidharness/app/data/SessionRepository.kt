@@ -93,6 +93,8 @@ class SessionRepository(
     suspend fun messages(sessionId: String): List<ChatMessage> =
         db.dao().messages(sessionId).map { it.toChatMessageCached() }
 
+    suspend fun toolOutput(sessionId: String, toolCallId: String): String? = db.dao().toolOutput(sessionId, toolCallId)
+
     /** Plan awaiting approval; persisted so the card survives process death. */
     suspend fun setPendingPlan(sessionId: String, plan: String?) =
         db.dao().setPendingPlan(sessionId, plan)

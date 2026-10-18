@@ -51,8 +51,7 @@ class ShellTool(
                 )
             val cwd =
                 if (remote != null) File(remote.commandPath(args["cwd"]?.jsonPrimitive?.content ?: "."))
-                else if (ctx.sandboxOff) resolveCwdUnchecked(args, root)
-                else resolveCwd(args, root)
+                else resolveShellWorkingDirectory(args["cwd"]?.jsonPrimitive?.content, root, ctx.sandboxOff)
 
             // Full access skips the denylist re-check; the engine already
             // gated this call against the same policy.
@@ -115,38 +114,18 @@ class ShellTool(
             ToolResult(ok = !res.timedOut && res.exitCode == 0 && !hasSymlinkError, output = sb.toString().trimEnd())
         }
 
-    /** Resolves the optional cwd argument inside the workspace root. */
-    private fun resolveCwd(args: JsonObject, root: File): File {
-        val rel = args["cwd"]?.jsonPrimitive?.content?.trim()
-            ?.removePrefix("./")?.trimEnd('/')
-            ?: return root
-        if (rel.isEmpty()) return root
-        val dir = File(root, rel)
-        val canonicalRoot = root.canonicalFile
-        val canonical = dir.canonicalFile
-        if (!canonical.path.startsWith(canonicalRoot.path)) {
-            throw ToolFailure("cwd is outside the workspace and was blocked: $rel")
-        }
-        if (!canonical.exists()) throw ToolFailure("cwd does not exist: $rel")
-        if (!canonical.isDirectory) throw ToolFailure("cwd is not a directory: $rel")
-        return canonical
-    }
-
-    /** Full access variant: any absolute or escaping cwd resolves unchecked. */
-    private fun resolveCwdUnchecked(args: JsonObject, root: File): File {
-        val rel = args["cwd"]?.jsonPrimitive?.content?.trim()
-            ?.removePrefix("./")?.trimEnd('/')
-            ?: return root
-        if (rel.isEmpty()) return root
-        // Absolute paths resolve directly; relative paths resolve against workspace root.
-        val dir = if (rel.startsWith('/')) File(rel) else File(root, rel)
-        val canonical = dir.canonicalFile
-        if (!canonical.exists()) throw ToolFailure("cwd does not exist: $rel")
-        if (!canonical.isDirectory) throw ToolFailure("cwd is not a directory: $rel")
-        return canonical
-    }
-
     private fun String.truncated(): String =
         if (length <= MAX_OUTPUT_CHARS) this
         else substring(0, MAX_OUTPUT_CHARS) + "\n[truncated]"
+}
+
+internal fun resolveShellWorkingDirectory(raw: String?, root: File, sandboxOff: Boolean): File {
+    val path = raw?.trim()?.removePrefix("./")?.takeIf { it.isNotEmpty() } ?: return root
+    val canonical = (if (path.startsWith('/')) File(path) else File(root, path)).canonicalFile
+    if (!sandboxOff && !canonical.toPath().startsWith(root.canonicalFile.toPath())) {
+        throw ToolFailure("cwd is outside the workspace and was blocked: $path")
+    }
+    if (!canonical.exists()) throw ToolFailure("cwd does not exist: $path")
+    if (!canonical.isDirectory) throw ToolFailure("cwd is not a directory: $path")
+    return canonical
 }

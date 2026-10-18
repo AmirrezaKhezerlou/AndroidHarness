@@ -304,6 +304,9 @@ interface HarnessDao {
     @Query("SELECT * FROM messages WHERE sessionId = :sessionId ORDER BY createdAt ASC, rowid ASC")
     suspend fun messages(sessionId: String): List<MessageEntity>
 
+    @Query("SELECT text FROM messages WHERE sessionId = :sessionId AND role = 'TOOL' AND toolCallId = :toolCallId ORDER BY createdAt DESC, rowid DESC LIMIT 1")
+    suspend fun toolOutput(sessionId: String, toolCallId: String): String?
+
     @Query("SELECT id FROM messages WHERE sessionId = :sessionId ORDER BY createdAt ASC, rowid ASC")
     suspend fun messageIds(sessionId: String): List<String>
 

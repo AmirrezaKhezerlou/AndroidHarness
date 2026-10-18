@@ -78,7 +78,8 @@ object FuzzyEdit {
         val use = if (replaceAll) matches else matches.take(1)
         for ((start, end) in use) {
             out.append(text, cursor, start)
-            out.append(new)
+            val separator = lineEnding(text, start, end) ?: lineEnding(text, 0, text.length)
+            out.append(if (separator == null) new else new.replace("\r\n", "\n").replace('\r', '\n').replace("\n", separator))
             cursor = end
         }
         out.append(text, cursor, text.length)
@@ -126,7 +127,11 @@ object FuzzyEdit {
                 }
             }
             val startIdx = starts[i]
-            val endIdx = starts[i + oldLines.size - 1] + textLines[i + oldLines.size - 1].length
+            var endIdx = starts[i + oldLines.size - 1] + textLines[i + oldLines.size - 1].length
+            if (old.endsWith('\n') || old.endsWith('\r')) {
+                if (endIdx < text.length && text[endIdx] == '\r') endIdx++
+                if (endIdx < text.length && text[endIdx] == '\n') endIdx++
+            }
             out += Match(startIdx, endIdx)
             i += oldLines.size // skip past; no overlapping matches
         }
@@ -140,14 +145,20 @@ object FuzzyEdit {
         var i = 0
         while (i < text.length) {
             val c = text[i]
-            if (c == '\n') {
-                starts[count++] = i + 1
-            } else if (c == '\r') {
-                starts[count++] = i + if (i + 1 < text.length && text[i + 1] == '\n') 2 else 1
-            }
-            i++
+            if (c == '\r' || c == '\n') {
+                i += if (c == '\r' && i + 1 < text.length && text[i + 1] == '\n') 2 else 1
+                starts[count++] = i
+            } else i++
         }
         return starts.copyOf(count)
+    }
+
+    private fun lineEnding(text: String, start: Int, end: Int): String? {
+        for (i in start until end) when (text[i]) {
+            '\r' -> return if (i + 1 < text.length && text[i + 1] == '\n') "\r\n" else "\r"
+            '\n' -> return "\n"
+        }
+        return null
     }
 
     /**

@@ -54,7 +54,7 @@ object ContextHygiene {
 
         return withEvictedImages.mapIndexed { i, m ->
             if (m.role != Role.TOOL || i in keepFull || m.text.length <= maxChars) m
-            else m.copy(text = truncate(m.text, maxChars))
+            else m.copy(text = truncate(m.text, maxChars, m.toolCallId))
         }
     }
 
@@ -105,8 +105,9 @@ object ContextHygiene {
         return shrinkToolResults(sliced)
     }
 
-    private fun truncate(text: String, maxChars: Int): String {
-        val marker = "\n[truncated ${text.length - maxChars} chars of tool output]\n"
+    private fun truncate(text: String, maxChars: Int, toolCallId: String?): String {
+        val recovery = toolCallId?.let { " Use read_tool_output with tool_call_id=${kotlinx.serialization.json.JsonPrimitive(it)} and offset/limit to retrieve omitted text." }.orEmpty()
+        val marker = "\n[truncated ${text.length - maxChars} chars of tool output.$recovery]\n"
         val keep = ((maxChars - marker.length) / 2).coerceAtLeast(64)
         return text.take(keep) + marker + text.takeLast(keep)
     }

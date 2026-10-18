@@ -40,6 +40,25 @@ class PatchToolsTest {
             e.message ?: ""
         }
 
+    @Test fun `overlapping hunks are rejected without losing either original file`() {
+        write("f.txt", "p1\np2\np3\np4\np5\n")
+        write("other.txt", "keep\n")
+        val msg = failingApply("--- a/other.txt\n+++ b/other.txt\n@@ -1 +1 @@\n-keep\n+changed\n" +
+            "--- a/f.txt\n+++ b/f.txt\n@@ -2,3 +2,3 @@\n p2\n-p3\n+FIRST\n p4\n" +
+            "@@ -3,2 +3,2 @@\n-p3\n+SECOND\n p4\n")
+        assertTrue(msg, msg.contains("Overlapping hunks"))
+        assertEquals("p1\np2\np3\np4\np5\n", file("f.txt").readText())
+        assertEquals("keep\n", file("other.txt").readText())
+    }
+
+    @Test fun `duplicate file sections cannot silently replace an earlier plan`() {
+        write("f.txt", "a\nb\n")
+        val msg = failingApply("--- a/f.txt\n+++ b/f.txt\n@@ -1 +1 @@\n-a\n+A\n" +
+            "--- a/f.txt\n+++ b/f.txt\n@@ -2 +2 @@\n-b\n+B\n")
+        assertTrue(msg, msg.contains("repeated file sections"))
+        assertEquals("a\nb\n", file("f.txt").readText())
+    }
+
     // --- files WITHOUT a trailing newline (the stress-test repro) -----------
 
     @Test

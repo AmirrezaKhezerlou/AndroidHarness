@@ -32,6 +32,7 @@ interface FsNode {
     val isDirectory: Boolean
     val isFile: Boolean
     val length: Long
+    val fileType: String get() = when { isDirectory -> "directory"; isFile -> "file"; else -> "special" }
 
     fun list(): List<FsNode>
     fun readText(): String
@@ -55,6 +56,7 @@ interface FsNode {
 
     /** Writes raw bytes to this file node, creating parent directories as needed. */
     fun writeBytes(data: ByteArray)
+    fun writeFrom(input: java.io.InputStream) = writeBytes(input.readBytes())
 
     /** Creates a new empty file [name] inside this (directory) node. */
     fun createFile(name: String): FsNode
@@ -121,45 +123,43 @@ class FileFsNode(val file: File, private val rootPath: java.nio.file.Path) : FsN
             }
         }
     override val name: String get() = file.name
-    override val exists: Boolean get() = file.exists()
-    override val isDirectory: Boolean get() = file.isDirectory
-    override val isFile: Boolean get() = file.isFile
-    override val length: Long get() = file.length()
+    private fun attributes(): java.nio.file.attribute.BasicFileAttributes? = try {
+        java.nio.file.Files.readAttributes(file.toPath(), java.nio.file.attribute.BasicFileAttributes::class.java)
+    } catch (_: java.nio.file.NoSuchFileException) {
+        null
+    } catch (e: Exception) {
+        throw fileFailure("inspect", e)
+    }
 
-    override fun list(): List<FsNode> =
-        file.listFiles().orEmpty().map { FileFsNode(it, rootPath) }
+    private fun fileFailure(action: String, e: Exception): ToolFailure {
+        if (isNameTooLong(e, file.name)) return ToolFailure(longFilenameGuidance(file.name))
+        val denied = e is java.nio.file.AccessDeniedException || e is SecurityException ||
+            e.message.orEmpty().contains("EACCES") || e.message.orEmpty().contains("Permission denied", true)
+        return ToolFailure("Cannot $action '$relPath': " + if (denied) "permission denied" else
+            (e.localizedMessage?.replace(file.absolutePath, relPath) ?: "filesystem error"))
+    }
+
+    override val exists: Boolean get() = attributes() != null
+    override val isDirectory: Boolean get() = attributes()?.isDirectory == true
+    override val isFile: Boolean get() = attributes()?.isRegularFile == true
+    override val length: Long get() = attributes()?.size() ?: 0L
+    override val fileType: String get() = attributes()?.let {
+        when { it.isDirectory -> "directory"; it.isRegularFile -> "file"; else -> "special" }
+    } ?: "missing"
+
+    override fun list(): List<FsNode> = try {
+        java.nio.file.Files.newDirectoryStream(file.toPath()).use { entries ->
+            entries.map { FileFsNode(it.toFile(), rootPath) }
+        }
+    } catch (e: Exception) { throw fileFailure("list", e) }
 
     override fun readText(): String = try {
         file.readText()
     } catch (e: Exception) {
-        if (isNameTooLong(e, file.name)) {
-            throw ToolFailure(longFilenameGuidance(file.name))
-        }
-        throw e
+        throw fileFailure("read", e)
     }
 
-    override fun writeText(content: String) {
-        if (isDirectory) {
-            throw ToolFailure("Cannot write file '$relPath': is a directory")
-        }
-        file.parentFile?.mkdirs()
-        try {
-            java.io.FileOutputStream(file).use { fos ->
-                fos.write(content.toByteArray(Charsets.UTF_8))
-                fos.flush()
-                runCatching { fos.fd.sync() }
-            }
-        } catch (e: Exception) {
-            if (isNameTooLong(e, file.name)) {
-                throw ToolFailure(longFilenameGuidance(file.name))
-            }
-            if (isDirectory || e.message?.contains("EISDIR") == true) {
-                throw ToolFailure("Cannot write file '$relPath': is a directory")
-            }
-            val cleanMsg = e.localizedMessage?.replace(file.absolutePath, relPath) ?: e.message
-            throw ToolFailure("Cannot write file '$relPath': $cleanMsg")
-        }
-    }
+    override fun writeText(content: String) = writeBytes(content.toByteArray(Charsets.UTF_8))
 
     override fun mkdirs() {
         file.mkdirs()
@@ -171,18 +171,33 @@ class FileFsNode(val file: File, private val rootPath: java.nio.file.Path) : FsN
     override fun renameTo(newName: String): Boolean =
         file.renameTo(File(file.parentFile, newName))
 
-    override fun writeBytes(data: ByteArray) {
+    override fun writeBytes(data: ByteArray) = atomicWrite { it.write(data) }
+
+    override fun writeFrom(input: java.io.InputStream) = atomicWrite { input.copyTo(it) }
+
+    private fun atomicWrite(write: (java.io.OutputStream) -> Unit) {
         if (isDirectory) throw ToolFailure("Cannot write file '$relPath': is a directory")
-        file.parentFile?.mkdirs()
+        if (exists && !isFile) throw ToolFailure("Cannot write '$relPath': special files are not supported")
+        if (exists && !java.nio.file.Files.isWritable(file.toPath())) throw ToolFailure("Cannot write '$relPath': permission denied")
+        var temporary: java.nio.file.Path? = null
         try {
-            java.io.FileOutputStream(file).use { fos ->
-                fos.write(data)
+            // Resolve an existing symlink to keep editing its target rather than replacing the link.
+            val target = file.canonicalFile.toPath()
+            java.nio.file.Files.createDirectories(target.parent)
+            val permissions = if (exists) runCatching { java.nio.file.Files.getPosixFilePermissions(target) }.getOrNull() else null
+            temporary = java.nio.file.Files.createTempFile(target.parent, ".harness-write-", ".tmp")
+            java.io.FileOutputStream(temporary.toFile()).use { fos ->
+                write(fos)
                 fos.flush()
-                runCatching { fos.fd.sync() }
+                fos.fd.sync()
             }
+            if (permissions != null) java.nio.file.Files.setPosixFilePermissions(temporary, permissions)
+            java.nio.file.Files.move(temporary, target, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING)
         } catch (e: Exception) {
-            val cleanMsg = e.localizedMessage?.replace(file.absolutePath, relPath) ?: e.message
-            throw ToolFailure("Cannot write file '$relPath': $cleanMsg")
+            throw fileFailure("write", e)
+        } finally {
+            temporary?.let { runCatching { java.nio.file.Files.deleteIfExists(it) } }
         }
     }
 
@@ -211,10 +226,7 @@ class FileFsNode(val file: File, private val rootPath: java.nio.file.Path) : FsN
     override fun openInputStream(): java.io.InputStream? = try {
         if (exists && isFile) file.inputStream() else null
     } catch (e: Exception) {
-        if (isNameTooLong(e, file.name)) {
-            throw ToolFailure(longFilenameGuidance(file.name))
-        }
-        throw e
+        throw fileFailure("read", e)
     }
 
     override fun isBinary(): Boolean {

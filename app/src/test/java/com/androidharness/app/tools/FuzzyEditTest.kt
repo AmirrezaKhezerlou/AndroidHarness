@@ -46,9 +46,29 @@ class FuzzyEditTest {
         val r = FuzzyEdit.replace(file, old, "int main() {\n    return 1;\n}", false)
         val o = ok(r)
         assertEquals(Level.LINE_ENDINGS, o.level)
-        assertTrue(o.newText.contains("return 1"))
-        // the CRLF after the final matched line is preserved
-        assertTrue(o.newText.endsWith("}\r\n"))
+        assertEquals("int main() {\r\n    return 1;\r\n}\r\n", o.newText)
+    }
+
+    @Test fun `CRLF edits preserve every surrounding byte and never duplicate a line`() {
+        assertEquals("one\r\nTWO\r\nTHREE\r\nfour\r\n", ok(FuzzyEdit.replace(
+            "one\r\ntwo\r\nthree\r\nfour\r\n", "two\nthree", "TWO\nTHREE", false)).newText)
+        assertEquals("aa\r\nBB\r\nCC\r\n", ok(FuzzyEdit.replace(
+            "aa\r\nbb\r\ncc\r\n", "bb\ncc", "BB\nCC", false)).newText)
+    }
+
+    @Test fun `normalized replacement consumes a requested trailing terminator exactly once`() {
+        for (eol in listOf("\r\n", "\r", "\n")) {
+            val original = listOf("one", "two ", "three", "four", "").joinToString(eol)
+            assertEquals(listOf("one", "TWO", "THREE", "four", "").joinToString(eol),
+                ok(FuzzyEdit.replace(original, "two\nthree\n", "TWO\nTHREE\n", false)).newText)
+        }
+    }
+
+    @Test fun `CRLF replace all and indentation matches keep correct original spans`() {
+        assertEquals("A\r\nB\r\nxx\r\nA\r\nB", ok(FuzzyEdit.replace(
+            "a\r\nb\r\nxx\r\na\r\nb", "a\nb", "A\nB", true)).newText)
+        assertEquals("head\r\nX\r\nY\r\ntail", ok(FuzzyEdit.replace(
+            "head\r\n  a\r\n  b\r\ntail", "a\nb", "X\nY", false)).newText)
     }
 
     @Test
