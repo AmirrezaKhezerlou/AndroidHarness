@@ -67,7 +67,7 @@ class SkillStore(
 
         val matches = findAll(key)
         if (matches.isEmpty()) {
-            val available = enabled().take(12).joinToString(", ") { it.name }
+            val available = enabled().joinToString(", ") { it.name }
             return Result.failure(
                 SkillParseException("Skill '$key' not found." + if (available.isNotEmpty()) " Available: $available" else ""),
             )

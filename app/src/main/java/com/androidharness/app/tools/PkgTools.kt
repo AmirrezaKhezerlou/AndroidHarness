@@ -17,9 +17,9 @@ class PkgInstallTool(
     constructor(linuxEnv: LinuxEnvironmentManager) : this(
         isReady = { linuxEnv.isReady },
         installedPackages = { linuxEnv.installedPackages() },
-        installPackages = { linuxEnv.install(it) },
+        installPackages = { linuxEnv.install(it).getOrThrow() },
         installForWorkspace = { packages, workspace ->
-            linuxEnv.install(packages, workspace)
+            linuxEnv.install(packages, workspace).getOrThrow()
             check(linuxEnv.isReady && packages.all(linuxEnv::installedContains)) { "Package installation did not complete. Check the Linux environment status." }
         },
     )
@@ -62,13 +62,22 @@ class PkgInstallTool(
             return ToolResult(result.exitCode == 0, result.rawOutput + result.rawStderr + "\n" + result.note.orEmpty())
         }
         return try {
+            val previouslyInstalled = installedPackages().toSet()
             if (installForWorkspace != null) installForWorkspace.invoke(pkgs, ctx.workspace.displayPath) else installPackages(pkgs)
-            val newlyInstalled = installedPackages().filter { it in pkgs }
-            val listText = if (newlyInstalled.isNotEmpty()) newlyInstalled.joinToString(", ") else pkgs.joinToString(", ")
+            val installed = installedPackages().toSet()
+            check(pkgs.all { it in installed }) { "Package installation did not complete." }
+            val newlyInstalled = pkgs.filter { it !in previouslyInstalled }
+            val reused = pkgs.filter { it in previouslyInstalled }
             ToolResult(
                 ok = true,
-                output = "Successfully installed: $listText. Binaries are now ready in the shell PATH."
+                output = buildList {
+                    if (newlyInstalled.isNotEmpty()) add("Successfully installed: ${newlyInstalled.joinToString(", ")}.")
+                    if (reused.isNotEmpty()) add("Already installed: ${reused.joinToString(", ")} (verified/repaired if needed).")
+                    add("Binaries are now ready in the shell PATH.")
+                }.joinToString(" ")
             )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             ToolResult(false, "Package installation failed: ${e.message}")
         }

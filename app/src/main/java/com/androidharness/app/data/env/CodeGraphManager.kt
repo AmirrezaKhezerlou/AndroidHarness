@@ -450,7 +450,10 @@ class CodeGraphManager(
 
     /** Downloads and lays out the runtime. Null on success, else the failure to report. */
     private suspend fun provision(): CodeGraphCommandResult? {
-        linuxEnv.install(listOf("bash"))
+        val preparation = linuxEnv.install(listOf("bash"))
+        if (preparation.isFailure) {
+            return CodeGraphCommandResult(false, "The Linux environment could not be prepared: ${preparation.exceptionOrNull()?.message}")
+        }
         if (!linuxEnv.isReady) {
             return CodeGraphCommandResult(false, "The Linux environment could not be prepared.")
         }

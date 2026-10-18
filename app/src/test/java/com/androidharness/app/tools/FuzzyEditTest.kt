@@ -67,8 +67,19 @@ class FuzzyEditTest {
     @Test fun `CRLF replace all and indentation matches keep correct original spans`() {
         assertEquals("A\r\nB\r\nxx\r\nA\r\nB", ok(FuzzyEdit.replace(
             "a\r\nb\r\nxx\r\na\r\nb", "a\nb", "A\nB", true)).newText)
-        assertEquals("head\r\nX\r\nY\r\ntail", ok(FuzzyEdit.replace(
+        assertEquals("head\r\n  X\r\nY\r\ntail", ok(FuzzyEdit.replace(
             "head\r\n  a\r\n  b\r\ntail", "a\nb", "X\nY", false)).newText)
+    }
+
+    @Test fun `tolerant matching keeps first line indentation just like substring matching`() {
+        assertEquals("x\n   KEY v\n   NEWVAL\nz\n", ok(FuzzyEdit.replace(
+            "x\n   KEY v\n   VAL\nz\n", "KEY v\n      VAL", "KEY v\n   NEWVAL", false)).newText)
+        assertEquals("start\r\n\tif x:\r\n    DO_NEW()\r\nend\r\n", ok(FuzzyEdit.replace(
+            "start\r\n\tif x:\r\n\t\tdo()\r\nend\r\n", "if x:\n  do()", "if x:\n    DO_NEW()", false)).newText)
+        assertEquals("    FOO()\n", ok(FuzzyEdit.replace("    foo()\n", "foo()", "FOO()", false)).newText)
+        assertEquals("\tNEW\n", ok(FuzzyEdit.replace("\tKEY  \n", "    KEY", "    NEW", false)).newText)
+        assertEquals("X\n", ok(FuzzyEdit.replace("\tKEY  \n", "\tKEY\n", "X\n", false)).newText)
+        assertEquals("next\n", ok(FuzzyEdit.replace("\tKEY  \nnext\n", "KEY\n", "", false)).newText)
     }
 
     @Test

@@ -32,6 +32,14 @@ private const val GIT_BASE_ARGS = "-c 'safe.directory=*' -c gc.auto=0 -c mainten
 internal fun gitCmd(vararg steps: String): String =
     steps.joinToString(" && ") { "git $GIT_BASE_ARGS ${it.trim()}" }
 
+internal fun gitDiffCmd(path: String?, staged: Boolean): String {
+    val flags = if (staged) " --staged" else ""
+    // Outside a repo, plain `git diff` can enter no-index mode and load a
+    // different config path. Establish repository context before either diff.
+    return gitCmd("rev-parse --git-dir >/dev/null", "diff$flags --stat",
+        "diff$flags" + if (path.isNullOrBlank()) "" else " -- ${path.shellQuote()}")
+}
+
 /**
  * Runtime directory whose artifacts must never be swept into a commit.
  *
@@ -299,17 +307,7 @@ class GitDiffTool(
         withContext(Dispatchers.IO) {
             val path = args["path"]?.jsonPrimitive?.content
             val staged = args["staged"]?.jsonPrimitive?.content == "true"
-            val statCmd = buildString {
-                append("diff")
-                if (staged) append(" --staged")
-                append(" --stat")
-            }
-            val detailCmd = buildString {
-                append("diff")
-                if (staged) append(" --staged")
-                if (!path.isNullOrBlank()) append(" -- ").append(path.shellQuote())
-            }
-            runGitWithRetry(router, linuxEnv, ctx, gitCmd(statCmd, detailCmd))
+            runGitWithRetry(router, linuxEnv, ctx, gitDiffCmd(path, staged))
         }
 }
 

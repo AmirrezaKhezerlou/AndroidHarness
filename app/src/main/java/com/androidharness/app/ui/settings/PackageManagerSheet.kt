@@ -272,7 +272,7 @@ fun PackageManagerSheet(
                                     errorMessage = null
                                     scope.launch {
                                         try {
-                                            linuxEnv.install(listOf(pkg.name))
+                                            linuxEnv.install(listOf(pkg.name)).getOrThrow()
                                             installedList = linuxEnv.installedPackages()
                                         } catch (e: Exception) {
                                             errorMessage = e.message ?: "Failed to install ${pkg.name}"
@@ -308,7 +308,7 @@ fun PackageManagerSheet(
                                 errorMessage = null
                                 scope.launch {
                                     try {
-                                        linuxEnv.install(listOf(name))
+                                        linuxEnv.install(listOf(name)).getOrThrow()
                                         installedList = linuxEnv.installedPackages()
                                     } catch (e: Exception) {
                                         errorMessage = e.message ?: "Failed to install $name"

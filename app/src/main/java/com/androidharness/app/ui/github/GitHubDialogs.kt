@@ -72,7 +72,7 @@ fun GitHubImportDialog(container: AppContainer, onDismiss: () -> Unit, onImporte
                 busy = true; message = "Installing Git tools…"
                 scope.launch {
                     try {
-                        container.linuxEnv.install(container.linuxEnv.corePackages)
+                        container.linuxEnv.install(container.linuxEnv.corePackages).getOrThrow()
                         check(container.linuxEnv.gitToolsReady) { (container.linuxEnv.state.value as? com.androidharness.app.data.env.EnvState.Failed)?.message ?: "Git tools could not be installed. Retry the installation." }
                         message = "Git tools ready."
                     }
@@ -215,7 +215,7 @@ fun GitHubPublishDialog(container: AppContainer, projectId: String, projectName:
         Text(projectName, style = MaterialTheme.typography.titleMedium)
         if (environment !is com.androidharness.app.data.env.EnvState.Ready || !container.linuxEnv.gitToolsReady) {
             OutlinedButton(onClick = { act {
-                container.linuxEnv.install(container.linuxEnv.corePackages)
+                container.linuxEnv.install(container.linuxEnv.corePackages).getOrThrow()
                 check(container.linuxEnv.gitToolsReady) { (container.linuxEnv.state.value as? com.androidharness.app.data.env.EnvState.Failed)?.message ?: "Git tools could not be installed. Retry the installation." }
                 refresh(); message = "Git tools ready."
             } }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Install or repair Git tools") }

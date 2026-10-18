@@ -47,7 +47,7 @@ object FuzzyEdit {
 
         // L0, today's behavior: plain substring.
         val exact = findAllExact(text, old)
-        if (exact.isNotEmpty()) return finish(text, exact, new, replaceAll, Level.EXACT)
+        if (exact.isNotEmpty()) return finish(text, exact, old, new, replaceAll, Level.EXACT)
 
         // L1, same lines, ignoring trailing whitespace and line terminators.
         val l1 = findNormalized(text, old, Level.LINE_ENDINGS)
@@ -60,14 +60,15 @@ object FuzzyEdit {
                         "Re-read the file and retry with the current contents."
                 )
             }
-            return finish(text, l2, new, replaceAll, Level.INDENTATION)
+            return finish(text, l2, old, new, replaceAll, Level.INDENTATION)
         }
-        return finish(text, l1, new, replaceAll, Level.LINE_ENDINGS)
+        return finish(text, l1, old, new, replaceAll, Level.LINE_ENDINGS)
     }
 
     private fun finish(
         text: String,
         matches: List<Match>,
+        old: String,
         new: String,
         replaceAll: Boolean,
         level: Level,
@@ -79,7 +80,14 @@ object FuzzyEdit {
         for ((start, end) in use) {
             out.append(text, cursor, start)
             val separator = lineEnding(text, start, end) ?: lineEnding(text, 0, text.length)
-            out.append(if (separator == null) new else new.replace("\r\n", "\n").replace('\r', '\n').replace("\n", separator))
+            // A normalized match consumes the entire first line, unlike a substring
+            // match. Rebase its leading whitespace so omitted/drifted indentation
+            // does not silently move the replacement out of its enclosing block.
+            val oldIndent = old.takeWhile { it == ' ' || it == '\t' }
+            val replacement = if (level != Level.EXACT && new.isNotEmpty() && new.startsWith(oldIndent)) {
+                text.substring(start, end).takeWhile { it == ' ' || it == '\t' } + new.removePrefix(oldIndent)
+            } else new
+            out.append(if (separator == null) replacement else replacement.replace("\r\n", "\n").replace('\r', '\n').replace("\n", separator))
             cursor = end
         }
         out.append(text, cursor, text.length)

@@ -82,7 +82,7 @@ class BgListTool(
 ) : Tool {
     override val name = "bg_list"
     override val description =
-        "List background shell processes started with shell_background, with status and recent log output."
+        "List active background jobs and up to 100 recent completed jobs, with exit codes and recent log output."
     override val parametersSchema = Schema.obj(emptyMap())
     override val isReadOnly = true
 
@@ -92,12 +92,12 @@ class BgListTool(
                 return@withContext com.androidharness.app.workspace.SshJobs.list(it)
             }
             val entries = store.list()
-            if (entries.isEmpty()) return@withContext ToolResult(true, "No background processes running.")
+            if (entries.isEmpty()) return@withContext ToolResult(true, "No tracked background jobs.")
             val sb = StringBuilder()
             entries.forEach { (e, alive) ->
-                val uptime = (System.currentTimeMillis() - e.startedAt) / 1000
+                val uptime = ((e.finishedAt ?: System.currentTimeMillis()) - e.startedAt) / 1000
                 sb.append("[${e.id}] ")
-                    .append(if (alive) "running" else "exited")
+                    .append(if (alive) "running" else "${e.termination ?: "exited"} (exit ${e.exitCode?.toString() ?: "unknown"})")
                     .append(" (${uptime}s, via ").append(e.source.lowercase()).append(")")
                     .append(if (e.startedAt < store.bootAt) " [prev app session]" else "")
                     .append(" ")
@@ -127,7 +127,9 @@ class BgKillTool(
             (ctx.workspace as? com.androidharness.app.workspace.SshFs)?.let {
                 return@withContext com.androidharness.app.workspace.SshJobs.stop(it, id)
             }
-            if (store.get(id) == null) ToolResult(false, "No background process with id $id.")
+            val entry = store.list().firstOrNull { it.first.id == id }?.first
+            if (entry == null) ToolResult(false, "No background process with id $id.")
+            else if (entry.finishedAt != null) ToolResult(true, "Background process $id already ${entry.termination ?: "exited"} (exit ${entry.exitCode?.toString() ?: "unknown"}).")
             else if (store.kill(id)) ToolResult(true, "Killed background process $id.")
             else ToolResult(false, "Failed to kill process $id.")
         }

@@ -288,6 +288,7 @@ internal fun gitSystemAttributesEnvOf(
  */
 class LinuxEnvironmentManager(
     private val context: Context,
+    private val packageIndexLoader: (suspend () -> Map<String, PkgMeta>)? = null,
     /** Master GitHub token from the app's encrypted settings (never stored in the prefix). */
     private val githubTokenProvider: () -> String? = { null },
 ) {
@@ -398,8 +399,10 @@ class LinuxEnvironmentManager(
     suspend fun install(wanted: List<String>, requester: String = "Manual install") = withContext(Dispatchers.IO) {
         installMutex.withLock {
             val broken = brokenInstalledPackages().toSet()
-            if (!(isReady && wanted.all { installedContains(it) && it !in broken })) installLocked(wanted)
-            if (wanted.all { installedContains(it) }) toolStore.require(wanted, requester)
+            val result = if (isReady && wanted.all { installedContains(it) && it !in broken }) Result.success(Unit)
+                else installLocked(wanted)
+            if (result.isSuccess) toolStore.require(wanted, requester)
+            result
         }
     }
 
@@ -412,8 +415,7 @@ class LinuxEnvironmentManager(
     suspend fun getPackageIndex(forceRefresh: Boolean = false): Map<String, PkgMeta> = withContext(Dispatchers.IO) {
         indexMutex.withLock {
             if (!forceRefresh && cachedIndex != null) return@withLock cachedIndex!!
-            val text = fetchText(indexUrl())
-            val index = PackageIndex.parse(text)
+            val index = packageIndexLoader?.invoke() ?: PackageIndex.parse(fetchText(indexUrl()))
             cachedIndex = index
             index
         }
@@ -512,7 +514,9 @@ class LinuxEnvironmentManager(
             (packageProtection(name) ?: "No recorded requirements remain."))
     }
 
-    private suspend fun installLocked(wanted: List<String>) {
+    private suspend fun installLocked(wanted: List<String>): Result<Unit> {
+        val wasReady = isReady
+        var prefixChanged = false
         try {
             // React to the tap immediately: fetching the package index takes
             // seconds on mobile networks before the first package download.
@@ -528,7 +532,7 @@ class LinuxEnvironmentManager(
                 markInstalled(wanted)
                 _state.value = EnvState.Ready
                 runCatching { deployStateListener?.invoke() }
-                return
+                return Result.success(Unit)
             }
 
             _state.value = EnvState.Downloading(0, closure.size, closure.first().name)
@@ -546,6 +550,7 @@ class LinuxEnvironmentManager(
                 val debFile = File(tempDir, debBase)
                 downloadVerified("$BASE_URL/$fileField", debFile, pkg.sha256)
                 _state.value = EnvState.Installing(i, closure.size, pkg.name)
+                prefixChanged = true
                 val installedPaths = extractDeb(debFile)
                 recordPackageFiles(pkg, installedPaths)
                 debFile.delete()
@@ -560,11 +565,21 @@ class LinuxEnvironmentManager(
             ensureShims(force = true)
             _state.value = EnvState.Ready
             runCatching { deployStateListener?.invoke() }
+            return Result.success(Unit)
         } catch (ce: CancellationException) {
+            _state.value = if ((wasReady && !prefixChanged) || hasUsableCore()) EnvState.Ready else EnvState.Failed("Installation cancelled")
+            runCatching { deployStateListener?.invoke() }
             throw ce
         } catch (e: Exception) {
-            _state.value = EnvState.Failed(e.message ?: "Install failed")
+            // An add-on's typo/network error does not uninstall the existing shell.
+            _state.value = if ((wasReady && !prefixChanged) || hasUsableCore()) EnvState.Ready else EnvState.Failed(e.message ?: "Install failed")
+            runCatching { deployStateListener?.invoke() }
+            return Result.failure(e)
         }
+    }
+
+    private fun hasUsableCore(): Boolean = marker.exists() && corePackages.all { name ->
+        installedContains(name) && BINARY_PROOF[name].orEmpty().any { File(prefix, it).isFile }
     }
 
     /** Captures the bytes actually extracted (including shebang/binary rewrites), never index size estimates. */
@@ -653,8 +668,7 @@ class LinuxEnvironmentManager(
             // Un-mark the broken ones so install() re-downloads them.
             marker.writeText(installedPackages().filter { it !in broken }.joinToString("\n"))
         }
-        install(fullPackages)
-        isReady
+        install(fullPackages).isSuccess && isReady
     }
 
     /** Packages marked installed whose proof binary is gone from disk. */

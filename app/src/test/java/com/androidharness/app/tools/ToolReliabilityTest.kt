@@ -54,6 +54,41 @@ class ToolReliabilityTest {
         assertArrayEquals("one\r\n2\r\n3\r\nfour\r\n".toByteArray(), file.readBytes())
     }
 
+    @Test fun `text edit tools reject malformed UTF8 anywhere without changing original bytes`() = runBlocking {
+        val file = tmp.root.resolve("encoding.txt")
+        val invalid = listOf(
+            "HEAD".toByteArray() + byteArrayOf(-1, -2) + "TAIL\n".toByteArray(),
+            "caf".toByteArray() + byteArrayOf(0xe9.toByte()) + " au TAIL\n".toByteArray(),
+            "TAIL\n".repeat(300).toByteArray() + byteArrayOf(0xc3.toByte()),
+            "TAIL\n".toByteArray() + byteArrayOf(0xed.toByte(), 0xa0.toByte(), 0x80.toByte())
+        )
+        for (bytes in invalid) {
+            file.writeBytes(bytes)
+            val edit = args("path" to file.name, "old_string" to "TAIL", "new_string" to "END", "replace_all" to true)
+            val multi = args("path" to file.name, "edits" to buildJsonArray { add(edit) })
+            for ((tool, input) in listOf(EditFileTool() to edit, MultiEditTool() to multi,
+                ApplyPatchTool() to args("patch" to "--- a/encoding.txt\n+++ b/encoding.txt\n@@ -1 +1 @@\n-TAIL\n+END\n"))) {
+                assertTrue(failure(tool, input).contains("not valid UTF-8"))
+                assertArrayEquals(tool.name, bytes, file.readBytes())
+            }
+        }
+    }
+
+    @Test fun `valid unicode BOM and literal replacement characters survive both edits`() = runBlocking {
+        val file = tmp.root.resolve("unicode.txt").apply { writeText("\uFEFFcafé � 😀\r\nTAIL\r\n") }
+        EditFileTool().execute(args("path" to file.name, "old_string" to "TAIL", "new_string" to "END"), ctx())
+        val edits = buildJsonArray { add(buildJsonObject { put("old_string", "END"); put("new_string", "TAIL") }) }
+        MultiEditTool().execute(args("path" to file.name, "edits" to edits), ctx())
+        assertArrayEquals("\uFEFFcafé � 😀\r\nTAIL\r\n".toByteArray(), file.readBytes())
+    }
+
+    @Test fun `multi edit preserves tolerant indentation through disk write`() = runBlocking {
+        tmp.root.resolve("indent.txt").writeText("x\n   KEY v\n   VAL\nz\n")
+        val edits = buildJsonArray { add(buildJsonObject { put("old_string", "KEY v\n      VAL"); put("new_string", "KEY v\n   NEWVAL") }) }
+        MultiEditTool().execute(args("path" to "indent.txt", "edits" to edits), ctx())
+        assertArrayEquals("x\n   KEY v\n   NEWVAL\nz\n".toByteArray(), tmp.root.resolve("indent.txt").readBytes())
+    }
+
     @Test fun `file move fallback copies arbitrary bytes without text decoding`() = runBlocking {
         val bytes = byteArrayOf(0, -1, -2, 13, 10, 127, -128, 42)
         tmp.root.resolve("source.bin").writeBytes(bytes)

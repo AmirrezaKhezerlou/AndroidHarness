@@ -1,5 +1,7 @@
 package com.androidharness.app.tools
 
+import com.androidharness.app.workspace.readUtf8ForEdit
+
 import com.androidharness.app.core.splitLines
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -45,7 +47,7 @@ class MultiEditTool : Tool {
             val file = ctx.workspace.resolve(path)
             if (!file.exists || !file.isFile) throw ToolFailure("File does not exist: $path")
 
-            var text = file.readText()
+            var text = file.readUtf8ForEdit()
             var applied = 0
             var fuzzy = false
             edits.forEachIndexed { idx, el ->
@@ -172,7 +174,7 @@ class ApplyPatchTool : Tool {
                             continue
                         }
                         try {
-                            val applied = applyHunks(node.readText(), filePatch.hunks, filePatch.path)
+                            val applied = applyHunks(node.readUtf8ForEdit(), filePatch.hunks, filePatch.path)
                             plans += Plan(filePatch.path, "patch", content = applied, hunksApplied = filePatch.hunks.size, hunksTotal = filePatch.hunks.size)
                         } catch (e: ToolFailure) {
                             failures += e.message ?: "unknown hunk failure in ${filePatch.path}"

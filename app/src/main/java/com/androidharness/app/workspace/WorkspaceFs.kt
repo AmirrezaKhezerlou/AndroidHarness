@@ -65,6 +65,20 @@ interface FsNode {
     fun createDir(name: String): FsNode
 }
 
+/** Text edits must never round-trip undecodable bytes through replacement characters. */
+fun FsNode.readUtf8ForEdit(): String {
+    val decoder = Charsets.UTF_8.newDecoder()
+        .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+        .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+    try {
+        return openInputStream()?.use { input ->
+            java.io.InputStreamReader(input, decoder).use { it.readText() }
+        } ?: throw ToolFailure("Could not read '$relPath' for editing")
+    } catch (_: java.nio.charset.CharacterCodingException) {
+        throw ToolFailure("Cannot edit '$relPath': file is not valid UTF-8. No changes were written. Convert its encoding explicitly before editing.")
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Real-filesystem implementation (app-private storage)
 // ---------------------------------------------------------------------------

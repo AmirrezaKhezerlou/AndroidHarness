@@ -14,6 +14,21 @@ import org.junit.Test
  */
 class GitCommandTest {
 
+    @Test fun `diff requires a repository and still reads staged and unstaged changes`() {
+        val (code, message) = shell(gitDiffCmd(null, false))
+        assertTrue(code != 0)
+        assertTrue(message, message.contains("not a git repository"))
+        success(gitCmd("init", "config user.name Test", "config user.email test@example.com"))
+        val file = tmp.root.resolve("space name.txt").apply { writeText("before\n") }
+        success(gitCmd("add .", "commit -m initial"))
+        file.writeText("after\n")
+        assertTrue(success(gitDiffCmd(file.name, false)).contains("+after"))
+        assertFalse(success(gitDiffCmd(file.name, true)).contains("+after"))
+        success(gitCmd("add ."))
+        assertTrue(success(gitDiffCmd(file.name, true)).contains("+after"))
+        assertFalse(success(gitDiffCmd(file.name, false)).contains("+after"))
+    }
+
     @get:org.junit.Rule
     val tmp = org.junit.rules.TemporaryFolder()
 

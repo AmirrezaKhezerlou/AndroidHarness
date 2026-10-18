@@ -26,6 +26,10 @@ data class BgProcessEntry(
     /** "APP" = child of the app process; "SHIZUKU" = inside Shizuku's server. */
     val source: String = "APP",
     val startedAt: Long = 0L,
+    val exitCodePath: String? = null,
+    val exitCode: Int? = null,
+    val finishedAt: Long? = null,
+    val termination: String? = null,
 )
 
 /**
@@ -56,9 +60,7 @@ class BgProcessStore(
     private val storageLock = Mutex()
 
     suspend fun <T> withIdleStorage(action: suspend () -> T): T = storageLock.withLock {
-        // Prune only verified exits. An unavailable privileged service is not proof of exit.
-        list()
-        check(entries.isEmpty()) { "Stop background processes and refresh their list before cleaning storage." }
+        check(listLocked().none { it.second }) { "Stop background processes and refresh their list before cleaning storage." }
         action()
     }
 
@@ -116,6 +118,8 @@ class BgProcessStore(
         val logFile = File(bgDir, logName).apply {
             runCatching { createNewFile() }
         }.let { if (it.exists() || it.canWrite()) it else File(detachedLogDir, logName).apply { createNewFile() } }
+        val exitFile = File(logFile.path + ".exit")
+        val monitoredCommand = backgroundCommand(command, exitFile.absolutePath)
 
         if (shizuku.isGranted()) {
             // Make sure the shell-user toolchain copy matches the package set
@@ -127,9 +131,9 @@ class BgProcessStore(
             }
             val toolchainDeployed = shizuku.isTmpPrefixDeployed(expected)
             val cmd = if (toolchainDeployed) {
-                arrayOf("${linuxEnv.tmpPrefix}/bin/bash", "-c", command)
+                arrayOf("${linuxEnv.tmpPrefix}/bin/bash", "-c", monitoredCommand)
             } else {
-                arrayOf("/system/bin/sh", "-c", command)
+                arrayOf("/system/bin/sh", "-c", monitoredCommand)
             }
             val env = if (toolchainDeployed) {
                 linuxEnv.tmpProcessEnv().map { "${it.key}=${it.value}" }.toTypedArray()
@@ -138,7 +142,7 @@ class BgProcessStore(
             if (pid != null && pid > 0) {
                 val entry = BgProcessEntry(
                     id = id, command = command, cwd = cwd.absolutePath,
-                    logPath = ".harness/bg/$logName", pid = pid, source = "SHIZUKU",
+                    logPath = logFile.absolutePath, pid = pid, source = "SHIZUKU", exitCodePath = exitFile.absolutePath,
                     startedAt = System.currentTimeMillis(),
                 )
                 entries[id] = entry
@@ -148,7 +152,7 @@ class BgProcessStore(
             // service dropped mid-flight, so fall back to the app tier below
         }
 
-        val process = linuxEnv.shellProcessBuilder(command)
+        val process = linuxEnv.shellProcessBuilder(monitoredCommand)
             .directory(cwd)
             .redirectOutput(ProcessBuilder.Redirect.appendTo(logFile))
             .redirectErrorStream(true)
@@ -156,7 +160,7 @@ class BgProcessStore(
         appProcesses[id] = process
         val entry = BgProcessEntry(
             id = id, command = command, cwd = cwd.absolutePath,
-            logPath = ".harness/bg/$logName", pid = -1, source = "APP",
+            logPath = logFile.absolutePath, pid = -1, source = "APP", exitCodePath = exitFile.absolutePath,
             startedAt = System.currentTimeMillis(),
         )
         entries[id] = entry
@@ -164,37 +168,48 @@ class BgProcessStore(
         return Started(entry, viaShizuku = false)
     }
 
-    /** All tracked processes with a live liveness check, pruning exited ones. */
-    suspend fun list(): List<Pair<BgProcessEntry, Boolean>> {
+    /** Active jobs plus the latest 100 terminal records, persisted across app restarts. */
+    suspend fun list(): List<Pair<BgProcessEntry, Boolean>> = storageLock.withLock { listLocked() }
+
+    private suspend fun listLocked(): List<Pair<BgProcessEntry, Boolean>> {
         val out = mutableListOf<Pair<BgProcessEntry, Boolean>>()
-        val deadIds = mutableListOf<Int>()
+        var changed = false
         entries.values.sortedBy { it.id }.forEach { e ->
+            if (e.finishedAt != null) {
+                out += e to false
+                return@forEach
+            }
+            val recordedExit = e.exitCodePath?.let { runCatching { File(it).readText().trim().toIntOrNull() }.getOrNull() }
             val alive = when (e.source) {
-                "SHIZUKU" -> privilegedLiveness(e.pid)
+                "SHIZUKU" -> if (recordedExit != null) false else privilegedLiveness(e.pid)
                     ?: error("Cannot verify a background process. Reconnect Shizuku before cleaning storage.")
                 else -> appProcesses[e.id]?.isAlive == true
             }
             if (alive) {
                 out += e to true
             } else {
-                deadIds += e.id
+                val code = recordedExit ?: appProcesses[e.id]?.let { runCatching { it.exitValue() }.getOrNull() }
+                val finished = e.copy(exitCode = code, finishedAt = System.currentTimeMillis(), termination = "exited")
+                entries[e.id] = finished
+                appProcesses.remove(e.id)
+                out += finished to false
+                changed = true
             }
         }
-        if (deadIds.isNotEmpty()) {
-            deadIds.forEach { id ->
-                entries.remove(id)
-                appProcesses.remove(id)
-            }
-            persist()
+        val expired = out.filter { !it.second }.sortedByDescending { it.first.finishedAt }.drop(100).map { it.first.id }.toSet()
+        if (expired.isNotEmpty()) {
+            expired.forEach(entries::remove)
+            changed = true
         }
-        return out
+        if (changed) persist()
+        return out.filterNot { it.first.id in expired }
     }
 
     fun get(id: Int): BgProcessEntry? = entries[id]
 
     /** Stops every background process launched through Harness. */
     suspend fun killAll(): Int {
-        val ids = entries.keys.toList()
+        val ids = entries.values.filter { it.finishedAt == null }.map { it.id }
         var killed = 0
         for (id in ids) {
             if (runCatching { kill(id) }.getOrDefault(false)) killed++
@@ -202,8 +217,11 @@ class BgProcessStore(
         return killed
     }
 
-    suspend fun kill(id: Int): Boolean {
+    suspend fun kill(id: Int): Boolean = storageLock.withLock { killLocked(id) }
+
+    private suspend fun killLocked(id: Int): Boolean {
         val e = entries[id] ?: return false
+        if (e.finishedAt != null) return false
         if (e.source == "SHIZUKU" && privilegedLiveness(e.pid) == null) return false
         val logFile = File(e.cwd, e.logPath).takeIf { it.exists() }
             ?: File(e.logPath).let { if (it.isAbsolute) it else File(detachedLogDir.parentFile, e.logPath) }
@@ -240,8 +258,9 @@ class BgProcessStore(
             }
         }
         if (!ok) return false
+        val exitCode = appProcesses[id]?.let { runCatching { it.exitValue() }.getOrNull() }
         appProcesses.remove(id)
-        entries.remove(id)
+        entries[id] = e.copy(finishedAt = System.currentTimeMillis(), exitCode = exitCode, termination = "killed")
         persist()
         return ok
     }
@@ -282,4 +301,10 @@ class BgProcessStore(
             }
         }
     }
+}
+
+/** Run in a subshell so `exit`, exec and parse failures still produce a terminal record. */
+internal fun backgroundCommand(command: String, exitPath: String): String {
+    fun quote(value: String) = "'" + value.replace("'", "'\\''") + "'"
+    return "(\neval ${quote(command)}\n)\nharness_bg_exit=\$?\nprintf '%s\\n' \"\$harness_bg_exit\" > ${quote(exitPath)}\nexit \"\$harness_bg_exit\""
 }

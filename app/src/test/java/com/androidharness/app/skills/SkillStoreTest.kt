@@ -8,6 +8,13 @@ import org.junit.rules.TemporaryFolder
 
 class SkillStoreTest {
 
+    @Test fun `missing skill lists every enabled name beyond twelve`() {
+        val names = (1..23).map { "audit-skill-${it.toString().padStart(2, '0')}" }
+        val s = store(bundled = names.associateWith { SkillStore.BundledSkill(it, skill(it, "test")) })
+        val message = s.view("missing").exceptionOrNull()?.message.orEmpty()
+        names.forEach { assertTrue(message, message.contains(it)) }
+    }
+
     @get:Rule
     val tmp = TemporaryFolder()
 

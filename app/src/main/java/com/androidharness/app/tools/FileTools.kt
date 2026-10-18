@@ -1,5 +1,7 @@
 package com.androidharness.app.tools
 
+import com.androidharness.app.workspace.readUtf8ForEdit
+
 import com.androidharness.app.core.splitLines
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -471,7 +473,7 @@ class EditFileTool : Tool {
             val file = ctx.workspace.resolve(path)
             if (!file.exists || !file.isFile) throw ToolFailure("File does not exist: $path")
 
-            when (val r = FuzzyEdit.replace(file.readText(), old, new, replaceAll)) {
+            when (val r = FuzzyEdit.replace(file.readUtf8ForEdit(), old, new, replaceAll)) {
                 is FuzzyEdit.Result.Ok -> {
                     file.writeText(r.newText)
                     val note = if (r.level != FuzzyEdit.Level.EXACT) {

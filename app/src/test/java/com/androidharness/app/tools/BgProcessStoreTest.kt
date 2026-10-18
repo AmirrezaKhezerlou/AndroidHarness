@@ -12,6 +12,20 @@ import java.io.File
 
 class BgProcessStoreTest {
 
+    @Test fun `background monitor records success explicit failure exec and syntax error`() {
+        val cases = listOf("echo hello; echo error >&2; exit 3" to 3,
+            "echo done" to 0, "exec /bin/sh -c 'exit 7'" to 7, "if then" to 2)
+        for ((command, expected) in cases) {
+            val status = File(tmp.root, "job '${expected}.exit")
+            val process = ProcessBuilder("/bin/sh", "-c", com.androidharness.app.data.backgroundCommand(command, status.path))
+                .redirectErrorStream(true).start()
+            val output = process.inputStream.bufferedReader().readText()
+            assertTrue(process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS))
+            assertEquals(output, expected, process.exitValue())
+            assertEquals(expected.toString(), status.readText().trim())
+        }
+    }
+
     @get:Rule
     val tmp = TemporaryFolder()
 

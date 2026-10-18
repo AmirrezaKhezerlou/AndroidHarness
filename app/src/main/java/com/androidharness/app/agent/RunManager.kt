@@ -932,7 +932,7 @@ class RunManager(
                     pending.response.complete(true)
                     return@launch
                 }
-                linuxEnv.install(linuxEnv.fullPackages)
+                linuxEnv.install(linuxEnv.fullPackages).getOrThrow()
                 if (linuxEnv.isReady) {
                     pending.response.complete(true)
                 } else {
