@@ -24,6 +24,30 @@ class ProviderThinkingIntegrationTest {
         Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("fixture")
             .body(events.joinToString("") { "data: $it\n\n" }.toResponseBody("text/event-stream".toMediaType())).build()
     }.build()
+    @Test fun `inherited custom reasoning survives the GPT6 tool transport redirect`() = runBlocking {
+        val c = ProviderConfig("openai-fixture", "OpenAI", ProviderType.OPENAI_COMPAT, "https://api.openai.com/v1", "gpt-6.1-sol")
+        var sent: JsonObject? = null
+        var path: String? = null
+        val intercepted = OkHttpClient.Builder().addInterceptor { chain ->
+            path = chain.request().url.encodedPath
+            val buffer = okio.Buffer()
+            chain.request().body!!.writeTo(buffer)
+            sent = json.parseToJsonElement(buffer.readUtf8()).jsonObject
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("fixture")
+                .body("data: [DONE]\n\n".toResponseBody("text/event-stream".toMediaType())).build()
+        }.build()
+        val key = com.androidharness.app.agent.CustomReasoning.key(c)
+        val opts = RequestOptions(thinking = ThinkingLevel.LOW,
+            customReasoning = mapOf(key to com.androidharness.app.agent.CustomReasoningConfig(listOf("Low", "Max"))),
+            customThinkingLevels = mapOf(key to "max"))
+        OpenAiCompatProvider(intercepted, json).streamChat(c, "fixture", "sys", listOf(user), tools, opts).toList()
+        assertEquals("/v1/responses", path)
+        assertEquals("max", sent!!["reasoning"]!!.jsonObject["effort"]!!.jsonPrimitive.content)
+        assertFalse(sent!!.containsKey("reasoning_effort"))
+        assertThrows(IllegalArgumentException::class.java) { opts.forTransportRoute(c, c.copy(baseUrl = "https://other.example/v1")) }
+        Unit
+    }
+
     @After fun reset() = ModelsDev.replaceForTesting(emptyMap())
 
     @Test fun `DeepSeek Max and Off use explicit native controls without a catalog`() {

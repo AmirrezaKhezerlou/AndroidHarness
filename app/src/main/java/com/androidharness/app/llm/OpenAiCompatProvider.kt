@@ -50,10 +50,10 @@ class OpenAiCompatProvider(
         options: RequestOptions,
     ): Flow<StreamEvent> {
         // GPT-6 tool use with reasoning requires Responses on the official OpenAI endpoint.
-        val nativeOpenAi = runCatching { java.net.URI(config.baseUrl).host == "api.openai.com" }.getOrDefault(false)
-        if (nativeOpenAi && config.model.substringAfterLast('/').startsWith("gpt-6") && tools.isNotEmpty()) {
-            return OpenAiResponsesProvider(client, json).streamChat(config.copy(type = ProviderType.OPENAI_RESPONSES),
-                apiKey, systemPrompt, messages, tools, options)
+        val routed = requestConfig(config, tools.isNotEmpty())
+        if (routed.type == ProviderType.OPENAI_RESPONSES) {
+            return OpenAiResponsesProvider(client, json).streamChat(routed,
+                apiKey, systemPrompt, messages, tools, options.forTransportRoute(config, routed))
         }
         val thinking = options.resolveThinking(config)
         val body = buildRequestBody(config, systemPrompt, messages, tools, options, thinking)
@@ -519,6 +519,12 @@ class OpenAiCompatProvider(
     }
 
     companion object {
+        fun requestConfig(config: ProviderConfig, hasTools: Boolean): ProviderConfig {
+            val nativeOpenAi = runCatching { java.net.URI(config.baseUrl).host == "api.openai.com" }.getOrDefault(false)
+            return if (config.type == ProviderType.OPENAI_COMPAT && nativeOpenAi && hasTools &&
+                config.model.substringAfterLast('/').startsWith("gpt-6")) config.copy(type = ProviderType.OPENAI_RESPONSES) else config
+        }
+
         /** Placeholder so key checks pass for a local server that has no key. */
         const val LOCAL_KEY = "local"
 

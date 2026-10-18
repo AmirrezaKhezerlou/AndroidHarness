@@ -14,11 +14,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.androidharness.app.agent.*
 import com.androidharness.app.llm.ProviderConfig
 import com.androidharness.app.llm.ReasoningMapping
+import com.androidharness.app.llm.ReasoningDefaults
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -34,6 +37,7 @@ internal fun CustomReasoningSheet(
     spec: ThinkingSpecs.Spec,
     onDismiss: () -> Unit,
     onSave: (CustomReasoningConfig?) -> Unit,
+    selectedLevel: String? = null,
 ) {
     val defaults = remember(spec) {
         spec.levels.map { if (spec.style == ThinkingSpecs.Style.TOGGLE && it != ThinkingLevel.OFF) "On" else it.label }
@@ -44,18 +48,24 @@ internal fun CustomReasoningSheet(
     var mapping by rememberSaveable(config.id, config.model) { mutableStateOf(saved?.mapping.orEmpty()) }
     var error by remember { mutableStateOf<String?>(null) }
     var preview by remember { mutableStateOf<String?>(null) }
-    var previewLevel by rememberSaveable { mutableIntStateOf(0) }
+    var previewLevel by rememberSaveable {
+        mutableIntStateOf(saved?.levels?.indexOfFirst { CustomReasoning.wire(it) == selectedLevel?.let(CustomReasoning::wire) }?.takeIf { it >= 0 } ?: 0)
+    }
     var validating by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val scheme = MaterialTheme.colorScheme
     val json = remember { Json { prettyPrint = true } }
-    LaunchedEffect(mapping, levels.toList(), previewLevel) {
+    val requestConfig = remember(config) { com.androidharness.app.llm.OpenAiCompatProvider.requestConfig(ThinkingSpecs.routedConfig(config), hasTools = true) }
+    val inheritedMapping = remember(requestConfig, spec) { ReasoningDefaults.inherited(requestConfig, spec) }
+    val effectiveMapping = mapping.trim().takeIf { it.isNotEmpty() } ?: inheritedMapping
+    val localControl = ReasoningDefaults.isLocal(config)
+    LaunchedEffect(effectiveMapping, levels.toList(), previewLevel) {
         preview = null
-        if (mapping.isNotBlank() && levels.isNotEmpty()) {
+        if (effectiveMapping != null && levels.isNotEmpty()) {
             delay(300)
             val name = levels[previewLevel.coerceIn(levels.indices)]
             preview = withContext(Dispatchers.Default) {
-                runCatching { json.encodeToString(JsonObject.serializer(), ReasoningMapping.evaluate(mapping, name)) }
+                runCatching { json.encodeToString(JsonObject.serializer(), ReasoningMapping.evaluate(effectiveMapping, name)) }
                     .getOrElse { it.message ?: "Invalid mapping" }
             }
         }
@@ -111,16 +121,28 @@ internal fun CustomReasoningSheet(
                     style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                 HorizontalDivider()
                 Text("Reasoning parameter mapping (optional)", style = MaterialTheme.typography.titleSmall)
-                Text("Use a CEL expression to map reasoningLevel to API request fields. It must return a JSON object, which is merged into the outgoing request body. A custom expression supplies the reasoning fields. Leave blank to use built-in mappings.",
+                Text("Leave blank to inherit this model/provider’s default mapping. Enter a CEL expression to override it. The JSON object it returns is merged into the outgoing request body.",
                     style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                 Text("reasoningLevel is lowercase (for example: disabled, low, high, max, xhigh). Nested objects merge; null removes a field.",
                     style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                 OutlinedTextField(mapping, { mapping = it.take(8_192); error = null },
-                    Modifier.fillMaxWidth(), minLines = 5, maxLines = 9, enabled = !validating,
-                    label = { Text("CEL expression") },
-                    placeholder = { Text("{\"reasoning_effort\": reasoningLevel}", fontFamily = FontFamily.Monospace) },
+                    Modifier.fillMaxWidth().semantics { contentDescription = "CEL expression (optional)" },
+                    minLines = 5, maxLines = 9, enabled = !validating && !localControl,
+                    placeholder = { Text(inheritedMapping ?: if (localControl) "Native on/off control" else "No inherited mapping. Enter a CEL expression.",
+                        maxLines = 6, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, fontFamily = FontFamily.Monospace) },
                     textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace))
-                if (mapping.isNotBlank() && levels.isNotEmpty()) {
+                Text(when {
+                    localControl -> "Uses native on/off control on this device."
+                    mapping.isNotBlank() -> "Using custom CEL mapping"
+                    inheritedMapping != null -> "Using inherited model/provider mapping"
+                    else -> "No inherited mapping is available. A custom CEL mapping is required."
+                }, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                if (inheritedMapping != null) TextButton(onClick = {
+                    mapping = if (mapping.isBlank()) inheritedMapping else ""; error = null
+                }, enabled = !validating) {
+                    Text(if (mapping.isBlank()) "Edit inherited mapping" else "Use inherited mapping")
+                }
+                if (effectiveMapping != null && levels.isNotEmpty()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Request fields preview", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
                         var showLevels by remember { mutableStateOf(false) }
@@ -147,7 +169,7 @@ internal fun CustomReasoningSheet(
                     val draft = CustomReasoningConfig(levels.toList(), mapping)
                     scope.launch {
                         validating = true
-                        val result = withContext(Dispatchers.Default) { runCatching { ReasoningMapping.validate(draft, config, spec) } }
+                        val result = withContext(Dispatchers.Default) { runCatching { ReasoningMapping.validate(draft, requestConfig, spec) } }
                         validating = false
                         result.onSuccess(onSave).onFailure { error = it.message ?: "Check your reasoning settings." }
                     }

@@ -35,8 +35,11 @@ class CustomReasoningTest {
         assertEquals("max", body(custom = custom)["reasoning_effort"]!!.jsonPrimitive.content)
         assertEquals("disabled", body(custom = custom, level = "disabled")["thinking"]!!.jsonObject["type"]!!.jsonPrimitive.content)
         val budget = config.copy(type = ProviderType.ANTHROPIC, baseUrl = "https://api.anthropic.com", model = "claude-sonnet-4-5")
+        val budgetOptions = options(budget, CustomReasoningConfig(listOf("Low", "Max")))
+        val request = AnthropicProvider(client, json).buildRequestBody(budget, "sys", user, emptyList(), budgetOptions)
         assertEquals(ThinkingSpecs.resolve(budget, ThinkingLevel.MAX).budget,
-            options(budget, CustomReasoningConfig(listOf("Low", "Max"))).resolveThinking(budget).budget)
+            request["thinking"]!!.jsonObject["budget_tokens"]!!.jsonPrimitive.int)
+        assertTrue(request["max_tokens"]!!.jsonPrimitive.int > request["thinking"]!!.jsonObject["budget_tokens"]!!.jsonPrimitive.int)
     }
 
     @Test fun `real CEL supports conditional nested objects numeric lookup and null`() {
@@ -92,11 +95,104 @@ class CustomReasoningTest {
         assertFalse(CustomReasoning.key(config).contains("deepseek"))
     }
 
-    @Test fun `unknown or unsupported native labels require explicit mapping`() {
-        for (name in listOf("Turbo", "Ultra")) assertThrows(IllegalArgumentException::class.java) {
-            ReasoningMapping.validate(CustomReasoningConfig(listOf(name)), config, ThinkingSpecs.forProvider(config))
+    @Test fun `declared levels inherit protocol mapping without a native preset whitelist`() {
+        val c = config.copy(baseUrl = "https://custom.example/v1", model = "new-provider-model")
+        val custom = CustomReasoningConfig(listOf("low", "MAX", "Turbo"))
+        val stalePresets = ThinkingSpecs.Spec(ThinkingSpecs.Style.EFFORT, listOf(ThinkingLevel.LOW, ThinkingLevel.HIGH))
+        val saved = ReasoningMapping.validate(custom, c, stalePresets)
+        assertEquals("", saved.mapping)
+        assertEquals(listOf("Low", "Max", "Turbo"), saved.levels)
+        assertEquals("max", body(c, saved, "MAX")["reasoning_effort"]!!.jsonPrimitive.content)
+        assertEquals("turbo", body(c, saved, "Turbo")["reasoning_effort"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun `custom effort is not silently clamped to a different model preset`() {
+        // The custom list is the user's capability declaration, not an assertion about this fixture's real API.
+        val c = config.copy(baseUrl = "https://api.openai.com/v1", model = "gpt-oss-120b")
+        val custom = ReasoningMapping.validate(CustomReasoningConfig(listOf("Low", "Max")), c, ThinkingSpecs.forProvider(c))
+        assertEquals("max", body(c, custom)["reasoning_effort"]!!.jsonPrimitive.content)
+        assertEquals("Max", options(c, custom).resolveThinking(c).label)
+    }
+
+    @Test fun `custom declarations can override incomplete reasoning capability metadata`() {
+        val c = config.copy(baseUrl = "https://custom.example/v1", model = "new-release")
+        val custom = CustomReasoningConfig(listOf("Low", "Max"))
+        val spec = ThinkingSpecs.forProvider(c, ModelEntry(c.model, reasoning = false))
+        assertEquals(ThinkingSpecs.Style.NONE, spec.style)
+        ReasoningMapping.validate(custom, c, spec)
+        val opts = options(c, custom).copy(modelCatalogs = mapOf(c.id to listOf(ModelEntry(c.model, reasoning = false))))
+        val sent = OpenAiCompatProvider(client, json).buildRequestBody(c, "sys", user, emptyList(), opts)
+        assertEquals("max", sent["reasoning_effort"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun `a blank override stays inherited while an explicit override wins`() {
+        val inherited = ReasoningMapping.validate(CustomReasoningConfig(listOf("low", "max")), config, ThinkingSpecs.forProvider(config))
+        assertEquals("", inherited.mapping)
+        assertEquals(ReasoningDefaults.inherited(config, ThinkingSpecs.forProvider(config)), options(custom = inherited).resolveThinking(config).requestMapping)
+        val overridden = inherited.copy(mapping = """{"reasoning_effort": "high", "thinking": {"type": "enabled"}}""")
+        assertEquals("high", body(custom = overridden)["reasoning_effort"]!!.jsonPrimitive.content)
+        assertEquals(overridden.mapping, options(custom = overridden).resolveThinking(config).requestMapping)
+    }
+
+    @Test fun `missing inherited map and invalid CEL have distinct errors`() {
+        val c = config.copy(type = ProviderType.ANTHROPIC, baseUrl = "https://custom.example", model = "custom-anthropic-model")
+        val missing = assertThrows(IllegalArgumentException::class.java) {
+            ReasoningMapping.validate(CustomReasoningConfig(listOf("Max")), c, ThinkingSpecs.forProvider(c))
         }
-        ReasoningMapping.validate(CustomReasoningConfig(listOf("Turbo"), """{"reasoning_effort": "max"}"""), config, ThinkingSpecs.forProvider(config))
+        assertTrue(missing.message!!.contains("No inherited reasoning mapping"))
+        val invalid = assertThrows(IllegalArgumentException::class.java) {
+            ReasoningMapping.validate(CustomReasoningConfig(listOf("Max"), "{bad"), c, ThinkingSpecs.forProvider(c))
+        }
+        assertTrue(invalid.message!!.startsWith("Reasoning mapping:"))
+        ReasoningMapping.validate(CustomReasoningConfig(listOf("Max"), """{"output_config": {"effort": reasoningLevel}}"""), c, ThinkingSpecs.forProvider(c))
+    }
+
+    @Test fun `inherited mappings use native nested fields for each remote API`() {
+        val fixtures = listOf(
+            config,
+            config.copy(type = ProviderType.OPENAI_RESPONSES, baseUrl = "https://api.openai.com/v1", model = "gpt-6.1-sol"),
+            config.copy(type = ProviderType.ANTHROPIC, baseUrl = "https://api.anthropic.com", model = "claude-sonnet-4-6"),
+            config.copy(type = ProviderType.GEMINI, baseUrl = "https://generativelanguage.googleapis.com/v1beta", model = "gemini-3-pro"))
+        for (c in fixtures) {
+            val custom = ReasoningMapping.validate(CustomReasoningConfig(listOf("Low", "Max")), c, ThinkingSpecs.forProvider(c))
+            val patch = ReasoningMapping.evaluate(ReasoningDefaults.effective(custom, c, ThinkingSpecs.forProvider(c))!!, "MAX")
+            val actual = when (c.type) {
+                ProviderType.OPENAI_COMPAT -> patch["reasoning_effort"]
+                ProviderType.OPENAI_RESPONSES -> patch["reasoning"]!!.jsonObject["effort"]
+                ProviderType.ANTHROPIC -> patch["output_config"]!!.jsonObject["effort"]
+                ProviderType.GEMINI -> patch["generationConfig"]!!.jsonObject["thinkingConfig"]!!.jsonObject["thinkingLevel"]
+            }
+            assertEquals("max", actual!!.jsonPrimitive.content)
+        }
+    }
+
+    @Test fun `router and Gemini budget defaults preserve native token ceilings and explicit disable`() {
+        val router = config.copy(baseUrl = "https://openrouter.ai/api/v1", model = "claude-sonnet-4-5")
+        val gemini = config.copy(type = ProviderType.GEMINI, baseUrl = "https://generativelanguage.googleapis.com/v1beta", model = "gemini-2.5-pro")
+        for (c in listOf(router, gemini)) {
+            val spec = ThinkingSpecs.forProvider(c)
+            val expression = ReasoningDefaults.inherited(c, spec)!!
+            val max = ReasoningMapping.evaluate(expression, "max")
+            val budget = if (c == router) max["reasoning"]!!.jsonObject["max_tokens"]!!.jsonPrimitive.int
+                else max["generationConfig"]!!.jsonObject["thinkingConfig"]!!.jsonObject["thinkingBudget"]!!.jsonPrimitive.int
+            assertEquals(spec.budgetMax, budget)
+            val off = ReasoningMapping.evaluate(expression, "disabled")
+            if (c == router) assertFalse(off["reasoning"]!!.jsonObject["enabled"]!!.jsonPrimitive.boolean)
+            else assertEquals(0, off["generationConfig"]!!.jsonObject["thinkingConfig"]!!.jsonObject["thinkingBudget"]!!.jsonPrimitive.int)
+        }
+        val toggle = ThinkingSpecs.Spec(ThinkingSpecs.Style.TOGGLE, listOf(ThinkingLevel.OFF, ThinkingLevel.HIGH))
+        assertTrue(ReasoningMapping.evaluate(ReasoningDefaults.inherited(router, toggle)!!, "max")["reasoning"]!!.jsonObject["enabled"]!!.jsonPrimitive.boolean)
+    }
+
+    @Test fun `local models retain native thinking controls without pretending to send JSON`() {
+        val c = config.copy(baseUrl = "local://fixture", model = "local-fixture")
+        val custom = ReasoningMapping.validate(CustomReasoningConfig(listOf("Disabled", "On")), c, ThinkingSpecs.forProvider(c))
+        assertNull(ReasoningDefaults.inherited(c, ThinkingSpecs.forProvider(c)))
+        assertEquals(ThinkingLevel.OFF, options(c, custom, "disabled").resolveThinking(c).level)
+        assertEquals(ThinkingLevel.HIGH, options(c, custom, "on").resolveThinking(c).level)
+        assertThrows(IllegalArgumentException::class.java) {
+            ReasoningMapping.validate(custom.copy(mapping = "{}"), c, ThinkingSpecs.forProvider(c))
+        }
     }
 
     @Test fun `selections round trip independently for each chat and older JSON remains readable`() {

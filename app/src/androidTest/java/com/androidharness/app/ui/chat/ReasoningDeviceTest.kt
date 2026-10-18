@@ -132,10 +132,9 @@ class ReasoningDeviceTest {
         val prefs = SettingsRepository(context)
         val original = prefs.settings.first()
         val config = ProviderConfig("custom-reasoning-fixture", "DeepSeek", ProviderType.OPENAI_COMPAT,
-            "https://api.deepseek.com/v1", "deepseek-v4-flash")
+            "https://custom.example/v1", "new-reasoning-model")
         val key = CustomReasoning.key(config)
-        val custom = mutableStateOf<CustomReasoningConfig?>(CustomReasoningConfig(listOf("low", "HIGH", "max"),
-            """{"thinking": {"type": "enabled"}, "reasoning_effort": reasoningLevel}"""))
+        val custom = mutableStateOf<CustomReasoningConfig?>(CustomReasoningConfig(listOf("low", "HIGH", "max")))
         val selected = mutableStateOf("max")
         val saved = mutableStateOf(false)
         val editing = mutableStateOf(false)
@@ -158,7 +157,7 @@ class ReasoningDeviceTest {
                             onOpenFiles = {}, onOpenGitHub = { githubOpens.value++ }, thinkingResolved = resolved,
                             onCustomizeThinking = { editing.value = true }, onSetCustomThinking = { selected.value = CustomReasoning.wire(it) })
                         }
-                        if (editing.value) CustomReasoningSheet(config, custom.value, ThinkingSpecs.forProvider(config),
+                        if (editing.value) CustomReasoningSheet(config, custom.value, ThinkingSpecs.forProvider(config), selectedLevel = selected.value,
                             onDismiss = { editing.value = false }, onSave = { custom.value = it; saved.value = true; editing.value = false })
                     } }
                 } } }
@@ -185,11 +184,19 @@ class ReasoningDeviceTest {
                 await("Reasoning levels (low to high)")
                 await(CustomReasoning.LEVEL_HELP)
                 screenshot("custom-editor")
+                reveal("Using inherited model/provider mapping")
+                reveal("Edit inherited mapping"); tap("Edit inherited mapping")
+                reveal("Using custom CEL mapping")
+                reveal("Use inherited mapping"); tap("Use inherited mapping")
+                reveal("Using inherited model/provider mapping")
+                reveal("\"reasoning_effort\": \"max\"", contains = true)
+                screenshot("inherited-mapping-preview")
                 tap("Save")
                 val until = SystemClock.uptimeMillis() + 15_000
                 while (!saved.value && SystemClock.uptimeMillis() < until) SystemClock.sleep(100)
                 assertTrue("CEL must compile and evaluate on Android before saving", saved.value)
                 assertEquals(listOf("Low", "High", "Max"), custom.value!!.levels)
+                assertEquals("", custom.value!!.mapping)
                 prefs.setReasoningConfig(key, custom.value)
                 assertEquals(custom.value, prefs.settings.first().reasoningConfigs[key])
                 tap("Thinking level"); tap("High")
@@ -234,6 +241,26 @@ class ReasoningDeviceTest {
         } finally { db.close(); context.deleteDatabase(name); prefs.restorePortable(original) }
     }
 
+    private fun reveal(text: String, contains: Boolean = false): AccessibilityNodeInfo {
+        val deadline = SystemClock.uptimeMillis() + 10_000
+        while (SystemClock.uptimeMillis() < deadline) {
+            if (android.os.Build.VERSION.SDK_INT >= 33) instrumentation.uiAutomation.clearCache()
+            val root = instrumentation.uiAutomation.rootInActiveWindow
+            find(root, text, contains)?.let { return it }
+            fun scrollable(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+                if (node == null) return null
+                if (node.isScrollable && !node.isEditable) return node
+                for (i in 0 until node.childCount) scrollable(node.getChild(i))?.let { return it }
+                return null
+            }
+            scrollable(root)?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+            instrumentation.waitForIdleSync()
+            SystemClock.sleep(100)
+        }
+        screenshot("editor-content-missing")
+        error("Missing editor content: $text")
+    }
+
     private fun find(node: AccessibilityNodeInfo?, text: String, contains: Boolean = false): AccessibilityNodeInfo? {
         if (node == null) return null
         val values = listOf(node.text?.toString(), node.contentDescription?.toString())
@@ -244,6 +271,7 @@ class ReasoningDeviceTest {
     private fun await(text: String, contains: Boolean = false): AccessibilityNodeInfo {
         val deadline = SystemClock.uptimeMillis() + 10_000
         while (SystemClock.uptimeMillis() < deadline) {
+            if (android.os.Build.VERSION.SDK_INT >= 33) instrumentation.uiAutomation.clearCache()
             find(instrumentation.uiAutomation.rootInActiveWindow, text, contains)?.let { return it }
             SystemClock.sleep(100)
         }

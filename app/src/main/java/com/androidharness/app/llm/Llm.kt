@@ -93,12 +93,24 @@ data class RequestOptions(
             customReasoning[com.androidharness.app.agent.CustomReasoning.key(config)],
             customThinkingLevels[com.androidharness.app.agent.CustomReasoning.key(config)])
 
+    /** Carry the original connection's overrides across an internal transport-only redirect. */
+    fun forTransportRoute(from: ProviderConfig, to: ProviderConfig): RequestOptions {
+        require(from.id == to.id && from.model == to.model && from.baseUrl.trimEnd('/') == to.baseUrl.trimEnd('/'))
+        val source = com.androidharness.app.agent.CustomReasoning.key(from)
+        val target = com.androidharness.app.agent.CustomReasoning.key(to)
+        val custom = customReasoning[source] ?: return this
+        if (source == target) return this
+        val selection = customThinkingLevels[source]
+        return copy(customReasoning = customReasoning + (target to custom),
+            customThinkingLevels = if (selection == null) customThinkingLevels else customThinkingLevels + (target to selection))
+    }
+
     fun applyReasoningMapping(config: ProviderConfig, body: JsonObject): JsonObject {
         val resolved = resolveThinking(config)
         val custom = resolved.customConfig ?: return body
         ReasoningMapping.validate(custom, config, com.androidharness.app.agent.ThinkingSpecs.forProvider(config,
             modelCatalogs[config.id]?.firstOrNull { it.id == config.model }))
-        val expression = custom.mapping.takeIf { it.isNotBlank() } ?: return body
+        val expression = requireNotNull(resolved.requestMapping) { "No inherited reasoning mapping is available. Add a CEL mapping." }
         return ReasoningMapping.merge(body, ReasoningMapping.evaluate(expression, requireNotNull(resolved.customLevel)))
     }
 }

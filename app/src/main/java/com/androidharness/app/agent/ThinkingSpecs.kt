@@ -30,6 +30,7 @@ object ThinkingSpecs {
         val maxOutputTokens: Int = 32_768,
         val customConfig: CustomReasoningConfig? = null,
         val customLevel: String? = null,
+        val requestMapping: String? = null,
     ) {
         val label: String get() = customLevel?.let(CustomReasoning::label) ?: when (spec.style) {
             Style.AUTOMATIC -> if (spec.reasoningSupported) "On" else "Thinking"
@@ -41,7 +42,12 @@ object ThinkingSpecs {
             if (spec.style == Style.TOGGLE && value != ThinkingLevel.OFF) "On" else value.label
         val active: Boolean get() = customLevel?.let { it != "disabled" } ?: (spec.style == Style.AUTOMATIC || level != ThinkingLevel.OFF)
         val detail: String get() = if (customLevel != null) {
-            "Thinking: $label\n" + if (customConfig?.mapping.isNullOrBlank()) "Built-in request mapping" else "Custom CEL request mapping"
+            "Thinking: $label\n" + when {
+                spec.style == Style.TOGGLE && requestMapping == null -> "Native on/off control"
+                requestMapping == null -> "Reasoning mapping required"
+                customConfig?.mapping.isNullOrBlank() -> "Inherited model/provider mapping"
+                else -> "Custom CEL request mapping"
+            }
         } else when (spec.style) {
             Style.NONE -> "This model has no reasoning control"
             Style.AUTOMATIC -> if (spec.reasoningSupported) "On · This model manages its own reasoning effort" else "Reasoning support is unverified. Add a custom mapping only for settings this model supports."

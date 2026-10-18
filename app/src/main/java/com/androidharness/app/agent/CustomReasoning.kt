@@ -51,11 +51,19 @@ object CustomReasoning {
         val choice = config.levels.firstOrNull { wire(it) == selected?.let(::wire) }
             ?: config.levels.firstOrNull { native(it) == base.level }
             ?: config.levels.last()
+        val name = wire(choice)
+        if (com.androidharness.app.llm.ReasoningDefaults.isLocal(provider)) return base.copy(
+            level = if (name == "disabled") ThinkingLevel.OFF else ThinkingLevel.HIGH,
+            customConfig = config, customLevel = name)
+        val expression = com.androidharness.app.llm.ReasoningDefaults.effective(config, provider, base.spec)
         val native = native(choice)
-        // Explicit CEL supplies reasoning fields itself. Blank mapping keeps the verified native adapter.
-        val effective = if (config.mapping.isBlank() && native != null) {
-            ThinkingSpecs.resolve(provider, native, maxOutput, entry)
-        } else base.copy(spec = base.spec.copy(style = ThinkingSpecs.Style.AUTOMATIC), effort = null, budget = null)
-        return effective.copy(customConfig = config, customLevel = wire(choice))
+        val budget = if (config.mapping.isBlank() && base.spec.style == ThinkingSpecs.Style.BUDGET)
+            com.androidharness.app.llm.ReasoningDefaults.budgetFor(base.spec, name) else null
+        val output = if (budget != null && budget > 0) maxOf(base.maxOutputTokens, budget + 4_096)
+            .let { base.spec.outputMax?.let(it::coerceAtMost) ?: it } else base.maxOutputTokens
+        // The selected string goes through the inherited/custom map without native-level clamping.
+        return base.copy(level = native ?: if (name == "disabled") ThinkingLevel.OFF else ThinkingLevel.HIGH,
+            spec = base.spec.copy(style = ThinkingSpecs.Style.AUTOMATIC), effort = null, budget = null,
+            maxOutputTokens = output, customConfig = config, customLevel = name, requestMapping = expression)
     }
 }

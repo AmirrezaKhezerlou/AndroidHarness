@@ -38,20 +38,14 @@ object ReasoningMapping {
 
     fun validate(config: CustomReasoningConfig, provider: ProviderConfig, spec: com.androidharness.app.agent.ThinkingSpecs.Spec): CustomReasoningConfig {
         val normalized = CustomReasoning.normalized(config)
-        if (normalized.mapping.isNotBlank()) {
-            require(!provider.baseUrl.startsWith("local://") && !com.androidharness.app.local.LocalModelCatalog.isLocal(provider.id)) {
-                "Local models use built-in thinking controls; request mapping is unavailable."
-            }
-            normalized.levels.forEach { evaluate(normalized.mapping, it) }
-        } else {
-            normalized.levels.forEach { name ->
-                val native = CustomReasoning.native(name)
-                require(native != null && (native in spec.levels ||
-                    (CustomReasoning.wire(name) in setOf("on", "enabled") && spec.style == com.androidharness.app.agent.ThinkingSpecs.Style.AUTOMATIC))) {
-                    "\"$name\" has no built-in mapping for this model. Use a supported level or add a CEL mapping."
-                }
-            }
+        if (ReasoningDefaults.isLocal(provider)) {
+            require(normalized.mapping.isBlank()) { "Local models use native thinking controls; CEL request mapping is unavailable." }
+            return normalized
         }
+        val expression = ReasoningDefaults.effective(normalized, provider, spec)
+        require(expression != null) { "No inherited reasoning mapping is available for this model/provider. Add a CEL mapping." }
+        // Validate the effective mapping, not membership in a separate preset vocabulary.
+        normalized.levels.forEach { evaluate(expression, it) }
         return normalized
     }
 

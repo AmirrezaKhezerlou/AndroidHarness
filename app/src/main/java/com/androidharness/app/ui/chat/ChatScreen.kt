@@ -991,8 +991,9 @@ private fun ChatScreenContent(
             editingReasoning?.let { config ->
                 val key = com.androidharness.app.agent.CustomReasoning.key(config)
                 com.androidharness.app.ui.chat.components.CustomReasoningSheet(
-                    config = config, saved = state.reasoningConfigs[key],
-                    spec = com.androidharness.app.agent.ThinkingSpecs.forProvider(config, modelEntry),
+                    config = config, saved = state.reasoningConfigs[key], selectedLevel = state.customThinkingLevels[key],
+                    spec = com.androidharness.app.agent.ThinkingSpecs.forProvider(config,
+                        state.catalogs[config.id].orEmpty().firstOrNull { it.id == config.model }),
                     onDismiss = { editingReasoning = null },
                     onSave = { viewModel.saveReasoningConfig(config, it); editingReasoning = null },
                 )
