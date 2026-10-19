@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.settings
 
+import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -177,7 +178,7 @@ internal fun LocalModelsSection(container: AppContainer) {
         SettingsPanel(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(text, style = MaterialTheme.typography.bodyMedium)
-                LinearProgressIndicator(Modifier.fillMaxWidth())
+                AppLinearProgressIndicator(Modifier.fillMaxWidth())
                 TextButton(onClick = { importProgress = "Cancelling import…"; importJob?.cancel() }) { Text("Cancel import") }
             }
         }
@@ -318,9 +319,9 @@ private fun LocalModelCard(model: LocalModelSpec, context: Int, device: LocalDev
                 val total = transfer.progress.getLong("total", 0)
                 val converting = status?.contains("convert", ignoreCase = true) == true || status?.contains("quantiz", ignoreCase = true) == true
                 if (total > 0 && !converting) {
-                    LinearProgressIndicator(progress = { (received.toFloat() / total).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+                    AppLinearProgressIndicator(progress = { (received.toFloat() / total).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
                     Text("${size(received)} of ${size(total)} downloaded", style = MaterialTheme.typography.bodySmall)
-                } else LinearProgressIndicator(Modifier.fillMaxWidth())
+                } else AppLinearProgressIndicator(Modifier.fillMaxWidth())
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (!selected || !installed) Button(onClick = onPrimary, enabled = enabled) {
@@ -460,7 +461,7 @@ internal fun CustomModelLinkDialog(resolve: suspend (String) -> List<LocalModelS
             OutlinedTextField(link, { link = it; candidates = emptyList(); error = null },
                 label = { Text("Model link") }, enabled = !loading, maxLines = 3, modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri))
-            if (loading) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Checking model files…", style = MaterialTheme.typography.bodySmall) }
+            if (loading) { AppLinearProgressIndicator(Modifier.fillMaxWidth()); Text("Checking model files…", style = MaterialTheme.typography.bodySmall) }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (candidates.isNotEmpty()) Text("Choose a file", style = MaterialTheme.typography.titleSmall)
             candidates.forEach { model ->

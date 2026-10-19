@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat
 
+import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -48,7 +49,7 @@ internal fun ChatFileDiffSheet(
             )
             val result = diff
             when {
-                result == null -> LinearProgressIndicator(Modifier.fillMaxWidth())
+                result == null -> AppLinearProgressIndicator(Modifier.fillMaxWidth())
                 result.isFailure -> Text(
                     result.exceptionOrNull()?.message ?: "Could not load the diff.",
                     color = MaterialTheme.colorScheme.error,

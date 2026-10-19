@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.update
 
+import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.core.animateFloatAsState
@@ -37,7 +38,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -408,7 +408,7 @@ private fun DownloadProgressContent(step: UpdateManager.Step.Downloading) {
             color = MaterialTheme.colorScheme.onSurface,
         )
 
-        LinearProgressIndicator(
+        AppLinearProgressIndicator(
             progress = { animatedProgress },
             modifier = Modifier
                 .fillMaxWidth()

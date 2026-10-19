@@ -4,6 +4,8 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MotionScheme
 
 /**
  * Single source of truth for motion.
@@ -32,3 +34,12 @@ fun <T> fastEffectsSpec(): FiniteAnimationSpec<T> =
 
 fun <T> slowEffectsSpec(): FiniteAnimationSpec<T> =
     tween(durationMillis = 350, easing = FastOutSlowInEasing)
+
+// Opt in per control; changing the app-wide scheme would also retime unrelated screens.
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+fun <T> expressiveSpatialSpec(): FiniteAnimationSpec<T> =
+    MotionScheme.expressive().fastSpatialSpec()
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+fun <T> expressiveEffectsSpec(): FiniteAnimationSpec<T> =
+    MotionScheme.expressive().fastEffectsSpec()

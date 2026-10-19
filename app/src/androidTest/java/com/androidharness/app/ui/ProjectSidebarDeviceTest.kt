@@ -13,6 +13,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -161,6 +163,17 @@ class ProjectSidebarDeviceTest {
             assertNull("A closed drawer must not expose its search field", find("Search chats and messages"))
             tap("Open navigation")
             await { find("AndroidHarness icon") != null }
+            assertSearchInactive(activity)
+            tap("Search chats and messages")
+            await { searchHasFocus() && keyboardVisible(activity) }
+            search("Unique sidebar search message anchor")
+            tap("Collapse sidebar")
+            await { find("Open navigation") != null }
+            tap("Open navigation")
+            await { find("AndroidHarness icon") != null }
+            assertSearchInactive(activity)
+            assertEquals("", nodes().first { it.isEditable && it.isVisibleToUser }.text?.toString().orEmpty())
+            search("")
             tap("Projects")
             scrollTo("Actions for project ${b.name}"); tap("Actions for project ${b.name}"); tap("New chat in ${b.name}")
             await { runBlocking { c.settings.settings.first().lastActiveSessionId?.let { it != original && c.sessions.session(it)?.projectId == b.id } == true } }
@@ -203,6 +216,31 @@ class ProjectSidebarDeviceTest {
             c.settings.restorePortable(saved); c.settings.setOnboardingDone(saved.onboardingDone); c.settings.setLastActiveSessionId(saved.lastActiveSessionId)
             root.deleteRecursively()
         }
+    }
+
+    private fun searchHasFocus(): Boolean = nodes().any {
+        it.isVisibleToUser && it.isEditable && it.isFocused &&
+            (it.contentDescription?.toString() == "Search chats and messages" ||
+                it.parent?.contentDescription?.toString() == "Search chats and messages")
+    }
+
+    private fun keyboardVisible(activity: MainActivity): Boolean {
+        var visible = false
+        instrumentation.runOnMainSync {
+            visible = ViewCompat.getRootWindowInsets(activity.window.decorView)
+                ?.isVisible(WindowInsetsCompat.Type.ime()) == true
+        }
+        return visible
+    }
+
+    private fun assertSearchInactive(activity: MainActivity) {
+        val deadline = SystemClock.uptimeMillis() + 1_500
+        do {
+            assertNotNull("The drawer must stay open", find("Search chats and messages"))
+            assertFalse("Opening the drawer must not focus chat search", searchHasFocus())
+            assertFalse("Opening the drawer must not open the keyboard", keyboardVisible(activity))
+            SystemClock.sleep(50)
+        } while (SystemClock.uptimeMillis() < deadline)
     }
 
     private fun nodes(): List<AccessibilityNodeInfo> = buildList {

@@ -126,6 +126,7 @@ class SettingsBackupPolicyTest {
             activeProviderId = "api", activeModel = "remote-model", planningProviderId = HarnessProvider.ID, planningModel = "custom-api-model",
             executionProviderId = "api", executionModel = "remote-model", subagentProviderId = "api", subagentModel = "small",
             themeMode = ThemeMode.AMOLED, maxContextTokens = 262_144, permissionMode = PermissionMode.FULL_ACCESS,
+            progressBarStyle = ProgressBarStyle.SQUIGGLY,
             biometricLockEnabled = true, biometricLockTimeoutMinutes = 5, allowScreenshots = true,
             pinnedSessions = setOf("chat"), archivedSessions = setOf("old-chat"), lastActiveSessionId = "chat"),
             setOf("api", HarnessProvider.ID))
@@ -138,6 +139,9 @@ class SettingsBackupPolicyTest {
         assertEquals("api", settings.subagentProviderId)
         assertEquals("small", settings.subagentModel)
         assertEquals(ThemeMode.AMOLED, settings.themeMode)
+        val reopened = Json.decodeFromString(AppSettings.serializer(), Json.encodeToString(AppSettings.serializer(), settings))
+        assertEquals(ProgressBarStyle.SQUIGGLY, reopened.progressBarStyle)
+        assertEquals(ProgressBarStyle.FLAT, Json.decodeFromString(AppSettings.serializer(), "{}").progressBarStyle)
         assertEquals(262_144, settings.maxContextTokens)
         assertEquals(PermissionMode.CONFIRM_RISKY, settings.permissionMode)
         assertFalse(settings.biometricLockEnabled)

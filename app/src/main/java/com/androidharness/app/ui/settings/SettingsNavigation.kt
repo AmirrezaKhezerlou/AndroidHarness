@@ -17,7 +17,7 @@ internal enum class SettingsPage(
     CAVEMAN("Caveman", "Shorter replies, optional coding skills and token reports", "Integrations", "caveman install intensity off lite full ultra wenyan compression tokens"),
     VOICE("Voice input", "Speech recognition and voice provider preferences", "Your assistant", "microphone groq whisper transcription speech"),
     SKILLS("Skills", "Manage the playbooks your assistant can use", "Your assistant", "catalog instructions add skills"),
-    APPEARANCE("Appearance", "Workspace layout, theme and colors", "Personalize", "dark light amoled system wallpaper dynamic color landscape desktop tablet layout split panes"),
+    APPEARANCE("Appearance", "Workspace layout, theme and colors", "Personalize", "dark light amoled system wallpaper dynamic color landscape desktop tablet layout split panes progress flat squiggly wavy animation"),
     PRIVACY("Privacy & security", "App lock, biometrics and screenshot access", "Personalize", "fingerprint pin authentication screenshots"),
     SEARCH("Web search", "Search provider and API credentials", "Connections", "brave tavily keyless internet"),
     MCP("Connected tools", "Add and configure MCP servers", "Connections", "mcp integrations servers transport"),
@@ -53,6 +53,8 @@ private val primarySettingsEntries = SettingsPage.entries.map { page ->
 }
 
 private val subSettingsEntries = listOf(
+    SettingsSearchEntry("Progress bar style", "Appearance · Flat or squiggly, with live previews", SettingsPage.APPEARANCE,
+        "progress loading indicator animation expressive flat squiggly wavy", anchor = "Progress bar style"),
     SettingsSearchEntry("Fallbacks", "Models & providers · Ordered backup models and routing privacy", SettingsPage.MODELS, "fallback failover retry retries quota ZDR privacy chain", anchor = "Fallbacks"),
     SettingsSearchEntry("Continue with ChatGPT", "Connected accounts · Use your ChatGPT plan", SettingsPage.CONNECTED_ACCOUNTS, "sign in codex subscription", anchor = "Continue with ChatGPT"),
     SettingsSearchEntry("Manage providers", "Models & providers · Add connections, API keys and choose models", SettingsPage.MODELS, "provider api key openai anthropic gemini login model", anchor = "Manage providers"),

@@ -87,6 +87,7 @@ class MainActivity : FragmentActivity() {
             HarnessTheme(
                 themeMode = currentSettings.themeMode,
                 dynamicColor = currentSettings.dynamicColor,
+                progressBarStyle = currentSettings.progressBarStyle,
             ) {
                 // Auto update check shortly after launch, once per process.
                 LaunchedEffect(Unit) {

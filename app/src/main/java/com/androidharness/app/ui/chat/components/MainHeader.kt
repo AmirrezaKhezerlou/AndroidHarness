@@ -69,6 +69,7 @@ import com.androidharness.app.agent.AgentMode
 import com.androidharness.app.agent.PermissionMode
 import com.androidharness.app.agent.ThinkingLevel
 import com.androidharness.app.ui.theme.fastEffectsSpec
+import com.androidharness.app.ui.common.ExpressiveIconButton
 
 /**
  * Phones give the model and thinking level their own row so neither competes
@@ -215,7 +216,7 @@ internal fun MainHeader(
                                 text = { Text("Thinking · ${thinkingResolved?.label ?: thinkingLevel.label}") },
                                 leadingIcon = {
                                     Icon(
-                                        painterResource(R.drawable.ic_chat_sparkles),
+                                        painterResource(R.drawable.ic_brain),
                                         contentDescription = null,
                                         tint = if (thinkingOn) scheme.primary else scheme.onSurfaceVariant,
                                     )
@@ -314,7 +315,7 @@ internal fun MainHeader(
                         }
                     }
                     Spacer(Modifier.width(8.dp))
-                    IconButton(onClick = onOpenGitHub, enabled = canOpenGitHub) {
+                    ExpressiveIconButton(onClick = onOpenGitHub, enabled = canOpenGitHub) {
                         Icon(painterResource(R.drawable.ic_github), contentDescription = "Open GitHub",
                             modifier = Modifier.size(18.dp))
                     }
@@ -352,7 +353,7 @@ private fun DesktopConversationHeader(
             TextButton(onClick = { onMode(if (mode == AgentMode.PLAN) AgentMode.ACT else AgentMode.PLAN) }) {
                 Text(if (mode == AgentMode.PLAN) "Plan" else "Act", style = MaterialTheme.typography.labelMedium)
             }
-            IconButton(onClick = onGitHub, enabled = canGitHub, modifier = Modifier.size(36.dp)) {
+            ExpressiveIconButton(onClick = onGitHub, enabled = canGitHub, modifier = Modifier.size(36.dp)) {
                 Icon(painterResource(R.drawable.ic_github), "Open GitHub", Modifier.size(18.dp))
             }
             Box {
@@ -438,7 +439,7 @@ private fun HeaderThinkingControl(
             ) {
                 Row(Modifier.heightIn(min = 28.dp).padding(horizontal = 8.dp, vertical = 3.dp),
                     verticalAlignment = Alignment.CenterVertically) {
-                    Icon(painterResource(R.drawable.ic_chat_sparkles), contentDescription = "Thinking level", modifier = Modifier.size(14.dp),
+                    Icon(painterResource(R.drawable.ic_brain), contentDescription = "Thinking level", modifier = Modifier.size(14.dp),
                         tint = if (thinkingOn) scheme.primary else scheme.onSurfaceVariant)
                     Spacer(Modifier.width(4.dp))
                     Text(resolved?.label ?: thinkingLevel.label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall,

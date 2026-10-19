@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.settings
 
+import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -48,7 +49,7 @@ internal fun CavemanSection(container: AppContainer, settings: AppSettings) {
             Button(onClick = { save { container.settings.setCavemanInstalled(true) } }, enabled = !busy) { Text("Install Caveman") }
             Text("Installs from the app. Reply mode starts Off; coding skills can be switched off individually.", style = MaterialTheme.typography.labelSmall)
         }
-        if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+        if (busy) AppLinearProgressIndicator(Modifier.fillMaxWidth())
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
     }
     if (settings.cavemanInstalled) {

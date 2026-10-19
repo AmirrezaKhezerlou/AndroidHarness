@@ -1,6 +1,7 @@
 package com.androidharness.app.ui.chat.components
 
 import androidx.compose.ui.res.painterResource
+import com.androidharness.app.ui.theme.expressiveSpatialSpec
 import com.androidharness.app.R
 
 import android.graphics.Bitmap
@@ -76,7 +77,7 @@ import java.io.File
  * One tool call = one compact, quiet row.
  *
  * Flat hairline card, neutral icon tile, monospace tool name, one-line summary.
- * A Material expressive wave indicates active calls. The right-hand status
+ * A Material expressive progress bar indicates active calls. The right-hand status
  * slot shows a check on success or a cross on failure. The whole row toggles details.
  */
 @Composable
@@ -104,7 +105,7 @@ internal fun ToolCallCard(
     var expanded by rememberSaveable(call.id) { mutableStateOf(false) }
     val chevronRotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
-        animationSpec = fastEffectsSpec(),
+        animationSpec = expressiveSpatialSpec(),
         label = "tool card chevron",
     )
     // JSON work is memoized: these cards recompose on every state emission,
@@ -222,8 +223,8 @@ internal fun ToolCallCard(
             }
             AnimatedVisibility(
                 expanded,
-                enter = expandVertically(animationSpec = fastSpatialSpec()) + fadeIn(defaultEffectsSpec()),
-                exit = shrinkVertically(animationSpec = fastSpatialSpec()) + fadeOut(defaultEffectsSpec()),
+                enter = expandVertically(animationSpec = expressiveSpatialSpec()) + fadeIn(defaultEffectsSpec()),
+                exit = shrinkVertically(animationSpec = expressiveSpatialSpec()) + fadeOut(defaultEffectsSpec()),
             ) {
                 Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
                     HorizontalDivider(
@@ -279,7 +280,7 @@ internal fun ToolGroupCard(
     var expanded by rememberSaveable(calls.joinToString(",") { it.id }) { mutableStateOf(false) }
     val rotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
-        animationSpec = fastEffectsSpec(),
+        animationSpec = expressiveSpatialSpec(),
         label = "tool group chevron",
     )
     val scheme = MaterialTheme.colorScheme
@@ -396,8 +397,8 @@ internal fun ToolGroupCard(
                 }
             AnimatedVisibility(
                 expanded,
-                enter = expandVertically(animationSpec = fastSpatialSpec()) + fadeIn(defaultEffectsSpec()),
-                exit = shrinkVertically(animationSpec = fastSpatialSpec()) + fadeOut(defaultEffectsSpec()),
+                enter = expandVertically(animationSpec = expressiveSpatialSpec()) + fadeIn(defaultEffectsSpec()),
+                exit = shrinkVertically(animationSpec = expressiveSpatialSpec()) + fadeOut(defaultEffectsSpec()),
             ) {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(8.dp),

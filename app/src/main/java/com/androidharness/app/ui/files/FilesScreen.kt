@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.files
 
+import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -49,7 +50,6 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -317,7 +317,7 @@ fun FilesScreen(
             if (selecting) {
                 Surface(color = scheme.surfaceContainerHigh, tonalElevation = 2.dp) {
                     Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 8.dp)) {
-                        if (batchBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                        if (batchBusy) AppLinearProgressIndicator(Modifier.fillMaxWidth())
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                             TextButton(enabled = selectedNodes.isNotEmpty() && !batchBusy, onClick = {
                                 val nodes = selectedNodes.toList()

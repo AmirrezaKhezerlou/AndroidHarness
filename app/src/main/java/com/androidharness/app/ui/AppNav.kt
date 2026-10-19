@@ -162,20 +162,12 @@ fun AppNav(container: AppContainer) {
             .getOrDefault(emptyList())
     }
 
-    // Keyboard belongs to manual taps only. Two mechanisms fought this:
-    // (1) the composer's focus survives the drawer opening, and (2) the
-    // drawer's own accessibility focus pass can land ON the search field,
-    // that one arrives a frame AFTER the open event, so clearing immediately
-    // loses the race. Clear on both edges, once more after the settle, and
-    // hide the IME outright.
-    androidx.compose.runtime.LaunchedEffect(drawerState.currentValue) {
+    // End text entry as the drawer starts moving. Its initial focus belongs
+    // to the sidebar container; later taps on search must keep their focus.
+    androidx.compose.runtime.LaunchedEffect(drawerState.targetValue) {
         focusManager.clearFocus(force = true)
         keyboard?.hide()
-        if (drawerState.currentValue == DrawerValue.Open) {
-            delay(120)
-            focusManager.clearFocus(force = true)
-            keyboard?.hide()
-        } else {
+        if (drawerState.targetValue == DrawerValue.Closed) {
             // Drawer closed: collapse search so it starts fresh next open.
             searchQuery = ""
         }

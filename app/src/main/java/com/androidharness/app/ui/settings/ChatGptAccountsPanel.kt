@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.settings
 
+import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
@@ -39,7 +40,7 @@ internal fun ChatGptAccountsPanel(
                     }
                 }
                 if (state.signingIn) {
-                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                    AppLinearProgressIndicator(Modifier.fillMaxWidth())
                     Text("Finish signing in in your browser, then return here.", style = MaterialTheme.typography.bodySmall)
                     TextButton(onClick = onCancelSignIn) { Text("Cancel sign-in") }
                 }
@@ -106,7 +107,7 @@ internal fun ChatGptAccountsPanel(
                         if (account.useForAutoSwitch) FallbackModelRow(account) { onFallback(account, true, it) }
                     }
                     if (state.checkingModelsFor == account.providerId) {
-                        LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+                        AppLinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
                         Text("Checking newer models. Small test requests use this account's plan.",
                             style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(16.dp), color = colors.onSurfaceVariant)
                     }

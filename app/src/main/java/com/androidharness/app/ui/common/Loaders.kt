@@ -11,14 +11,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -28,6 +29,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.androidharness.app.data.ProgressBarStyle
+import com.androidharness.app.ui.theme.LocalProgressBarStyle
 
 /**
  * Minimal loading indicator: three small dots pulsing in sequence.
@@ -102,34 +105,22 @@ fun DotLoading(
     }
 }
 
-/**
- * Thin 3dp progress line with round caps for measured operations.
- */
+/** Compact progress bars share a fixed-height slot so changing style doesn't move content. */
 @Composable
 fun ThinLinearProgress(
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.primary,
 ) {
-    LinearProgressIndicator(
-        modifier = modifier
-            .height(3.dp)
-            .clip(RoundedCornerShape(50)),
-        color = color,
-        trackColor = color.copy(alpha = 0.15f),
-    )
+    AppLinearProgressIndicator(modifier = modifier, color = color)
 }
 
-/** Uses Material's native wave proportions, motion, and dynamic track color. */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+/** Uses the saved appearance choice in the existing tool-card slot. */
 @Composable
 fun ToolCallProgress(
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.primary,
 ) {
-    LinearWavyProgressIndicator(
-        modifier = modifier,
-        color = color,
-    )
+    AppLinearProgressIndicator(modifier = modifier, color = color)
 }
 
 /** Determinate variant of [ThinLinearProgress]. */
@@ -139,12 +130,38 @@ fun ThinLinearProgress(
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.primary,
 ) {
-    LinearProgressIndicator(
-        progress = progress,
-        modifier = modifier
-            .height(3.dp)
-            .clip(RoundedCornerShape(50)),
-        color = color,
-        trackColor = color.copy(alpha = 0.15f),
-    )
+    AppLinearProgressIndicator(progress = progress, modifier = modifier, color = color)
+}
+
+@Composable
+fun AppLinearProgressIndicator(
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.primary,
+    trackColor: Color = MaterialTheme.colorScheme.secondaryContainer,
+) = StyledLinearProgress(null, modifier, color, trackColor)
+
+@Composable
+fun AppLinearProgressIndicator(
+    progress: () -> Float,
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.primary,
+    trackColor: Color = MaterialTheme.colorScheme.secondaryContainer,
+) = StyledLinearProgress(progress, modifier, color, trackColor)
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun StyledLinearProgress(progress: (() -> Float)?, modifier: Modifier, color: Color, trackColor: Color) {
+    val squiggly = LocalProgressBarStyle.current == ProgressBarStyle.SQUIGGLY
+    MaterialTheme(motionScheme = MotionScheme.expressive()) {
+        Box(modifier.height(10.dp), contentAlignment = Alignment.Center) {
+            when {
+                squiggly && progress != null -> LinearWavyProgressIndicator(progress = progress,
+                    modifier = Modifier.fillMaxWidth(), color = color, trackColor = trackColor)
+                squiggly -> LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth(), color = color, trackColor = trackColor)
+                progress != null -> LinearProgressIndicator(progress = progress,
+                    modifier = Modifier.fillMaxWidth(), color = color, trackColor = trackColor)
+                else -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = color, trackColor = trackColor)
+            }
+        }
+    }
 }

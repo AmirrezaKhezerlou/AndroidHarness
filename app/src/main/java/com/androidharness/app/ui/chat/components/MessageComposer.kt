@@ -61,6 +61,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -110,6 +111,9 @@ import com.androidharness.app.ui.theme.defaultEffectsSpec
 import com.androidharness.app.ui.theme.defaultSpatialSpec
 import com.androidharness.app.ui.theme.fastEffectsSpec
 import com.androidharness.app.ui.theme.fastSpatialSpec
+import com.androidharness.app.ui.common.ExpressiveIconButton
+import com.androidharness.app.ui.theme.expressiveEffectsSpec
+import com.androidharness.app.ui.theme.expressiveSpatialSpec
 import kotlin.math.abs
 
 /** How far left the finger travels before releasing cancels the take. */
@@ -195,7 +199,7 @@ internal fun MessageComposer(
             canSend || isGroqLocked -> MaterialTheme.colorScheme.primary
             else -> MaterialTheme.colorScheme.surfaceContainerHighest
         },
-        animationSpec = defaultEffectsSpec(),
+        animationSpec = expressiveEffectsSpec(),
         label = "sendColor",
     )
     val iconColor by animateColorAsState(
@@ -204,18 +208,13 @@ internal fun MessageComposer(
             canSend || isGroqLocked -> MaterialTheme.colorScheme.onPrimary
             else -> MaterialTheme.colorScheme.onSurfaceVariant
         },
-        animationSpec = defaultEffectsSpec(),
+        animationSpec = expressiveEffectsSpec(),
         label = "sendIconColor",
     )
     val corner by animateDpAsState(
         targetValue = if (canSend || isGroqLocked || showStopOnly) 26.dp else 17.dp,
-        animationSpec = defaultSpatialSpec(),
+        animationSpec = expressiveSpatialSpec(),
         label = "sendCorner",
-    )
-    val buttonScale by animateFloatAsState(
-        targetValue = if (canSend || isGroqLocked || showStopOnly) 1f else 0.86f,
-        animationSpec = fastSpatialSpec(),
-        label = "sendScale",
     )
 
     val actionSize = if (desktopInput) 36.dp else if (desktop) 52.dp else 44.dp
@@ -442,27 +441,17 @@ internal fun MessageComposer(
 
             else -> {
                 // Inbuilt voice mode: Simple tap toggle without gesture overlays
-                Box(
-                    modifier = Modifier
-                        .size(actionSize)
-                        .clip(RoundedCornerShape(corner))
-                        .clickable { onToggleInbuiltVoice() }
+                ExpressiveIconButton(
+                    onClick = onToggleInbuiltVoice,
+                    modifier = Modifier.size(actionSize)
                         .semantics { contentDescription = if (isInbuiltListening) "Stop voice input" else "Voice input" },
-                    contentAlignment = Alignment.Center,
+                    shape = RoundedCornerShape(corner),
+                    colors = IconButtonDefaults.iconButtonColors(
+                        containerColor = if (isInbuiltListening) MaterialTheme.colorScheme.primary else Color.Transparent,
+                        contentColor = if (isInbuiltListening) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(actionSize)
-                            .graphicsLayer {
-                                scaleX = buttonScale
-                                scaleY = buttonScale
-                            }
-                            .clip(RoundedCornerShape(corner))
-                            .background(if (isInbuiltListening) MaterialTheme.colorScheme.primary else Color.Transparent),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(painterResource(R.drawable.ic_chat_mic), null, Modifier.size(18.dp), tint = if (isInbuiltListening) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                    Icon(painterResource(R.drawable.ic_chat_mic), null, Modifier.size(18.dp))
                 }
             }
         }
@@ -470,36 +459,21 @@ internal fun MessageComposer(
     val trailing: @Composable () -> Unit = {
         // Action button on the right.
         //
-        // Every arm of this `when` follows the same shape: the outer Box owns the
-        // clickable area and the clip, and the inner Box carries the scale
-        // animation. A scale applied over the clickable used to shrink the tap
-        // target along with the artwork, down to ~45dp at the idle scale.
+        // Native press feedback changes the painted shape, keeping actionSize
+        // and the clickable area steady while the input grows or shrinks.
         when {
             showQueueSend -> {
-                Box(
-                    modifier = Modifier
-                        .size(actionSize)
-                        .clip(RoundedCornerShape(corner))
-                        .clickable {
-                            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-                            onSend()
-                        }
+                ExpressiveIconButton(
+                    onClick = { haptics.performHapticFeedback(HapticFeedbackType.Confirm); onSend() },
+                    modifier = Modifier.size(actionSize)
                         .semantics { contentDescription = "Queue message" },
-                    contentAlignment = Alignment.Center,
+                    shape = RoundedCornerShape(corner),
+                    colors = IconButtonDefaults.iconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                    ),
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(actionSize)
-                            .graphicsLayer {
-                                scaleX = buttonScale
-                                scaleY = buttonScale
-                            }
-                            .clip(RoundedCornerShape(corner))
-                            .background(MaterialTheme.colorScheme.primary),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(painterResource(R.drawable.ic_chat_arrow_up), null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onPrimary)
-                    }
+                    Icon(painterResource(R.drawable.ic_chat_arrow_up), null, Modifier.size(20.dp))
                 }
             }
 
@@ -528,58 +502,26 @@ internal fun MessageComposer(
             }
 
             showStopOnly -> {
-                Box(
-                    modifier = Modifier
-                        .size(actionSize)
-                        .clip(RoundedCornerShape(corner))
-                        .clickable {
-                            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-                            onStop()
-                        }
+                ExpressiveIconButton(
+                    onClick = { haptics.performHapticFeedback(HapticFeedbackType.Confirm); onStop() },
+                    modifier = Modifier.size(actionSize)
                         .semantics { contentDescription = "Stop" },
-                    contentAlignment = Alignment.Center,
+                    shape = RoundedCornerShape(corner),
+                    colors = IconButtonDefaults.iconButtonColors(containerColor = buttonColor, contentColor = iconColor),
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(actionSize)
-                            .graphicsLayer {
-                                scaleX = buttonScale
-                                scaleY = buttonScale
-                            }
-                            .clip(RoundedCornerShape(corner))
-                            .background(buttonColor),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        StopGlyph(color = iconColor)
-                    }
+                    StopGlyph(color = iconColor)
                 }
             }
 
             canSend -> {
-                Box(
-                    modifier = Modifier
-                        .size(actionSize)
-                        .clip(RoundedCornerShape(corner))
-                        .clickable {
-                            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-                            onSend()
-                        }
+                ExpressiveIconButton(
+                    onClick = { haptics.performHapticFeedback(HapticFeedbackType.Confirm); onSend() },
+                    modifier = Modifier.size(actionSize)
                         .semantics { contentDescription = "Send message" },
-                    contentAlignment = Alignment.Center,
+                    shape = RoundedCornerShape(corner),
+                    colors = IconButtonDefaults.iconButtonColors(containerColor = buttonColor, contentColor = iconColor),
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(actionSize)
-                            .graphicsLayer {
-                                scaleX = buttonScale
-                                scaleY = buttonScale
-                            }
-                            .clip(RoundedCornerShape(corner))
-                            .background(buttonColor),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(painterResource(R.drawable.ic_chat_arrow_up), null, Modifier.size(20.dp), tint = iconColor)
-                    }
+                    Icon(painterResource(R.drawable.ic_chat_arrow_up), null, Modifier.size(20.dp))
                 }
             }
 
@@ -954,7 +896,7 @@ private fun HuliaMicButton(
             recording -> MaterialTheme.colorScheme.primary
             else -> MaterialTheme.colorScheme.surfaceContainerHighest
         },
-        animationSpec = defaultEffectsSpec(),
+        animationSpec = expressiveEffectsSpec(),
         label = "micColor",
     )
     val glyphColor by animateColorAsState(
@@ -963,12 +905,12 @@ private fun HuliaMicButton(
             recording -> MaterialTheme.colorScheme.onPrimary
             else -> MaterialTheme.colorScheme.onSurfaceVariant
         },
-        animationSpec = defaultEffectsSpec(),
+        animationSpec = expressiveEffectsSpec(),
         label = "micGlyphColor",
     )
     val corner by animateDpAsState(
         targetValue = if (recording) 26.dp else 17.dp,
-        animationSpec = defaultSpatialSpec(),
+        animationSpec = expressiveSpatialSpec(),
         label = "micCorner",
     )
     val buttonScale by animateFloatAsState(
@@ -1111,30 +1053,17 @@ private fun ComposerLeadingButton(
     var expanded by remember { mutableStateOf(false) }
 
     Box {
-        Box(
-            modifier = Modifier
-                .size(size)
-                .clip(RoundedCornerShape(17.dp))
-                .clickable {
-                    haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-                    expanded = true
-                }
+        ExpressiveIconButton(
+            onClick = { haptics.performHapticFeedback(HapticFeedbackType.Confirm); expanded = true },
+            modifier = Modifier.size(size)
                 .semantics { contentDescription = "Message actions" },
-            contentAlignment = Alignment.Center,
+            shape = RoundedCornerShape(17.dp),
+            colors = IconButtonDefaults.iconButtonColors(
+                containerColor = if (expanded) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+                contentColor = if (expanded) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+            ),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(size)
-                    .graphicsLayer {
-                        scaleX = 0.86f
-                        scaleY = 0.86f
-                    }
-                    .clip(RoundedCornerShape(17.dp))
-                    .background(Color.Transparent),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(painterResource(R.drawable.ic_chat_plus), null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            Icon(painterResource(R.drawable.ic_chat_plus), null, Modifier.size(18.dp))
         }
 
         DropdownMenu(

@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import android.widget.FrameLayout
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -146,7 +147,7 @@ internal fun ArtifactCard(
                     Text("Preview unavailable", style = MaterialTheme.typography.titleSmall)
                     TextButton(onClick = { reload++ }) { Text("Reload preview") }
                 } else ArtifactViewHost(web, Modifier.fillMaxSize())
-                if (loading) LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter))
+                if (loading) AppLinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter))
             }
         }
     }

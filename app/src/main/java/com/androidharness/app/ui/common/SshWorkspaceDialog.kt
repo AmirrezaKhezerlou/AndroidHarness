@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.common
 
+import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -97,7 +98,7 @@ fun SshWorkspaceDialog(container: AppContainer, existing: SshFs? = null, onSelec
                     if (folders.isEmpty()) Text("No subfolders. You can use this folder.")
                     TextButton(enabled = !busy, onClick = { verified = false }) { Text("Edit connection") }
                 }
-                if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                if (busy) AppLinearProgressIndicator(Modifier.fillMaxWidth())
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
         },

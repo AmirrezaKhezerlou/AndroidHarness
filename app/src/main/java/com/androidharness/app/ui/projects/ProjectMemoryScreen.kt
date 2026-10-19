@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.projects
 
+import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -61,7 +62,7 @@ fun ProjectMemoryScreen(container: AppContainer, projectId: String, onBack: () -
             Text("Notes shared by chats in this project.", style = MaterialTheme.typography.bodyMedium)
             if (project == null) Text("This project is no longer available.")
             else {
-                if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                if (busy) AppLinearProgressIndicator(Modifier.fillMaxWidth())
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
                 if (loaded) {
                     OutlinedTextField(draft, onValueChange = { draft = it; saved = false },

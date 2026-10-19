@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.settings
 
+import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,7 +27,7 @@ internal fun ProjectorDialog(model: LocalModelSpec, manager: LocalModelManager, 
             model.projector?.let { Text("Added: ${it.filename.substringAfterLast('/')}", style = MaterialTheme.typography.bodySmall) }
             if (!model.localFile) TextButton(onClick = { uri.openUri(model.modelPage) }, enabled = !busy) { Text("Open model page") }
             OutlinedTextField(link, { link = it }, label = { Text("Vision file link (.gguf)") }, enabled = !busy, modifier = Modifier.fillMaxWidth(), maxLines = 3)
-            if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (busy) AppLinearProgressIndicator(Modifier.fillMaxWidth())
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
     }, confirmButton = { TextButton(enabled = !busy && link.isNotBlank(), onClick = {

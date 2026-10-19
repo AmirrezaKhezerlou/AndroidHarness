@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat.components
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -22,10 +23,13 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -36,6 +40,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.androidharness.app.R
+import com.androidharness.app.ui.common.CatalogLoadingIndicator
+import com.androidharness.app.ui.common.ExpressiveIconButton
+import com.androidharness.app.ui.theme.expressiveEffectsSpec
 import com.androidharness.app.chatgpt.ChatGptProtocol
 import com.androidharness.app.data.ModelShortcut
 import com.androidharness.app.data.ModelShortcuts
@@ -79,7 +87,7 @@ fun ModelPickerSheet(
     onAddProvider: (() -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val compactHeight = LocalConfiguration.current.screenHeightDp < 600
+    val compactHeight = LocalConfiguration.current.screenHeightDp < 600 * LocalDensity.current.fontScale
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
@@ -173,7 +181,8 @@ fun ModelPickerSheet(
     @Composable fun SearchField() {
         OutlinedTextField(value = if (choosingProvider) providerQuery else query,
                 onValueChange = { if (choosingProvider) providerQuery = it else query = it }, singleLine = true,
-                placeholder = { Text(if (choosingProvider) "Search providers" else "Search models or providers") },
+                placeholder = { Text(if (choosingProvider) "Search providers" else "Search models or providers",
+                    maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 leadingIcon = { Icon(Icons.Outlined.Search, null, Modifier.size(19.dp)) },
                 trailingIcon = { if ((if (choosingProvider) providerQuery else query).isNotEmpty()) IconButton(onClick = {
                     if (choosingProvider) providerQuery = "" else query = ""
@@ -246,11 +255,15 @@ fun ModelPickerSheet(
                             horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             collections.forEach { (key, label) ->
                                 val selected = if (searching) key == "All" else activeCollection == key
+                                val collectionColor by animateColorAsState(
+                                    if (selected) scheme.secondaryContainer else scheme.surface,
+                                    animationSpec = expressiveEffectsSpec(), label = "model collection",
+                                )
                                 Surface(onClick = { collection = key; query = "" }, shape = RoundedCornerShape(9.dp),
-                                    color = if (selected) scheme.surfaceContainerHigh else scheme.surface,
+                                    color = collectionColor,
                                     modifier = Modifier.semantics { this.selected = selected; role = Role.Tab }) {
                                     Box(Modifier.heightIn(min = 44.dp).padding(horizontal = 12.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
-                                        Text(label, style = MaterialTheme.typography.labelMedium, color = if (selected) scheme.onSurface else scheme.onSurfaceVariant)
+                                        Text(label, style = MaterialTheme.typography.labelMedium, color = if (selected) scheme.onSecondaryContainer else scheme.onSurfaceVariant)
                                     }
                                 }
                             }
@@ -259,8 +272,8 @@ fun ModelPickerSheet(
                             Text("${rows.size} ${if (rows.size == 1) "model" else "models"}${if (showAll) " · Show all" else ""}",
                                 Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
                             TextButton(onClick = { managing = true }) { Text("Edit list", style = MaterialTheme.typography.labelMedium) }
-                            IconButton(onClick = { scope.launch { refresh(scopedProviders.filter { it.enabled || listedId == it.id }.map { it.id }) } }, enabled = !isRefreshing) {
-                                if (isRefreshing) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                            ExpressiveIconButton(onClick = { scope.launch { refresh(scopedProviders.filter { it.enabled || listedId == it.id }.map { it.id }) } }, enabled = !isRefreshing) {
+                                if (isRefreshing) CatalogLoadingIndicator(Modifier.size(20.dp))
                                 else Icon(Icons.Outlined.Refresh, "Refresh models", Modifier.size(18.dp))
                             }
                         }
@@ -296,7 +309,7 @@ fun ModelPickerSheet(
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     FilterChip(selected = thinkOnly, onClick = { thinkOnly = !thinkOnly }, label = { Text("Thinking only") },
-                        leadingIcon = { Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(15.dp)) })
+                        leadingIcon = { Icon(painterResource(R.drawable.ic_brain), null, Modifier.size(15.dp)) })
                     Spacer(Modifier.weight(1f))
                     Box {
                         IconButton(onClick = { more = true }) { Icon(Icons.Outlined.MoreHoriz, "Model options") }
@@ -384,7 +397,12 @@ private fun ModelRow(
     capabilities: ModelCapabilities, current: Boolean, onDelete: (() -> Unit)?,
 ) {
     val scheme = MaterialTheme.colorScheme
-    Surface(color = if (selected) scheme.primary.copy(alpha = .06f) else scheme.surface,
+    val containerColor by animateColorAsState(
+        if (selected) scheme.secondaryContainer else scheme.surface,
+        animationSpec = expressiveEffectsSpec(), label = "model selection",
+    )
+    Surface(color = containerColor,
+        contentColor = if (selected) scheme.onSecondaryContainer else scheme.onSurface,
         shape = RoundedCornerShape(13.dp), border = BorderStroke(1.dp, if (selected) scheme.primary.copy(alpha = .65f) else scheme.surface),
         modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -400,9 +418,11 @@ private fun ModelRow(
                     ModelCapabilityLabels(capabilities)
                     note?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant) }
                 }
-                if (selected) Icon(Icons.Outlined.CheckCircle, "Selected", Modifier.size(17.dp), tint = scheme.primary)
+                Box(Modifier.size(17.dp), contentAlignment = Alignment.Center) {
+                    if (selected) Icon(Icons.Outlined.CheckCircle, "Selected", Modifier.size(17.dp), tint = scheme.onSecondaryContainer)
+                }
             }
-            IconButton(onClick = onFavourite) { Icon(if (favourite) Icons.Filled.Star else Icons.Outlined.StarBorder,
+            ExpressiveIconButton(onClick = onFavourite) { Icon(if (favourite) Icons.Filled.Star else Icons.Outlined.StarBorder,
                 if (favourite) "Remove ${entry.displayName ?: entry.id} from favourites" else "Favourite ${entry.displayName ?: entry.id}",
                 Modifier.size(18.dp), tint = if (favourite) scheme.primary else scheme.onSurfaceVariant) }
             if (onDelete != null) IconButton(onClick = onDelete) { Icon(Icons.Outlined.Close, "Remove custom model", Modifier.size(17.dp)) }
@@ -414,7 +434,7 @@ private fun ModelRow(
 @Composable
 private fun ModelCapabilityLabels(capabilities: ModelCapabilities) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        @Composable fun Label(text: String, icon: ImageVector, value: ModelCapabilities.Capability) {
+        @Composable fun Label(text: String, icon: Painter, value: ModelCapabilities.Capability) {
             if (value.supported == true) Row(Modifier.semantics { contentDescription = "$text: ${value.description}" },
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 Icon(icon, null, Modifier.size(13.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -422,9 +442,9 @@ private fun ModelCapabilityLabels(capabilities: ModelCapabilities) {
             }
         }
         val inferred = capabilities.thinking.source == ModelCapabilities.Source.FAMILY
-        Label(if (inferred) "Thinking unconfirmed" else "Thinking", if (inferred) Icons.Outlined.HelpOutline else Icons.Outlined.AutoAwesome, capabilities.thinking)
-        Label("Tools", Icons.Outlined.Build, capabilities.tools)
-        Label("Images", Icons.Outlined.Image, capabilities.images)
+        Label(if (inferred) "Thinking unconfirmed" else "Thinking", painterResource(R.drawable.ic_brain), capabilities.thinking)
+        Label("Tools", rememberVectorPainter(Icons.Outlined.Build), capabilities.tools)
+        Label("Images", rememberVectorPainter(Icons.Outlined.Image), capabilities.images)
     }
 }
 

@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.github
 
+import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -33,7 +34,7 @@ internal fun GitHubDialog(title: String, busy: Boolean, onDismiss: () -> Unit,
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
                 footer()
-                if (busy) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp))
+                if (busy) AppLinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp))
                 TextButton(onClick = onDismiss, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Close") }
             }
         }

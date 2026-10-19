@@ -19,6 +19,9 @@ private val WEB_SEARCH_PROVIDERS = setOf("keyless", "brave", "tavily")
 enum class ThemeMode { SYSTEM, LIGHT, DARK, AMOLED }
 
 @kotlinx.serialization.Serializable
+enum class ProgressBarStyle { FLAT, SQUIGGLY }
+
+@kotlinx.serialization.Serializable
 data class AppSettings(
     val permissionMode: PermissionMode = PermissionMode.CONFIRM_RISKY,
     val subagentFullAccess: Boolean = false,
@@ -26,6 +29,7 @@ data class AppSettings(
     val subagentModel: String? = null,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val dynamicColor: Boolean = true,
+    val progressBarStyle: ProgressBarStyle = ProgressBarStyle.FLAT,
     val workspaceLayout: WorkspaceLayoutMode = WorkspaceLayoutMode.AUTO,
     val activeProviderId: String? = null,
     val providerOrder: List<String> = emptyList(),
@@ -147,6 +151,7 @@ class SettingsRepository(private val context: Context) {
         val SUBAGENT_MODEL = stringPreferencesKey("subagent_model")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
+        val PROGRESS_BAR_STYLE = stringPreferencesKey("progress_bar_style")
         val WORKSPACE_LAYOUT = stringPreferencesKey("workspace_layout")
         val ACTIVE_PROVIDER = stringPreferencesKey("active_provider_id")
         val PROVIDER_ORDER = stringPreferencesKey("provider_order")
@@ -202,6 +207,8 @@ class SettingsRepository(private val context: Context) {
                 ?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
                 ?: ThemeMode.SYSTEM,
             dynamicColor = prefs[Keys.DYNAMIC_COLOR] ?: true,
+            progressBarStyle = ProgressBarStyle.entries.firstOrNull { it.name == prefs[Keys.PROGRESS_BAR_STYLE] }
+                ?: ProgressBarStyle.FLAT,
             workspaceLayout = WorkspaceLayoutMode.fromStored(prefs[Keys.WORKSPACE_LAYOUT])
                 ?: WorkspaceLayoutMode.AUTO,
             activeProviderId = prefs[Keys.ACTIVE_PROVIDER] ?: com.androidharness.app.llm.HarnessProvider.ID,
@@ -261,6 +268,7 @@ class SettingsRepository(private val context: Context) {
         context.settingsStore.edit { p ->
             p[Keys.THEME_MODE] = s.themeMode.name
             p[Keys.DYNAMIC_COLOR] = s.dynamicColor
+            p[Keys.PROGRESS_BAR_STYLE] = s.progressBarStyle.name
             p[Keys.WORKSPACE_LAYOUT] = s.workspaceLayout.name
             p[Keys.PROVIDER_ORDER] = ProviderListPreferences.encodeOrder(s.providerOrder)
             p[Keys.DISABLED_PROVIDERS] = s.disabledProviderIds
@@ -329,6 +337,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setDynamicColor(enabled: Boolean) {
         context.settingsStore.edit { it[Keys.DYNAMIC_COLOR] = enabled }
+    }
+
+    suspend fun setProgressBarStyle(style: ProgressBarStyle) {
+        context.settingsStore.edit { it[Keys.PROGRESS_BAR_STYLE] = style.name }
     }
 
     suspend fun setWorkspaceLayout(mode: WorkspaceLayoutMode) {

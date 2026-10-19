@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat.rich
 
+import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import com.androidharness.app.core.response.RichResponse
 
 import android.widget.FrameLayout
@@ -56,7 +57,7 @@ internal fun InlineResponsePreview(node: RichResponse.Node.Preview, onFollowUp: 
                 host.addView(web, FrameLayout.LayoutParams(-1, -1))
             }
         }, onRelease = { host -> if (web.parent === host) host.removeView(web) })
-        if (loading) LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter))
+        if (loading) AppLinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter))
     } }
     val controls: @Composable (Boolean) -> Unit = { fullscreen ->
         Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 2.dp), verticalAlignment = Alignment.CenterVertically) {

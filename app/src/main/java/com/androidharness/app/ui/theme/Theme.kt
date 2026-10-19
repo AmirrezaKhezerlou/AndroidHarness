@@ -9,8 +9,12 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
 import com.androidharness.app.data.ThemeMode
+import com.androidharness.app.data.ProgressBarStyle
+
+val LocalProgressBarStyle = staticCompositionLocalOf { ProgressBarStyle.FLAT }
 
 /**
  * App theme: Material You dynamic color on Android 12+, with a Google-blue–seeded
@@ -26,6 +30,7 @@ import com.androidharness.app.data.ThemeMode
 fun HarnessTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     dynamicColor: Boolean = true,
+    progressBarStyle: ProgressBarStyle = ProgressBarStyle.FLAT,
     content: @Composable () -> Unit,
 ) {
     val dark = when (themeMode) {
@@ -46,6 +51,7 @@ fun HarnessTheme(
 
     CompositionLocalProvider(
         LocalStatusColors provides (if (dark) StatusDark else StatusLight),
+        LocalProgressBarStyle provides progressBarStyle,
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

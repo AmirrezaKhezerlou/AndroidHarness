@@ -2063,6 +2063,12 @@ private fun AppearanceSection(container: AppContainer, settings: AppSettings, sc
                     )
                 }
             }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+            SettingsAnchor("Progress bar style") {
+                ProgressBarStyleSection(settings.progressBarStyle) {
+                    scope.launch { container.settings.setProgressBarStyle(it) }
+                }
+            }
         }
     }
 }

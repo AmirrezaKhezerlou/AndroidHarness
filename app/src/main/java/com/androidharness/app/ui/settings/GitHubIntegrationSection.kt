@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.settings
 
+import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -73,7 +74,7 @@ internal fun GitHubIntegrationSection(container: AppContainer) {
                 OutlinedButton(onClick = { patForm = true; token = ""; message = null },
                     enabled = !working, modifier = Modifier.fillMaxWidth()) { Text("Use a personal access token") }
             }
-            if (state.busy || working) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (state.busy || working) AppLinearProgressIndicator(Modifier.fillMaxWidth())
             state.message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             if (patForm) {
                 Text("For fine-grained tokens, include the target repositories and Contents: read and write. Workflow changes also need Workflows access. Organization approval or SSO may be required.",

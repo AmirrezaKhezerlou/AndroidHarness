@@ -190,11 +190,16 @@ class ModelLockingDeviceTest {
             tap("Switch model"); awaitText("All chats")
             tap("All chats"); awaitText("Use model for"); tap("This chat")
             withTimeout(15000) { c.settings.settings.first { !it.sameModelAcrossChats } }
-            awaitText("For this chat")
+            awaitText("This chat")
             screenshot("model-picker-accessible")
             instrumentation.runOnMainSync { activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
             awaitLandscape()
-            tap("All models"); scrollTo("beta-model")
+            // Other installed providers can have thousands of rows; use the unified search.
+            val search = requireNotNull(find { it.isEditable })
+            assertTrue(search.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "beta-model")
+            }))
+            scrollTo("beta-model")
             screenshot("model-picker-accessible-landscape")
             tap("beta-model"); tap("Use model")
             withTimeout(15000) { c.chatModels.observe(a).first { it.selection.active?.model == "beta-model" } }
@@ -368,11 +373,13 @@ class ModelLockingDeviceTest {
                 // their inner list can consume accessibility scroll actions.
                 if (!moved || step % 3 == 2) {
                     val d = instrumentation.targetContext.resources.displayMetrics
-                    val top = d.heightPixels / 3
-                    val bottom = d.heightPixels * 2 / 3
+                    val viewport = vertical?.let { Rect().also(it::getBoundsInScreen) }
+                        ?: Rect(0, 0, d.widthPixels, d.heightPixels)
+                    val top = viewport.top + viewport.height() / 5
+                    val bottom = viewport.bottom - viewport.height() / 5
                     val from = if (direction == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) bottom else top
                     val to = if (direction == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) top else bottom
-                    shell("input swipe ${d.widthPixels / 2} $from ${d.widthPixels / 2} $to 300")
+                    shell("input swipe ${viewport.centerX()} $from ${viewport.centerX()} $to 300")
                 }
                 instrumentation.waitForIdleSync()
                 SystemClock.sleep(250)

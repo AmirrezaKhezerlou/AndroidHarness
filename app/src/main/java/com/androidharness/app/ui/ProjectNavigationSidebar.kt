@@ -1,8 +1,11 @@
 package com.androidharness.app.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -44,6 +47,8 @@ import com.androidharness.app.data.db.SessionEntity
 import com.androidharness.app.ui.common.HarnessMark
 import com.androidharness.app.ui.theme.LocalStatusColors
 import com.androidharness.app.ui.common.formatRelativeTime
+import com.androidharness.app.ui.theme.expressiveEffectsSpec
+import com.androidharness.app.ui.theme.expressiveSpatialSpec
 
 internal enum class SidebarProjectAction { OPEN, RENAME, PIN, ARCHIVE }
 internal enum class SidebarChatAction { RENAME, PIN, ARCHIVE, DETAILS, DELETE }
@@ -128,7 +133,8 @@ internal fun ProjectNavigationSidebar(
             SidebarNavRow("Settings", Icons.Outlined.Settings, currentRoute == "settings", onClick = onSettings)
         }
     }
-    Surface(color = scheme.surface, modifier = Modifier.fillMaxSize().semantics { contentDescription = "Project and chat sidebar" }) {
+    // The drawer's opening focus request should land here, not in chat search.
+    Surface(color = scheme.surface, modifier = Modifier.fillMaxSize().focusable().semantics { contentDescription = "Project and chat sidebar" }) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val short = maxHeight < 440.dp
             val narrow = maxWidth < 280.dp
@@ -171,12 +177,21 @@ internal fun ProjectNavigationSidebar(
                         verticalAlignment = Alignment.CenterVertically) {
                         Row(Modifier.weight(1f).background(scheme.surfaceContainer, RoundedCornerShape(12.dp)).padding(3.dp)) {
                             listOf(false to "Chats", true to "Projects").forEach { (projectTab, label) ->
-                                Surface(onClick = { onProjectsViewChange(projectTab) }, shape = RoundedCornerShape(9.dp),
-                                    color = if (projectsView == projectTab) scheme.secondaryContainer else scheme.surfaceContainer,
-                                    modifier = Modifier.weight(1f).semantics { role = Role.Tab; selected = projectsView == projectTab }) {
+                                val selectedTab = projectsView == projectTab
+                                val tabColor by animateColorAsState(
+                                    if (selectedTab) scheme.secondaryContainer else scheme.surfaceContainer,
+                                    animationSpec = expressiveEffectsSpec(), label = "sidebar tab color",
+                                )
+                                val tabCorner by animateDpAsState(
+                                    if (selectedTab) 18.dp else 9.dp,
+                                    animationSpec = expressiveSpatialSpec(), label = "sidebar tab shape",
+                                )
+                                Surface(onClick = { onProjectsViewChange(projectTab) }, shape = RoundedCornerShape(tabCorner),
+                                    color = tabColor,
+                                    modifier = Modifier.weight(1f).semantics { role = Role.Tab; selected = selectedTab }) {
                                     Box(Modifier.heightIn(min = 42.dp).padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
                                         Text(label, style = MaterialTheme.typography.labelLarge,
-                                            color = if (projectsView == projectTab) scheme.onSecondaryContainer else scheme.onSurfaceVariant)
+                                            color = if (selectedTab) scheme.onSecondaryContainer else scheme.onSurfaceVariant)
                                     }
                                 }
                             }

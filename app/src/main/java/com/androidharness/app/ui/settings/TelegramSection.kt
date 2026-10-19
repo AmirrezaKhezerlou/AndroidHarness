@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.settings
 
+import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -169,7 +170,7 @@ import kotlinx.coroutines.launch
                 if (!canConfigure) OutlinedButton(enabled = !busy, onClick = { action("Task stopped.") { manager.stopTasks() } }) { Text("Stop task") }
             }
         }
-        if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+        if (busy) AppLinearProgressIndicator(Modifier.fillMaxWidth())
         (serviceError ?: manager.store.loadError ?: pairing.error ?: if (failed) message else runtime.message)?.let {
             Text(it, style = MaterialTheme.typography.bodySmall, color = if (failed || serviceError != null || pairing.error != null || manager.store.loadError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -223,7 +224,7 @@ import kotlinx.coroutines.launch
         TelegramChoice("Provider", providers.firstOrNull { it.id == providerChoice }?.label ?: "Choose provider", providers, !busy && canConfigure && setup.sessionId != null) { providerChoice = it }
         val selectedModel = if (providerChoice == activeChoice?.providerId) activeChoice?.model else null
         TelegramChoice("Model", selectedModel ?: "Choose model", modelChoices, !busy && !loadingModels && canConfigure && setup.sessionId != null) { id -> action("Model selected.") { manager.selectModel(requireNotNull(providerChoice), id) } }
-        if (loadingModels) LinearProgressIndicator(Modifier.fillMaxWidth())
+        if (loadingModels) AppLinearProgressIndicator(Modifier.fillMaxWidth())
         modelError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         TextButton(enabled = !loadingModels && !busy, onClick = { refreshModels++ }) { Text("Refresh models") }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -271,7 +272,7 @@ import kotlinx.coroutines.launch
             OutlinedTextField(token, { token = it }, singleLine = true, label = { Text("Bot token") }, visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(), trailingIcon = {
                 IconButton(onClick = { visible = !visible }) { Icon(if (visible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, if (visible) "Hide bot token" else "Show bot token") }
             }, modifier = Modifier.fillMaxWidth())
-            if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (busy) AppLinearProgressIndicator(Modifier.fillMaxWidth())
             if (failed) message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         }
     }, confirmButton = { TextButton(enabled = !busy && token.isNotBlank(), onClick = { action("Bot verified.") { manager.connect(token); tokenDialog = false; token = "" } }) { Text("Verify bot") } }, dismissButton = { TextButton(enabled = !busy, onClick = { tokenDialog = false; token = "" }) { Text("Cancel") } })
