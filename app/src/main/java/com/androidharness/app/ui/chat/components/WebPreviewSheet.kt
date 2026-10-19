@@ -180,6 +180,9 @@ fun WebPreviewSheet(
     messages: List<ChatMessage> = emptyList(),
     browserController: com.androidharness.app.browser.BrowserController? = null,
     onSendPrompt: ((String) -> Unit)? = null,
+    agentActivity: com.androidharness.app.browser.BrowserToolActivity? = null,
+    agentRunning: Boolean = false,
+    onStopAgent: (() -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -275,6 +278,9 @@ fun WebPreviewSheet(
                             showConsole = showConsole,
                             consoleLogs = consoleLogs,
                             browserController = browserController,
+                            agentActivity = agentActivity,
+                            agentRunning = agentRunning,
+                            onStopAgent = onStopAgent,
                             onToggleFullscreen = { isFullscreen = !isFullscreen },
                             onToggleConsole = { showConsole = !showConsole },
                             onHideConsole = { showConsole = false },
@@ -687,6 +693,9 @@ private fun WebPageView(
     onBackToHub: () -> Unit,
     onFixBug: (String) -> Unit,
     onClose: () -> Unit,
+    agentActivity: com.androidharness.app.browser.BrowserToolActivity? = null,
+    agentRunning: Boolean = false,
+    onStopAgent: (() -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     val statusColors = LocalStatusColors.current
@@ -740,14 +749,15 @@ private fun WebPageView(
     val controlActiveFlow = remember(browserController) {
         browserController?.isAgentControlling ?: kotlinx.coroutines.flow.MutableStateFlow(false)
     }
-    val agentControlling by controlActiveFlow.collectAsState()
+    val trackedAgentControlling by controlActiveFlow.collectAsState()
+    val agentControlling = agentActivity?.let { it.status == "In progress" || it.status == "Waiting" } ?: trackedAgentControlling
     val trackFlow = remember(browserController) {
         browserController?.actionTrack ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())
     }
     val agentTracks by trackFlow.collectAsState()
 
     val isWorkspaceHtml: (String) -> Boolean = { t ->
-        t.endsWith(".html", ignoreCase = true) || t.endsWith(".htm", ignoreCase = true)
+        com.androidharness.app.browser.BrowserToolActivity.workspacePath(t, workspace?.shellRoot?.absolutePath) != null
     }
 
     val load: (String) -> Unit = { t ->
@@ -756,14 +766,15 @@ private fun WebPageView(
         val view = webViewRef
         if (view != null) {
             if (isWorkspaceHtml(t)) {
-                val node = runCatching { workspace?.resolve(t) }.getOrNull()
+                val relative = requireNotNull(com.androidharness.app.browser.BrowserToolActivity.workspacePath(t, workspace?.shellRoot?.absolutePath))
+                val node = runCatching { workspace?.resolve(relative) }.getOrNull()
                 if (node != null && node.exists && node.isFile) {
-                    pageTitle = t.substringAfterLast('/')
+                    pageTitle = relative.substringAfterLast('/')
                     // Load through the shared workspace origin instead of
                     // loadDataWithBaseURL: loadData creates a data: history
                     // entry, which pollutes back/forward for the agent.
-                    workspace?.let { browserController?.prepareWorkspacePreview(t, it) }
-                    currentUrl = BrowserController.localFileUrl(t)
+                    workspace?.let { browserController?.prepareWorkspacePreview(relative, it) }
+                    currentUrl = BrowserController.localFileUrl(relative) + BrowserController.splitLocalTarget(t).second
                     view.post {
                         view.loadUrl(currentUrl)
                     }
@@ -959,7 +970,7 @@ private fun WebPageView(
 
         // "Agent is controlling the browser" strip; tap to expand the action trail
         AnimatedVisibility(
-            visible = agentControlling,
+            visible = agentActivity != null || agentControlling,
             enter = expandVertically(fastEffectsSpec()) + fadeIn(fastEffectsSpec()),
             exit = shrinkVertically(fastEffectsSpec()) + fadeOut(fastEffectsSpec()),
         ) {
@@ -978,17 +989,23 @@ private fun WebPageView(
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                 ) {
-                    AgentPulsingDot(tint = scheme.onPrimaryContainer)
+                    if (agentActivity?.status in listOf("In progress", "Waiting") || agentActivity == null) {
+                        AgentPulsingDot(tint = scheme.onPrimaryContainer)
+                    } else {
+                        Icon(Icons.Outlined.Language, null, Modifier.size(16.dp), tint = scheme.onPrimaryContainer)
+                    }
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "Agent is controlling the browser",
+                        agentActivity?.let { "${it.status} · ${it.action}" } ?: "Agent is controlling the browser",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = scheme.onPrimaryContainer,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
+                    if (onStopAgent != null) TextButton(onClick = onStopAgent, enabled = agentRunning,
+                        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = scheme.error)) { Text("Stop agent") }
                     Icon(
                         if (showAgentTrack) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp,
                         contentDescription = if (showAgentTrack) "Hide agent activity" else "Show agent activity",

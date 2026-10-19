@@ -20,12 +20,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androidharness.app.AppContainer
 import com.androidharness.app.core.Role
+import com.androidharness.app.core.ToolCallData
+import com.androidharness.app.browser.BrowserToolActivity
+import com.androidharness.app.ui.chat.components.WebPreviewSheet
 import com.androidharness.app.ui.chat.components.MonoBlock
 import com.androidharness.app.ui.chat.components.ThinkingBlock
 import com.androidharness.app.ui.chat.components.ToolCallCard
@@ -97,6 +103,17 @@ fun SubagentScreen(
     }
 
     val listState = rememberLazyListState()
+    val browserTargets = remember(messages) { BrowserToolActivity.targets(messages) }
+    var watchCall by remember(sessionId) { mutableStateOf<ToolCallData?>(null) }
+    var watchTarget by remember(sessionId) { mutableStateOf<String?>(null) }
+    watchCall?.let { call ->
+        val fs by produceState<com.androidharness.app.workspace.WorkspaceFs?>(null, sessionId) {
+            value = container.workspace.forSession(sessionId)
+        }
+        WebPreviewSheet(initialTarget = watchTarget, workspace = fs, messages = messages, browserController = container.browser,
+            agentActivity = BrowserToolActivity.from(call, innerResults[call.id], running && call.id !in innerResults, browserTargets[call.id]),
+            agentRunning = running, onStopAgent = { container.runManager.stop(sessionId) }, onDismiss = { watchCall = null })
+    }
     LaunchedEffect(innerTurns.size, steps.size) {
         if (running) {
             val count = listState.layoutInfo.totalItemsCount
@@ -168,6 +185,8 @@ fun SubagentScreen(
                             result = innerResults[call.id],
                             running = running && call.id !in innerResults,
                             onOpenFile = { _, _ -> },
+                            browserTarget = browserTargets[call.id],
+                            onWatchBrowser = { target -> watchTarget = target ?: container.browser.getActiveUrl(); watchCall = call },
                         )
                     }
                 }

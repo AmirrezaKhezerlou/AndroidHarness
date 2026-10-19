@@ -143,7 +143,7 @@ import com.androidharness.app.ui.chat.components.ToolGroupCard
 import com.androidharness.app.ui.chat.components.TurnActivityCard
 import com.androidharness.app.ui.chat.components.UserBubble
 import com.androidharness.app.ui.chat.components.WebPreviewSheet
-import com.androidharness.app.ui.chat.components.FloatingBrowserBubble
+import com.androidharness.app.browser.BrowserToolActivity
 import com.androidharness.app.ui.common.formatRelativeTime
 import com.androidharness.app.ui.common.formatDuration
 import com.androidharness.app.ui.files.DiffStatText
@@ -219,6 +219,19 @@ private fun ChatScreenContent(
     val showProviderManager = activeProviderManagerTarget != null
     var showWebPreview by remember { mutableStateOf(false) }
     var webPreviewUrl by remember { mutableStateOf<String?>(null) }
+    fun watchBrowser(target: String?) {
+        webPreviewUrl = target ?: viewModel.container.browser.getActiveUrl()?.takeUnless { it == "about:blank" }
+        showWebPreview = true
+    }
+    val browserTargets = remember(state.messages) { BrowserToolActivity.targets(state.messages) }
+    val latestBrowserActivity = remember(state.messages, state.runningCalls, state.pendingApproval, browserTargets) {
+        val call = state.runningCalls.lastOrNull { BrowserToolActivity.isBrowserTool(it.name) }
+            ?: state.messages.flatMap { it.toolCalls }.lastOrNull { BrowserToolActivity.isBrowserTool(it.name) }
+        call?.let {
+            BrowserToolActivity.from(it, state.messages.lastOrNull { m -> m.role == Role.TOOL && m.toolCallId == it.id },
+                state.runningCalls.any { running -> running.id == it.id }, browserTargets[it.id], state.pendingApproval?.call?.id == it.id)
+        }
+    }
     var slashExpanded by remember { mutableStateOf(false) }
     // The composer carries its own selection so programmatic edits (mention
     // picks, share prefills) move the cursor instead of leaving it where the
@@ -269,8 +282,6 @@ private fun ChatScreenContent(
             }
         }
     }
-    val isAgentControllingBrowser by viewModel.container.browser.isAgentControlling.collectAsStateWithLifecycle(initialValue = false)
-    val browserActionTracks by viewModel.container.browser.actionTrack.collectAsStateWithLifecycle(initialValue = emptyList())
 
     LaunchedEffect(state.sessionId) {
         val sid = state.sessionId ?: return@LaunchedEffect
@@ -539,6 +550,9 @@ private fun ChatScreenContent(
             workspace = fs,
             messages = state.messages,
             browserController = viewModel.container.browser,
+            agentActivity = latestBrowserActivity,
+            agentRunning = state.busy,
+            onStopAgent = viewModel::stop,
             onSendPrompt = { prompt ->
                 viewModel.send(prompt)
             },
@@ -1325,6 +1339,7 @@ private fun ChatScreenContent(
                                                             fileEdits = edits,
                                                             workedLabel = userAt?.let { formatDuration((message.createdAt - it).coerceAtLeast(0)) }.orEmpty(),
                                                             activity = activity, onOpenFile = onOpenFile, showLiveCode = state.showLiveCode,
+                                                            onWatchBrowser = ::watchBrowser, browserTargets = browserTargets,
                                                         )
                                                     }
                                                 }
@@ -1408,7 +1423,7 @@ private fun ChatScreenContent(
                                             }
                                         }
                                     }
-                                    if (otherCalls.size >= 3 && !(state.showLiveCode && otherCalls.any {
+                                    if (otherCalls.size >= 3 && otherCalls.none { BrowserToolActivity.isBrowserTool(it.name) } && !(state.showLiveCode && otherCalls.any {
                                             it.name in com.androidharness.app.agent.LiveCodePreview.tools })) {
                                         indexedItem(key = "message-$messageKey-tools", contentType = ChatListContentType.Tools) {
                                             Box(Modifier.animateItem(fadeInSpec = fastEffectsSpec(), placementSpec = null, fadeOutSpec = null)) {
@@ -1419,6 +1434,8 @@ private fun ChatScreenContent(
                                                     onOpenFile = onOpenFile,
                                                     subagentSteps = state.subagentSteps,
                                                     showLiveCode = state.showLiveCode,
+                                                    onWatchBrowser = ::watchBrowser,
+                                                    browserTargets = browserTargets,
                                                 )
                                             }
                                         }
@@ -1434,6 +1451,8 @@ private fun ChatScreenContent(
                                                         showLiveCode = state.showLiveCode,
                                                         codeDraft = if (isTurnRunning) state.codeDrafts[call.id] else null,
                                                         awaitingApproval = isTurnRunning && state.pendingApproval?.call?.id == call.id,
+                                                        onWatchBrowser = ::watchBrowser,
+                                                        browserTarget = browserTargets[call.id],
                                                     )
                                                 }
                                             }
@@ -1811,20 +1830,6 @@ private fun ChatScreenContent(
                 )
             }
 
-            // Draggable, animated floating bubble shown whenever agent is driving the browser
-            FloatingBrowserBubble(
-                visible = isAgentControllingBrowser && !showWebPreview,
-                latestAction = browserActionTracks.lastOrNull(),
-                onClick = {
-                    // Pin the preview to the page the agent is actually on,
-                    // otherwise the sheet falls back to a stale/default target.
-                    viewModel.container.browser.getActiveUrl()
-                        ?.takeIf { it.isNotBlank() && it != "about:blank" }
-                        ?.let { webPreviewUrl = it }
-                    showWebPreview = true
-                },
-                modifier = Modifier.fillMaxSize(),
-            )
         }
     }
 }

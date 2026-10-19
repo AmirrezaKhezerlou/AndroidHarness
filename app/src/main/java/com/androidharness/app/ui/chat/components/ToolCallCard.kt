@@ -89,7 +89,13 @@ internal fun ToolCallCard(
     showLiveCode: Boolean = true,
     codeDraft: com.androidharness.app.agent.LiveCodeDraft? = null,
     awaitingApproval: Boolean = false,
+    onWatchBrowser: ((String?) -> Unit)? = null,
+    browserTarget: String? = null,
 ) {
+    if (com.androidharness.app.browser.BrowserToolActivity.isBrowserTool(call.name)) {
+        BrowserToolCard(call, result, running, browserTarget, awaitingApproval, onWatchBrowser)
+        return
+    }
     if (showLiveCode && call.name in com.androidharness.app.agent.LiveCodePreview.tools) {
         if (codeDraft != null) LiveCodeCard(codeDraft, awaitingApproval, onOpenFile)
         else {
@@ -276,6 +282,8 @@ internal fun ToolGroupCard(
     onOpenFile: (String, Int?) -> Unit,
     subagentSteps: Map<String, List<String>> = emptyMap(),
     showLiveCode: Boolean = true,
+    onWatchBrowser: ((String?) -> Unit)? = null,
+    browserTargets: Map<String, String> = emptyMap(),
 ) {
     var expanded by rememberSaveable(calls.joinToString(",") { it.id }) { mutableStateOf(false) }
     val rotation by animateFloatAsState(
@@ -386,7 +394,8 @@ internal fun ToolGroupCard(
                         .padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
                 )
             }
-            calls.filter { it.name != "read_image" }.flatMap { results[it.id]?.images.orEmpty() }
+            calls.filter { it.name != "read_image" && !com.androidharness.app.browser.BrowserToolActivity.isBrowserTool(it.name) }
+                .flatMap { results[it.id]?.images.orEmpty() }
                 .takeIf { it.isNotEmpty() }?.let { imgs ->
                     Column(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -421,6 +430,8 @@ internal fun ToolGroupCard(
                                 running = call.id in activeIds,
                                 onOpenFile = onOpenFile,
                                 showLiveCode = showLiveCode,
+                                onWatchBrowser = onWatchBrowser,
+                                browserTarget = browserTargets[call.id],
                             )
                         }
                     }
@@ -440,6 +451,8 @@ internal fun TurnActivityCard(
     activity: List<ChatMessage>,
     onOpenFile: (String, Int?) -> Unit,
     showLiveCode: Boolean = true,
+    onWatchBrowser: ((String?) -> Unit)? = null,
+    browserTargets: Map<String, String> = emptyMap(),
 ) {
     if (activity.isEmpty()) return
     var expanded by rememberSaveable(calls.joinToString(",") { it.id }) { mutableStateOf(false) }
@@ -508,6 +521,8 @@ internal fun TurnActivityCard(
                                 running = false,
                                 onOpenFile = onOpenFile,
                                 showLiveCode = showLiveCode,
+                                onWatchBrowser = onWatchBrowser,
+                                browserTarget = browserTargets[call.id],
                             )
                         }
                     }
