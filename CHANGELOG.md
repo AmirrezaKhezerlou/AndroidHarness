@@ -1,5 +1,43 @@
 # Changelog
 
+## 2.4 (2026-10-19)
+
+### Added
+
+- **Interactive concepts in chat**: ask for a mockup, chart, diagram, or small interactive tool and a tool-capable model can return a self-contained HTML/CSS/JS concept through `create_artifact`. Each concept has Preview and Code tabs, an expanded view, version history, Reload, Revise, and Save HTML; Revise attaches the selected revision to the composer without sending. Revisions are stored on saved messages, survive restarts, forks and chat backups (format 2, older backups still import), and the preview renderer has no network, file access, storage, native bridge, popup, download, or permission access, so generated code cannot call tools.
+- **Rich replies**: assistant answers can mix prose with native cards, callouts, metrics, charts, comparisons, checklists, expandable explanations, link cards, and self-contained interactive previews using a `harness-ui` block. Selection state persists, incomplete streamed blocks are never executed, invalid blocks show a text recovery action, and copy and search show readable content. Card actions and Discuss selection prepare a draft in the composer and never send a message or change files on their own.
+- **Reviewable question cards**: the agent's question card now stages single-choice, multiple-choice, and written answers, shows exactly what will be sent, and waits for an explicit Send answer. Draft state is keyed to the tool call, so reopening the chat does not lose it.
+- **Model capability picker**: the redesigned model sheet shows Thinking, Tools and Images badges with the source behind each claim, a provider sub-screen with search, model details, and Edit list. The picker now opens on All models and hides Favourites or Recent when they are empty.
+- **One sidebar for every layout**: the phone drawer and desktop sidebar share the same project tree, with Chats and Projects views, search, pinning, archived chats, chat actions and undo, delete confirmation, and a Tools footer. The chosen view persists.
+- **Model-native thinking controls**: thinking choices now come from each model instead of one global ladder. Levels are read from the provider's model list when it reports them, with models.dev and the shipped family tables as fallback. Custom levels can be added, renamed, reordered and removed per provider and model, and an optional CEL expression overrides the request fields. Local models keep their native on/off control, the header shows the resolved level and how it was chosen, and thinking blocks show the provider's reported reasoning tokens and active setting.
+- **Package install progress**: Linux package installs report the package name, byte-level download progress, size, percentage, and completed package count. The install card stays in the chat while the install runs and shows the final error if it fails.
+- **Progress bar style**: Settings → Appearance adds Flat and Squiggly progress bars with live previews. The choice applies immediately, persists, and travels in settings backups.
+- **`read_tool_output`**: the agent can page through an earlier tool result by character offset, including text omitted from model context, instead of guessing or re-running the tool.
+- **Background process exit records**: background jobs now report the real exit code and whether they exited or were killed, and the last 100 terminal records survive app restarts.
+
+### Changed
+
+- Chat keeps the app's Material You palette in light, dark, and AMOLED modes instead of replacing it with fixed gray surfaces.
+- The composer keeps a steady height while typing, aligns text to the bottom for multi-line input, and scrolls long drafts inside the field instead of moving the surrounding controls.
+- `search_files` and `grep` sort results and accept offset and limit paging, and `search_files` can stay non-recursive.
+- File edits write through a temporary file and atomic replace, preserve POSIX permissions, and refuse non-UTF-8 files instead of corrupting bytes through replacement characters.
+- Fuzzy edits rebase indentation when a normalized match consumes the line, so a replacement stays inside its enclosing block.
+- Tool call rows key on message, index, and ID, so providers that reuse tool call IDs cannot make rows collide or disappear; live-code drafts use their own key namespace.
+- Expressive press shapes and motion in the composer, model picker, sidebar tabs, and tool cards. The composer's send button no longer scales its tap target.
+- Opening the drawer no longer focuses chat search or opens the keyboard, while tapping search afterwards keeps focus.
+- README now carries the feature guides directly after the standalone documents were removed.
+
+### Fixed
+
+- Provider reasoning metadata: model list effort values and defaults are parsed, validated, and used only for the endpoint that reported them, so one provider's vocabulary cannot leak into another.
+- Bare and automatic models no longer invent thinking ladders, and models reported as non-reasoning hide the menu.
+- Assistant reasoning continuation is stored with its provider, endpoint, model, format, and content digest, and is replayed only to the exact endpoint that produced it, so switching models cannot leak native reasoning.
+- Browser navigation uses exact history offsets, no longer loads `about:blank` during a history change, reports JavaScript alerts, confirms, prompts and blocked popups in tool output, and cleans up headless WebViews.
+- `pkg install` verifies every requested package is present before reporting success and distinguishes newly installed packages from ones that were already installed.
+- Provider catalog refreshes are serialized and briefly cached, and a connection change is detected before the result is saved.
+- File info and listing report missing, special, and permission-denied paths clearly.
+- `git diff` establishes repository context first, so it cannot enter no-index mode.
+
 ## 2.3 (2026-10-16)
 
 ### Added

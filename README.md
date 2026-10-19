@@ -4,7 +4,7 @@
 <a href="https://buymeacoffee.com/sanuj7"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy me a coffee" height="72"></a>
 
 [![Debug build](https://github.com/Sanuu7/AndroidHarness/actions/workflows/nightly.yml/badge.svg)](https://github.com/Sanuu7/AndroidHarness/actions/workflows/nightly.yml)
-[![Version](https://img.shields.io/badge/version-2.3-blue)](https://github.com/Sanuu7/AndroidHarness/releases/latest)
+[![Version](https://img.shields.io/badge/version-2.4-blue)](https://github.com/Sanuu7/AndroidHarness/releases/latest)
 [![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3ddc84)](https://developer.android.com/about/versions/oreo)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 
@@ -41,7 +41,7 @@ Open a workspace, point the agent at a project, and ask for a change. `/doctor` 
 ### Chat
 
 - **Telegram remote control.** Pair a private bot account in Settings → Telegram to continue real chats, choose projects and models, edit files, approve tools and answer agent questions while the app is minimized. A persistent notification offers Pause and Stop, and saved requests/replies remain recoverable after a connection failure.
-- Full markdown chat with streaming responses, thinking blocks that report an estimated token count, and a tool call card for every action the agent takes.
+- Full markdown chat with streaming responses, thinking blocks that show the provider's reported reasoning tokens and the thinking setting in use (with a text estimate when a provider reports no count), and a tool call card for every action the agent takes.
 - **Rich replies.** Assistant answers can mix text with native cards, callouts, metrics, interactive charts, comparisons, checklists, expandable explanations, link cards, and custom interactive previews. Choices and preview controls can prepare a follow-up in the normal composer. Existing versioned artifacts remain available.
 - **Interactive concepts in chat.** Ask for a mockup, chart, diagram, or small interactive tool. Tool-capable models can create offline HTML/CSS/JS previews with Preview/Code tabs, fullscreen, revision history, Revise, and Save HTML. Concepts stay with the chat through restarts, backups, and forks.
 - Responsive markdown tables with compact card previews and an expandable full-sheet viewer with horizontal scroll.
@@ -59,11 +59,11 @@ Open a workspace, point the agent at a project, and ask for a change. `/doctor` 
 - **Project memory.** Chats in a project share one notes file, edited from the project screen and counted against the same limit the agent uses. Saving compares against the version you loaded, so a draft written while the agent was updating the notes is refused with a reload prompt instead of overwriting newer work, and saving waits while a task is running in that workspace.
 - Message queue for follow-ups, with edit, reorder, remove, and Send now. The queue persists across app restarts, each message starts after that chat's successful Run finished notification, and interruptions keep it waiting.
 - Long-press your own message for Retry, Copy, and Edit. Retry resends it as a fresh turn.
-- The agent can ask you something mid-run, and you can answer from the notification shade or the chat.
+- The agent can ask you something mid-run. Question cards stage single-choice, multiple-choice, or written answers, show exactly what will be sent, and wait for an explicit Send answer. You can also answer from the notification shade.
 - Optional Caveman reply modes: terse, compressed responses with an intensity dial and optional skill enforcement, configured in their own settings screen.
 - Chat backup: export every chat with its full message history to a JSON file and import it back on any device. The file holds chats and messages only, never API keys or settings.
 - Encrypted settings backup: API provider setup, custom API model IDs, and preferences in one encrypted file, with API keys and MCP configuration included optionally. Local models and their selections are excluded. A failed export names the setting that blocks it instead of a generic error, provider endpoints that work in chat validate here too, and the password can be as short as 6 characters.
-- Workspace layout in Settings → Appearance: Auto, Phone, or Desktop. Wide windows use a desktop workspace with a persistent project/chat sidebar, a focused conversation, resizable file and change panels, and a right-side terminal panel. Narrow windows keep a compact layout.
+- Workspace layout in Settings → Appearance: Auto, Phone, or Desktop. Wide windows use a desktop workspace with a persistent project/chat sidebar, a focused conversation, resizable file and change panels, and a right-side terminal panel. Narrow windows keep a compact layout. Appearance also offers Flat or Squiggly progress bars with live previews, and controls use Material expressive press shapes and motion.
 - Desktop controls: right-click, long-press, or use a chat's menu to manage it. Tab/Shift+Tab moves focus; Ctrl+L focuses the composer, Ctrl+Enter sends, Ctrl+N starts a chat, Ctrl+Shift+B toggles the sidebar, and Ctrl+Alt+F/T/G opens Files/Terminal/GitHub. Ctrl+S saves in the editor. Enter runs a terminal command; Up/Down recalls commands.
 
 ### Scheduled automations
@@ -78,8 +78,8 @@ Open a workspace, point the agent at a project, and ask for a change. `/doctor` 
 
 ### Agent tools
 
-- **Files.** read, write, edit, search, grep, list, move, delete, fuzzy multi-edit, and apply_patch, which checks every hunk header and line count before it touches a file and rolls back atomically on failure. Moves refuse to overwrite an existing destination unless you pass `overwrite=true`. The agent reads images by filename and extracts text from attached PDFs.
-- **Shell.** Run commands with timeouts, launch and manage background processes, install Linux packages, and query Android logs with package, tag, level, and pattern filters.
+- **Files.** read, write, edit, search, grep, list, move, delete, fuzzy multi-edit, and apply_patch, which checks every hunk header and line count before it touches a file and rolls back atomically on failure. Writes use a temporary file and atomic replace, preserve permissions, and refuse non-UTF-8 files instead of corrupting bytes. Search and grep page through sorted results with offset and limit, and `read_tool_output` pages through an earlier tool result without re-running it. Moves refuse to overwrite an existing destination unless you pass `overwrite=true`. The agent reads images by filename and extracts text from attached PDFs.
+- **Shell.** Run commands with timeouts, launch and manage background processes, install Linux packages, and query Android logs with package, tag, level, and pattern filters. Package installs show byte-level download progress and a package count, and background jobs record their real exit code and whether they exited or were killed.
 - **Git.** status, diff, commit, log, show, branch, checkout, push, and pull, with git identity auto-configured so commits never fail on "author unknown".
 - **Web.** Search through keyless engines or the Brave and Tavily APIs with a key; fetch pages; make raw HTTP requests with JSON bodies, restricted to public addresses (localhost, private ranges, and other non-public destinations are refused, DNS answers are validated before connecting, and redirects are not followed); call the GitHub API with automatic authentication.
 - **Web preview and browser control.** A preview hub for localhost ports, workspace HTML files, and web links, with Eruda DevTools, console logs, and one-tap bug fixing. The agent drives the page itself through browser tools (navigate, snapshot, click, type, scroll, eval, screenshot) behind a floating live-action bubble. Select any element to send its selector, computed styles, console errors, and a screenshot straight to the agent as a fix request.
@@ -143,7 +143,7 @@ The app-tier shell and the terminal run bundled Bash directly on Android 8 and 9
 - Optional task-wide limits for tokens, estimated USD cost, and active time, including subagents and compaction. Tasks pause at request or action boundaries with progress saved, in-flight work can exceed a limit, and a reached limit is raised before resuming.
 - Approve or deny sensitive actions from the notification shade, with four permission modes up to a full access mode that lifts every sandbox for workspaces you trust.
 - Review and revoke every remembered tool permission individually in their own settings section.
-- Navigation drawer with a quick-access tool strip (Files, Terminal, Automations, Build & Test) and the active provider at a glance.
+- The phone drawer and desktop sidebar share one project tree, with Chats and Projects views, search, pinning, archived chats, chat actions and undo, a delete confirmation, and a Tools footer with Files, Terminal, Automations and Build & Test.
 
 ### Models and providers
 
@@ -152,7 +152,7 @@ The app-tier shell and the terminal run bundled Bash directly on Android 8 and 9
 - Anthropic, Google Gemini, and any OpenAI-compatible endpoint with a custom base URL.
 - Custom cloud model IDs typed directly into the model picker sheet.
 - Live model catalog fetch with latency check, per-model price tracking, and a running cost readout, plus a total estimated cost hero on the Stats screen. Stats windows (Today, 1 week, 1 month, Lifetime) count requests by the day they were made on your local calendar, so continuing an old chat never moves earlier work into today.
-- One global thinking ladder from Off to Ultra on every model. Non-native rungs resolve down the chain at request time, never rewriting your pick.
+- **Thinking controls follow the model.** Levels come from the provider's own model list when it reports them, with models.dev and shipped family tables as fallback, and models without reasoning controls no longer show a fake ladder. The header shows the resolved level and how it was chosen. Custom levels can be added, renamed, reordered, and removed per provider and model, and an optional CEL expression maps them to request fields, with an inherited default for every remote API. Local models keep their native on/off control.
 - Per-chat dual planning: a chat menu toggle that runs Plan mode on one model and execution on another, each picked from the same model sheet, with a toast confirming which model fired and a plan card that survives app restarts. Long plans expand into a complete, formatted, selectable view before approval.
 - Per-chat models: one choice for every chat is the default, as before. Turn off Use the same model in every chat in the picker and each chat remembers its own provider and model for the active, planning and execution roles plus its own thinking level, labelled This chat in the header. Model IDs are saved with the chat, so editing a provider's default later cannot change an older chat, and a chat whose provider or model is gone asks you to pick again instead of sending the request somewhere else.
 - **Fallback chains** (issue #33): up to four backup models across providers take over, in order, when the selected model fails. Quota exhaustion switches immediately, ordinary rate limits and temporary failures retry first (0 to 5 retries), and a partial response is never retried or sent again. Each destination uses its own credentials and your selected model stays selected; the chat notes the switch. Configure a default chain in Settings → Models & providers, or per chat from the picker: Use default, Custom chain, or Off, which also turns off ChatGPT account switching for that chat. Subagents and automatic compaction follow the same chain, a request from a model outside it is refused with a review message rather than sent, Stay within selected provider keeps every request (subagents included) on the selected connection, and settings backups carry the chain with non-portable providers stripped.
