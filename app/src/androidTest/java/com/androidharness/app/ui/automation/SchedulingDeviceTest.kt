@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.activity.compose.setContent
+import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.work.NetworkType
@@ -18,6 +19,7 @@ import com.androidharness.app.core.ChatMessage
 import com.androidharness.app.core.Role
 import com.androidharness.app.core.ToolCallData
 import com.androidharness.app.llm.*
+import com.androidharness.app.ui.chat.ChatListTestActivity
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.io.File
@@ -30,6 +32,53 @@ import org.junit.runner.RunWith
 class SchedulingDeviceTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val c get() = (instrumentation.targetContext.applicationContext as HarnessApp).container
+
+    @Test fun deleteIsAvailableForScheduledManualAndCancelledTasks(): Unit = runBlocking {
+        val projectId = "delete-ui-${System.nanoTime()}"
+        val tasks = listOf(
+            AutomationTask(title = "Check the Android project and prepare the next release", prompt = "Run project checks and summarize the results.",
+                projectId = projectId, projectName = "Automation layout fixture", providerId = "delete-fixture", model = "fixture-model",
+                schedule = AutomationSchedule.HOURLY, lastSessionId = "layout-fixture"),
+            AutomationTask(title = "Manual automation", prompt = "Manual automation", projectId = projectId, projectName = "Layout fixture"),
+            AutomationTask(title = "Cancelled automation", prompt = "Cancelled automation", projectId = projectId, projectName = "Layout fixture",
+                schedule = AutomationSchedule.ONCE, enabled = false, lastStatus = AutomationStatus.CANCELLED),
+        )
+        try {
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { activity -> activity.setContent {
+                    com.androidharness.app.ui.theme.HarnessTheme { AutomationScreen(c, {}, {}, projectId = projectId) }
+                } }
+                for ((index, task) in tasks.withIndex()) {
+                    if (task.schedule == AutomationSchedule.HOURLY) c.automation.save(task)
+                    else c.automation.repository.save(task)
+                    awaitText(task.title)
+                    scrollTo("Delete")
+                    assertWithinWindow("Delete")
+                    screenshot("automation-delete-card-$index")
+                    tap("Delete"); awaitText("Delete automation?")
+                    assertWithinWindow("Delete automation"); assertWithinWindow("Keep automation")
+                    screenshot("automation-delete-confirm-$index")
+                    tap("Keep automation")
+                    assertNotNull(c.automation.repository.task(task.id))
+                    scrollTo("Delete"); tap("Delete"); tap("Delete automation")
+                    withTimeout(10000) { while (c.automation.repository.task(task.id) != null) delay(50) }
+                    assertNull(AutomationRepository(c.appContext).task(task.id))
+                    val work = WorkManager.getInstance(c.appContext).getWorkInfosForUniqueWork("automation-schedule-${task.id}").get()
+                    assertTrue(work.all { it.state.isFinished })
+                    awaitText("Create your first automation")
+                }
+            }
+        } finally { tasks.forEach { c.automation.delete(it.id) } }
+    }
+
+    private fun assertWithinWindow(text: String) {
+        val node = await { it.isVisibleToUser && it.text?.toString() == text }
+        val bounds = android.graphics.Rect().also(node::getBoundsInScreen)
+        val screen = c.appContext.resources.displayMetrics
+        assertFalse("$text has no visible bounds", bounds.isEmpty)
+        assertTrue("$text outside screen: $bounds", bounds.left >= 0 && bounds.top >= 0 &&
+            bounds.right <= screen.widthPixels && bounds.bottom <= screen.heightPixels)
+    }
 
     private suspend fun <T> fixture(mode: GatewayMode = GatewayMode.REPLY, block: suspend (MainActivity, ProviderConfig, String, String, File, FixtureGateway) -> T): T {
         val settings = c.settings.settings.first()

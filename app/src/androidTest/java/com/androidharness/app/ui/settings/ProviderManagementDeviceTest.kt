@@ -322,11 +322,18 @@ class ProviderManagementDeviceTest {
             ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
                 scenario.onActivity { it.setContent { theme {
                     var open by remember { mutableStateOf(true) }
-                    if (open) ModelPickerSheet(listOf(first, second), first.id, first.model, catalog,
-                        onDismiss = { open = false }, onSelect = { id, model -> selected.set(ModelShortcut(id, requireNotNull(model))) },
+                    var active by remember { mutableStateOf(ModelShortcut(first.id, first.model)) }
+                    androidx.compose.material3.TextButton(onClick = { open = true }) { androidx.compose.material3.Text("Reopen models") }
+                    if (open) ModelPickerSheet(listOf(first, second), active.providerId, active.modelId, catalog,
+                        onDismiss = { open = false }, onSelect = { id, model ->
+                            active = ModelShortcut(id, requireNotNull(model))
+                            selected.set(active)
+                        },
                         onRefreshCatalog = { null }, onManageProviders = {}, modelShortcuts = ModelShortcuts(c.appContext, storeName))
                 } } }
                 await { find("Switch provider") != null }
+                assertNotNull(find(first.name))
+                assertNull(find("Choose ${second.model} from ${second.name}"))
                 assertTrue(bounds(requireNotNull(find("Switch provider"))).top > bounds(requireNotNull(find("Choose a model"))).top)
                 scrollTo("Thinking: Reported by this provider")
                 assertNotNull(find("Thinking: Reported by this provider"))
@@ -351,6 +358,16 @@ class ProviderManagementDeviceTest {
                 tap("Use model")
                 await { selected.get() != null }
                 assertEquals(ModelShortcut(second.id, second.model), selected.get())
+                await { find("Switch provider") == null }
+                tap("Reopen models")
+                await { find("Switch provider") != null }
+                assertNotNull(find(second.name))
+                assertNull(find("All providers"))
+                assertNull(find("Choose ${first.model} from ${first.name}"))
+                tap("Switch provider")
+                tap("All providers")
+                await { find("Choose ${first.model} from ${first.name}") != null }
+                assertNotNull(find("Choose ${second.model} from ${second.name}"))
             }
         } finally {
             c.appContext.getSharedPreferences(storeName, android.content.Context.MODE_PRIVATE).edit().clear().commit()

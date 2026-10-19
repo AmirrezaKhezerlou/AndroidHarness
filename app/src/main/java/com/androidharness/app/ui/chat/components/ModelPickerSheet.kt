@@ -98,7 +98,9 @@ fun ModelPickerSheet(
     val directoryRevision by ModelsDev.revision.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf("") }
     var providerQuery by rememberSaveable { mutableStateOf("") }
-    var listedId by rememberSaveable { mutableStateOf(browseProviderId) }
+    var listedId by rememberSaveable {
+        mutableStateOf(browseProviderId ?: activeProviderId.takeUnless { searchAllProvidersInitially })
+    }
     var showAll by rememberSaveable { mutableStateOf(searchAllProvidersInitially) }
     var collection by rememberSaveable { mutableStateOf("All") }
     var thinkOnly by rememberSaveable { mutableStateOf(false) }

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.AutoMode
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.StopCircle
@@ -217,6 +218,7 @@ fun AutomationScreen(
                                 showEditor = true
                             },
                             onStop = { act { manager.cancel(task.id) } },
+                            onDelete = { act { manager.delete(task.id) } },
                             onOpen = { task.lastSessionId?.let(onOpenSession) },
                             onToggle = { act { if (task.enabled) manager.pause(task.id) else manager.resumeSchedule(task.id) } },
                             statusText = scheduleStatus(task, connection, now),
@@ -448,11 +450,25 @@ private fun AutomationTaskCard(
     onRun: () -> Unit,
     onEdit: () -> Unit,
     onStop: () -> Unit,
+    onDelete: () -> Unit,
     onOpen: () -> Unit,
     onToggle: () -> Unit,
     statusText: String,
 ) {
     var confirmCancel by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    if (confirmDelete) AlertDialog(
+        onDismissRequest = { confirmDelete = false },
+        title = { Text("Delete automation?") },
+        text = { Text("\u201c${task.title}\u201d will be removed and any active or scheduled runs will stop. Chat history and previous run results will stay available.") },
+        confirmButton = {
+            TextButton(onClick = { confirmDelete = false; onDelete() },
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                Text("Delete automation")
+            }
+        },
+        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Keep automation") } },
+    )
     if (confirmCancel) AlertDialog(onDismissRequest = { confirmCancel = false }, title = { Text("Cancel this schedule?") },
         text = { Text("Future runs will stop. Chat history and completed work will stay available.") },
         confirmButton = { TextButton(onClick = { confirmCancel = false; onStop() }) { Text("Cancel schedule") } },
@@ -604,9 +620,21 @@ private fun AutomationTaskCard(
                 }
             }
 
-            if (task.lastSessionId != null) {
-                TextButton(onClick = onOpen, modifier = Modifier.align(Alignment.End)) {
-                    Text("Open latest run")
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                if (task.lastSessionId != null) {
+                    TextButton(onClick = onOpen, modifier = Modifier.heightIn(min = 48.dp)) {
+                        Text("Open latest run")
+                    }
+                }
+                TextButton(onClick = { confirmDelete = true }, modifier = Modifier.heightIn(min = 48.dp),
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                    Icon(Icons.Outlined.DeleteOutline, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Delete")
                 }
             }
         }
