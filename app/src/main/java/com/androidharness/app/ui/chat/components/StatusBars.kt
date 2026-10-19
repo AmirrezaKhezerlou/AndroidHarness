@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -38,6 +39,7 @@ import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,8 +48,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
@@ -110,52 +117,76 @@ private fun StatusDot() {
     )
 }
 
-/** Collapsible task checklist. Flat hairline card; status via icon color only. */
+/** Live milestone progress. Completion comes only from explicit agent updates. */
 @Composable
 internal fun TodoCard(todos: List<TodoItem>) {
-    var expanded by remember { mutableStateOf(false) }
+    if (todos.isEmpty()) return
+    var expanded by rememberSaveable { mutableStateOf(false) }
     val done = todos.count { it.status == TodoItem.Status.COMPLETED }
     val active = todos.firstOrNull { it.status == TodoItem.Status.IN_PROGRESS }
+    val next = todos.firstOrNull { it.status == TodoItem.Status.PENDING }
     val scheme = MaterialTheme.colorScheme
     val success = LocalStatusColors.current.success
+    val listHeight = (LocalConfiguration.current.screenHeightDp * .28f).coerceIn(120f, 240f).dp
     Surface(
-        color = scheme.surface,
+        color = scheme.surfaceContainerLow,
         shape = MaterialTheme.shapes.medium,
         border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.5f)),
-        onClick = { expanded = !expanded },
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp),
     ) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Column {
+            Row(Modifier.fillMaxWidth().clickable(
+                onClickLabel = if (expanded) "Collapse task list" else "Expand task list",
+                onClick = { expanded = !expanded },
+            ).semantics {
+                stateDescription = "$done completed, ${todos.count { it.status == TodoItem.Status.IN_PROGRESS }} in progress, ${todos.count { it.status == TodoItem.Status.PENDING }} pending"
+            }.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Outlined.Checklist,
                     contentDescription = null,
-                    modifier = Modifier.size(15.dp),
-                    tint = scheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                    tint = if (done == todos.size) success else scheme.primary,
                 )
                 Spacer(Modifier.width(8.dp))
-                Text(
-                    "Tasks · $done/${todos.size}" + (active?.let { " · ${it.content}" } ?: ""),
-                    style = MaterialTheme.typography.labelMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
+                Column(Modifier.weight(1f)) {
+                    Text("Task list", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                    Text("$done of ${todos.size} completed", style = MaterialTheme.typography.labelSmall,
+                        color = scheme.onSurfaceVariant)
+                }
                 Icon(
                     if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(16.dp),
+                    contentDescription = if (expanded) "Collapse task list" else "Expand task list",
+                    modifier = Modifier.size(20.dp),
                     tint = scheme.onSurfaceVariant,
                 )
             }
+            LinearProgressIndicator(progress = { done.toFloat() / todos.size },
+                color = if (done == todos.size) success else scheme.primary,
+                trackColor = scheme.surfaceContainerHighest,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).height(4.dp))
+            if (!expanded) {
+                Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                    Text(when { active != null -> "In progress"; next != null -> "Next"; else -> "All tasks completed" },
+                        style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium,
+                        color = if (done == todos.size) success else scheme.primary)
+                    (active ?: next)?.let { Text(it.content, style = MaterialTheme.typography.bodySmall,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                }
+            }
             AnimatedVisibility(expanded) {
-                Column(Modifier.padding(top = 6.dp)) {
+                Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp).heightIn(max = listHeight)
+                    .verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     todos.forEach { todo ->
+                        val status = when (todo.status) {
+                            TodoItem.Status.COMPLETED -> "Completed"
+                            TodoItem.Status.IN_PROGRESS -> "In progress"
+                            TodoItem.Status.PENDING -> "Pending"
+                        }
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.Top,
+                            modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { stateDescription = status },
                         ) {
                             Icon(
                                 when (todo.status) {
@@ -164,7 +195,7 @@ internal fun TodoCard(todos: List<TodoItem>) {
                                     TodoItem.Status.PENDING -> Icons.Outlined.RadioButtonUnchecked
                                 },
                                 contentDescription = null,
-                                modifier = Modifier.size(14.dp),
+                                modifier = Modifier.padding(top = 2.dp).size(18.dp),
                                 tint = when (todo.status) {
                                     TodoItem.Status.COMPLETED -> success
                                     TodoItem.Status.IN_PROGRESS -> scheme.primary
@@ -172,12 +203,13 @@ internal fun TodoCard(todos: List<TodoItem>) {
                                 },
                             )
                             Spacer(Modifier.width(8.dp))
-                            Text(
-                                todo.content,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (todo.status == TodoItem.Status.COMPLETED) scheme.onSurfaceVariant
-                                else scheme.onSurface,
-                            )
+                            Column(Modifier.weight(1f)) {
+                                Text(todo.content, style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = if (todo.status == TodoItem.Status.IN_PROGRESS) FontWeight.Medium else FontWeight.Normal,
+                                    color = if (todo.status == TodoItem.Status.COMPLETED) scheme.onSurfaceVariant else scheme.onSurface)
+                                Text(status, style = MaterialTheme.typography.labelSmall,
+                                    color = if (todo.status == TodoItem.Status.IN_PROGRESS) scheme.primary else scheme.onSurfaceVariant)
+                            }
                         }
                     }
                 }

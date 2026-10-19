@@ -31,10 +31,8 @@ class TodoStore {
 
     /** Run start claims the store; another session's stale list is dropped. */
     fun beginRun(sessionId: String) {
-        if (_owner.value != sessionId) {
-            _owner.value = sessionId
-            _todos.value = emptyList()
-        }
+        _todos.value = emptyList()
+        _owner.value = sessionId
     }
 
     fun setAll(items: List<TodoItem>) {

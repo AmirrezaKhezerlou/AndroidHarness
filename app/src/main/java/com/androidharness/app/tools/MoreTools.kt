@@ -343,7 +343,8 @@ class TodoWriteTool(
     override val name = "todo_write"
     override val description =
         "Maintain a task list for this session. Use it to plan multi-step work: mark tasks " +
-        "in_progress when you start them and completed when done. Replaces the whole list. " +
+        "in_progress before starting work or delegating it, then completed as each milestone is verified. " +
+        "Update before moving to the next task; do not wait until the final answer. Replaces the whole list. " +
         "The todos parameter must be a JSON array like " +
         "[{\"content\": \"Do X\", \"status\": \"pending\"}], with statuses: pending, in_progress, completed."
     override val parametersSchema = Schema.obj(

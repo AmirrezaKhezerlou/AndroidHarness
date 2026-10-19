@@ -284,6 +284,7 @@ class AgentEngine(
         // actually produce its answer.
         var lastFinishReason: String? = null
         var answerNudges = 0
+        var roundsWithoutTodoUpdate = 0
 
         while (true) {
             kotlin.coroutines.coroutineContext[TaskBudget]?.check()
@@ -329,7 +330,10 @@ class AgentEngine(
                 }
 
             val requestSystemPrompt = if (!agentContextEnabled) "" else com.androidharness.app.caveman.CavemanPolicy.apply(
-                systemPrompt,
+                systemPrompt + TodoPrompt.format(
+                    todoStore?.takeIf { it.owner.value == sessionId }?.todos?.value.orEmpty(),
+                    roundsWithoutTodoUpdate,
+                ).let { if (it.isBlank()) "" else "\n\n$it" },
                 installed = replySettings.cavemanInstalled,
                 intensity = replySettings.cavemanIntensity,
                 wenyan = replySettings.cavemanWenyan,
@@ -563,50 +567,47 @@ class AgentEngine(
                 }
             }
 
-            // Subagents are independent and slow, run every task
-            // call in the batch concurrently so research branches don't queue.
-            // Ordinary read-only calls are also allowed to overlap, but only
-            // inside contiguous safe-read groups. Writes and interactive/stateful
-            // calls form hard ordering boundaries.
-            val subagentCalls = calls.filter { it.name == "task" }
-            val otherCalls = calls.filterNot { it.name == "task" }
+            // Only overlap contiguous subagents or safe reads. Stateful calls
+            // such as todo_write must run at their requested position, including
+            // before a slow subagent batch, so progress is visible during work.
             val results = LinkedHashMap<String, ToolResult>()
-
-            if (subagentCalls.isNotEmpty()) {
-                // FlowCollector.emit is not concurrency-safe; parallel subagents
-                // share one mutex-protected emitter.
-                val emitLock = Mutex()
-                val serialEmit: suspend (AgentEvent) -> Unit = { event ->
-                    emitLock.withLock { emit(event) }
-                }
-                subagentCalls.forEach { call -> emit(AgentEvent.ToolStarted(call)) }
-                android.util.Log.d(
-                    "HarnessSpawn",
-                    "batch of ${subagentCalls.size} task call(s): ${subagentCalls.map { it.id }}",
-                )
-                coroutineScope {
-                    subagentCalls.map { call ->
-                        async {
-                            android.util.Log.d("HarnessSpawn", "task ${call.id} START ${System.currentTimeMillis()}")
-                            val result = executeWithPermission(
-                                call, effectiveMode, sessionAllowedTools, execWorkspace,
-                                sessionId, turnId, mode, requestOptions, config, apiKey,
-                                runRegistry, resolveSubagentModel, serialEmit,
-                            )
-                            android.util.Log.d("HarnessSpawn", "task ${call.id} END ${System.currentTimeMillis()}")
-                            call.id to result
-                        }
-                    }.awaitAll().forEach { (id, result) -> results[id] = result }
-                }
-            }
-
             var ordinaryIndex = 0
-            while (ordinaryIndex < otherCalls.size) {
-                val first = otherCalls[ordinaryIndex]
-                if (parallelSafeReadOnly(first, runRegistry)) {
+            while (ordinaryIndex < calls.size) {
+                val first = calls[ordinaryIndex]
+                if (first.name == "task") {
+                    val subagentCalls = mutableListOf<ToolCallData>()
+                    while (ordinaryIndex < calls.size && calls[ordinaryIndex].name == "task") {
+                        subagentCalls += calls[ordinaryIndex++]
+                    }
+                    // FlowCollector.emit is not concurrency-safe; parallel subagents
+                    // share one mutex-protected emitter.
+                    val emitLock = Mutex()
+                    val serialEmit: suspend (AgentEvent) -> Unit = { event ->
+                        emitLock.withLock { emit(event) }
+                    }
+                    subagentCalls.forEach { call -> emit(AgentEvent.ToolStarted(call)) }
+                    android.util.Log.d(
+                        "HarnessSpawn",
+                        "batch of ${subagentCalls.size} task call(s): ${subagentCalls.map { it.id }}",
+                    )
+                    coroutineScope {
+                        subagentCalls.map { call ->
+                            async {
+                                android.util.Log.d("HarnessSpawn", "task ${call.id} START ${System.currentTimeMillis()}")
+                                val result = executeWithPermission(
+                                    call, effectiveMode, sessionAllowedTools, execWorkspace,
+                                    sessionId, turnId, mode, requestOptions, config, apiKey,
+                                    runRegistry, resolveSubagentModel, serialEmit,
+                                )
+                                android.util.Log.d("HarnessSpawn", "task ${call.id} END ${System.currentTimeMillis()}")
+                                call.id to result
+                            }
+                        }.awaitAll().forEach { (id, result) -> results[id] = result }
+                    }
+                } else if (parallelSafeReadOnly(first, runRegistry)) {
                     val group = mutableListOf<ToolCallData>()
-                    while (ordinaryIndex < otherCalls.size && parallelSafeReadOnly(otherCalls[ordinaryIndex], runRegistry)) {
-                        group += otherCalls[ordinaryIndex++]
+                    while (ordinaryIndex < calls.size && calls[ordinaryIndex].name != "task" && parallelSafeReadOnly(calls[ordinaryIndex], runRegistry)) {
+                        group += calls[ordinaryIndex++]
                     }
                     group.forEach { emit(AgentEvent.ToolStarted(it)) }
                     val emitLock = Mutex()
@@ -632,6 +633,9 @@ class AgentEngine(
                     ) { emit(it) }
                 }
             }
+
+            if (calls.any { it.name == "todo_write" && results[it.id]?.ok == true }) roundsWithoutTodoUpdate = 0
+            else if (calls.any { it.name != "todo_write" }) roundsWithoutTodoUpdate++
 
             // Commit tool messages in the model's original call order.
             for (call in calls) {
@@ -1683,7 +1687,7 @@ Rules:
 - Browser screenshots save under .harness/screenshots/ as timestamped JPEGs (e.g. .harness/screenshots/20260903_120000.jpg). To look up past screenshots, list the directory with list_dir path=".harness/screenshots". Use read_image with the screenshot path or filename to inspect visual content.
 - A message may reference files as @path (for example @src/Main.kt): the user is pointing at those exact files, so read them before acting on the request.
 - Prefer edit_file/multi_edit for targeted changes to existing files; use write_file to create or fully rewrite files; use apply_patch for multi-file diffs.
-- Use todo_write to track multi-step work and keep statuses current.
+- Use todo_write to track multi-step work. Mark the current task in_progress before starting work or delegating it. After each milestone, mark only verified completed work completed and mark the next task in_progress before more tools. Never defer all task updates until the final answer; leave unfinished work pending or in_progress.
 - For a separately managed concept or artifact with version history and HTML export, use create_artifact. For ordinary rich replies, use the inline response components described below. Show it directly in chat; do not create workspace files, install packages, start a server, or change the real product unless requested. For follow-up edits, use read_artifact then create_artifact with the same artifact_id. If the user message has a [[harness-concept]] attachment, read its exact artifact_id and revision so edits start from the version the user selected.
 - HTML passed to create_artifact must be self-contained and work offline. Use inline CSS/JS/SVG/canvas, responsive layouts at 320px, accessible native controls with 44px touch targets, clear typography, and restrained spacing. Respect prefers-color-scheme and prefers-reduced-motion. No remote fonts, CDN scripts, fetch, APIs, forms that submit, or native bridges. Make controls actually work locally. Return a short explanation after creating the concept; never paste its full source into the final answer.
 - Use ask_user whenever a decision is genuinely the user's to make instead of guessing.
@@ -1761,10 +1765,6 @@ Rules:
         if (memoryTopics.isNotEmpty()) {
             sb.append("\nLong-term memory topic files on disk (retrieve with memory_read, search with memory_search): ")
                 .append(memoryTopics.joinToString(", ")).append('\n')
-        }
-        val todos = TodoPrompt.format(todoStore?.todos?.value.orEmpty())
-        if (todos.isNotBlank()) {
-            sb.append('\n').append(todos)
         }
         if (repoMapEnabled) {
             val map = runCatching {
