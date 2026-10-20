@@ -46,9 +46,13 @@ internal object EnvProbes {
      * file is absent or unreadable from here. App-prefix files are stated
      * directly; deployed tmp-prefix files go through the privileged shell.
      */
-    suspend fun fileMode(shizuku: ShizukuManager, probeRoot: File, rel: String): String? {
+    suspend fun fileMode(shizuku: ShizukuManager, probeRoot: File, rel: String, router: ShellTierRouter? = null): String? {
         val f = File(probeRoot, rel)
         return if (isTmpPrefix(probeRoot)) {
+            if (router?.deviceAccess != null) {
+                return router.run("if [ -f '${f.absolutePath}' ]; then stat -c %a '${f.absolutePath}'; fi", File("/"), 5_000, 200)
+                    .takeIf { it.exitCode == 0 }?.rawOutput?.trim()?.ifBlank { null }
+            }
             shizuku.runPrivileged(
                 arrayOf("/system/bin/sh", "-c", "if [ -f '${f.absolutePath}' ]; then stat -c %a '${f.absolutePath}'; fi"),
                 env = null,

@@ -293,11 +293,11 @@ class AutomationManager(private val c: AppContainer) {
                     saveRun(requireNotNull(run).copy(checking = true))
                 }
                 status(AutomationStatus.RUNNING, "Verifying result · attempt ${active.attempt} of $attempts")
-                val check = com.androidharness.app.tools.ShellTool(c.linuxEnv, c.shellRouter).execute(
+                val check = c.deviceAccess.traceTool(task.projectId, session) { com.androidharness.app.tools.ShellTool(c.linuxEnv, c.shellRouter).execute(
                     kotlinx.serialization.json.buildJsonObject {
                         put("command", kotlinx.serialization.json.JsonPrimitive(task.checkCommand))
                         put("timeout_seconds", kotlinx.serialization.json.JsonPrimitive(600))
-                    }, com.androidharness.app.tools.ToolContext(fs, sessionId = session))
+                    }, com.androidharness.app.tools.ToolContext(fs, sessionId = session)) }
                 c.sessions.addMessage(session, com.androidharness.app.core.ChatMessage(role = Role.USER,
                     text = "Automation success check: ${task.checkCommand}\n${check.output}"))
                 if (check.ok) {

@@ -42,4 +42,15 @@ interface IHarnessService {
 
     /** SIGKILL a process by pid. */
     boolean killProcess(int pid) = 5;
+
+    /** Interrupt only commands started by this service. */
+    int cancelActive() = 6;
+    int activeCommandCount() = 7;
+    int getUid() = 8;
+    String rootList(in String path, int offset) = 9;
+    String rootRead(in String path) = 10;
+    String rootWrite(in String path, in String expectedHash, in String text) = 11;
+    void resumeCommands() = 12;
+    /** Stop a recovered job only after verifying it still owns its unique log. */
+    boolean killTrackedProcess(int pid, in String logPath) = 13;
 }

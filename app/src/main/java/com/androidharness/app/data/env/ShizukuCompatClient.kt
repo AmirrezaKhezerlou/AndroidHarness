@@ -21,6 +21,7 @@ import java.util.concurrent.atomic.AtomicLong
 internal class ShizukuCompatClient private constructor(
     private val process: IRemoteProcess,
     private val onDied: () -> Unit,
+    val uid: Int,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val closed = AtomicBoolean(false)
@@ -105,7 +106,7 @@ internal class ShizukuCompatClient private constructor(
             check(uid == 0 || uid == 2000) { "Shizuku did not provide shell/root privileges" }
             val server = IShizukuService.Stub.asInterface(Shizuku.getBinder())
             val process = requireNotNull(server.newProcess(ShizukuCompatProtocol.launchCommand(apkPath), null, null))
-            val client = try { ShizukuCompatClient(process, onDied) } catch (e: Exception) {
+            val client = try { ShizukuCompatClient(process, onDied, uid) } catch (e: Exception) {
                 runCatching { process.destroy() }
                 throw e
             }

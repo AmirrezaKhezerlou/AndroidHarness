@@ -28,6 +28,7 @@ data class ToolResult(
      */
     val image: com.androidharness.app.core.ImageRef? = null,
     val artifact: com.androidharness.app.artifacts.ChatArtifact? = null,
+    val execution: List<com.androidharness.app.data.env.ExecutionReceipt> = emptyList(),
 )
 
 class ToolFailure(message: String) : Exception(message)
@@ -89,7 +90,7 @@ class ToolRegistry(private val tools: List<Tool>) {
                 ShellBackgroundTool(bgStore, linuxEnv, shellRouter),
                 EnvStatusTool(shizuku, linuxEnv, shellRouter),
                 DoctorTool(linuxEnv, shizuku, shellRouter, httpClient),
-                ReadLogcatTool(shizuku),
+                ReadLogcatTool(shizuku, router = shellRouter),
                 PkgInstallTool(linuxEnv),
                 PkgSearchTool(linuxEnv),
                 PkgListTool(linuxEnv),

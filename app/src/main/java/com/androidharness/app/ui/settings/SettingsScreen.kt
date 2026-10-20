@@ -524,6 +524,7 @@ private fun TerminalSection(
         onRefresh = { container.shizuku.refresh() },
         onGrant = { container.shizuku.requestPermission() },
     )
+    RootAccessSection(container)
     BatteryCard(container = container)
 }
 

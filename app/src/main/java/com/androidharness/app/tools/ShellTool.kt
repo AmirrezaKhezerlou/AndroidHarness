@@ -19,7 +19,7 @@ class ShellTool(
     override val name = "shell"
     override val description =
         "Run a shell command on the device. Uses SSH for an SSH workspace; " +
-        "otherwise runs with the best available native environment: " +
+        "otherwise follows the selected Auto, Normal, Shizuku or Root access mode: " +
         "a full Linux userspace (bash, git, python, node…) as the app when installed, " +
         "Shizuku ADB-shell privileges (plus the same toolchain) when Shizuku is connected and " +
         "the target folder needs it, otherwise toybox sh. If the active workspace is a picked " +
@@ -29,6 +29,7 @@ class ShellTool(
     override val parametersSchema = Schema.obj(
         mapOf(
             "command" to Schema.string("The shell command to run."),
+            "access" to Schema.string("auto (default) or root. Root requires a verified root-capable backend and project permission; it never falls back to non-root execution."),
             "cwd" to Schema.string(
                 "Working directory relative to the workspace root (default: the root). " +
                     "Use it instead of 'cd dir && …' chains.",
@@ -43,6 +44,7 @@ class ShellTool(
         withContext(Dispatchers.IO) {
             val rawCommand = args["command"]?.jsonPrimitive?.content
                 ?: throw ToolFailure("Missing required argument: command")
+            require(args["access"]?.jsonPrimitive?.content in listOf(null, "auto", "root")) { "access must be auto or root" }
             val remote = ctx.workspace as? com.androidharness.app.workspace.SshFs
             val root = remote?.root?.let { File(it) } ?: ctx.workspace.shellRoot
                 ?: throw ToolFailure(
@@ -100,7 +102,7 @@ class ShellTool(
                 sb.append("[note: fell back to toybox sh, launching the Linux bash failed on this device]\n")
             }
             if (res.tier == ExecutionTier.PRIVILEGED) {
-                sb.append("[note: ran with Shizuku ADB-shell privileges]\n")
+                sb.append("[note: ran via Shizuku; the access receipt records its verified UID]\n")
             }
             if (res.timedOut) sb.append(if (res.tier == ExecutionTier.TERMUX_SSH)
                 "[SSH channel closed after ${timeoutSec}s timeout; inspect Termux before retrying modifying commands]\n"

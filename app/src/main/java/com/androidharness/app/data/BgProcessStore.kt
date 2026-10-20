@@ -49,6 +49,7 @@ class BgProcessStore(
     /** App workspace root, so detached logs live under it so file tools can read them. */
     workspaceRoot: File,
     private val privilegedLiveness: suspend (Int) -> Boolean? = shizuku::probeProcessAlive,
+    private val deviceAccess: com.androidharness.app.data.env.DeviceAccessManager? = null,
 ) {
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -121,6 +122,10 @@ class BgProcessStore(
         val exitFile = File(logFile.path + ".exit")
         val monitoredCommand = backgroundCommand(command, exitFile.absolutePath)
 
+        deviceAccess?.let { access ->
+            return startWithAccess(access, id, command, monitoredCommand, cwd, logFile, exitFile)
+        }
+
         if (shizuku.isGranted()) {
             // Make sure the shell-user toolchain copy matches the package set
             // tmpProcessEnv() is built for: a copy from an older set is missing
@@ -139,6 +144,7 @@ class BgProcessStore(
                 linuxEnv.tmpProcessEnv().map { "${it.key}=${it.value}" }.toTypedArray()
             } else null
             val pid = shizuku.spawnDetached(cmd, env, cwd.absolutePath, logFile.absolutePath)
+            check(pid == null || pid > 0) { "Privileged background start failed or its result is uncertain; it was not replayed." }
             if (pid != null && pid > 0) {
                 val entry = BgProcessEntry(
                     id = id, command = command, cwd = cwd.absolutePath,
@@ -149,7 +155,7 @@ class BgProcessStore(
                 persist()
                 return Started(entry, viaShizuku = true)
             }
-            // service dropped mid-flight, so fall back to the app tier below
+            // No dispatch began; the app tier may safely be selected below.
         }
 
         val process = linuxEnv.shellProcessBuilder(monitoredCommand)
@@ -169,6 +175,59 @@ class BgProcessStore(
     }
 
     /** Active jobs plus the latest 100 terminal records, persisted across app restarts. */
+    private suspend fun startWithAccess(
+        access: com.androidharness.app.data.env.DeviceAccessManager,
+        id: Int, command: String, monitored: String, cwd: File, log: File, exit: File,
+    ): Started {
+        val result = access.execute(
+            appWorkspace = access.isAppWorkspace(cwd),
+            normal = {
+                val process = linuxEnv.shellProcessBuilder(monitored).directory(cwd)
+                    .redirectOutput(ProcessBuilder.Redirect.appendTo(log)).redirectErrorStream(true).start()
+                appProcesses[id] = process
+                com.androidharness.app.data.env.ShellRunResult(0, false, "APP", "", com.androidharness.app.data.env.ExecutionTier.APP_LINUX, null)
+            },
+            shizukuRun = {
+                if (!shizuku.isServiceReady()) null else {
+                    val tag = linuxEnv.deployedTag()
+                    if (linuxEnv.isReady && !shizuku.isTmpPrefixDeployed(tag)) linuxEnv.ensureShellDeploy(shizuku)
+                    val deployed = shizuku.isTmpPrefixDeployed(tag)
+                    val args = if (deployed) arrayOf("${linuxEnv.tmpPrefix}/bin/bash", "-c", monitored) else arrayOf("/system/bin/sh", "-c", monitored)
+                    val env = if (deployed) linuxEnv.tmpProcessEnv().map { "${it.key}=${it.value}" }.toTypedArray() else null
+                    val pid = shizuku.spawnDetached(args, env, cwd.path, log.path)
+                    pid?.let { com.androidharness.app.data.env.ShellRunResult(if (it > 0) 0 else -1, false, it.toString(), "Detached start failed or its result is uncertain; it was not replayed.", com.androidharness.app.data.env.ExecutionTier.PRIVILEGED, null) }
+                }
+            },
+            rootRun = {
+                val svc = access.root.service
+                if (svc == null) null else {
+                    val pid = runCatching { svc.spawnDetached(linuxEnv.shellProcessBuilder(monitored).command().toTypedArray(),
+                        (linuxEnv.processEnv() + mapOf("HARNESS_TMP_LIB" to "${linuxEnv.prefix}/lib", "HARNESS_TMP_BIN" to "${linuxEnv.prefix}/bin"))
+                            .map { "${it.key}=${it.value}" }.toTypedArray(), cwd.path, log.path) }.getOrDefault(-1)
+                    com.androidharness.app.data.env.ShellRunResult(if (pid > 0) 0 else -1, false, pid.toString(), "Root task start failed or its result is uncertain; it was not replayed.", com.androidharness.app.data.env.ExecutionTier.ROOT, null)
+                }
+            },
+        )
+        check(result.exitCode == 0) { result.rawStderr.ifBlank { result.note ?: "Could not start the selected background backend." } }
+        val source = when (result.tier) { com.androidharness.app.data.env.ExecutionTier.ROOT -> "ROOT"; com.androidharness.app.data.env.ExecutionTier.PRIVILEGED -> "SHIZUKU"; else -> "APP" }
+        val entry = BgProcessEntry(id, command, cwd.path, log.path, result.rawOutput.toIntOrNull() ?: -1,
+            source, System.currentTimeMillis(), exit.path)
+        entries[id] = entry
+        persist()
+        return Started(entry, source == "SHIZUKU")
+    }
+
+    private suspend fun rootLiveness(pid: Int): Boolean? = withContext(Dispatchers.IO) {
+        val svc = deviceAccess?.root?.service ?: return@withContext null
+        runCatching { svc.isProcessAlive(pid) }.getOrNull()
+    }
+    suspend fun stopPrivilegedTasks(): String {
+        val candidates = entries.values.filter { it.finishedAt == null && it.source in setOf("ROOT", "SHIZUKU") }
+        var stopped = 0
+        candidates.forEach { if (runCatching { kill(it.id) }.getOrDefault(false)) stopped++ }
+        return "Detached privileged tasks: $stopped stopped; ${candidates.size - stopped} could not be confirmed."
+    }
+
     suspend fun list(): List<Pair<BgProcessEntry, Boolean>> = storageLock.withLock { listLocked() }
 
     private suspend fun listLocked(): List<Pair<BgProcessEntry, Boolean>> {
@@ -181,6 +240,8 @@ class BgProcessStore(
             }
             val recordedExit = e.exitCodePath?.let { runCatching { File(it).readText().trim().toIntOrNull() }.getOrNull() }
             val alive = when (e.source) {
+                "ROOT" -> if (recordedExit != null) false else rootLiveness(e.pid)
+                    ?: error("Cannot verify a root background process. Reconnect root before cleaning storage.")
                 "SHIZUKU" -> if (recordedExit != null) false else privilegedLiveness(e.pid)
                     ?: error("Cannot verify a background process. Reconnect Shizuku before cleaning storage.")
                 else -> appProcesses[e.id]?.isAlive == true
@@ -223,11 +284,16 @@ class BgProcessStore(
         val e = entries[id] ?: return false
         if (e.finishedAt != null) return false
         if (e.source == "SHIZUKU" && privilegedLiveness(e.pid) == null) return false
+        if (e.source == "ROOT" && rootLiveness(e.pid) == null) return false
         val logFile = File(e.cwd, e.logPath).takeIf { it.exists() }
             ?: File(e.logPath).let { if (it.isAbsolute) it else File(detachedLogDir.parentFile, e.logPath) }
         val ok = when (e.source) {
+            "ROOT" -> {
+                runCatching { deviceAccess?.root?.service?.killTrackedProcess(e.pid, logFile.absolutePath) }
+                rootLiveness(e.pid) == false
+            }
             "SHIZUKU" -> {
-                shizuku.killProcess(e.pid)
+                shizuku.killProcess(e.pid, logFile.absolutePath)
                 killPidsWithFd(logFile)
                 privilegedLiveness(e.pid) == false
             }

@@ -180,6 +180,17 @@ internal fun ToolCallCard(
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
+                    result?.generation?.execution?.distinctBy { it.label }?.forEach { receipt ->
+                        androidx.compose.material3.Surface(
+                            color = if (receipt.uid == 0) scheme.tertiaryContainer else scheme.secondaryContainer,
+                            contentColor = if (receipt.uid == 0) scheme.onTertiaryContainer else scheme.onSecondaryContainer,
+                            shape = RoundedCornerShape(50), modifier = Modifier.padding(top = 4.dp),
+                        ) {
+                            Text(receipt.label + if (receipt.fallbackReason != null) " · fallback" else "",
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp))
+                        }
+                    }
                 }
                 Spacer(Modifier.width(8.dp))
                 val statusKey = when {

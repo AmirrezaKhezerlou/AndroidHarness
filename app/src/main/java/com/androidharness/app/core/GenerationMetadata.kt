@@ -46,6 +46,7 @@ data class GenerationMetadata(
     /** Null means the provider did not report a separate reasoning count. Zero is a real count. */
     val reasoningTokens: Int? = null,
     val reasoningSetting: String? = null,
+    val execution: List<com.androidharness.app.data.env.ExecutionReceipt> = emptyList(),
 ) {
     companion object {
         private val json = Json { ignoreUnknownKeys = true }

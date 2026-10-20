@@ -43,6 +43,12 @@ object ShizukuCompatMain {
                                     request.directory, requireNotNull(request.logPath)).toString()
                                 "alive" -> runner.isProcessAlive(request.pid).toString()
                                 "kill" -> runner.killProcess(request.pid).toString()
+                                "killTracked" -> runner.killTrackedProcess(request.pid, requireNotNull(request.logPath)).toString()
+                                "stop" -> { val count = runner.cancelActive(); repeat(30) { if (runner.activeCommandCount() != 0) Thread.sleep(100) }; check(runner.activeCommandCount() == 0) { "Termination is not confirmed" }; count.toString() }
+                                "resume" -> { runner.resumeCommands(); "ready" }
+                                "rootList" -> runner.rootList(request.command[0], request.command[1].toInt())
+                                "rootRead" -> runner.rootRead(request.command[0])
+                                "rootWrite" -> runner.rootWrite(request.command[0], request.command[1], request.command[2])
                                 else -> error("Unknown compatibility operation")
                             }
                             respond(CompatResponse(request.id, result))

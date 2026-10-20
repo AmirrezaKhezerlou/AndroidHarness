@@ -36,6 +36,9 @@ class HarnessUserService() : IHarnessService.Stub() {
 
     private val pidToLog = java.util.concurrent.ConcurrentHashMap<Int, String>()
     private val pidToDir = java.util.concurrent.ConcurrentHashMap<Int, String>()
+    private val pidStart = java.util.concurrent.ConcurrentHashMap<Int, String>()
+    private val commandLock = Any()
+    @Volatile private var acceptingCommands = true
 
     init {
         // PR_SET_CHILD_SUBREAPER (36) so orphaned descendants reparent to this service instead of PID 1
@@ -73,8 +76,9 @@ class HarnessUserService() : IHarnessService.Stub() {
         env: Array<String>?,
         dir: String?,
         logPath: String,
-    ): Int {
-        return try {
+    ): Int = synchronized(commandLock) {
+        if (!acceptingCommands) return@synchronized -1
+        try {
             val wrappedCmd = if (File("/system/bin/setsid").exists()) {
                 val shBin = if (File("/system/bin/sh").exists()) "/system/bin/sh" else "sh"
                 arrayOf(
@@ -107,6 +111,7 @@ class HarnessUserService() : IHarnessService.Stub() {
             val pid = pidOf(p) ?: -1
             if (pid > 0) {
                 pidToLog[pid] = canonLog
+                processStart(pid)?.let { pidStart[pid] = it }
                 dir?.let { pidToDir[pid] = runCatching { File(it).canonicalPath }.getOrDefault(it) }
             }
             pid
@@ -120,8 +125,13 @@ class HarnessUserService() : IHarnessService.Stub() {
 
     override fun killProcess(pid: Int): Boolean =
         runCatching {
+            // Never signal an unrelated/reused PID, even when running as root.
+            val expected = pidStart[pid]
+            if (android.os.Process.myUid() == 0 && expected == null) return@runCatching false
+            if (expected != null && processStart(pid)?.let { it != expected } == true) return@runCatching false
             val logPath = pidToLog.remove(pid)
             val dir = pidToDir.remove(pid)
+            pidStart.remove(pid)
 
             // 1. Kill process group
             runCatching { android.system.Os.kill(-pid, android.system.OsConstants.SIGKILL) }
@@ -137,6 +147,23 @@ class HarnessUserService() : IHarnessService.Stub() {
             reapZombies()
             true
         }.getOrDefault(false)
+
+    fun stopDetachedCommands(): Int = pidToLog.keys.toList().count { killProcess(it) }
+
+    override fun killTrackedProcess(pid: Int, logPath: String): Boolean = runCatching {
+        val start = processStart(pid) ?: return@runCatching false
+        val canonical = File(logPath).canonicalPath
+        val descriptors = File("/proc/$pid/fd").listFiles().orEmpty()
+        if (descriptors.none { runCatching { android.system.Os.readlink(it.path) == canonical }.getOrDefault(false) }) return@runCatching false
+        // Capture identity before adopting the recovered job; killProcess checks it again.
+        pidStart[pid] = start
+        pidToLog[pid] = canonical
+        killProcess(pid)
+    }.getOrDefault(false)
+
+    private fun processStart(pid: Int): String? = runCatching {
+        File("/proc/$pid/stat").readText().substringAfterLast(") ").split(' ')[19]
+    }.getOrNull()
 
     private fun killProcessesAssociatedWith(rootPid: Int, logPath: String?, dir: String?) {
         val proc = File("/proc")
@@ -279,7 +306,41 @@ class HarnessUserService() : IHarnessService.Stub() {
         destroy()
     }
 
-    override fun exec(
+    private val activeCommands = java.util.concurrent.ConcurrentHashMap.newKeySet<Thread>()
+
+    override fun getUid(): Int = android.os.Process.myUid()
+    override fun rootList(path: String, offset: Int): String = synchronized(commandLock) {
+        check(acceptingCommands) { "Privileged access is paused." }; RootFileOperations.list(path, offset)
+    }
+    override fun rootRead(path: String): String = synchronized(commandLock) {
+        check(acceptingCommands) { "Privileged access is paused." }; RootFileOperations.read(path)
+    }
+    override fun rootWrite(path: String, expectedHash: String, text: String): String = synchronized(commandLock) {
+        check(acceptingCommands) { "Privileged access is paused." }; RootFileOperations.write(path, expectedHash, text)
+    }
+    override fun activeCommandCount(): Int = activeCommands.size
+    override fun cancelActive(): Int {
+        val running = synchronized(commandLock) { acceptingCommands = false; activeCommands.toList() }
+        running.forEach { it.interrupt() }
+        stopDetachedCommands()
+        return running.size
+    }
+    override fun resumeCommands() { synchronized(commandLock) { acceptingCommands = true } }
+
+    override fun exec(cmd: Array<String>, env: Array<String>?, dir: String?, maxBytes: Int, timeoutMs: Int): String {
+        val thread = Thread.currentThread()
+        synchronized(commandLock) {
+            // Readiness probes remain available while execution is paused.
+            val identityProbe = cmd.contentEquals(arrayOf("/system/bin/sh", "-c", "id -u"))
+            if (!acceptingCommands && !identityProbe) return "exit=-130\ntimeout=0\n$STDERR_SEPARATOR\nPrivileged access is paused."
+            activeCommands.add(thread)
+        }
+        return try { executeTracked(cmd, env, dir, maxBytes, timeoutMs) }
+        catch (_: InterruptedException) { "exit=-130\ntimeout=0\n$STDERR_SEPARATOR\nCancelled by user." }
+        finally { activeCommands.remove(thread); Thread.interrupted() }
+    }
+
+    private fun executeTracked(
         cmd: Array<String>,
         env: Array<String>?,
         dir: String?,

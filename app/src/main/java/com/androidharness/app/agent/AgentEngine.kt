@@ -208,6 +208,7 @@ class AgentEngine(
     private val cavemanSettings: suspend () -> com.androidharness.app.data.AppSettings = { com.androidharness.app.data.AppSettings() },
     private val configuredSubagent: suspend () -> SubagentConnection? = { null },
     private val prepareGitHub: suspend () -> Unit = {},
+    private val deviceAccess: com.androidharness.app.data.env.DeviceAccessManager? = null,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -257,11 +258,11 @@ class AgentEngine(
         var replySettings = cavemanSettings()
         val localChat = com.androidharness.app.local.LocalModelCatalog.isLocal(config.id)
         val agentContextEnabled = !localChat || replySettings.localModelAgentContext
-        fun runSystemPrompt(fullAccess: Boolean): String =
-            if (!agentContextEnabled) "" else systemPrompt(workspace, mode, fullAccess = fullAccess, repoMapEnabled = repoMapEnabled) +
+        suspend fun runSystemPrompt(fullAccess: Boolean): String =
+            if (!agentContextEnabled) "" else systemPrompt(workspace, mode, fullAccess = fullAccess, repoMapEnabled = repoMapEnabled, sessionId = sessionId) +
                 if (pinnedInstructions.isBlank()) "" else "\n\nPinned user instructions:\n$pinnedInstructions"
         var systemPrompt = runSystemPrompt(false)
-        var promptShizukuStatus = shizukuAgentStatus(shizuku.state.value, shizuku.serviceState.value, shizuku.isServiceReady())
+        var promptShizukuStatus = deviceAccess?.statusForAgent(workspace, sessionId) ?: shizukuAgentStatus(shizuku.state.value, shizuku.serviceState.value, shizuku.isServiceReady())
         var promptSandboxOff = false
         val runRegistry = registry.withExtra(extraTools)
         val tools = if (!agentContextEnabled) emptyList() else runRegistry.schemas(
@@ -316,7 +317,7 @@ class AgentEngine(
             val effectiveMode = permissionMode()
             val sandboxOff = effectiveMode == PermissionMode.FULL_ACCESS
             val nextReplySettings = cavemanSettings()
-            val nextShizukuStatus = shizukuAgentStatus(shizuku.state.value, shizuku.serviceState.value, shizuku.isServiceReady())
+            val nextShizukuStatus = deviceAccess?.statusForAgent(workspace, sessionId) ?: shizukuAgentStatus(shizuku.state.value, shizuku.serviceState.value, shizuku.isServiceReady())
             if (sandboxOff != promptSandboxOff || replySettings != nextReplySettings || promptShizukuStatus != nextShizukuStatus) {
                 replySettings = nextReplySettings
                 promptSandboxOff = sandboxOff
@@ -468,6 +469,7 @@ class AgentEngine(
             // re-emitting deltas the UI already showed would duplicate output.
             var recoverableFailure = false
             val managedFallback = kotlin.coroutines.coroutineContext[com.androidharness.app.llm.FallbackRun]?.policy()?.enabled == true
+
             var failure = StreamRetrier.run(
                 streamFor = {
                     provider.streamChat(config, apiKey, requestSystemPrompt, working, tools, requestOptions)
@@ -650,6 +652,7 @@ class AgentEngine(
                     toolName = call.name,
                     isError = !result.ok,
                     images = listOfNotNull(result.image), artifact = result.artifact,
+                    generation = com.androidharness.app.core.GenerationMetadata(execution = result.execution),
                 )
                 working += toolMessage.withImagesResolved()
                 emit(AgentEvent.ToolFinished(call.id, result))
@@ -773,6 +776,7 @@ class AgentEngine(
             emitEvent(AgentEvent.ToolMessageCommitted(ChatMessage(
                 role = Role.TOOL, text = result.output, toolCallId = call.id,
                 toolName = call.name, isError = !result.ok, images = listOfNotNull(result.image), artifact = result.artifact,
+                    generation = com.androidharness.app.core.GenerationMetadata(execution = result.execution),
             )))
         }
         return result
@@ -1016,7 +1020,9 @@ class AgentEngine(
         val executed = try {
             if (call.name in setOf("git_push", "git_pull", "http_request", "shell", "shell_background") &&
                 workspace !is com.androidharness.app.workspace.SshFs) prepareGitHub()
-            val raw = tool.execute(args, ToolContext(workspace, sandboxOff, sessionId))
+            val raw = deviceAccess?.traceTool(route.binding?.id ?: (route.workspace as? ChatWorkspaceFs)?.primaryId, sessionId, args["access"]?.jsonPrimitive?.content == "root") {
+                tool.execute(args, ToolContext(workspace, sandboxOff, sessionId))
+            } ?: tool.execute(args, ToolContext(workspace, sandboxOff, sessionId))
             raw.redacted()
         } catch (ce: CancellationException) {
             throw ce
@@ -1047,7 +1053,9 @@ class AgentEngine(
                     // Repaired: run the exact same command again for the model.
                     kotlin.coroutines.coroutineContext[TaskBudget]?.check()
                     val retry = try {
-                        tool.execute(args, ToolContext(workspace, sandboxOff, sessionId))
+                        deviceAccess?.traceTool(route.binding?.id ?: (route.workspace as? ChatWorkspaceFs)?.primaryId, sessionId, args["access"]?.jsonPrimitive?.content == "root") {
+                            tool.execute(args, ToolContext(workspace, sandboxOff, sessionId))
+                        } ?: tool.execute(args, ToolContext(workspace, sandboxOff, sessionId))
                     } catch (ce: CancellationException) {
                         throw ce
                     } catch (e: Exception) {
@@ -1316,6 +1324,7 @@ class AgentEngine(
             var subState: com.androidharness.app.core.ProviderMessageState? = null
             var subReasoningTokens: Int? = null
             var subReasoningSetting: String? = null
+            val liveSystem = system + deviceAccess?.statusForAgent(workspace, sessionId)?.let { "\n$it" }.orEmpty()
             val managedFallback = kotlin.coroutines.coroutineContext[com.androidharness.app.llm.FallbackRun]?.policy()?.enabled == true
 
             // Same transient-failure retry policy as the main loop. Unlike the
@@ -1323,7 +1332,7 @@ class AgentEngine(
             // subagent streams no deltas to the UI, so nothing can duplicate.
             val failure = StreamRetrier.run(
                 streamFor = {
-                    provider.streamChat(config, apiKey, system, history, subTools, requestOptions)
+                    provider.streamChat(config, apiKey, liveSystem, history, subTools, requestOptions)
                 },
                 onAttemptStart = {
                     text.clear()
@@ -1439,8 +1448,9 @@ class AgentEngine(
                         try {
                             val args = json.parseToJsonElement(call.argumentsJson).jsonObject
                             val route = WorkspaceToolRouting.route(tool, args, workspace)
-                            val result = tool.execute(args, ctx.copy(workspace = route.workspace,
-                                sandboxOff = ctx.sandboxOff && workspace !is ChatWorkspaceFs)).redacted()
+                            val execute = suspend { tool.execute(args, ctx.copy(workspace = route.workspace,
+                                sandboxOff = ctx.sandboxOff && workspace !is ChatWorkspaceFs)).redacted() }
+                            val result = deviceAccess?.traceTool(route.binding?.id ?: (route.workspace as? ChatWorkspaceFs)?.primaryId, sessionId, args["access"]?.jsonPrimitive?.content == "root", execute) ?: execute()
                             route.label?.let { result.copy(output = "[Workspace: $it]\n${result.output}") } ?: result
                         } catch (ce: CancellationException) {
                             throw ce
@@ -1464,6 +1474,7 @@ class AgentEngine(
                     toolName = call.name,
                     isError = !result.ok,
                     images = listOfNotNull(result.image), artifact = result.artifact,
+                    generation = com.androidharness.app.core.GenerationMetadata(execution = result.execution),
                 )
                 history += toolMessage.withImagesResolved()
                 emitEvent(AgentEvent.SubagentMessageCommitted(parentCallId, toolMessage))
@@ -1674,16 +1685,17 @@ class AgentEngine(
         return hints.distinct()
     }
 
-    private fun systemPrompt(
+    private suspend fun systemPrompt(
         workspace: WorkspaceFs,
         mode: AgentMode,
         fullAccess: Boolean,
         repoMapEnabled: Boolean = true,
         multiWorkspace: Boolean = false,
+        sessionId: String? = null,
     ): String {
         if (workspace is ChatWorkspaceFs) {
-            return systemPrompt(workspace.fileAccess(workspace.primary), mode, false, repoMapEnabled = false, multiWorkspace = true) +
-                WorkspaceToolRouting.instructions(workspace)
+            return systemPrompt(workspace.fileAccess(workspace.primary), mode, false, repoMapEnabled = false, multiWorkspace = true, sessionId = sessionId) +
+                WorkspaceToolRouting.instructions(workspace) + deviceAccess?.statusForAgent(workspace, sessionId).orEmpty()
         }
         val agentsFile = readWorkspaceDoc(workspace, "AGENTS.md")
             ?: readWorkspaceDoc(workspace, "HARNESS.md")
@@ -1714,6 +1726,7 @@ Rules:
 
 """.trim()
         )
+        deviceAccess?.statusForAgent(workspace, sessionId)?.let { sb.append("\n").append(it).append("\n") }
         sb.append("\n").append(com.androidharness.app.core.response.RichResponse.INSTRUCTIONS).append("\n")
         if (multiWorkspace) {
             sb.append("- Workspace tool capabilities and access are listed below. Select workspace_id for commands as well as file tools.\n")
@@ -1731,7 +1744,7 @@ Rules:
 
         if (!multiWorkspace && workspace !is com.androidharness.app.workspace.SshFs) {
             // Shizuku guidance: tell the agent the current state so it can guide the user.
-            shizukuAgentStatus(shizuku.state.value, shizuku.serviceState.value, shizuku.isServiceReady())
+            if (deviceAccess == null) shizukuAgentStatus(shizuku.state.value, shizuku.serviceState.value, shizuku.isServiceReady())
                 ?.let { sb.append("- ").append(it).append('\n') }
             sb.append(
                 "- Shell environment rules (IMPORTANT): always call commands by plain name (ls, grep, head, python3, git, node…). NEVER work around the environment yourself: do not invoke /system/bin/linker64, /apex/.../linker64, or /system/bin/toybox directly, and do not craft alternate PATHs. The harness already makes every toolchain binary runnable in every tier. " +

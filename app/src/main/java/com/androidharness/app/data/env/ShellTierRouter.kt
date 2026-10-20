@@ -23,6 +23,7 @@ object PathClassifier {
 /** Which engine actually runs the shell command. */
 enum class ExecutionTier {
     TERMUX_SSH,
+    ROOT,
     /** Inside Shizuku's server process: shell/root uid, can reach system paths and any folder. */
     PRIVILEGED,
 
@@ -56,6 +57,7 @@ class ShellTierRouter(
     private val context: Context,
     private val shizuku: ShizukuManager,
     private val linuxEnv: LinuxEnvironmentManager,
+    val deviceAccess: DeviceAccessManager? = null,
 ) {
 
     /** Broad shared-storage access, including runtime storage permission on Android 8–10. */
@@ -111,9 +113,18 @@ class ShellTierRouter(
         // would freeze the UI for the command's full duration, so the work
         // never inherits the caller's dispatcher.
         withContext(Dispatchers.IO) {
+            deviceAccess?.let { access ->
+                return@withContext access.execute(
+                    appWorkspace = regionOf(cwd) == PathClassifier.Region.APP_DATA,
+                    normal = { runApp(command, cwd, timeoutMs, maxOutput, if (linuxEnv.isReady) ExecutionTier.APP_LINUX else ExecutionTier.TOYBOX) },
+                    shizukuRun = { runPrivileged(command, cwd, timeoutMs, maxOutput, allowFallback = false) },
+                    rootRun = { access.runRoot(command, cwd, timeoutMs, maxOutput) },
+                )
+            }
             when (val tier = resolveTier(cwd)) {
+                ExecutionTier.ROOT -> error("Root requires device access routing")
                 ExecutionTier.TERMUX_SSH -> error("SSH requires a captured workspace")
-                ExecutionTier.PRIVILEGED -> runPrivileged(command, cwd, timeoutMs, maxOutput)
+                ExecutionTier.PRIVILEGED -> requireNotNull(runPrivileged(command, cwd, timeoutMs, maxOutput))
                 ExecutionTier.APP_LINUX -> runApp(command, cwd, timeoutMs, maxOutput, ExecutionTier.APP_LINUX)
                 ExecutionTier.TOYBOX -> runApp(command, cwd, timeoutMs, maxOutput, ExecutionTier.TOYBOX)
             }
@@ -154,7 +165,8 @@ class ShellTierRouter(
         cwd: File,
         timeoutMs: Int,
         maxOutput: Int,
-    ): ShellRunResult {
+        allowFallback: Boolean = true,
+    ): ShellRunResult? {
         // Self-heal: catch a stale or vanished deployed copy even when nothing
         // in-process changed the staging state (throttled internally).
         linuxEnv.verifyDeployedCopyThrottled(shizuku)
@@ -185,7 +197,8 @@ class ShellTierRouter(
 
         val r = shizuku.runPrivileged(cmd, env, cwd.absolutePath, timeoutMs, maxOutput)
         if (r == null) {
-            // Service dropped mid-flight: fall back to the app uid tier.
+            if (!allowFallback) return null
+            // No dispatch began: fall back to the app uid tier.
             val fb = runApp(command, cwd, timeoutMs, maxOutput, ExecutionTier.APP_LINUX)
             return ShellRunResult(
                 exitCode = fb.exitCode,

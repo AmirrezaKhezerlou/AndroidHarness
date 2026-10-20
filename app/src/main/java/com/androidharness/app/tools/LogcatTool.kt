@@ -20,8 +20,10 @@ import java.util.concurrent.TimeUnit
  */
 class ReadLogcatTool(
     private val shizuku: ShizukuManager? = null,
-    private val runner: LogcatRunner = DefaultLogcatRunner(shizuku),
+    runner: LogcatRunner? = null,
+    private val router: com.androidharness.app.data.env.ShellTierRouter? = null,
 ) : Tool {
+    private val runner: LogcatRunner = runner ?: DefaultLogcatRunner(shizuku, router)
     override val name = "read_logcat"
     override val description =
         "Read recent Android logcat logs with optional filtering by log level, tag, package name, buffer, or keyword. " +
@@ -155,9 +157,21 @@ interface LogcatRunner {
 
 class DefaultLogcatRunner(
     private val shizuku: ShizukuManager?,
+    private val router: com.androidharness.app.data.env.ShellTierRouter? = null,
 ) : LogcatRunner {
 
     override suspend fun runLogcat(query: LogcatQuery): LogcatRunResult {
+        if (router?.deviceAccess != null) {
+            fun quote(value: String) = "'" + value.replace("'", "'\\''") + "'"
+            val cwd = java.io.File("/")
+            val pid = query.packageName?.let { pkg ->
+                router.run("/system/bin/pidof ${quote(pkg)}", cwd, 3_000, 1024).rawOutput.trim()
+                    .split(Regex("\\s+")).firstOrNull { it.isNotEmpty() && it.all(Char::isDigit) }
+            }
+            val result = router.run(buildLogcatArgs(query, pid).joinToString(" ", transform = ::quote), cwd, 15_000, ReadLogcatTool.MAX_OUTPUT_CHARS)
+            return LogcatRunResult(result.exitCode == 0 || result.rawOutput.isNotEmpty(),
+                result.rawOutput.ifBlank { result.rawStderr }, pid, result.note)
+        }
         val isPrivileged = shizuku != null &&
             shizuku.state.value == ShizukuState.GRANTED &&
             shizuku.serviceState.value.isReady

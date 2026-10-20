@@ -32,6 +32,7 @@ class TerminalManager(
     private val linuxEnv: LinuxEnvironmentManager,
     private val shizuku: ShizukuManager,
     private val runManager: RunManager,
+    private val router: com.androidharness.app.data.env.ShellTierRouter? = null,
 ) {
 
     data class TerminalState(
@@ -42,6 +43,7 @@ class TerminalManager(
         val started: Boolean = false,
         val lastCommand: String? = null,
         val lastExitCode: Int? = null,
+        val backendLabel: String = "Normal",
     )
 
     private val _state = MutableStateFlow(TerminalState())
@@ -231,7 +233,7 @@ class TerminalManager(
 
     /** Sends one command line. */
     @Synchronized
-    fun send(command: String, workspace: com.androidharness.app.workspace.WorkspaceFs? = null) {
+    fun send(command: String, workspace: com.androidharness.app.workspace.WorkspaceFs? = null, sessionId: String? = null, projectId: String? = null) {
         if (storageMaintenance) { appendLines(listOf("# storage cleanup in progress; try again shortly")); return }
         val cmd = command.trimEnd()
         if (cmd.isEmpty()) return
@@ -246,10 +248,46 @@ class TerminalManager(
 
         if (remoteWorkspace != null) {
             sendSsh(cmd)
+        } else if (router?.deviceAccess != null) {
+            sendDevice(cmd, sessionId, projectId)
         } else if (_state.value.privileged && shizuku.isGranted()) {
             sendPrivileged(cmd)
         } else {
             sendAppTier(cmd)
+        }
+    }
+
+    private fun sendDevice(cmd: String, sessionId: String?, projectId: String?) {
+        val access = router?.deviceAccess ?: return
+        scope.launch {
+            access.withRequest(projectId, sessionId, forceDevice = true, manual = true) {
+                try {
+                    val decision = access.select()
+                    if (decision.backend == com.androidharness.app.data.env.DeviceBackend.NORMAL) {
+                        _state.update { it.copy(backendLabel = "Normal") }
+                        decision.reason?.let { appendLines(listOf("# Access fallback: $it; using Normal")) }
+                        sendAppTier(cmd)
+                        return@withRequest
+                    }
+                    if (decision.backend == null) {
+                        appendLines(listOf("# ${decision.reason}"))
+                        _state.update { it.copy(busy = false, lastExitCode = -1) }
+                        return@withRequest
+                    }
+                    val quoted = "'" + cmd.replace("'", "'\\''") + "'"
+                    val script = "eval $quoted; ec=\$?; printf '\\n$marker:%s:%s\\n' \"\$ec\" \"\$PWD\"; exit \"\$ec\""
+                    val result = router.run(script, cwd, 120_000, 60_000)
+                    result.rawOutput.lines().forEach(::handleLine)
+                    if (result.rawStderr.isNotBlank()) appendLines(result.rawStderr.lines())
+                    result.note?.let { appendLines(listOf(it)) }
+                    val receipt = kotlinx.coroutines.currentCoroutineContext()[com.androidharness.app.data.env.AccessRequest]?.receipts?.lastOrNull()
+                    _state.update { it.copy(busy = false, lastExitCode = result.exitCode, backendLabel = receipt?.label ?: "Unavailable") }
+                } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (e: Exception) {
+                    appendLines(listOf("# ${e.message}"))
+                    _state.update { it.copy(busy = false, lastExitCode = -1) }
+                }
+            }
         }
     }
 

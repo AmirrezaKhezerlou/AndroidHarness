@@ -21,7 +21,8 @@ class ShellBackgroundTool(
         "foreground service. Returns a process id; its output goes to a log file. " +
         "Use bg_list to inspect and bg_kill to stop it."
     override val parametersSchema = Schema.obj(
-        mapOf("command" to Schema.string("The shell command to run in the background.")),
+        mapOf("command" to Schema.string("The shell command to run in the background."),
+            "access" to Schema.string("auto (default) or root. Root requires a verified backend and project permission.")),
         required = listOf("command"),
     )
     override val isReadOnly = false
@@ -30,6 +31,7 @@ class ShellBackgroundTool(
         withContext(Dispatchers.IO) {
             val rawCommand = args["command"]?.jsonPrimitive?.content
                 ?: throw ToolFailure("Missing required argument: command")
+            require(args["access"]?.jsonPrimitive?.content in listOf(null, "auto", "root")) { "access must be auto or root" }
             val remote = ctx.workspace as? com.androidharness.app.workspace.SshFs
             if (remote != null) {
                 val deny = if (ctx.sandboxOff) null else ShellPolicy.denyReason(rawCommand, java.io.File(remote.root), java.io.File(remote.root))
@@ -56,6 +58,7 @@ class ShellBackgroundTool(
                 val started = store.start(command, cwd)
                 val notes = StringBuilder()
                 npmNote?.let { notes.append(it).append('\n') }
+                if (started.entry.source == "ROOT") notes.append("[note: running via direct root; tied to this root service/app session]\n")
                 if (started.viaShizuku) {
                     notes.append("[note: running under Shizuku: survives the app being minimized or killed]\n")
                 }
@@ -65,11 +68,13 @@ class ShellBackgroundTool(
                         "Started background process ${started.entry.id}: ${command.take(80)}\n" +
                         "Log: ${started.entry.logPath}",
                 )
-            } catch (e: Exception) {
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) {
                 // App-tier background processes run as the app uid, which may
                 // not reach folders outside its own; start Shizuku for those.
                 val hint =
-                    "[note: without Shizuku, background processes run as the app user and could not " +
+                    if (router?.deviceAccess != null) "[note: check access mode, connection readiness and project root permission in Settings → Terminal & device.]"
+                    else "[note: without Shizuku, background processes run as the app user and could not " +
                         "start in $cwd. Start Shizuku (Settings → Terminal) to run servers anywhere, " +
                         "or move the project into the app workspace or a folder the app can reach directly.]"
                 ToolResult(false, hint + "\nFailed to start background process: ${e.message}")

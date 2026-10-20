@@ -434,12 +434,15 @@ class ShizukuManager(
         timeoutMs: Int,
         maxBytes: Int = 60_000,
     ): PrivilegedResult? = withContext(Dispatchers.IO) {
+        val expectedUid = currentCoroutineContext()[VerifiedDeviceAccess]?.takeIf { it.backend == DeviceBackend.SHIZUKU }?.uid
         val svc = service
         val raw = if (svc != null) {
+            if (expectedUid != null && runCatching { svc.uid }.getOrNull() != expectedUid) return@withContext null
             runCatching { svc.exec(cmd, withDeployPaths(env), dir, maxBytes, timeoutMs) }.getOrNull()
-                ?: return@withContext null
+                ?: return@withContext PrivilegedResult(-1, false, "", "Shizuku connection lost after dispatch. The command may have run; it was not retried.")
         } else {
             val client = compatibility?.takeIf { it.isAlive } ?: return@withContext null
+            if (expectedUid != null && client.uid != expectedUid) return@withContext null
             try {
                 client.request(CompatRequest(0, "exec", cmd.toList(), withDeployPaths(env).toList(), dir,
                     maxBytes = maxBytes, timeoutMs = timeoutMs))
@@ -471,6 +474,45 @@ class ShizukuManager(
             extra.any { it.substringBefore('=') == entry.substringBefore('=') }
         }
         return (extra.asList() + kept).toTypedArray()
+    }
+
+
+    internal fun currentService(): com.androidharness.app.IHarnessService? = service
+
+    internal suspend fun rootFileOperation(operation: String, args: List<String>): String = withContext(Dispatchers.IO) {
+        val svc = service
+        if (svc != null) when (operation) {
+            "rootList" -> svc.rootList(args[0], args[1].toInt())
+            "rootRead" -> svc.rootRead(args[0])
+            "rootWrite" -> svc.rootWrite(args[0], args[1], args[2])
+            else -> error("Unknown file operation")
+        } else requireNotNull(compatibility) { "Reconnect the privileged file service first." }
+            .request(CompatRequest(0, operation, command = args))
+    }
+
+    internal suspend fun resumeCommands() = withContext(Dispatchers.IO) {
+        service?.resumeCommands()
+        compatibility?.request(CompatRequest(0, "resume"))
+        Unit
+    }
+
+    suspend fun stopActiveCommands(): String = withContext(Dispatchers.IO) {
+        val svc = service
+        if (svc != null) {
+            runCatching {
+                val count = svc.cancelActive()
+                repeat(30) {
+                    if (svc.activeCommandCount() == 0) return@withContext "Shizuku: stopped $count active commands."
+                    kotlinx.coroutines.delay(100)
+                }
+                "Shizuku: stop requested for $count commands; termination is not confirmed."
+            }.getOrElse { "Shizuku: termination could not be verified (${it.message})." }
+        } else if (compatibility != null) {
+            runCatching {
+                val count = compatibility?.request(CompatRequest(0, "stop"))
+                "Shizuku compatibility: stopped $count active commands; runner paused."
+            }.getOrElse { "Shizuku compatibility: stop could not be verified (${it.message})." }
+        } else "Shizuku: no connected runner; termination cannot be verified."
     }
 
     private fun parseResult(raw: String): PrivilegedResult {
@@ -627,10 +669,18 @@ class ShizukuManager(
         dir: String?,
         logPath: String,
     ): Int? = withContext(Dispatchers.IO) {
+        val expectedUid = currentCoroutineContext()[VerifiedDeviceAccess]?.takeIf { it.backend == DeviceBackend.SHIZUKU }?.uid
         val svc = service
-        if (svc != null) runCatching { svc.spawnDetached(cmd, env, dir, logPath) }.getOrNull()
-        else compatibility?.takeIf { it.isAlive }?.request(CompatRequest(0, "spawn", cmd.toList(),
-            withDeployPaths(env).toList(), dir, logPath))?.toIntOrNull()
+        if (svc != null && expectedUid != null && runCatching { svc.uid }.getOrNull() != expectedUid) return@withContext null
+        if (svc != null) runCatching { svc.spawnDetached(cmd, env, dir, logPath) }.getOrDefault(-1)
+        else {
+            val client = compatibility?.takeIf { it.isAlive } ?: return@withContext null
+            if (expectedUid != null && client.uid != expectedUid) return@withContext null
+            try { client.request(CompatRequest(0, "spawn", cmd.toList(),
+                withDeployPaths(env).toList(), dir, logPath)).toIntOrNull() ?: -1 }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { -1 } // Dispatch was attempted; never replay under another UID.
+        }
     }
 
     /** Null means the process could not be checked; maintenance must retain its reference. */
@@ -645,9 +695,9 @@ class ShizukuManager(
 
     suspend fun isProcessAlive(pid: Int): Boolean = probeProcessAlive(pid) ?: false
 
-    suspend fun killProcess(pid: Int): Boolean = withContext(Dispatchers.IO) {
+    suspend fun killProcess(pid: Int, expectedLog: String? = null): Boolean = withContext(Dispatchers.IO) {
         val svc = service
-        if (svc != null) runCatching { svc.killProcess(pid) }.getOrDefault(false)
-        else compatibility?.takeIf { it.isAlive }?.request(CompatRequest(0, "kill", pid = pid))?.toBooleanStrictOrNull() ?: false
+        if (svc != null) runCatching { if (expectedLog != null) svc.killTrackedProcess(pid, expectedLog) else svc.killProcess(pid) }.getOrDefault(false)
+        else compatibility?.takeIf { it.isAlive }?.request(CompatRequest(0, if (expectedLog != null) "killTracked" else "kill", pid = pid, logPath = expectedLog))?.toBooleanStrictOrNull() ?: false
     }
 }

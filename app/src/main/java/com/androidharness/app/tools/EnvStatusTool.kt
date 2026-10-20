@@ -34,6 +34,7 @@ class EnvStatusTool(
             return ToolResult(res.exitCode == 0, "SSH workspace. Git identity and authentication are configured on this host.\n" + res.rawOutput + "\n" + res.rawStderr)
         }
 
+        val accessReport = router.deviceAccess?.report()
         val sz = shizuku.state.value
         val szText = when (sz) {
             ShizukuState.NOT_INSTALLED -> "not installed"
@@ -50,8 +51,9 @@ class EnvStatusTool(
             }
         }
         val cwd = ctx.workspace.shellRoot ?: linuxEnv.shellFallbackRoot
-        val tier = router.resolveTier(cwd)
+        val tier = router.deviceAccess?.liveTier(cwd) ?: router.resolveTier(cwd)
         val tierText = when (tier) {
+            ExecutionTier.ROOT -> "Direct root"
             ExecutionTier.TERMUX_SSH -> "SSH workspace using host tools and credentials"
             ExecutionTier.PRIVILEGED ->
                 "Shizuku ADB-shell privileges (${if (shizuku.isTmpPrefixDeployed(linuxEnv.deployedTag())) "with the full Linux toolchain deployed to /data/local/tmp" else "system /system/bin/sh, Linux toolchain not deployed"}) in $cwd"
@@ -118,8 +120,8 @@ class EnvStatusTool(
         // shell tiers can read, so an agent can consume it (stress-test L11).
         // Report the REAL permission bits: a hardcoded claim is how a 0755 copy
         // went undetected.
-        val ghMode = EnvProbes.fileMode(shizuku, probeRoot, com.androidharness.app.data.env.GitHubProvision.TOKEN_FILE)
-        val ghHostsMode = EnvProbes.fileMode(shizuku, probeRoot, com.androidharness.app.data.env.GitHubProvision.GH_HOSTS_FILE)
+        val ghMode = EnvProbes.fileMode(shizuku, probeRoot, com.androidharness.app.data.env.GitHubProvision.TOKEN_FILE, router)
+        val ghHostsMode = EnvProbes.fileMode(shizuku, probeRoot, com.androidharness.app.data.env.GitHubProvision.GH_HOSTS_FILE, router)
         val tokenPath = java.io.File(probeRoot, com.androidharness.app.data.env.GitHubProvision.TOKEN_FILE)
         val ghText = when {
             ghMode != null && linuxEnv.githubToken() == null ->
@@ -143,6 +145,7 @@ class EnvStatusTool(
         return ToolResult(
             true,
             buildString {
+                accessReport?.let { append(it).append("\n\n") }
                 append("Shizuku: ").append(szText).append('\n')
                 append("Linux environment: ").append(envText).append('\n')
                 append("GitHub: ").append(ghText).append('\n')

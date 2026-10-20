@@ -119,7 +119,9 @@ class AppContainer(val appContext: Context) {
     val linuxEnv =
         com.androidharness.app.data.env.LinuxEnvironmentManager(appContext) { keys.githubToken() }
     val shizuku = com.androidharness.app.data.env.ShizukuManager(appContext)
-    val shellRouter = com.androidharness.app.data.env.ShellTierRouter(appContext, shizuku, linuxEnv)
+    val deviceAccess = com.androidharness.app.data.env.DeviceAccessManager(appContext, shizuku, linuxEnv,
+        projectForSession = { sessions.session(it)?.projectId })
+    val shellRouter = com.androidharness.app.data.env.ShellTierRouter(appContext, shizuku, linuxEnv, deviceAccess)
     val codeGraph = com.androidharness.app.data.env.CodeGraphManager(linuxEnv, shellRouter)
 
     init {
@@ -130,8 +132,10 @@ class AppContainer(val appContext: Context) {
 
     val updates = com.androidharness.app.data.update.UpdateManager(appContext, shizuku)
     val backgroundProcesses = com.androidharness.app.data.BgProcessStore(
-        appContext, linuxEnv, shizuku, workspaceRoot = workspace.appPrivateRoot,
+        appContext, linuxEnv, shizuku, workspaceRoot = workspace.appPrivateRoot, deviceAccess = deviceAccess,
     )
+
+    init { deviceAccess.stopBackgroundTasks = backgroundProcesses::stopPrivilegedTasks }
 
     @Volatile
     private var projectSkillsDir: java.io.File? = null
@@ -216,6 +220,7 @@ class AppContainer(val appContext: Context) {
             }
         },
         prepareGitHub = { github.refreshIfNeeded() },
+        deviceAccess = deviceAccess,
     )
     val runManager = com.androidharness.app.agent.RunManager(
         context = appContext,
@@ -237,7 +242,7 @@ class AppContainer(val appContext: Context) {
     val automation = com.androidharness.app.automation.AutomationManager(this)
     val projectDeletion = com.androidharness.app.workspace.ProjectDeletion(this)
     internal var telegram = com.androidharness.app.telegram.TelegramManager(this)
-    val terminal = com.androidharness.app.data.TerminalManager(appContext, linuxEnv, shizuku, runManager)
+    val terminal = com.androidharness.app.data.TerminalManager(appContext, linuxEnv, shizuku, runManager, shellRouter)
     val storage = com.androidharness.app.data.storage.StorageManager(this)
     val projectChecks = com.androidharness.app.data.ProjectCheckStore(appContext, terminal)
 

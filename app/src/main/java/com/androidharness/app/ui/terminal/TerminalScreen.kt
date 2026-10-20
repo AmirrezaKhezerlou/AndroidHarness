@@ -1,6 +1,7 @@
 package com.androidharness.app.ui.terminal
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,6 +40,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.input.key.*
@@ -67,10 +70,10 @@ fun TerminalScreen(
     val workspace by remember(sessionId, projectId) { container.workspace.forTools(sessionId, projectId) }.collectAsStateWithLifecycle(initialValue = null)
     val remote = workspace as? com.androidharness.app.workspace.SshFs
     val state by terminal.state.collectAsStateWithLifecycle()
-    val shizukuState by container.shizuku.state.collectAsStateWithLifecycle()
-    val shizukuServiceState by container.shizuku.serviceState.collectAsStateWithLifecycle()
-    val shizukuReady = shizukuState == com.androidharness.app.data.env.ShizukuState.GRANTED &&
-        shizukuServiceState.isReady
+    val accessPrefs by container.deviceAccess.preferences.collectAsStateWithLifecycle()
+    val accessScope = rememberCoroutineScope()
+    var showAccess by remember { mutableStateOf(false) }
+
     val listState = rememberLazyListState()
     var inputValue by androidx.compose.runtime.saveable.rememberSaveable(stateSaver = TextFieldValue.Saver) {
         mutableStateOf(TextFieldValue(""))
@@ -85,7 +88,7 @@ fun TerminalScreen(
         if (input.isBlank() || state.busy || workspace == null) return
         history = (history + input).takeLast(100)
         historyIndex = history.size
-        terminal.send(input, workspace)
+        terminal.send(input, workspace, sessionId, projectId)
         setInput("")
         historyDraft = ""
     }
@@ -108,26 +111,32 @@ fun TerminalScreen(
         }
     }
 
+    if (showAccess) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { showAccess = false },
+        title = { Text("Access mode") },
+        text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            com.androidharness.app.ui.settings.AccessModeChoices(accessPrefs.mode) { mode ->
+                accessScope.launch { container.deviceAccess.store.setMode(mode) }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Auto fallback", Modifier.weight(1f))
+                Switch(accessPrefs.mode == com.androidharness.app.data.env.AccessMode.AUTO || accessPrefs.autoFallback, enabled = accessPrefs.mode != com.androidharness.app.data.env.AccessMode.AUTO, onCheckedChange = { enabled -> accessScope.launch { container.deviceAccess.store.setFallback(enabled) } })
+            }
+            Text("Root → Shizuku → Normal. Root access and project permissions are managed in Settings → Terminal & device.", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+        } },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { showAccess = false }) { Text("Done") } },
+    )
+
     Scaffold(
         containerColor = scheme.surface,
         topBar = {
             AppHeader(
                 title = "Terminal",
-                subtitle = if (remote != null) "SSH workspace" else if (state.privileged && shizukuReady) "Shizuku (shell user)" else "App user",
+                subtitle = if (remote != null) "SSH workspace" else "${state.backendLabel} · ${accessPrefs.mode.label} preferred",
                 onBack = onBack,
                 actions = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Outlined.Shield,
-                            contentDescription = "Privileged mode",
-                            tint = if (state.privileged) scheme.primary else scheme.onSurfaceVariant,
-                            modifier = Modifier.size(17.dp),
-                        )
-                        Switch(
-                            checked = state.privileged && shizukuReady,
-                            onCheckedChange = { terminal.setPrivileged(it) },
-                            enabled = remote == null && shizukuReady,
-                        )
+                    IconButton(onClick = { showAccess = true }, enabled = remote == null) {
+                        Icon(Icons.Outlined.Shield, contentDescription = "Access mode", tint = scheme.primary)
                     }
                     IconButton(onClick = { terminal.clear() }) {
                         Icon(

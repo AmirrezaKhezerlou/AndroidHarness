@@ -204,6 +204,8 @@ dependencies {
     implementation(libs.coroutines.android)
     implementation(libs.commons.compress)
     implementation(libs.xz)
+    implementation("com.github.topjohnwu.libsu:core:6.0.0")
+    implementation("com.github.topjohnwu.libsu:service:6.0.0")
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
     // In-app code editor (gutter, undo/redo, search engine) for the file manager.

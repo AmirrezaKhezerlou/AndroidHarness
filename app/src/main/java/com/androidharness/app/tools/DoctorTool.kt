@@ -159,9 +159,9 @@ class DoctorTool(
 
     private suspend fun checkTokenFile(lines: MutableList<String>, ctx: ToolContext) {
         val cwd = ctx.workspace.shellRoot ?: linuxEnv.shellFallbackRoot
-        val tier = router.resolveTier(cwd)
+        val tier = router.deviceAccess?.liveTier(cwd) ?: router.resolveTier(cwd)
         val probeRoot = EnvProbes.probeRoot(linuxEnv, shizuku, tier)
-        val mode = EnvProbes.fileMode(shizuku, probeRoot, GitHubProvision.TOKEN_FILE)
+        val mode = EnvProbes.fileMode(shizuku, probeRoot, GitHubProvision.TOKEN_FILE, router)
         val path = File(probeRoot, GitHubProvision.TOKEN_FILE).absolutePath
         when (mode) {
             "600" -> lines += "[ok] token file: $path is 0600"
