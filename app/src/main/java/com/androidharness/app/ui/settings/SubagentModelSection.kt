@@ -9,12 +9,14 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androidharness.app.AppContainer
 import com.androidharness.app.data.AppSettings
 import com.androidharness.app.llm.ModelCatalog
 import com.androidharness.app.llm.effectiveApiKey
+import com.androidharness.app.R
 import com.androidharness.app.ui.chat.components.ModelPickerSheet
 import kotlinx.coroutines.launch
 
@@ -28,7 +30,7 @@ internal fun SubagentModelSection(container: AppContainer, settings: AppSettings
     val selected = providers.firstOrNull { it.id == settings.subagentProviderId }
     val pickerProviderId = settings.subagentProviderId ?: settings.activeProviderId ?: providers.firstOrNull()?.id
 
-    SettingsAnchor("Subagent model") {
+    SettingsAnchor(R.string.settings_anchor_subagent_model) {
         SettingsPanel(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(
@@ -37,7 +39,7 @@ internal fun SubagentModelSection(container: AppContainer, settings: AppSettings
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("Subagent model", style = MaterialTheme.typography.titleSmall)
+                        Text(stringResource(R.string.settings_anchor_subagent_model), style = MaterialTheme.typography.titleSmall)
                         Text(
                             when {
                                 settings.subagentProviderId == null -> "Use main agent model"
@@ -48,7 +50,7 @@ internal fun SubagentModelSection(container: AppContainer, settings: AppSettings
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Choose subagent model")
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.settings_subagent_choose_model))
                 }
                 Text(
                     "Choose a provider and model for all subagents. The main agent keeps its current model.",
@@ -57,7 +59,7 @@ internal fun SubagentModelSection(container: AppContainer, settings: AppSettings
                 )
                 if (settings.subagentProviderId != null) {
                     TextButton(onClick = { scope.launch { container.settings.setSubagentModel(null, null) } }) {
-                        Text("Use main agent model")
+                        Text(stringResource(R.string.settings_subagent_use_main))
                     }
                 }
             }

@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -23,6 +24,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.androidharness.app.agent.PermissionMode
 import com.androidharness.app.data.AppSettings
+import com.androidharness.app.R
 import com.androidharness.app.ui.chat.components.FullAccessOrange
 import com.androidharness.app.ui.common.formatTokenCount
 
@@ -30,11 +32,12 @@ private enum class BehaviorPicker { PERMISSIONS, CONTEXT, ITERATIONS }
 
 private data class BehaviorChoice(val key: String, val title: String, val description: String)
 
+@Composable
 private fun PermissionMode.description(): String = when (this) {
-    PermissionMode.CONFIRM_ALL -> "Ask before each tool action, including reads."
-    PermissionMode.CONFIRM_RISKY -> "Read freely. Ask before edits and commands."
-    PermissionMode.FULL_AUTO -> "Run automatically with workspace and command safeguards."
-    PermissionMode.FULL_ACCESS -> "Run without approvals, workspace limits or command safeguards."
+    PermissionMode.CONFIRM_ALL -> stringResource(R.string.settings_agent_perm_confirm_all)
+    PermissionMode.CONFIRM_RISKY -> stringResource(R.string.settings_agent_perm_confirm_risky)
+    PermissionMode.FULL_AUTO -> stringResource(R.string.settings_agent_perm_full_auto)
+    PermissionMode.FULL_ACCESS -> stringResource(R.string.settings_agent_perm_full_access)
 }
 
 /** Presentation only: all changes still go through the existing settings repository. */
@@ -52,14 +55,14 @@ internal fun AgentBehaviorSection(
 
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Text(
-            "Choose how the agent works. You can also change permissions from chat.",
+            stringResource(R.string.settings_agent_intro),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        BehaviorGroup("Permissions", Icons.Outlined.Security) {
-            SettingsAnchor("Default permission mode") {
+        BehaviorGroup(stringResource(R.string.settings_agent_group_permissions), Icons.Outlined.Security) {
+            SettingsAnchor(R.string.settings_anchor_default_permission) {
                 BehaviorValueRow(
-                    title = "Default permission mode",
+                    title = stringResource(R.string.settings_anchor_default_permission),
                     value = settings.permissionMode.label,
                     description = settings.permissionMode.description(),
                     onClick = { pickerName = BehaviorPicker.PERMISSIONS.name },
@@ -67,30 +70,31 @@ internal fun AgentBehaviorSection(
                 )
             }
         }
-        BehaviorGroup("Run limits", Icons.Outlined.Tune) {
-            SettingsAnchor("Max context window") {
+        BehaviorGroup(stringResource(R.string.settings_agent_group_run_limits), Icons.Outlined.Tune) {
+            SettingsAnchor(R.string.settings_anchor_max_context) {
                 BehaviorValueRow(
-                    title = "Max context window",
-                    value = "${formatTokenCount(settings.maxContextTokens.toLong())} tokens",
-                    description = "Cap the context sent to the model.",
+                    title = stringResource(R.string.settings_anchor_max_context),
+                    value = stringResource(R.string.settings_agent_context_value, formatTokenCount(settings.maxContextTokens.toLong())),
+                    description = stringResource(R.string.settings_agent_context_cap_subtitle),
                     onClick = { pickerName = BehaviorPicker.CONTEXT.name },
                 )
             }
             BehaviorDivider()
-            SettingsAnchor("Tool-call iteration limit") {
+            SettingsAnchor(R.string.settings_anchor_tool_iterations) {
                 BehaviorValueRow(
-                    title = "Tool-call iteration limit",
-                    value = if (settings.maxIterations <= 0) "Unlimited" else "${settings.maxIterations} rounds",
-                    description = "How many tool rounds a run can take.",
+                    title = stringResource(R.string.settings_anchor_tool_iterations),
+                    value = if (settings.maxIterations <= 0) stringResource(R.string.settings_agent_unlimited)
+                    else stringResource(R.string.settings_agent_rounds_value, settings.maxIterations),
+                    description = stringResource(R.string.settings_agent_tool_rounds_subtitle),
                     onClick = { pickerName = BehaviorPicker.ITERATIONS.name },
                 )
             }
         }
-        BehaviorGroup("Project instructions", Icons.Outlined.Description) {
-            SettingsAnchor("Project instructions (AGENTS.md)") {
+        BehaviorGroup(stringResource(R.string.settings_agent_instructions_group), Icons.Outlined.Description) {
+            SettingsAnchor(R.string.settings_anchor_project_instructions) {
                 BehaviorValueRow(
-                    title = "Project instructions (AGENTS.md)",
-                    description = "View or edit the rules for your current workspace.",
+                    title = stringResource(R.string.settings_anchor_project_instructions),
+                    description = stringResource(R.string.settings_agent_instructions_subtitle),
                     onClick = onProjectInstructions,
                 )
             }
@@ -104,16 +108,16 @@ internal fun AgentBehaviorSection(
         val choices: List<BehaviorChoice>
         when (picker) {
             BehaviorPicker.PERMISSIONS -> {
-                title = "Default permission mode"
-                description = "Choose when the agent asks for approval. Package installs always ask; remembered approvals skip repeat prompts."
+                title = stringResource(R.string.settings_anchor_default_permission)
+                description = stringResource(R.string.settings_agent_permission_subtitle)
                 selected = settings.permissionMode.name
                 choices = PermissionMode.entries.map {
                     BehaviorChoice(it.name, it.label, it.description())
                 }
             }
             BehaviorPicker.CONTEXT -> {
-                title = "Max context window"
-                description = "A larger context can keep more history, but uses more tokens. The model's own limit still applies."
+                title = stringResource(R.string.settings_anchor_max_context)
+                description = stringResource(R.string.settings_agent_context_cap_detail)
                 selected = settings.maxContextTokens.toString()
                 choices = (listOf(131_072, 262_144, 400_000, 1_000_000, 2_000_000) + settings.maxContextTokens)
                     .distinct().sorted().map {
@@ -121,12 +125,17 @@ internal fun AgentBehaviorSection(
                     }
             }
             BehaviorPicker.ITERATIONS -> {
-                title = "Tool-call iteration limit"
-                description = "A round can include several tool calls. Unlimited keeps going until the task finishes or you stop it."
+                title = stringResource(R.string.settings_anchor_tool_iterations)
+                description = stringResource(R.string.settings_agent_tool_rounds_detail)
                 selected = settings.maxIterations.coerceAtLeast(0).toString()
                 choices = (listOf(0, 25, 100, 250) + settings.maxIterations.coerceAtLeast(0))
                     .distinct().sorted().map {
-                        BehaviorChoice(it.toString(), if (it == 0) "Unlimited" else "$it rounds", "")
+                        BehaviorChoice(
+                            it.toString(),
+                            if (it == 0) stringResource(R.string.settings_agent_unlimited)
+                            else stringResource(R.string.settings_agent_rounds_value, it),
+                            "",
+                        )
                     }
             }
         }
@@ -178,7 +187,7 @@ internal fun AgentBehaviorSection(
                         }
                     }
                 }
-                TextButton(onClick = { pickerName = null }, modifier = Modifier.align(Alignment.End)) { Text("Cancel") }
+                TextButton(onClick = { pickerName = null }, modifier = Modifier.align(Alignment.End)) { Text(stringResource(R.string.settings_action_cancel)) }
             }
         }
     }

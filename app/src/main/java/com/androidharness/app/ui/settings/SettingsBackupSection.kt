@@ -13,11 +13,13 @@ import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.androidharness.app.AppContainer
+import com.androidharness.app.R
 import com.androidharness.app.data.BackupEncryption
 import com.androidharness.app.data.SettingsBackup
 import com.androidharness.app.data.SettingsBackupFile
@@ -60,12 +62,12 @@ internal fun SettingsBackupSection(container: AppContainer) {
     SecureScreenEffect(container, source != null || destination != null || preview != null || busy)
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Settings backup", style = MaterialTheme.typography.titleSmall)
-            Text("Password-encrypted API providers and preferences, with optional API keys and MCP configuration. Local models are excluded. Chats have a separate backup.",
+            Text(stringResource(R.string.settings_backup_title), style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.settings_backup_desc),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { message = null; exportPicker.launch("androidharness-settings.hbackup") }, enabled = !busy) { Text("Export") }
-                OutlinedButton(onClick = { message = null; importPicker.launch(arrayOf("application/octet-stream", "*/*")) }, enabled = !busy) { Text("Import") }
+                Button(onClick = { message = null; exportPicker.launch("androidharness-settings.hbackup") }, enabled = !busy) { Text(stringResource(R.string.settings_action_export)) }
+                OutlinedButton(onClick = { message = null; importPicker.launch(arrayOf("application/octet-stream", "*/*")) }, enabled = !busy) { Text(stringResource(R.string.settings_action_import)) }
             }
             if (busy) ThinLinearProgress(Modifier.fillMaxWidth())
             message?.let { Text(it, style = MaterialTheme.typography.bodySmall,
@@ -76,22 +78,26 @@ internal fun SettingsBackupSection(container: AppContainer) {
         val exporting = destination != null
         AlertDialog(
             onDismissRequest = { if (!busy) clear() },
-            title = { Text(if (exporting) "Encrypt settings" else "Unlock backup") },
+            title = { Text(if (exporting) stringResource(R.string.settings_backup_encrypt_title) else stringResource(R.string.settings_backup_unlock_title)) },
             text = {
                 SecureDialogEffect()
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(if (exporting) "Use at least ${BackupEncryption.MIN_PASSWORD_LENGTH} characters. A lost password cannot be recovered. Nothing is uploaded by the app; your chosen file provider may sync the encrypted file." else "Enter the backup password. Settings are not changed until you review and confirm.")
-                    OutlinedTextField(password, { if (it.length <= BackupEncryption.MAX_PASSWORD_LENGTH) password = it }, label = { Text("Password") },
+                    Text(
+                        if (exporting) stringResource(R.string.settings_backup_export_note, BackupEncryption.MIN_PASSWORD_LENGTH.toString())
+                        else stringResource(R.string.settings_backup_import_note),
+                    )
+                    OutlinedTextField(password, { if (it.length <= BackupEncryption.MAX_PASSWORD_LENGTH) password = it }, label = { Text(stringResource(R.string.settings_backup_password)) },
                         singleLine = true, enabled = !busy, visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                         trailingIcon = {
                             IconButton(onClick = { showPassword = !showPassword }, enabled = !busy) {
                                 Icon(if (showPassword) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
-                                    contentDescription = if (showPassword) "Hide password" else "Show password")
+                                    contentDescription = if (showPassword) stringResource(R.string.settings_backup_hide_password)
+                                    else stringResource(R.string.settings_backup_show_password))
                             }
                         },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
                     if (exporting) {
-                        OutlinedTextField(confirmation, { if (it.length <= BackupEncryption.MAX_PASSWORD_LENGTH) confirmation = it }, label = { Text("Confirm password") },
+                        OutlinedTextField(confirmation, { if (it.length <= BackupEncryption.MAX_PASSWORD_LENGTH) confirmation = it }, label = { Text(stringResource(R.string.settings_backup_confirm_password)) },
                             singleLine = true, enabled = !busy, visualTransformation = if (showConfirmation) VisualTransformation.None else PasswordVisualTransformation(),
                             trailingIcon = {
                                 IconButton(onClick = { showConfirmation = !showConfirmation }, enabled = !busy) {
@@ -102,9 +108,9 @@ internal fun SettingsBackupSection(container: AppContainer) {
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
                         Row {
                             Checkbox(includeKeys, { includeKeys = it }, enabled = !busy)
-                            Text("Include credentials and MCP servers", modifier = Modifier.padding(top = 12.dp))
+                            Text(stringResource(R.string.settings_backup_include_credentials), modifier = Modifier.padding(top = 12.dp))
                         }
-                        Text("MCP commands, URLs and headers can contain secrets, so MCP servers are included only with credentials. OAuth sessions, permissions, app lock and workspace access are never restored.", style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(R.string.settings_backup_include_note), style = MaterialTheme.typography.bodySmall)
                     }
                     if (busy) ThinLinearProgress(Modifier.fillMaxWidth())
                     if (failed) message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -126,7 +132,7 @@ internal fun SettingsBackupSection(container: AppContainer) {
                             if (target != null) {
                                 backup.exportTo(target, chars, includeKeys)
                                 clear()
-                                message = "Encrypted settings exported. Keep the password separately."
+                                message = stringResource(R.string.settings_backup_exported)
                             } else if (input != null) {
                                 preview = backup.read(input, chars)
                                 source = null
@@ -139,23 +145,32 @@ internal fun SettingsBackupSection(container: AppContainer) {
                     }
                 }) { Text(if (exporting) "Encrypt" else "Unlock") }
             },
-            dismissButton = { TextButton(onClick = { clear() }, enabled = !busy) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { clear() }, enabled = !busy) { Text(stringResource(R.string.settings_action_cancel)) } },
         )
     }
     preview?.let { file ->
         AlertDialog(
             onDismissRequest = { if (!busy) clear() },
-            title = { Text("Restore settings?") },
+            title = { Text(stringResource(R.string.settings_backup_restore_title)) },
             text = {
                 SecureDialogEffect()
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("${file.providers.count { it.config.id != com.androidharness.app.llm.HarnessProvider.ID }} providers · ${file.servers.size} MCP servers")
-                    Text("Providers are added as new connections, not overwritten. Preferences and selected models will change. Existing app lock, screenshot policy and permissions stay unchanged. MCP servers are added disabled; review them before enabling.")
-                    Text("Only restore a backup you trust. Imported provider endpoints can receive future messages. Restoring does not contact them.")
+                    Text(
+                        stringResource(
+                            R.string.settings_backup_contents,
+                            file.providers.count { it.config.id != com.androidharness.app.llm.HarnessProvider.ID }.toString(),
+                            file.servers.size.toString(),
+                        ),
+                    )
+                    Text(stringResource(R.string.settings_backup_restore_note))
+                    Text(stringResource(R.string.settings_backup_restore_trust))
                     file.providers.filterNot { it.config.id == com.androidharness.app.llm.HarnessProvider.ID }.forEach { entry ->
-                        Text("${entry.config.name}\n${entry.config.baseUrl}", style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            stringResource(R.string.settings_backup_provider_line, entry.config.name, entry.config.baseUrl),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                     }
-                    Text("Missing search and voice keys are restored when included. Existing keys are kept. GitHub tokens and OAuth sessions are excluded.", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.settings_backup_restore_keys), style = MaterialTheme.typography.bodySmall)
                     if (busy) ThinLinearProgress(Modifier.fillMaxWidth())
                 }
             },
@@ -165,15 +180,15 @@ internal fun SettingsBackupSection(container: AppContainer) {
                     try {
                         backup.restore(file)
                         failed = false
-                        message = "Settings restored. Review new connections before use."
+                        message = stringResource(R.string.settings_backup_restored)
                     } catch (e: CancellationException) { throw e }
                     catch (_: Exception) {
                         failed = true
-                        message = "Restore did not finish. Stop active tasks and check connections before retrying; some entries may have been added."
+                        message = stringResource(R.string.settings_backup_restore_failed)
                     } finally { clear(); busy = false }
                 }
-            }) { Text("Restore") } },
-            dismissButton = { TextButton(onClick = { clear() }, enabled = !busy) { Text("Cancel") } },
+            }) { Text(stringResource(R.string.settings_action_restore)) } },
+            dismissButton = { TextButton(onClick = { clear() }, enabled = !busy) { Text(stringResource(R.string.settings_action_cancel)) } },
         )
     }
 }

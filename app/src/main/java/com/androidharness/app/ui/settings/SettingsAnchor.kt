@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.settings
 
+import androidx.annotation.StringRes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -26,31 +27,33 @@ import com.androidharness.app.ui.theme.defaultEffectsSpec
  * something like "Whisper model" a dead end on a long page. The page sets this
  * to the target label and every [SettingsAnchor] with a matching title scrolls
  * itself into view and flashes a tint.
+ * Held as a string resource id rather than the rendered text, so an anchor and
+ * the search entry pointing at it stay the same value in every language.
  */
-internal val LocalSettingsHighlight = staticCompositionLocalOf<String?> { null }
+internal val LocalSettingsHighlight = staticCompositionLocalOf<Int?> { null }
 
 /** Provides [highlight] to everything below, see [LocalSettingsHighlight]. */
 @Composable
 internal fun SettingsHighlightScope(
-    highlight: String?,
+    @StringRes highlight: Int?,
     content: @Composable () -> Unit,
 ) {
     CompositionLocalProvider(LocalSettingsHighlight provides highlight) { content() }
 }
 
 /**
- * Marks the control a deep link can land on. The anchor title must match the
- * visible label of the control it wraps, which is also the title the search
- * entry carries, so the two stay greppable as a pair.
+ * Marks the control a deep link can land on. The anchor title must be the same
+ * string resource the control's visible label uses, which is also the resource
+ * the search entry carries, so the three can never drift apart.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun SettingsAnchor(
-    title: String,
+    @StringRes title: Int,
     content: @Composable () -> Unit,
 ) {
     val highlight = LocalSettingsHighlight.current
-    val isTarget = highlight != null && title.equals(highlight.trim(), ignoreCase = true)
+    val isTarget = highlight != null && title == highlight
     val requester = remember { BringIntoViewRequester() }
     val tint by animateColorAsState(
         targetValue = if (isTarget) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)

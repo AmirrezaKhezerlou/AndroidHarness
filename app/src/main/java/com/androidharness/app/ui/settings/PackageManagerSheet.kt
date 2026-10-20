@@ -46,11 +46,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androidharness.app.AppContainer
+import com.androidharness.app.R
 import com.androidharness.app.data.env.EnvState
 import com.androidharness.app.data.env.PkgMeta
 import com.androidharness.app.ui.common.PackageInstallProgress
@@ -159,7 +161,7 @@ fun PackageManagerSheet(
                 )
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Linux Packages", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.settings_packages_title), style = MaterialTheme.typography.titleMedium)
                     Text(
                         "${installedList.size} installed · Termux repository",
                         style = MaterialTheme.typography.bodySmall,
@@ -206,7 +208,7 @@ fun PackageManagerSheet(
                         ) {
                             Icon(
                                 Icons.Outlined.Close,
-                                contentDescription = "Dismiss",
+                                contentDescription = stringResource(R.string.settings_action_dismiss),
                                 tint = scheme.error,
                                 modifier = Modifier.size(17.dp),
                             )
@@ -219,14 +221,14 @@ fun PackageManagerSheet(
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = { Text("Search packages…") },
+                placeholder = { Text(stringResource(R.string.settings_packages_search)) },
                 leadingIcon = {
                     Icon(Icons.Outlined.Search, contentDescription = null, tint = scheme.onSurfaceVariant)
                 },
                 trailingIcon = {
                     if (query.isNotEmpty()) {
                         IconButton(onClick = { query = "" }) {
-                            Icon(Icons.Outlined.Close, contentDescription = "Clear search", tint = scheme.onSurfaceVariant)
+                            Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.settings_search_clear), tint = scheme.onSurfaceVariant)
                         }
                     }
                 },
@@ -402,7 +404,7 @@ private fun PackageItemRow(
             Spacer(Modifier.width(10.dp))
 
             if (isInstalling) {
-                Text("Installing…", style = MaterialTheme.typography.labelMedium, color = scheme.primary)
+                Text(stringResource(R.string.settings_packages_installing), style = MaterialTheme.typography.labelMedium, color = scheme.primary)
             } else if (isInstalled) {
                 Surface(
                     color = scheme.primaryContainer.copy(alpha = 0.5f),
@@ -435,7 +437,7 @@ private fun PackageItemRow(
                     ) {
                         Icon(
                             Icons.Outlined.Storage,
-                            contentDescription = "Review shared storage",
+                            contentDescription = stringResource(R.string.settings_packages_review_storage),
                             tint = scheme.onSurfaceVariant,
                             modifier = Modifier.size(17.dp),
                         )
@@ -453,7 +455,7 @@ private fun PackageItemRow(
                         modifier = Modifier.size(14.dp),
                     )
                     Spacer(Modifier.width(4.dp))
-                    Text("Install", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.settings_action_install), style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
@@ -498,7 +500,7 @@ private fun InstalledPackageRow(
                 ) {
                     Icon(
                         Icons.Outlined.Storage,
-                        contentDescription = "Review shared storage for $name",
+                        contentDescription = stringResource(R.string.settings_packages_review_cd, name),
                         tint = scheme.error.copy(alpha = 0.7f),
                         modifier = Modifier.size(17.dp),
                     )

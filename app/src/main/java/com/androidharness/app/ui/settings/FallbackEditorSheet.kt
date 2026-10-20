@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
@@ -20,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androidharness.app.AppContainer
 import com.androidharness.app.llm.*
+import com.androidharness.app.R
 import com.androidharness.app.ui.chat.components.ModelPickerSheet
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -27,13 +29,19 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun FallbackSettingsSection(container: AppContainer, policy: FallbackPolicy) {
     var editing by rememberSaveable { mutableStateOf(false) }
-    SettingsAnchor("Fallbacks") {
+    SettingsAnchor(R.string.settings_anchor_fallbacks) {
         SettingsPanel(Modifier.fillMaxWidth()) {
             Column(Modifier.fillMaxWidth().clickable { editing = true }.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Fallbacks", style = MaterialTheme.typography.titleSmall)
-                Text(if (policy.enabled) "${policy.targets.size} backup models · ${policy.retries} retries" else "No default chain · Set backup models",
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.settings_anchor_fallbacks), style = MaterialTheme.typography.titleSmall)
+                Text(
+                    if (policy.enabled) stringResource(
+                        R.string.settings_fallback_summary,
+                        policy.targets.size.toString(),
+                        policy.retries.toString(),
+                    ) else stringResource(R.string.settings_fallback_summary_empty),
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
@@ -127,7 +135,7 @@ fun FallbackEditorSheet(
             item {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Fallbacks", style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.settings_anchor_fallbacks), style = MaterialTheme.typography.titleMedium)
                         Text(if (chatMode == null) "Default for chats" else "For this chat", style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -144,11 +152,11 @@ fun FallbackEditorSheet(
             if (editable) item {
                 Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(draft.enabled, enabled = !saving, role = Role.Switch,
                     onValueChange = { update(draft.copy(enabled = it)) }), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Automatic fallbacks", Modifier.weight(1f))
+                    Text(stringResource(R.string.settings_fallback_automatic), Modifier.weight(1f))
                     Switch(checked = draft.enabled, onCheckedChange = null, enabled = !saving)
                 }
             }
-            item { Text("Your selected model runs first. These models are tried next, in order.",
+            item { Text(stringResource(R.string.settings_fallback_order_note),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             itemsIndexed(shown.targets, key = { _, it -> "${it.providerId}:${it.model}" }) { index, target ->
                 val provider = providers.firstOrNull { it.id == target.providerId }
@@ -160,11 +168,11 @@ fun FallbackEditorSheet(
                     Text("${index + 1}", color = MaterialTheme.colorScheme.primary)
                     Column(Modifier.weight(1f)) {
                         Text(target.model, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text(provider?.name ?: "Provider unavailable", style = MaterialTheme.typography.bodySmall,
+                        Text(provider?.name ?: stringResource(R.string.settings_fallback_provider_unavailable), style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        if (!available) Text("Unavailable · skipped until enabled and restored", style = MaterialTheme.typography.bodySmall,
+                        if (!available) Text(stringResource(R.string.settings_fallback_unavailable), style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error)
-                        else if (restricted) Text("Skipped by same-provider routing", style = MaterialTheme.typography.bodySmall,
+                        else if (restricted) Text(stringResource(R.string.settings_fallback_same_provider_skip), style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (privacy && provider != null) Text(runCatching { java.net.URI(
                             if (provider.id == HarnessProvider.ID) HarnessProvider.pool[target.model]?.baseUrl ?: provider.baseUrl else provider.baseUrl
@@ -180,9 +188,9 @@ fun FallbackEditorSheet(
                                 val swap = targets[other]; targets[other] = targets[index]; targets[index] = swap
                                 update(draft.copy(targets = targets)); menu = false
                             }
-                            DropdownMenuItem(text = { Text("Move up") }, onClick = { move(-1) }, enabled = index > 0)
-                            DropdownMenuItem(text = { Text("Move down") }, onClick = { move(1) }, enabled = index < draft.targets.lastIndex)
-                            DropdownMenuItem(text = { Text("Remove") }, onClick = { update(draft.copy(targets = draft.targets - target)); menu = false })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.settings_action_move_up)) }, onClick = { move(-1) }, enabled = index > 0)
+                            DropdownMenuItem(text = { Text(stringResource(R.string.settings_action_move_down)) }, onClick = { move(1) }, enabled = index < draft.targets.lastIndex)
+                            DropdownMenuItem(text = { Text(stringResource(R.string.settings_action_remove)) }, onClick = { update(draft.copy(targets = draft.targets - target)); menu = false })
                         }
                     }
                 }
@@ -190,25 +198,40 @@ fun FallbackEditorSheet(
             if (shown.targets.isEmpty()) item { Text(if (mode == FallbackMode.OFF && chatMode != null) "Automatic switching is off for this chat." else "No backup models added.",
                 style = MaterialTheme.typography.bodyMedium) }
             if (chatMode != null && mode == FallbackMode.DEFAULT && !defaultPolicy.enabled) item {
-                Text("No default chain. Connected-account switching settings still apply.", style = MaterialTheme.typography.bodySmall,
+                Text(stringResource(R.string.settings_fallback_empty), style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (editable) item {
-                TextButton(onClick = { picking = true }, enabled = !saving && draft.targets.size < FallbackPolicy.MAX_TARGETS) { Text("Add model (${draft.targets.size}/4)") }
+                TextButton(onClick = { picking = true }, enabled = !saving && draft.targets.size < FallbackPolicy.MAX_TARGETS) {
+                    Text(
+                        stringResource(
+                            R.string.settings_fallback_add_model,
+                            draft.targets.size.toString(),
+                            FallbackPolicy.MAX_TARGETS.toString(),
+                        ),
+                    )
+                }
             }
             if (editable) item {
                 var retriesMenu by remember { mutableStateOf(false) }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Retries before switching", Modifier.weight(1f))
+                    Text(stringResource(R.string.settings_fallback_retries), Modifier.weight(1f))
                     Box {
-                        TextButton(onClick = { retriesMenu = true }, enabled = !saving) { Text("${draft.retries} retries") }
+                        TextButton(onClick = { retriesMenu = true }, enabled = !saving) {
+                            Text(stringResource(R.string.settings_fallback_retries_value, draft.retries.toString()))
+                        }
                         DropdownMenu(expanded = retriesMenu, onDismissRequest = { retriesMenu = false }) {
-                            (0..5).forEach { count -> DropdownMenuItem(text = { Text("$count retries") }, onClick = { update(draft.copy(retries = count)); retriesMenu = false }) }
+                            (0..5).forEach { count ->
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.settings_fallback_retries_value, count.toString())) },
+                                    onClick = { update(draft.copy(retries = count)); retriesMenu = false },
+                                )
+                            }
                         }
                     }
                 }
             }
-            item { Text("Quota exhausted: switch immediately. Temporary failures: retry first. A partial response is kept for review.",
+            item { Text(stringResource(R.string.settings_fallback_policy_note),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             item { TextButton(onClick = { privacy = !privacy }) { Text(if (privacy) "Hide privacy & routing" else "Privacy & routing") } }
             if (privacy) {
@@ -220,7 +243,7 @@ fun FallbackEditorSheet(
                 item {
                     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(shown.sameProviderOnly, enabled = editable && !saving, role = Role.Switch,
                         onValueChange = { update(draft.copy(sameProviderOnly = it)) }), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Stay within selected provider", Modifier.weight(1f))
+                        Text(stringResource(R.string.settings_fallback_stay_provider), Modifier.weight(1f))
                         Switch(shown.sameProviderOnly, onCheckedChange = null, enabled = editable && !saving)
                     }
                 }

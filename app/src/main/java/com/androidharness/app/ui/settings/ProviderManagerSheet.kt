@@ -18,10 +18,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.androidharness.app.R
 import com.androidharness.app.data.ModelVisibility
 import com.androidharness.app.llm.ModelEntry
 import com.androidharness.app.llm.ModelsDev
@@ -80,7 +82,7 @@ fun ProviderManagerSheet(
         Crossfade(
             targetState = showForm,
             animationSpec = fastEffectsSpec(),
-            label = "provider manager page",
+            label = stringResource(R.string.settings_providers_page_cd),
         ) { inForm ->
             if (!inForm) {
                 Column(Modifier.fillMaxWidth().height((LocalConfiguration.current.screenHeightDp * .9f).dp).navigationBarsPadding()) {
@@ -90,20 +92,20 @@ fun ProviderManagerSheet(
                     ) {
                         item {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Providers", style = MaterialTheme.typography.titleMediumEmphasized, modifier = Modifier.weight(1f))
+                                Text(stringResource(R.string.settings_providers_title), style = MaterialTheme.typography.titleMediumEmphasized, modifier = Modifier.weight(1f))
                                 TextButton(enabled = !selection.busy, onClick = {
                                     if (selection.selecting) selection.done() else selection.selecting = true
                                 }) { Text(if (selection.selecting) "Done" else "Select providers") }
-                                IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Close") }
+                                IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.settings_action_close)) }
                             }
-                            Text("Disabled providers stay searchable. Existing chats keep their model.",
+                            Text(stringResource(R.string.settings_providers_disabled_note),
                                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             FilledTonalButton(onClick = { editing = null; showForm = true }, modifier = Modifier.fillMaxWidth()) {
-                                Text("Add provider")
+                                Text(stringResource(R.string.settings_providers_add))
                             }
-                            OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Search providers") },
+                            OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text(stringResource(R.string.settings_providers_search)) },
                                 singleLine = true, modifier = Modifier.fillMaxWidth())
-                            FilterChip(selected = showDisabled, onClick = { showDisabled = !showDisabled }, label = { Text("Show disabled") })
+                            FilterChip(selected = showDisabled, onClick = { showDisabled = !showDisabled }, label = { Text(stringResource(R.string.settings_providers_show_disabled)) })
                         }
                         itemsIndexed(visible, key = { _, p -> p.id }) { index, provider ->
                             ProviderListCard(provider, provider.id == activeProviderId, index > 0, index < visible.lastIndex,
@@ -127,7 +129,7 @@ fun ProviderManagerSheet(
                                 onLongPress = { if (!selection.busy) selection.start(provider.id) })
                         }
                         if (visible.isEmpty()) item {
-                            Text("No matching providers. Try searching or show disabled providers.",
+                            Text(stringResource(R.string.settings_providers_search_empty),
                                 modifier = Modifier.padding(vertical = 20.dp))
                         }
                         item {

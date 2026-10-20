@@ -10,10 +10,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.androidharness.app.R
 import com.androidharness.app.AppContainer
 import com.androidharness.app.ui.github.*
 import com.androidharness.app.ui.common.SecureScreenEffect
@@ -38,7 +40,7 @@ internal fun GitHubIntegrationSection(container: AppContainer) {
 
     fun open(url: String) {
         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
-            .onFailure { message = "Could not open the browser. Open $url in your browser." }
+            .onFailure { message = context.getString(R.string.settings_github_open_browser_failed, url) }
     }
 
     SettingsPanel(Modifier.fillMaxWidth()) {
@@ -53,35 +55,35 @@ internal fun GitHubIntegrationSection(container: AppContainer) {
             if (state.code != null) {
                 val code = requireNotNull(state.code)
                 Text(code.userCode, style = MaterialTheme.typography.headlineSmall)
-                Text("Copy this code and enter it on GitHub. Return here after approving access.")
+                Text(stringResource(R.string.settings_github_copy_code_note))
                 Button(onClick = {
                     (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                         .setPrimaryClip(ClipData.newPlainText("GitHub sign-in code", code.userCode))
                     open(code.url)
-                }, modifier = Modifier.fillMaxWidth()) { Text("Copy code & open GitHub") }
-                TextButton(onClick = { container.github.cancelSignIn() }, modifier = Modifier.fillMaxWidth()) { Text("Cancel sign-in") }
+                }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.settings_github_copy_open)) }
+                TextButton(onClick = { container.github.cancelSignIn() }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.settings_chatgpt_cancel_signin)) }
             } else if (!patForm && !state.busy) {
                 Button(onClick = { message = null; container.github.startSignIn(workflow) },
                     enabled = !working && container.github.clientId.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
                     Text(if (state.login == null) "Sign in with GitHub" else "Sign in with another account")
                 }
-                if (container.github.clientId.isBlank()) Text("GitHub sign-in is unavailable in this build. You can use a personal access token.",
+                if (container.github.clientId.isBlank()) Text(stringResource(R.string.settings_github_signin_unavailable),
                     style = MaterialTheme.typography.bodySmall)
                 Row {
                     Checkbox(workflow, onCheckedChange = { workflow = it })
-                    Text("Allow editing GitHub Actions workflows", modifier = Modifier.weight(1f).padding(top = 12.dp))
+                    Text(stringResource(R.string.settings_github_allow_workflows), modifier = Modifier.weight(1f).padding(top = 12.dp))
                 }
                 OutlinedButton(onClick = { patForm = true; token = ""; message = null },
-                    enabled = !working, modifier = Modifier.fillMaxWidth()) { Text("Use a personal access token") }
+                    enabled = !working, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.settings_github_use_pat)) }
             }
             if (state.busy || working) AppLinearProgressIndicator(Modifier.fillMaxWidth())
             state.message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             if (patForm) {
-                Text("For fine-grained tokens, include the target repositories and Contents: read and write. Workflow changes also need Workflows access. Organization approval or SSO may be required.",
+                Text(stringResource(R.string.settings_github_pat_scope_note),
                     style = MaterialTheme.typography.bodySmall)
                 OutlinedButton(onClick = { open("https://github.com/settings/tokens?type=beta") },
-                    modifier = Modifier.fillMaxWidth()) { Text("Create a token on GitHub") }
-                OutlinedTextField(token, onValueChange = { token = it }, label = { Text("Personal access token") },
+                    modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.settings_github_create_token)) }
+                OutlinedTextField(token, onValueChange = { token = it }, label = { Text(stringResource(R.string.settings_github_pat)) },
                     visualTransformation = PasswordVisualTransformation(), singleLine = true, enabled = !working,
                     modifier = Modifier.fillMaxWidth())
                 Button(onClick = {
@@ -92,30 +94,30 @@ internal fun GitHubIntegrationSection(container: AppContainer) {
                         catch (e: Exception) { message = container.github.safeMessage(e) }
                         finally { working = false }
                     }
-                }, enabled = !working && token.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Verify & connect") }
+                }, enabled = !working && token.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.settings_github_verify_connect)) }
                 TextButton(onClick = { token = ""; patForm = false }, enabled = !working,
-                    modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
+                    modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.settings_action_cancel)) }
             }
             message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
             if (state.login != null) TextButton(onClick = { logout = true }, enabled = !working && !state.busy,
-                modifier = Modifier.fillMaxWidth()) { Text("Disconnect GitHub") }
+                modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.settings_github_disconnect)) }
         }
     }
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Repositories", style = MaterialTheme.typography.titleMedium)
-            Button(onClick = { importing = true }, modifier = Modifier.fillMaxWidth()) { Text("Import from GitHub") }
+            Text(stringResource(R.string.settings_github_repositories), style = MaterialTheme.typography.titleMedium)
+            Button(onClick = { importing = true }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.settings_github_import)) }
             Text(project?.let { "Current workspace: ${it.name}" } ?: "Choose a workspace to publish changes.", style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = { project?.let { publishing = it.id to it.name } },
-                enabled = project != null, modifier = Modifier.fillMaxWidth()) { Text("Commit & push") }
-            Text("Review the repository, branch and files before publishing. Save a push preset from these controls to reuse it in Automation.",
+                enabled = project != null, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.settings_github_commit_push)) }
+            Text(stringResource(R.string.settings_github_commit_note),
                 style = MaterialTheme.typography.bodySmall)
         }
     }
     if (importing) GitHubImportDialog(container, onDismiss = { importing = false })
     publishing?.let { (id, name) -> GitHubPublishDialog(container, id, name, onDismiss = { publishing = null }) }
-    if (logout) AlertDialog(onDismissRequest = { logout = false }, title = { Text("Disconnect GitHub?") },
-        text = { Text("Remove the saved connection and repository credentials from this device. Your repositories and local commits are kept.") },
+    if (logout) AlertDialog(onDismissRequest = { logout = false }, title = { Text(stringResource(R.string.settings_github_disconnect_title)) },
+        text = { Text(stringResource(R.string.settings_github_disconnect_message)) },
         confirmButton = { TextButton(onClick = {
             logout = false; working = true
             scope.launch {
@@ -123,5 +125,5 @@ internal fun GitHubIntegrationSection(container: AppContainer) {
                 catch (e: Exception) { message = container.github.safeMessage(e) }
                 finally { working = false }
             }
-        }) { Text("Disconnect") } }, dismissButton = { TextButton(onClick = { logout = false }) { Text("Cancel") } })
+        }) { Text(stringResource(R.string.settings_action_disconnect)) } }, dismissButton = { TextButton(onClick = { logout = false }) { Text(stringResource(R.string.settings_action_cancel)) } })
 }

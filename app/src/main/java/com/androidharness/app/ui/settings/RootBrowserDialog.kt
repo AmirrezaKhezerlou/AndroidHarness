@@ -11,10 +11,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.androidharness.app.R
 import com.androidharness.app.data.env.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -61,7 +63,7 @@ internal fun RootBrowserDialog(access: DeviceAccessManager, projectId: String?, 
                         else onDismiss()
                     } }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back") }
                     Column(Modifier.weight(1f)) {
-                        Text("Root browser", style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.settings_root_browser), style = MaterialTheme.typography.titleMedium)
                         Text(opened?.path ?: path, style = MaterialTheme.typography.bodySmall, maxLines = 2)
                     }
                     IconButton(onClick = { requestLeave(onDismiss) }) { Icon(Icons.Outlined.Close, "Close root browser") }
@@ -73,10 +75,10 @@ internal fun RootBrowserDialog(access: DeviceAccessManager, projectId: String?, 
                 if (file != null) {
                     Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(if (edit) "Editing" else "Read only", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
-                        if (!edit) FilledTonalButton(onClick = { edit = true }) { Text("Edit file") }
+                        if (!edit) FilledTonalButton(onClick = { edit = true }) { Text(stringResource(R.string.settings_root_browser_edit)) }
                         else {
-                            TextButton(onClick = { draft = file.text; edit = false }) { Text("Discard") }
-                            Button(onClick = { confirmSave = true }, enabled = !busy && draft != file.text) { Text("Save") }
+                            TextButton(onClick = { draft = file.text; edit = false }) { Text(stringResource(R.string.settings_action_discard)) }
+                            Button(onClick = { confirmSave = true }, enabled = !busy && draft != file.text) { Text(stringResource(R.string.settings_action_save)) }
                         }
                     }
                     OutlinedTextField(draft, onValueChange = { if (edit) draft = it }, readOnly = !edit,
@@ -87,7 +89,12 @@ internal fun RootBrowserDialog(access: DeviceAccessManager, projectId: String?, 
                         items(directory?.entries.orEmpty(), key = { it.path }) { entry ->
                             ListItem(
                                 headlineContent = { Text(entry.name) },
-                                supportingContent = { Text(if (entry.directory) "Folder" else "${entry.size} bytes") },
+                                supportingContent = {
+                                    Text(
+                                        if (entry.directory) stringResource(R.string.settings_root_folder)
+                                        else stringResource(R.string.settings_root_size_bytes, entry.size.toString()),
+                                    )
+                                },
                                 leadingContent = { Icon(if (entry.directory) Icons.Outlined.Folder else Icons.Outlined.InsertDriveFile, null) },
                                 modifier = Modifier.fillMaxWidth().clickable(enabled = !busy) {
                                     if (entry.directory) { directory = null; path = entry.path }
@@ -103,18 +110,18 @@ internal fun RootBrowserDialog(access: DeviceAccessManager, projectId: String?, 
                                 },
                             )
                         }
-                        directory?.nextOffset?.let { next -> item { TextButton(onClick = { scope.launch { load(next) } }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Load more") } } }
+                        directory?.nextOffset?.let { next -> item { TextButton(onClick = { scope.launch { load(next) } }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.settings_action_load_more)) } } }
                     }
                 }
             }
         }
     }
-    leave?.let { action -> AlertDialog(onDismissRequest = { leave = null }, title = { Text("Discard changes?") },
-        text = { Text("Your changes to this root file have not been saved.") },
-        confirmButton = { TextButton(onClick = { leave = null; action() }) { Text("Discard") } },
-        dismissButton = { TextButton(onClick = { leave = null }) { Text("Keep editing") } }) }
-    if (confirmSave) AlertDialog(onDismissRequest = { confirmSave = false }, title = { Text("Save root file?") },
-        text = { Text("Write your changes to ${opened?.path}?") },
+    leave?.let { action -> AlertDialog(onDismissRequest = { leave = null }, title = { Text(stringResource(R.string.settings_root_browser_discard_title)) },
+        text = { Text(stringResource(R.string.settings_root_browser_discard_message)) },
+        confirmButton = { TextButton(onClick = { leave = null; action() }) { Text(stringResource(R.string.settings_action_discard)) } },
+        dismissButton = { TextButton(onClick = { leave = null }) { Text(stringResource(R.string.settings_root_browser_keep_editing)) } }) }
+    if (confirmSave) AlertDialog(onDismissRequest = { confirmSave = false }, title = { Text(stringResource(R.string.settings_root_browser_save_title)) },
+        text = { Text(stringResource(R.string.settings_root_save_message, opened?.path.orEmpty())) },
         confirmButton = { Button(onClick = { confirmSave = false; scope.launch {
             val file = opened ?: return@launch
             busy = true; error = null
@@ -124,6 +131,6 @@ internal fun RootBrowserDialog(access: DeviceAccessManager, projectId: String?, 
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { error = e.message ?: "The file could not be saved." }
             finally { busy = false }
-        } }) { Text("Save changes") } },
-        dismissButton = { TextButton(onClick = { confirmSave = false }) { Text("Cancel") } })
+        } }) { Text(stringResource(R.string.settings_root_browser_save_confirm)) } },
+        dismissButton = { TextButton(onClick = { confirmSave = false }) { Text(stringResource(R.string.settings_action_cancel)) } })
 }

@@ -17,10 +17,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import com.androidharness.app.R
 import com.androidharness.app.ui.common.ProviderGlyph
 import androidx.compose.ui.unit.dp
 
@@ -28,11 +31,12 @@ import androidx.compose.ui.unit.dp
 internal fun SettingsHome(
     query: String,
     onQueryChange: (String) -> Unit,
-    onOpen: (SettingsPage, String?) -> Unit,
+    onOpen: (SettingsPage, Int?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
-    val results = remember(query) { matchingSettingsEntries(query) }
+    val context = LocalContext.current
+    val results = remember(query, context) { matchingSettingsEntries(query, context) }
     Column(
         modifier.padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
@@ -40,11 +44,11 @@ internal fun SettingsHome(
         OutlinedTextField(
             value = query,
             onValueChange = onQueryChange,
-            placeholder = { Text("Search settings") },
+            placeholder = { Text(stringResource(R.string.settings_search_placeholder)) },
             leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
             trailingIcon = {
                 if (query.isNotEmpty()) IconButton(onClick = { onQueryChange("") }) {
-                    Icon(Icons.Filled.Close, contentDescription = "Clear search")
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.settings_search_clear))
                 }
             },
             singleLine = true,
@@ -62,14 +66,14 @@ internal fun SettingsHome(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Icon(Icons.Outlined.Search, null, tint = colors.onSurfaceVariant, modifier = Modifier.size(32.dp))
-                Text("No matching settings", style = MaterialTheme.typography.titleMedium)
-                Text("Try “theme”, “voice” or “permissions”.", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+                Text(stringResource(R.string.settings_search_empty_title), style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.settings_search_empty_hint), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
             }
         }
         results.groupBy { it.page.group }.forEach { (group, entries) ->
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    group,
+                    stringResource(group),
                     style = MaterialTheme.typography.titleSmall,
                     color = colors.onSurfaceVariant,
                     modifier = Modifier.padding(start = 4.dp),
@@ -93,8 +97,8 @@ internal fun SettingsHome(
                                     Icon(settingsIcon(entry.page), null, tint = colors.primary, modifier = Modifier.size(21.dp))
                                 }
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                    Text(entry.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                                    Text(entry.description, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                                    Text(stringResource(entry.title), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                                    Text(stringResource(entry.description), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                                 }
                                 Icon(
                                     Icons.AutoMirrored.Filled.KeyboardArrowRight,
@@ -119,28 +123,33 @@ internal fun SettingsHome(
 @Composable
 internal fun DesktopSettingsNavigation(
     selected: SettingsPage?, query: String, onQueryChange: (String) -> Unit,
-    onOpen: (SettingsPage, String?) -> Unit, modifier: Modifier = Modifier,
+    onOpen: (SettingsPage, Int?) -> Unit, modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val results = remember(query) { matchingSettingsEntries(query) }
+    val context = LocalContext.current
+    val results = remember(query, context) { matchingSettingsEntries(query, context) }
     Surface(modifier, color = scheme.surfaceContainerLow, contentColor = scheme.onSurface) {
-        Column(Modifier.fillMaxSize().semantics { contentDescription = "Settings categories" }) {
+        Column(Modifier.fillMaxSize().semantics { contentDescription = context.getString(R.string.settings_search_categories) }) {
             OutlinedTextField(query, onQueryChange, singleLine = true,
-                placeholder = { Text("Search settings", style = MaterialTheme.typography.bodySmall) },
+                placeholder = { Text(stringResource(R.string.settings_search_placeholder), style = MaterialTheme.typography.bodySmall) },
                 leadingIcon = { Icon(Icons.Outlined.Search, null, Modifier.size(18.dp)) },
                 trailingIcon = { if (query.isNotBlank()) IconButton(onClick = { onQueryChange("") }) {
-                    Icon(Icons.Filled.Close, "Clear search", Modifier.size(18.dp))
+                    Icon(Icons.Filled.Close, stringResource(R.string.settings_search_clear), Modifier.size(18.dp))
                 } },
                 textStyle = MaterialTheme.typography.bodySmall,
                 shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth().padding(12.dp))
             LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
-                if (results.isEmpty()) item { Text("No matching settings", Modifier.padding(12.dp),
+                if (results.isEmpty()) item { Text(stringResource(R.string.settings_search_empty_title), Modifier.padding(12.dp),
                     style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant) }
                 results.groupBy { it.page.group }.toList().sortedBy { (group, _) ->
-                    when (group) { "Personalize" -> 0; "Your assistant" -> 1; else -> 2 }
+                    when (group) {
+                        R.string.settings_group_personalize -> 0
+                        R.string.settings_group_your_assistant -> 1
+                        else -> 2
+                    }
                 }.forEach { (group, entries) ->
-                    item { Text(group, Modifier.padding(start = 12.dp, top = 16.dp, bottom = 6.dp),
+                    item { Text(stringResource(group), Modifier.padding(start = 12.dp, top = 16.dp, bottom = 6.dp),
                         style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant) }
                     items(entries, key = { "${it.page}:${it.title}" }) { entry ->
                         val active = entry.page == selected
@@ -151,7 +160,7 @@ internal fun DesktopSettingsNavigation(
                             Row(Modifier.heightIn(min = 44.dp).padding(horizontal = 12.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Icon(settingsIcon(entry.page), null, Modifier.size(18.dp))
-                                Text(entry.title, style = MaterialTheme.typography.labelLarge, maxLines = 2,
+                                Text(stringResource(entry.title), style = MaterialTheme.typography.labelLarge, maxLines = 2,
                                     overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                             }
                         }
@@ -176,7 +185,7 @@ internal fun SettingsPageIntro(page: SettingsPage) {
             Icon(settingsIcon(page), null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(26.dp))
         }
         Text(
-            page.description,
+            stringResource(page.description),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
@@ -233,10 +242,10 @@ internal fun ThemeChoice(
 ) {
     val colors = MaterialTheme.colorScheme
     val label = when (mode) {
-        com.androidharness.app.data.ThemeMode.SYSTEM -> "System"
-        com.androidharness.app.data.ThemeMode.LIGHT -> "Light"
-        com.androidharness.app.data.ThemeMode.DARK -> "Dark"
-        com.androidharness.app.data.ThemeMode.AMOLED -> "AMOLED"
+        com.androidharness.app.data.ThemeMode.SYSTEM -> stringResource(R.string.settings_theme_system)
+        com.androidharness.app.data.ThemeMode.LIGHT -> stringResource(R.string.settings_theme_light)
+        com.androidharness.app.data.ThemeMode.DARK -> stringResource(R.string.settings_theme_dark)
+        com.androidharness.app.data.ThemeMode.AMOLED -> stringResource(R.string.settings_theme_amoled)
     }
     Surface(
         onClick = onClick,
@@ -263,7 +272,7 @@ internal fun ThemeChoice(
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
-                if (selected) Icon(Icons.Outlined.CheckCircle, "Selected", tint = colors.primary, modifier = Modifier.size(18.dp))
+                if (selected) Icon(Icons.Outlined.CheckCircle, stringResource(R.string.settings_selected), tint = colors.primary, modifier = Modifier.size(18.dp))
             }
         }
     }

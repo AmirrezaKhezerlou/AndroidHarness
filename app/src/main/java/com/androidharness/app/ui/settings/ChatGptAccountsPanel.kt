@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.settings
 
+import com.androidharness.app.R
 import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
@@ -10,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -29,10 +31,10 @@ internal fun ChatGptAccountsPanel(
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("ChatGPT", style = MaterialTheme.typography.titleMedium)
-                Text("Connect your accounts and choose which one to use.", style = MaterialTheme.typography.bodyMedium,
+                Text(stringResource(R.string.settings_chatgpt_title), style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.settings_chatgpt_subtitle), style = MaterialTheme.typography.bodyMedium,
                     color = colors.onSurfaceVariant)
-                SettingsAnchor("Continue with ChatGPT") {
+                SettingsAnchor(R.string.settings_anchor_continue_chatgpt) {
                     Button(onClick = onAdd, enabled = !state.signingIn) {
                         Icon(Icons.Outlined.Add, null, Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
@@ -41,8 +43,8 @@ internal fun ChatGptAccountsPanel(
                 }
                 if (state.signingIn) {
                     AppLinearProgressIndicator(Modifier.fillMaxWidth())
-                    Text("Finish signing in in your browser, then return here.", style = MaterialTheme.typography.bodySmall)
-                    TextButton(onClick = onCancelSignIn) { Text("Cancel sign-in") }
+                    Text(stringResource(R.string.settings_chatgpt_finish_signin), style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = onCancelSignIn) { Text(stringResource(R.string.settings_chatgpt_cancel_signin)) }
                 }
                 error?.let { Text(it, color = colors.error, style = MaterialTheme.typography.bodySmall) }
             }
@@ -51,7 +53,7 @@ internal fun ChatGptAccountsPanel(
                 AccountSwitchRow("Auto-switch at usage limit",
                     "Continue with another account. Keep the same model when available, otherwise use its fallback.", state.autoSwitch, onAutoSwitch)
                 if (state.autoSwitch && state.accounts.count { it.connected && it.useForAutoSwitch } < 2) {
-                    Text("Add or enable another account to switch automatically.", style = MaterialTheme.typography.bodySmall,
+                    Text(stringResource(R.string.settings_chatgpt_add_account_hint), style = MaterialTheme.typography.bodySmall,
                         color = colors.onSurfaceVariant, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp))
                 }
             }
@@ -61,11 +63,12 @@ internal fun ChatGptAccountsPanel(
                     var menu by remember { mutableStateOf(false) }
                     val selected = selectedId == account.providerId
                     val subtitle = when {
-                        selecting == account.providerId -> "Checking available models…"
-                        !account.connected -> "Signed out"
-                        account.usageLimited -> if (selected) "Usage limit reached · try again in chat" else "Usage limit reached"
+                        selecting == account.providerId -> stringResource(R.string.settings_chatgpt_checking_available)
+                        !account.connected -> stringResource(R.string.settings_chatgpt_signed_out)
+                        account.usageLimited -> if (selected) stringResource(R.string.settings_chatgpt_usage_limit_chat)
+                            else stringResource(R.string.settings_chatgpt_usage_limit)
                         selected -> account.models.firstOrNull { it.id == selectedModel }?.displayName ?: selectedModel.orEmpty()
-                        else -> "${account.models.size} available ${if (account.models.size == 1) "model" else "models"}"
+                        else -> stringResource(R.string.settings_accounts_models_available, account.models.size.toString())
                     }
                     Surface(onClick = { if (account.connected) onSelect(account) else onReconnect(account) },
                         enabled = selecting == null && !state.signingIn, color = colors.surface,
@@ -81,21 +84,21 @@ internal fun ChatGptAccountsPanel(
                                 Text(account.label, style = MaterialTheme.typography.titleSmall)
                                 Text(subtitle, style = MaterialTheme.typography.bodySmall,
                                     color = if (account.usageLimited) colors.error else colors.onSurfaceVariant)
-                                if (selected) Text("Selected", style = MaterialTheme.typography.labelSmall, color = colors.primary)
+                                if (selected) Text(stringResource(R.string.settings_chatgpt_selected), style = MaterialTheme.typography.labelSmall, color = colors.primary)
                             }
                             if (selecting == account.providerId) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                             else if (selected) Icon(Icons.Outlined.CheckCircle, null, tint = colors.primary, modifier = Modifier.size(20.dp))
                             Box {
-                                IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "Manage ${account.label}") }
+                                IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, stringResource(R.string.settings_accounts_manage_cd, account.label)) }
                                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                                     if (account.connected) {
-                                        DropdownMenuItem(text = { Text("Refresh models") }, onClick = { menu = false; onRefresh(account) })
-                                        DropdownMenuItem(text = { Text("Check newer models") }, enabled = state.checkingModelsFor == null,
+                                        DropdownMenuItem(text = { Text(stringResource(R.string.settings_chatgpt_refresh_models)) }, onClick = { menu = false; onRefresh(account) })
+                                        DropdownMenuItem(text = { Text(stringResource(R.string.settings_chatgpt_check_new_models)) }, enabled = state.checkingModelsFor == null,
                                             onClick = { menu = false; onCheckModels(account) })
                                     }
                                     DropdownMenuItem(text = { Text(if (account.connected) "Reconnect" else "Sign in again") },
                                         enabled = !state.signingIn, onClick = { menu = false; onReconnect(account) })
-                                    if (account.connected) DropdownMenuItem(text = { Text("Sign out", color = colors.error) },
+                                    if (account.connected) DropdownMenuItem(text = { Text(stringResource(R.string.settings_chatgpt_sign_out), color = colors.error) },
                                         onClick = { menu = false; onSignOut(account) })
                                 }
                             }
@@ -108,7 +111,7 @@ internal fun ChatGptAccountsPanel(
                     }
                     if (state.checkingModelsFor == account.providerId) {
                         AppLinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
-                        Text("Checking newer models. Small test requests use this account's plan.",
+                        Text(stringResource(R.string.settings_chatgpt_checking_models),
                             style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(16.dp), color = colors.onSurfaceVariant)
                     }
                     state.modelCheckResults[account.providerId]?.let {
@@ -120,7 +123,7 @@ internal fun ChatGptAccountsPanel(
             TextButton(onClick = onUsage, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
                 Icon(Icons.Outlined.OpenInNew, null, Modifier.size(16.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Limits & usage in ChatGPT")
+                Text(stringResource(R.string.settings_chatgpt_limits_usage))
             }
         }
     }
@@ -146,18 +149,18 @@ private fun FallbackModelRow(account: ChatGptAccount, onSelect: (String?) -> Uni
     Box(Modifier.fillMaxWidth().padding(start = 64.dp, end = 16.dp, bottom = 12.dp)) {
         Surface(onClick = { expanded = true }, color = MaterialTheme.colorScheme.surfaceContainerHigh,
             shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().semantics {
-                contentDescription = "Fallback model for ${account.label}"
+                contentDescription = stringResource(R.string.settings_accounts_fallback_cd, account.label)
             }) {
             Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp).heightIn(min = 36.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("Fallback model", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.settings_chatgpt_fallback_model), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(choice?.displayName ?: choice?.id ?: "Automatic", style = MaterialTheme.typography.bodyMedium)
                 }
                 Icon(Icons.Outlined.ExpandMore, null, Modifier.size(20.dp))
             }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(text = { Text("Automatic") }, onClick = { expanded = false; onSelect(null) })
+            DropdownMenuItem(text = { Text(stringResource(R.string.settings_chatgpt_fallback_auto)) }, onClick = { expanded = false; onSelect(null) })
             account.models.forEach { model -> DropdownMenuItem(text = { Text(model.displayName ?: model.id) },
                 onClick = { expanded = false; onSelect(model.id) }) }
         }

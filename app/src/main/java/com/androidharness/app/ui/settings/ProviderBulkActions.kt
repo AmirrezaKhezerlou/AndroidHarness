@@ -8,7 +8,9 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.androidharness.app.R
 import com.androidharness.app.llm.ProviderConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -47,7 +49,7 @@ internal fun ProviderBulkActions(
     val scope = rememberCoroutineScope()
     val selected = providers.filter { it.id in state.ids }
     if (state.selecting) {
-        Text("${selected.size} selected", style = MaterialTheme.typography.labelLarge)
+        Text(stringResource(R.string.settings_bulk_selected_count, selected.size.toString()), style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(true to "Enable", false to "Disable").forEach { (enabled, label) ->
                 OutlinedButton(enabled = selected.isNotEmpty() && !state.busy, onClick = {
@@ -61,9 +63,9 @@ internal fun ProviderBulkActions(
                 }) { Text(label) }
             }
             OutlinedButton(enabled = selected.isNotEmpty() && selected.all(::deletableProvider) && !state.busy,
-                onClick = { state.requestDelete(selected.map { it.id }) }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                onClick = { state.requestDelete(selected.map { it.id }) }) { Text(stringResource(R.string.settings_action_delete), color = MaterialTheme.colorScheme.error) }
         }
-        if (selected.any { !deletableProvider(it) }) Text("Built-in providers, connected accounts and installed models can be disabled here. Only API connections can be deleted.",
+        if (selected.any { !deletableProvider(it) }) Text(stringResource(R.string.settings_bulk_disable_note),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
@@ -72,13 +74,21 @@ internal fun ProviderBulkActions(
         val valid = targets.size == requested.size && targets.all(::deletableProvider)
         val multiple = requested.size > 1
         AlertDialog(onDismissRequest = { if (!state.busy) state.deleting = null },
-            title = { Text(if (state.reviewing) "Delete all ${requested.size} providers?"
-                else if (multiple) "Delete ${requested.size} providers?" else "Delete ${targets.firstOrNull()?.name ?: "provider"}?") },
+            title = { Text(
+                when {
+                    state.reviewing -> stringResource(R.string.settings_bulk_delete_all_title, requested.size.toString())
+                    multiple -> stringResource(R.string.settings_bulk_delete_count_title, requested.size.toString())
+                    else -> stringResource(
+                        R.string.settings_bulk_delete_one_title,
+                        targets.firstOrNull()?.name ?: stringResource(R.string.settings_bulk_delete_fallback_name),
+                    )
+                },
+            ) },
             text = {
                 Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Saved API keys and connections will be removed. Chat history stays. Chats and schedules using these connections will need another provider.")
+                    Text(stringResource(R.string.settings_bulk_delete_note))
                     if (state.reviewing || !multiple) targets.forEach { Text(it.name, style = MaterialTheme.typography.bodyMedium) }
-                    if (!valid) Text("The provider list changed. Edit the selection and try again.", color = MaterialTheme.colorScheme.error)
+                    if (!valid) Text(stringResource(R.string.settings_bulk_list_changed), color = MaterialTheme.colorScheme.error)
                     state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             },

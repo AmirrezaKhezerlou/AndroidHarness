@@ -4,9 +4,11 @@ import android.net.Uri
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androidharness.app.AppContainer
 import com.androidharness.app.chatgpt.ChatGptProtocol
+import com.androidharness.app.R
 import com.androidharness.app.data.AppSettings
 import com.androidharness.app.ui.common.openOAuthBrowser
 import kotlinx.coroutines.CancellationException
@@ -58,15 +60,15 @@ internal fun ConnectedAccountsSection(container: AppContainer) {
     )
     if (state.showWelcome) AlertDialog(
         onDismissRequest = { update { container.chatGpt.dismissWelcome() } },
-        title = { Text("You're using your ChatGPT plan") },
-        text = { Text("Eligible requests in AndroidHarness use your ChatGPT plan or credits. Review usage and manage this app's access in ChatGPT settings.") },
-        confirmButton = { TextButton(onClick = { update { container.chatGpt.dismissWelcome() } }) { Text("Got it") } },
+        title = { Text(stringResource(R.string.settings_accounts_using_plan)) },
+        text = { Text(stringResource(R.string.settings_accounts_using_plan_desc)) },
+        confirmButton = { TextButton(onClick = { update { container.chatGpt.dismissWelcome() } }) { Text(stringResource(R.string.settings_action_got_it)) } },
     )
     pendingSignOut?.let { id -> AlertDialog(
         onDismissRequest = { pendingSignOut = null },
-        title = { Text("Sign out of this account?") },
-        text = { Text("This disconnects the account from AndroidHarness and removes it from automatic switching. You can sign in again later.") },
-        confirmButton = { TextButton(onClick = { container.chatGpt.signOut(id); pendingSignOut = null }) { Text("Sign out") } },
-        dismissButton = { TextButton(onClick = { pendingSignOut = null }) { Text("Cancel") } },
+        title = { Text(stringResource(R.string.settings_accounts_signout_title)) },
+        text = { Text(stringResource(R.string.settings_accounts_signout_message)) },
+        confirmButton = { TextButton(onClick = { container.chatGpt.signOut(id); pendingSignOut = null }) { Text(stringResource(R.string.settings_chatgpt_sign_out)) } },
+        dismissButton = { TextButton(onClick = { pendingSignOut = null }) { Text(stringResource(R.string.settings_action_cancel)) } },
     ) }
 }

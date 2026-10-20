@@ -7,17 +7,19 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import com.androidharness.app.R
 import com.androidharness.app.data.WorkspaceLayoutMode
 
 @Composable
 internal fun WorkspaceLayoutSection(selected: WorkspaceLayoutMode, onSelect: (WorkspaceLayoutMode) -> Unit) {
-    SettingsAnchor("Workspace layout") {
+    SettingsAnchor(R.string.settings_anchor_layout) {
         SettingsPanel(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp).selectableGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Workspace layout", style = MaterialTheme.typography.titleSmall)
-                Text("Narrow windows keep one full-width panel.",
+                Text(stringResource(R.string.settings_anchor_layout), style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.settings_layout_narrow_note),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 WorkspaceLayoutMode.entries.forEach { mode ->
                     Row(Modifier.fillMaxWidth().selectable(selected == mode, role = Role.RadioButton,

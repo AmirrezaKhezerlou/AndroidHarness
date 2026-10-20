@@ -12,7 +12,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.androidharness.app.R
 import com.androidharness.app.data.env.ShizukuConnectionFailure
 import com.androidharness.app.data.env.ShizukuStartupReport
 import kotlinx.coroutines.launch
@@ -33,18 +35,19 @@ internal fun ShizukuFailureDetails(failure: ShizukuConnectionFailure?, report: (
         copied = true
     }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text("${if (recovered) "Standard startup error" else "Last connection error"} · ${failure.reason.name}",
+        Text(
+            "${if (recovered) stringResource(R.string.settings_shizuku_standard_error) else stringResource(R.string.settings_shizuku_last_error)} · ${failure.reason.name}",
             style = MaterialTheme.typography.labelMedium,
             color = if (recovered) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error)
-        Text(if (recovered) "Compatibility mode restored the connection." else failure.reason.summary,
+        Text(if (recovered) stringResource(R.string.settings_shizuku_restored) else failure.reason.summary,
             style = MaterialTheme.typography.bodySmall)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             if (failure.detail.isNotBlank() || startup != null) TextButton(onClick = { expanded = !expanded }) {
-                Text(if (expanded) "Hide details" else "Show details")
+                Text(if (expanded) stringResource(R.string.settings_shizuku_hide_details) else stringResource(R.string.settings_shizuku_show_details))
             }
             TextButton(onClick = {
                 copy(startup?.report ?: report())
-            }) { Text(if (copied) "Copied" else "Copy error details") }
+            }) { Text(if (copied) stringResource(R.string.settings_shizuku_copied) else stringResource(R.string.settings_shizuku_copy_error)) }
             TextButton(enabled = !collecting, onClick = {
                 collecting = true
                 scope.launch {
@@ -54,9 +57,9 @@ internal fun ShizukuFailureDetails(failure: ShizukuConnectionFailure?, report: (
                         copy(result.report)
                     } finally { collecting = false }
                 }
-            }) { Text(if (collecting) "Reading startup log…" else "Copy startup log") }
+            }) { Text(if (collecting) stringResource(R.string.settings_shizuku_reading_log) else stringResource(R.string.settings_shizuku_copy_log)) }
         }
-        startup?.let { Text("${it.status}. Report copied; paste it when reporting this connection problem.",
+        startup?.let { Text(stringResource(R.string.settings_shizuku_report_copied, it.status),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         if (expanded) SelectionContainer {
             Text(startup?.report ?: failure.detail, style = MaterialTheme.typography.bodySmall,

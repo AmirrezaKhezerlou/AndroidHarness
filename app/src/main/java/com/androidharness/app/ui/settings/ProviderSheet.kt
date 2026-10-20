@@ -50,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -58,6 +59,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.androidharness.app.ui.common.ProviderMark
 import com.androidharness.app.ui.common.SecureDialogEffect
+import com.androidharness.app.R
 import com.androidharness.app.llm.ModelCatalog
 import com.androidharness.app.llm.ModelEntry
 import com.androidharness.app.llm.ModelsDev
@@ -286,7 +288,7 @@ internal fun ProviderSheetContent(
                         OutlinedTextField(
                             value = providerQuery,
                             onValueChange = { providerQuery = it },
-                            placeholder = { Text("Search ${devProviders.size} providers") },
+                            placeholder = { Text(stringResource(R.string.settings_provider_search_count, devProviders.size.toString())) },
                             leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                             singleLine = true,
                             shape = RoundedCornerShape(14.dp),
@@ -352,10 +354,10 @@ internal fun ProviderSheetContent(
                                 value = type.endpointPath,
                                 onValueChange = {},
                                 readOnly = true,
-                                label = { Text("Protocol") },
+                                label = { Text(stringResource(R.string.settings_provider_protocol)) },
                                 trailingIcon = {
                                     IconButton(onClick = { typeMenu = true }) {
-                                        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Choose protocol")
+                                        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = stringResource(R.string.settings_provider_choose_protocol))
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
@@ -378,7 +380,7 @@ internal fun ProviderSheetContent(
                         OutlinedTextField(
                             value = baseUrl,
                             onValueChange = { baseUrl = it },
-                            label = { Text("Server address") },
+                            label = { Text(stringResource(R.string.settings_provider_server_address)) },
                             placeholder = { Text("https://your-server.example.com/v1") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
@@ -389,9 +391,9 @@ internal fun ProviderSheetContent(
                         OutlinedTextField(
                             value = apiKey,
                             onValueChange = { apiKey = it; fetchError = null },
-                            label = { Text("API key") },
+                            label = { Text(stringResource(R.string.settings_provider_api_key)) },
                             placeholder = {
-                                Text("Get one from ${effectiveBaseUrl.substringAfter("://").substringBefore('/')}")
+                                Text(stringResource(R.string.settings_provider_get_one_from, effectiveBaseUrl.substringAfter("://").substringBefore('/')))
                             },
                             visualTransformation = PasswordVisualTransformation(),
                             singleLine = true,
@@ -411,7 +413,7 @@ internal fun ProviderSheetContent(
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(
-                                "$selectedLabel runs locally, so no API key is needed.",
+                                stringResource(R.string.settings_provider_local_no_key, selectedLabel),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                                 modifier = Modifier.padding(12.dp),
@@ -440,7 +442,7 @@ internal fun ProviderSheetContent(
                         ) { Text(if (fetching) "Connecting…" else "Continue") }
                     },
                     secondary = if (fetchError != null && headersValid) {
-                        { TextButton(onClick = { step = AddStep.MODEL }) { Text("Continue anyway") } }
+                        { TextButton(onClick = { step = AddStep.MODEL }) { Text(stringResource(R.string.settings_action_continue_anyway)) } }
                     } else null,
                     onCancel = onDismiss,
                 )
@@ -456,13 +458,13 @@ internal fun ProviderSheetContent(
                 ) {
                     SelectedProviderSummary(
                         label = selectedLabel,
-                        subtitle = "Choose the model this provider should use",
+                        subtitle = stringResource(R.string.settings_provider_choose_model),
                     )
                     Spacer(Modifier.height(10.dp))
                     OutlinedTextField(
                         value = modelQuery,
                         onValueChange = { modelQuery = it },
-                        placeholder = { Text("Search models or type an ID") },
+                        placeholder = { Text(stringResource(R.string.settings_provider_search_model)) },
                         leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                         singleLine = true,
                         shape = RoundedCornerShape(14.dp),
@@ -487,7 +489,7 @@ internal fun ProviderSheetContent(
                                     entry = ModelEntry(q),
                                     providerType = effectiveType,
                                     selected = model == q,
-                                    hint = "Use custom model ID",
+                                    hint = stringResource(R.string.settings_provider_custom_model),
                                     onClick = { model = q },
                                 )
                             }
@@ -517,7 +519,7 @@ internal fun ProviderSheetContent(
                     OutlinedTextField(
                         value = name,
                         onValueChange = { name = it },
-                        label = { Text("Profile name (optional)") },
+                        label = { Text(stringResource(R.string.settings_provider_profile_name)) },
                         placeholder = { Text(selectedLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
@@ -533,7 +535,7 @@ internal fun ProviderSheetContent(
                                     com.androidharness.app.llm.ProviderHeaders.normalized(headers))
                             },
                             enabled = model.isNotBlank() && headersValid,
-                        ) { Text("Save") }
+                        ) { Text(stringResource(R.string.settings_action_save)) }
                     },
                     secondary = null,
                     onCancel = onDismiss,
@@ -560,16 +562,17 @@ private fun ProviderFlowHeader(
     ) {
         if (step != AddStep.PROVIDER) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.settings_action_back))
             }
         }
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     when (step) {
-                        AddStep.PROVIDER -> if (editing) "Edit provider" else "Add provider"
-                        AddStep.KEY -> "Connect $providerLabel"
-                        AddStep.MODEL -> "Choose model"
+                        AddStep.PROVIDER -> if (editing) stringResource(R.string.settings_provider_edit_title)
+                        else stringResource(R.string.settings_provider_add_title)
+                        AddStep.KEY -> stringResource(R.string.settings_provider_connect_title, providerLabel)
+                        AddStep.MODEL -> stringResource(R.string.settings_provider_choose_model_title)
                     },
                     style = MaterialTheme.typography.titleMediumEmphasized,
                     maxLines = 1,
@@ -608,7 +611,7 @@ private fun ProviderFlowHeader(
             )
         }
         IconButton(onClick = onClose) {
-            Icon(Icons.Filled.Close, contentDescription = "Close")
+            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.settings_action_close))
         }
     }
 }
@@ -664,7 +667,7 @@ private fun StepButtons(
             .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
         Spacer(Modifier.weight(1f))
-        TextButton(onClick = onCancel) { Text("Cancel") }
+        TextButton(onClick = onCancel) { Text(stringResource(R.string.settings_action_cancel)) }
         secondary?.invoke()
         primary()
     }
@@ -713,7 +716,7 @@ private fun ModelPickRow(
             if (selected) {
                 Icon(
                     Icons.Filled.CheckCircle,
-                    contentDescription = "Selected",
+                    contentDescription = stringResource(R.string.settings_chatgpt_selected),
                     tint = scheme.primary,
                     modifier = Modifier.size(19.dp),
                 )
@@ -759,8 +762,8 @@ private fun ColumnScope.ProviderDirectory(
         if (q.isBlank() || "custom".contains(q)) {
             item(key = "custom") {
                 ProviderRow(
-                    title = "Custom endpoint",
-                    subtitle = "Connect any compatible API or local server",
+                    title = stringResource(R.string.settings_provider_custom_endpoint),
+                    subtitle = stringResource(R.string.settings_provider_custom_endpoint_desc),
                     selected = customSelected,
                     custom = true,
                     onClick = onSelectCustom,
@@ -782,12 +785,12 @@ private fun ColumnScope.ProviderDirectory(
         }
         if (dev.isNotEmpty()) {
             if (q.isBlank()) {
-                item(key = "all-label") { DirectoryLabel("All providers") }
+                item(key = "all-label") { DirectoryLabel(stringResource(R.string.settings_provider_all_providers)) }
             }
             items(dev, key = { "dev-${it.id}" }) { info ->
                 ProviderRow(
                     title = info.name,
-                    subtitle = "${info.modelCount} models",
+                    subtitle = stringResource(R.string.settings_provider_model_count, info.modelCount.toString()),
                     selected = info.id == selectedDev?.id,
                     onClick = { onSelectDev(info) },
                 )
@@ -858,7 +861,7 @@ private fun ProviderRow(
             if (selected) {
                 Icon(
                     Icons.Filled.CheckCircle,
-                    contentDescription = "Selected",
+                    contentDescription = stringResource(R.string.settings_chatgpt_selected),
                     tint = scheme.primary,
                     modifier = Modifier.size(19.dp),
                 )
