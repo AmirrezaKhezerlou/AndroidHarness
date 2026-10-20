@@ -55,7 +55,11 @@ internal fun statsSnapshot(rows: List<StatsUsagePojo>, lifetimeSessions: List<Se
     val models = rows.groupBy { it.providerName to it.model }.map { (identity, modelRows) ->
         ModelUsagePojo(identity.first, identity.second, modelRows.sumOf { it.inputTokens },
             modelRows.sumOf { it.outputTokens }, modelRows.sumOf { it.cachedTokens },
-            modelRows.sumOf { it.cacheWriteTokens }, modelRows.sumOf { it.requests })
+            modelRows.sumOf { it.cacheWriteTokens }, modelRows.sumOf { it.requests },
+            peakInputTokens = modelRows.sumOf { it.peakInputTokens },
+            peakOutputTokens = modelRows.sumOf { it.peakOutputTokens },
+            peakCachedTokens = modelRows.sumOf { it.peakCachedTokens },
+            peakCacheWriteTokens = modelRows.sumOf { it.peakCacheWriteTokens })
     }.sortedByDescending { it.totalTokens }
     return StatsSnapshot(bundle, models)
 }

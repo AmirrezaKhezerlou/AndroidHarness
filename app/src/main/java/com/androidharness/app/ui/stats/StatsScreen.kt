@@ -59,8 +59,12 @@ internal fun StatsScreen(repository: SessionRepository, onBack: () -> Unit) {
     }
     val view = key(window, range) { flow.collectAsStateWithLifecycle(initialValue = UsageView()).value }
     val bundle = view.stats.bundle
-    val models = view.stats.byModel.map { row -> row to com.androidharness.app.llm.ModelPrices.estimate(
-        row.model, row.inputTokens, row.outputTokens, row.cachedTokens, row.cacheWriteTokens) }
+    val models = view.stats.byModel.map { row -> row to com.androidharness.app.llm.ModelPrices.estimateSplit(
+        model = row.model, totalInputTokens = row.inputTokens, outputTokens = row.outputTokens,
+        cachedTokens = row.cachedTokens, cacheWriteTokens = row.cacheWriteTokens,
+        peakInputTokens = row.peakInputTokens, peakOutputTokens = row.peakOutputTokens,
+        peakCachedTokens = row.peakCachedTokens, peakCacheWriteTokens = row.peakCacheWriteTokens,
+        providerKey = com.androidharness.app.llm.ModelsDev.providerKeyFor(row.providerName)) }
     val knownPrices = models.mapNotNull { it.second }
     val cost = knownPrices.takeIf { it.isNotEmpty() }?.sum()
     val code = view.code
@@ -183,7 +187,7 @@ internal fun StatsScreen(repository: SessionRepository, onBack: () -> Unit) {
                     Text("AI code changes count applied source and configuration edits, including repeated edits and later reversals. Net is added minus removed activity, not the current Git diff. Manual editor saves, documentation, generated files, dependencies and binary files are excluded.", style = MaterialTheme.typography.bodySmall)
                     Text("Tracked file tools and eligible local foreground shell changes are included. Background commands, remote shell changes and comparisons beyond size or work limits can be missing. Earlier totals use retained edit records; deleted history cannot be recovered. No file contents are kept in Usage.", style = MaterialTheme.typography.bodySmall)
                     Text("Today uses your device's calendar day. 1 week includes today and the previous 6 days; 1 month includes today and the previous 29 days. Undated token usage appears only in Lifetime.", style = MaterialTheme.typography.bodySmall)
-                    Text("Token totals include subagents and compaction. Cache reads and writes are separate from fresh input. Prices are estimates from the bundled model price list, not provider invoices.", style = MaterialTheme.typography.bodySmall)
+                    Text("Token totals include subagents and compaction. Cache reads and writes are separate from fresh input. Prices are estimates from the bundled model price list, not provider invoices. DeepSeek requests use peak rates 01:00-04:00 and 06:00-10:00 UTC on weekdays; all other times, including weekends, are billed at half.", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }

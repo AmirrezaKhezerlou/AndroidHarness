@@ -190,6 +190,11 @@ data class StatsUsagePojo(
     val cachedTokens: Long,
     val cacheWriteTokens: Long,
     val requests: Long,
+    /** Token totals from requests made in DeepSeek's peak window, priced at list rate. */
+    val peakInputTokens: Long = 0,
+    val peakOutputTokens: Long = 0,
+    val peakCachedTokens: Long = 0,
+    val peakCacheWriteTokens: Long = 0,
 )
 
 /** Aggregated per (provider, model) usage within a time window. */
@@ -200,9 +205,22 @@ data class ModelUsagePojo(    val providerName: String,
     val cachedTokens: Long,
     val cacheWriteTokens: Long,
     val requests: Long,
+    val peakInputTokens: Long = 0,
+    val peakOutputTokens: Long = 0,
+    val peakCachedTokens: Long = 0,
+    val peakCacheWriteTokens: Long = 0,
 ) {
     val totalTokens: Long get() = inputTokens + outputTokens
 }
+
+/**
+ * DeepSeek's rate window: 01:00-04:00 and 06:00-10:00 UTC on weekdays are
+ * peak; everything else, including weekends, is off-peak. SQLite's
+ * 'unixepoch' modifier is UTC, so no device timezone leaks into the split.
+ */
+private const val PEAK_WINDOW_SQL =
+    "(CAST(strftime('%w', createdAt / 1000, 'unixepoch') AS INTEGER) BETWEEN 1 AND 5 " +
+        "AND CAST(strftime('%H', createdAt / 1000, 'unixepoch') AS INTEGER) IN (1,2,3,6,7,8,9))"
 
 @Dao
 interface HarnessDao {
@@ -473,7 +491,12 @@ interface HarnessDao {
     @Query(
         "SELECT sessionId, providerName, model, SUM(inputTokens) AS inputTokens, " +
             "SUM(outputTokens) AS outputTokens, SUM(cachedTokens) AS cachedTokens, " +
-            "SUM(cacheWriteTokens) AS cacheWriteTokens, COUNT(*) AS requests " +
+            "SUM(cacheWriteTokens) AS cacheWriteTokens, " +
+            "SUM(CASE WHEN " + PEAK_WINDOW_SQL + " THEN inputTokens ELSE 0 END) AS peakInputTokens, " +
+            "SUM(CASE WHEN " + PEAK_WINDOW_SQL + " THEN outputTokens ELSE 0 END) AS peakOutputTokens, " +
+            "SUM(CASE WHEN " + PEAK_WINDOW_SQL + " THEN cachedTokens ELSE 0 END) AS peakCachedTokens, " +
+            "SUM(CASE WHEN " + PEAK_WINDOW_SQL + " THEN cacheWriteTokens ELSE 0 END) AS peakCacheWriteTokens, " +
+            "COUNT(*) AS requests " +
             "FROM usage_events WHERE createdAt >= :since AND createdAt < :until " +
             "GROUP BY sessionId, providerName, model"
     )
@@ -482,7 +505,12 @@ interface HarnessDao {
     @Query(
         "SELECT providerName, model, SUM(inputTokens) AS inputTokens, " +
             "SUM(outputTokens) AS outputTokens, SUM(cachedTokens) AS cachedTokens, " +
-            "SUM(cacheWriteTokens) AS cacheWriteTokens, COUNT(*) AS requests " +
+            "SUM(cacheWriteTokens) AS cacheWriteTokens, " +
+            "SUM(CASE WHEN " + PEAK_WINDOW_SQL + " THEN inputTokens ELSE 0 END) AS peakInputTokens, " +
+            "SUM(CASE WHEN " + PEAK_WINDOW_SQL + " THEN outputTokens ELSE 0 END) AS peakOutputTokens, " +
+            "SUM(CASE WHEN " + PEAK_WINDOW_SQL + " THEN cachedTokens ELSE 0 END) AS peakCachedTokens, " +
+            "SUM(CASE WHEN " + PEAK_WINDOW_SQL + " THEN cacheWriteTokens ELSE 0 END) AS peakCacheWriteTokens, " +
+            "COUNT(*) AS requests " +
             "FROM usage_events WHERE createdAt >= :since " +
             "GROUP BY providerName, model ORDER BY (SUM(inputTokens) + SUM(outputTokens)) DESC"
     )
@@ -491,7 +519,12 @@ interface HarnessDao {
     @Query(
         "SELECT providerName, model, SUM(inputTokens) AS inputTokens, " +
             "SUM(outputTokens) AS outputTokens, SUM(cachedTokens) AS cachedTokens, " +
-            "SUM(cacheWriteTokens) AS cacheWriteTokens, COUNT(*) AS requests " +
+            "SUM(cacheWriteTokens) AS cacheWriteTokens, " +
+            "SUM(CASE WHEN " + PEAK_WINDOW_SQL + " THEN inputTokens ELSE 0 END) AS peakInputTokens, " +
+            "SUM(CASE WHEN " + PEAK_WINDOW_SQL + " THEN outputTokens ELSE 0 END) AS peakOutputTokens, " +
+            "SUM(CASE WHEN " + PEAK_WINDOW_SQL + " THEN cachedTokens ELSE 0 END) AS peakCachedTokens, " +
+            "SUM(CASE WHEN " + PEAK_WINDOW_SQL + " THEN cacheWriteTokens ELSE 0 END) AS peakCacheWriteTokens, " +
+            "COUNT(*) AS requests " +
             "FROM usage_events WHERE sessionId = :sessionId " +
             "GROUP BY providerName, model ORDER BY (SUM(inputTokens) + SUM(outputTokens)) DESC"
     )

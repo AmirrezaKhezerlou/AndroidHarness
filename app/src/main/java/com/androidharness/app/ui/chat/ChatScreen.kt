@@ -2101,12 +2101,16 @@ private fun CostDialog(
     val cost: Double? = if (state.sessionModelUsage.isNotEmpty()) {
         state.sessionModelUsage.sumOf { row ->
             val pKey = com.androidharness.app.llm.ModelsDev.providerKeyFor(row.providerName)
-            com.androidharness.app.llm.ModelPrices.estimate(
+            com.androidharness.app.llm.ModelPrices.estimateSplit(
                 model = row.model,
                 totalInputTokens = row.inputTokens,
                 outputTokens = row.outputTokens,
                 cachedTokens = row.cachedTokens,
                 cacheWriteTokens = row.cacheWriteTokens,
+                peakInputTokens = row.peakInputTokens,
+                peakOutputTokens = row.peakOutputTokens,
+                peakCachedTokens = row.peakCachedTokens,
+                peakCacheWriteTokens = row.peakCacheWriteTokens,
                 providerKey = pKey,
             ) ?: 0.0
         }

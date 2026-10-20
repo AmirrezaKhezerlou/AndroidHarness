@@ -492,11 +492,12 @@ class RunManager(
                         if (event is AgentEvent.Finished) finishedNormally = event.reason == null
                         if (event is AgentEvent.Error) recoverableInterruption = event.recoverable
                         if (event is AgentEvent.Usage) {
-                            val price = if (event.providerName.startsWith("ChatGPT · ")) null else com.androidharness.app.llm.ModelPrices.estimate(
+                            val price = if (event.providerName.startsWith("ChatGPT · ")) null else com.androidharness.app.llm.ModelPrices.estimateAt(
                                 model = event.model, totalInputTokens = event.inputTokens.toLong(),
                                 outputTokens = event.outputTokens.toLong(), cachedTokens = event.cachedInputTokens.toLong(),
                                 cacheWriteTokens = event.cacheWriteTokens.toLong(),
                                 providerKey = event.providerKey ?: com.androidharness.app.llm.ModelsDev.providerKeyFor(runConfig.baseUrl),
+                                atMillis = System.currentTimeMillis(),
                             )
                             budget.add(event.inputTokens, event.outputTokens, price)
                             if (record.limits.cost > 0 && price == null) {

@@ -40,6 +40,8 @@ object ModelPrices {
         "deepseek-chat" to Cost(0.28, 0.42, cacheRead = 0.25, cacheWrite = 1.0),
         "deepseek-v3" to Cost(0.28, 0.42, cacheRead = 0.25, cacheWrite = 1.0),
         "deepseek-r1" to Cost(0.55, 2.19, cacheRead = 0.25, cacheWrite = 1.0),
+        // DeepSeek V4.1 list rates are the peak rates; off-peak is half.
+        "deepseek-v4.1" to Cost(0.30, 1.20, cacheRead = 0.02, cacheWrite = 1.0),
         "llama-3.3-70b" to Cost(0.59, 0.79, cacheRead = 0.25, cacheWrite = 1.0),
         "llama-3.1-8b" to Cost(0.05, 0.08, cacheRead = 0.25, cacheWrite = 1.0),
         "llama-3.1-70b" to Cost(0.59, 0.79, cacheRead = 0.25, cacheWrite = 1.0),
@@ -100,5 +102,58 @@ object ModelPrices {
             (cachedTokens / 1_000_000.0 * cost.input * cost.cacheRead) +
             (cacheWriteTokens / 1_000_000.0 * cost.input * cost.cacheWrite) +
             (outputTokens / 1_000_000.0 * cost.output)
+    }
+
+    /** DeepSeek bills peak hours at double the off-peak rate. The window is UTC. */
+    internal fun deepSeekOffPeak(atMillis: Long): Boolean {
+        val utc = java.time.Instant.ofEpochMilli(atMillis).atZone(java.time.ZoneOffset.UTC)
+        val weekday = utc.dayOfWeek.value in 1..5
+        return !weekday || (utc.hour !in 1..3 && utc.hour !in 6..9)
+    }
+
+    private fun isDeepSeek(model: String) = model.contains("deepseek", ignoreCase = true)
+
+    /** Live cost for a request that just happened. */
+    fun estimateAt(
+        model: String,
+        totalInputTokens: Long,
+        outputTokens: Long,
+        cachedTokens: Long = 0,
+        cacheWriteTokens: Long = 0,
+        providerKey: String? = null,
+        atMillis: Long,
+    ): Double? {
+        val base = estimate(model, totalInputTokens, outputTokens, cachedTokens, cacheWriteTokens, providerKey)
+            ?: return null
+        return if (isDeepSeek(model) && deepSeekOffPeak(atMillis)) base * 0.5 else base
+    }
+
+    /**
+     * Cost for tokens aggregated over time. [peakInputTokens] and friends are
+     * the subsets that fell inside the peak window; the rest are billed at half.
+     * Non-DeepSeek models ignore the split and use list prices for everything.
+     */
+    fun estimateSplit(
+        model: String,
+        totalInputTokens: Long,
+        outputTokens: Long,
+        cachedTokens: Long = 0,
+        cacheWriteTokens: Long = 0,
+        peakInputTokens: Long = 0,
+        peakOutputTokens: Long = 0,
+        peakCachedTokens: Long = 0,
+        peakCacheWriteTokens: Long = 0,
+        providerKey: String? = null,
+    ): Double? {
+        val base = estimate(model, totalInputTokens, outputTokens, cachedTokens, cacheWriteTokens, providerKey)
+            ?: return null
+        if (!isDeepSeek(model)) return base
+        val offInput = (totalInputTokens - peakInputTokens).coerceAtLeast(0)
+        val offOutput = (outputTokens - peakOutputTokens).coerceAtLeast(0)
+        val offCached = (cachedTokens - peakCachedTokens).coerceAtLeast(0)
+        val offCacheWrite = (cacheWriteTokens - peakCacheWriteTokens).coerceAtLeast(0)
+        if (offInput == 0L && offOutput == 0L && offCached == 0L && offCacheWrite == 0L) return base
+        val offPeakCost = estimate(model, offInput, offOutput, offCached, offCacheWrite, providerKey) ?: return base
+        return base - offPeakCost * 0.5
     }
 }
