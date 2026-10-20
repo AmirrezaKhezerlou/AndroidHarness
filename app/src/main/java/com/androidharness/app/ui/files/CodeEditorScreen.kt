@@ -95,7 +95,7 @@ private const val MAX_EDIT_BYTES = 16_000_000L
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-fun CodeEditorScreen(
+internal fun CodeEditorScreen(
     container: AppContainer,
     path: String,
     initialLine: Int? = null,
@@ -104,6 +104,12 @@ fun CodeEditorScreen(
     navigationGuard: EditorNavigationGuard? = null,
     projectId: String? = null,
     onAskAgent: ((String?, String) -> Unit)? = null,
+    suppliedBuffer: EditorBuffer? = null,
+    workspaceChrome: (@Composable () -> Unit)? = null,
+    actions: EditorActions? = null,
+    onQuickOpen: (() -> Unit)? = null,
+    onProjectSearch: (() -> Unit)? = null,
+    onCommands: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -120,7 +126,7 @@ fun CodeEditorScreen(
     var loadState by remember(draftKey) { mutableStateOf<Load>(Load.Loading) }
     val buffers: EditorBufferViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
     val buffer = remember(draftKey) {
-        draftKey?.let { buffers.acquire(it) } ?: buffers.buffer
+        suppliedBuffer ?: draftKey?.let { buffers.acquire(it) } ?: buffers.buffer
     }
     val diskBaseline = buffer.baseline
     val lastSavedText = buffer.saved
@@ -128,7 +134,7 @@ fun CodeEditorScreen(
 
     LaunchedEffect(path, fs) {
         if (fs == null) return@LaunchedEffect
-        if (buffer.text.value != null) {
+        if (buffer.text.value != null && buffer.dirty.value) {
             loadState = Load.Ready
             return@LaunchedEffect
         }
@@ -166,7 +172,8 @@ fun CodeEditorScreen(
                 if (dec == null) loadState = Load.Binary(fileLength)
                 else {
                     decoded.value = dec
-                    if (buffer.text.value == null) {
+                    if (buffer.text.value == null || buffer.diskVersion.value != EditorDiskSnapshot(bytes).version) {
+                        buffer.document = null
                         buffer.text.value = dec.text
                         diskBaseline.value = dec.text
                         lastSavedText.value = dec.text
@@ -185,9 +192,10 @@ fun CodeEditorScreen(
     var selection by remember(path) { mutableStateOf<SelectedCode?>(null) }
     var selectedLength by remember(path) { mutableIntStateOf(0) }
     var editorRef by remember(draftKey) { mutableStateOf<CodeEditor?>(null) }
+    var editRevision by remember(buffer) { mutableIntStateOf(0) }
     var editing by buffer.editing
     var dirty by buffer.dirty
-    var saving by remember { mutableStateOf(false) }
+    var saving by buffer.saving
     var showExitPrompt by remember { mutableStateOf(false) }
     var searchOpen by remember { mutableStateOf(false) }
     var gotoOpen by remember { mutableStateOf(false) }
@@ -295,108 +303,124 @@ fun CodeEditorScreen(
         }
     }
 
-    val desktopInput by androidx.compose.runtime.rememberUpdatedState(com.androidharness.app.ui.LocalDesktopInput.current)
     val keyboardSave by androidx.compose.runtime.rememberUpdatedState<() -> Unit>({ if (!saving && dirty) save() })
     BackHandler(enabled = com.androidharness.app.ui.LocalWorkspacePaneActive.current && dirty && !saving) { requestNavigation(onBack) }
 
+    androidx.compose.runtime.SideEffect {
+        actions?.ready = loadState != Load.Loading && (loadState != Load.Ready || editorRef != null)
+        actions?.textAvailable = loadState == Load.Ready && editorRef != null
+        actions?.close = ::requestNavigation
+        actions?.save = { if (dirty) save() }
+        actions?.find = { searchOpen = true }
+        actions?.goToLine = { gotoOpen = true }
+        actions?.toggleWrap = { container.editorScope.launch { container.settings.setEditorWordWrap(!wordwrapOn) } }
+    }
+    val undoAvailable = editRevision.let { editorRef?.text?.canUndo() == true }
+    val redoAvailable = editRevision.let { editorRef?.text?.canRedo() == true }
+    val controls: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
+        IconButton(
+            onClick = { editorRef?.text?.undo() },
+            enabled = undoAvailable,
+        ) { Icon(Icons.Outlined.Undo, contentDescription = "Undo") }
+        IconButton(
+            onClick = { editorRef?.text?.redo() },
+            enabled = redoAvailable,
+        ) { Icon(Icons.Outlined.Redo, contentDescription = "Redo") }
+        if (workspaceChrome != null) Spacer(Modifier.weight(1f))
+        IconButton(onClick = {
+            editing = !editing
+            editorRef?.isEditable = editing
+            if (editing) searchOpen = false
+            persistDraft()
+        }) {
+            Icon(
+                if (editing) Icons.Outlined.Check else Icons.Outlined.Edit,
+                contentDescription = if (editing) "Done editing" else "Edit",
+                tint = if (editing) scheme.primary else scheme.onSurfaceVariant,
+            )
+        }
+        if (dirty && !saving) {
+            IconButton(onClick = { save() }) {
+                Icon(Icons.Outlined.Save, contentDescription = "Save", tint = scheme.primary)
+            }
+        }
+        Box {
+            IconButton(onClick = { menuOpen = true }) {
+                Icon(Icons.Filled.MoreVert, contentDescription = "More")
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                onQuickOpen?.let { action -> DropdownMenuItem(text = { Text("Quick Open") }, leadingIcon = { Icon(Icons.Outlined.OpenInNew, null) }, onClick = { menuOpen = false; action() }) }
+                onProjectSearch?.let { action -> DropdownMenuItem(text = { Text("Search project") }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, onClick = { menuOpen = false; action() }) }
+                onCommands?.let { action -> DropdownMenuItem(text = { Text("Command palette") }, onClick = { menuOpen = false; action() }) }
+                if (onQuickOpen != null) androidx.compose.material3.HorizontalDivider()
+                DropdownMenuItem(
+                    text = { Text(if (searchOpen) "Hide find" else "Find…") },
+                    leadingIcon = { Icon(Icons.Outlined.Search, null) },
+                    onClick = {
+                        menuOpen = false
+                        searchOpen = !searchOpen
+                        if (!searchOpen) editorRef?.searcher?.stopSearch()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text(if (wordwrapOn) "Word wrap: on" else "Word wrap: off") },
+                    onClick = {
+                        menuOpen = false
+                        val enabled = !wordwrapOn
+                        editorRef?.setWordwrap(enabled)
+                        container.editorScope.launch { container.settings.setEditorWordWrap(enabled) }
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Go to line…") },
+                    onClick = { menuOpen = false; gotoOpen = true },
+                )
+                DropdownMenuItem(
+                    text = { Text("Share") },
+                    leadingIcon = { Icon(Icons.Outlined.Share, null) },
+                    onClick = {
+                        menuOpen = false
+                        val f = fs ?: return@DropdownMenuItem
+                        scope.launch {
+                            runCatching {
+                                val node = withContext(Dispatchers.IO) { f.resolve(path) }
+                                FileOps.share(context, node)
+                            }.onFailure { e ->
+                                Toast.makeText(context, e.message ?: "Share failed", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Open externally") },
+                    leadingIcon = { Icon(Icons.Outlined.OpenInNew, null) },
+                    onClick = {
+                        menuOpen = false
+                        val f = fs ?: return@DropdownMenuItem
+                        scope.launch {
+                            runCatching {
+                                val node = withContext(Dispatchers.IO) { f.resolve(path) }
+                                FileOps.openWith(context, node)
+                            }.onFailure { e ->
+                                Toast.makeText(context, e.message ?: "No app can open this", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                )
+            }
+        }
+    }
     Scaffold(
         containerColor = scheme.surface,
         topBar = {
-            AppHeader(
-                title = path.substringAfterLast('/'),
-                subtitle = path,
-                onBack = {
-                    requestNavigation(onBack)
-                },
-                actions = {
-                    IconButton(
-                        onClick = { editorRef?.text?.undo() },
-                        enabled = editorRef != null && editorRef!!.text.canUndo(),
-                    ) { Icon(Icons.Outlined.Undo, contentDescription = "Undo") }
-                    IconButton(
-                        onClick = { editorRef?.text?.redo() },
-                        enabled = editorRef != null && editorRef!!.text.canRedo(),
-                    ) { Icon(Icons.Outlined.Redo, contentDescription = "Redo") }
-                    IconButton(onClick = {
-                        editing = !editing
-                        editorRef?.isEditable = editing
-                        if (editing) searchOpen = false
-                        persistDraft()
-                    }) {
-                        Icon(
-                            if (editing) Icons.Outlined.Check else Icons.Outlined.Edit,
-                            contentDescription = if (editing) "Done editing" else "Edit",
-                            tint = if (editing) scheme.primary else scheme.onSurfaceVariant,
-                        )
-                    }
-                    if (dirty && !saving) {
-                        IconButton(onClick = { save() }) {
-                            Icon(Icons.Outlined.Save, contentDescription = "Save", tint = scheme.primary)
-                        }
-                    }
-                    Box {
-                        IconButton(onClick = { menuOpen = true }) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "More")
-                        }
-                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                            DropdownMenuItem(
-                                text = { Text(if (searchOpen) "Hide find" else "Find…") },
-                                leadingIcon = { Icon(Icons.Outlined.Search, null) },
-                                onClick = {
-                                    menuOpen = false
-                                    searchOpen = !searchOpen
-                                    if (!searchOpen) editorRef?.searcher?.stopSearch()
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text(if (wordwrapOn) "Word wrap: on" else "Word wrap: off") },
-                                onClick = {
-                                    menuOpen = false
-                                    val enabled = !wordwrapOn
-                                    editorRef?.setWordwrap(enabled)
-                                    container.editorScope.launch { container.settings.setEditorWordWrap(enabled) }
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Go to line…") },
-                                onClick = { menuOpen = false; gotoOpen = true },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Share") },
-                                leadingIcon = { Icon(Icons.Outlined.Share, null) },
-                                onClick = {
-                                    menuOpen = false
-                                    val f = fs ?: return@DropdownMenuItem
-                                    scope.launch {
-                                        runCatching {
-                                            val node = withContext(Dispatchers.IO) { f.resolve(path) }
-                                            FileOps.share(context, node)
-                                        }.onFailure { e ->
-                                            Toast.makeText(context, e.message ?: "Share failed", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Open externally") },
-                                leadingIcon = { Icon(Icons.Outlined.OpenInNew, null) },
-                                onClick = {
-                                    menuOpen = false
-                                    val f = fs ?: return@DropdownMenuItem
-                                    scope.launch {
-                                        runCatching {
-                                            val node = withContext(Dispatchers.IO) { f.resolve(path) }
-                                            FileOps.openWith(context, node)
-                                        }.onFailure { e ->
-                                            Toast.makeText(context, e.message ?: "No app can open this", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                },
-                            )
-                        }
-                    }
-                },
-            )
+            Column {
+                if (workspaceChrome != null) {
+                    workspaceChrome()
+                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, content = controls)
+                    androidx.compose.material3.HorizontalDivider(color = scheme.outlineVariant)
+                } else AppHeader(title = path.substringAfterLast('/'), subtitle = path, onBack = { requestNavigation(onBack) }, actions = controls)
+            }
         },
     ) { padding ->
         Column(Modifier.padding(padding)) {
@@ -488,8 +512,14 @@ fun CodeEditorScreen(
                             factory = { ctx ->
                                 CodeEditor(ctx).apply {
                                     setOnKeyListener { _, keyCode, event ->
-                                        if (desktopInput && event.isCtrlPressed && keyCode == android.view.KeyEvent.KEYCODE_S) {
+                                        if (event.isCtrlPressed && keyCode == android.view.KeyEvent.KEYCODE_S) {
                                             if (event.action == android.view.KeyEvent.ACTION_UP) keyboardSave()
+                                            true
+                                        } else if (event.isCtrlPressed && keyCode == android.view.KeyEvent.KEYCODE_P && onQuickOpen != null) {
+                                            if (event.action == android.view.KeyEvent.ACTION_UP) { if (event.isShiftPressed) onCommands?.invoke() else onQuickOpen.invoke() }
+                                            true
+                                        } else if (event.isCtrlPressed && event.isShiftPressed && keyCode == android.view.KeyEvent.KEYCODE_F && onProjectSearch != null) {
+                                            if (event.action == android.view.KeyEvent.ACTION_UP) onProjectSearch.invoke()
                                             true
                                         } else false
                                     }
@@ -501,22 +531,47 @@ fun CodeEditorScreen(
                                     isEditable = editing
                                     setWordwrap(wordwrapOn)
                                     setEditorLanguage(BasicCodeLanguage(path))
-                                    setText(buffer.text.value ?: decoded.value!!.text)
+                                    setText(buffer.document ?: io.github.rosemoe.sora.text.Content(buffer.text.value ?: decoded.value!!.text), true, null)
+                                    buffer.document = text
+                                    val left = text.indexer.getCharPosition(buffer.selectionStart.coerceIn(0, text.length))
+                                    val right = text.indexer.getCharPosition(buffer.selectionEnd.coerceIn(0, text.length))
+                                    setSelectionRegion(left.line, left.column, right.line, right.column, false)
+                                    val savedX = buffer.offsetX
+                                    val savedY = buffer.offsetY
+                                    post {
+                                        if (!isReleased && initialLine == null) {
+                                            scroller.startScroll(0, 0, savedX.coerceAtMost(scrollMaxX), savedY.coerceAtMost(scrollMaxY), 0)
+                                            scroller.setEditorOffsets(); invalidate()
+                                        }
+                                    }
                                     applyEditorTheme(this, scheme)
                                     // Dirty flag via the event bus, survives setText
                                     // swapping out the Content object.
                                     subscribeEvent(
                                         io.github.rosemoe.sora.event.ContentChangeEvent::class.java,
                                     ) { _, _ ->
+                                        editRevision++
+                                        buffer.document = text
                                         buffer.text.value = text.toString()
                                         dirty = buffer.text.value != lastSavedText.value
                                         persistDraft()
                                     }
                                     subscribeEvent(io.github.rosemoe.sora.event.SelectionChangeEvent::class.java) { _, _ ->
                                         selectedLength = cursor.right - cursor.left
+                                        buffer.selectionStart = cursor.left
+                                        buffer.selectionEnd = cursor.right
+                                    }
+                                    subscribeEvent(io.github.rosemoe.sora.event.ScrollEvent::class.java) { _, _ ->
+                                        buffer.offsetX = offsetX; buffer.offsetY = offsetY
                                     }
                                     editorRef = this
                                 }
+                            },
+                            onRelease = { ed ->
+                                buffer.document = ed.text
+                                buffer.selectionStart = ed.cursor.left; buffer.selectionEnd = ed.cursor.right
+                                buffer.offsetX = ed.offsetX; buffer.offsetY = ed.offsetY
+                                ed.release()
                             },
                             update = { ed ->
                                 applyEditorTheme(ed, scheme)

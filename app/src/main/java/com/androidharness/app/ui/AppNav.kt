@@ -84,7 +84,7 @@ import com.androidharness.app.ui.projects.ProjectMemoryScreen
 import com.androidharness.app.ui.buildtest.BuildTestScreen
 import com.androidharness.app.ui.common.formatRelativeTime
 import com.androidharness.app.ui.files.ChangesScreen
-import com.androidharness.app.ui.files.CodeEditorScreen
+import com.androidharness.app.ui.files.WorkspaceEditorScreen
 import com.androidharness.app.ui.files.FilesScreen
 import com.androidharness.app.ui.settings.ProvidersScreen
 import com.androidharness.app.ui.settings.SettingsScreen
@@ -526,6 +526,10 @@ fun AppNav(container: AppContainer) {
                     onOpenFile = { path ->
                         nav.navigate("viewer/${encode(path)}?line=0&session=${encode(filesSessionId.orEmpty())}&project=${encode(filesProjectId.orEmpty())}")
                     },
+                    onOpenFileAtLine = { path, line ->
+                        nav.navigate("viewer/${encode(path)}?line=${line ?: 0}&session=${encode(filesSessionId.orEmpty())}&project=${encode(filesProjectId.orEmpty())}")
+                    },
+                    onOpenTerminal = { nav.navigate("terminal?session=${encode(filesSessionId.orEmpty())}&project=${encode(filesProjectId.orEmpty())}") },
                     onOpenChanges = filesSessionId?.let { sid ->
                         { nav.navigate("changes/${encode(sid)}") }
                     },
@@ -558,9 +562,11 @@ fun AppNav(container: AppContainer) {
                 val path = entry.arguments?.getString("path").orEmpty()
                 val line = entry.arguments?.getInt("line")?.takeIf { it > 0 }
                 val sessionArg = entry.arguments?.getString("session").orEmpty()
-                CodeEditorScreen(
+                WorkspaceEditorScreen(
                     container = container,
                     path = path,
+                    requestId = entry.id,
+                    onOpenTerminal = { nav.navigate("terminal?session=${encode(sessionArg)}&project=${encode(entry.arguments?.getString("project").orEmpty())}") },
                     initialLine = line,
                     sessionId = sessionArg.takeIf { it.isNotBlank() },
                     projectId = entry.arguments?.getString("project")?.takeIf { it.isNotBlank() },

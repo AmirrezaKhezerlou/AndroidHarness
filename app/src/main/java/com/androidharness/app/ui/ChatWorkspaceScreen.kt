@@ -58,17 +58,23 @@ fun ChatWorkspaceScreen(
     val guard = LocalDesktopNavigationGuard.current ?: localGuard
     var tool by rememberSaveable { mutableStateOf("Files") }
     var file by rememberSaveable { mutableStateOf<String?>(null) }
+    var fileRequest by rememberSaveable { mutableStateOf(java.util.UUID.randomUUID().toString()) }
     var line by rememberSaveable { mutableIntStateOf(0) }
     var panelOpen by rememberSaveable { mutableStateOf(false) }
     var compactOpen by rememberSaveable { mutableStateOf(false) }
     var toolsUsed by rememberSaveable { mutableStateOf(false) }
     var fraction by rememberSaveable { mutableFloatStateOf(0.62f) }
+    var workspaceTools by remember(chatState.sessionId, project?.id) { mutableStateOf<WorkspaceToolMode?>(null) }
     var githubProject by remember { mutableStateOf<Pair<String, String>?>(null) }
     val savedTools = rememberSaveableStateHolder()
     val keyboardRouter = LocalDesktopKeyboardRouter.current
     val keyboardOwner = remember { Any() }
     val inheritedDesktop = LocalDesktopLayout.current
     val desktopInput = settings.workspaceLayout == WorkspaceLayoutMode.DESKTOP
+    fun selectFile(path: String, atLine: Int?) {
+        fileRequest = java.util.UUID.randomUUID().toString()
+        file = path; line = atLine ?: 0
+    }
 
     githubProject?.let { (id, name) ->
         GitHubWorkspaceDialog(container, id, name, onOpenSettings = {
@@ -107,6 +113,15 @@ fun ChatWorkspaceScreen(
             guard.navigate { if (file != null) file = null else closePanel() }
         }
         fun handleKey(event: androidx.compose.ui.input.key.KeyEvent): Boolean {
+                    if (file == null || !visible) {
+                        val mode = if(event.isCtrlPressed && !event.isAltPressed) when {
+                            event.key == Key.P && event.isShiftPressed -> WorkspaceToolMode.COMMANDS
+                            event.key == Key.P -> WorkspaceToolMode.FILES
+                            event.key == Key.F && event.isShiftPressed -> WorkspaceToolMode.SEARCH
+                            else -> null
+                        } else null
+                        if(mode != null) { if(event.type == KeyEventType.KeyDown) workspaceTools = mode; return true }
+                    }
                     return if (!desktopInput) false else {
                         val action: (() -> Unit)? = when {
                             event.isCtrlPressed && !event.isAltPressed && event.key == Key.L -> ::focusInput
@@ -134,10 +149,25 @@ fun ChatWorkspaceScreen(
             WorkspaceToolButton("Terminal", Icons.Outlined.Terminal, visible && tool == "Terminal", desktop) { showTool("Terminal") }
             if (desktop) WorkspaceAccessMode(chatState.permissionMode, viewModel::setPermissionMode)
         }
-        CompositionLocalProvider(LocalDesktopLayout provides desktop, LocalDesktopInput provides desktopInput,
+        workspaceTools?.let { mode ->
+            WorkspaceToolsSheet(container, chatState.sessionId, null, mode, onDismiss = { workspaceTools = null },
+                onOpenFile = { path, atLine ->
+                    workspaceTools = null
+                    if (embedded) guard.navigate {
+                        focus.clearFocus(force = true)
+                        selectFile(path, atLine); tool = "Files"
+                        toolsUsed = true; panelOpen = true; compactOpen = !wide
+                    } else onOpenFile(path, atLine)
+                }, commands = listOf(
+                    WorkspaceCommand("Open files", "Browse this workspace", Icons.Outlined.Folder) { workspaceTools = null; if(embedded) showTool("Files") else onOpenFiles() },
+                    WorkspaceCommand("Open terminal", "Terminal for this workspace", Icons.Outlined.Terminal) { workspaceTools = null; if(embedded) showTool("Terminal") else onOpenTerminal() },
+                    WorkspaceCommand("Open settings", "App preferences and connections", Icons.Outlined.Settings) { workspaceTools = null; guard.navigate(onOpenSettings) },
+                ))
+        }
+        CompositionLocalProvider(LocalWorkspaceToolLauncher provides { workspaceTools = it }, LocalDesktopLayout provides desktop, LocalDesktopInput provides desktopInput,
             LocalComposerFocus provides inputFocus, LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
             Column(Modifier.fillMaxSize().then(if (showChrome) Modifier.statusBarsPadding() else Modifier)
-                .onPreviewKeyEvent { event -> if (keyboardRouter == null) handleKey(event) else false }) {
+                .onPreviewKeyEvent { event -> if (!desktop || keyboardRouter == null) handleKey(event) else false }) {
                 if (showChrome) {
                     Surface(color = MaterialTheme.colorScheme.surfaceContainer, contentColor = MaterialTheme.colorScheme.onSurface) {
                         Column {
@@ -165,7 +195,7 @@ fun ChatWorkspaceScreen(
                             onOpenFile = { path, initialLine ->
                                 if (embedded) guard.navigate {
                                     focus.clearFocus(force = true)
-                                    file = path; line = initialLine ?: 0; tool = "Files"
+                                    selectFile(path, initialLine); tool = "Files"
                                     toolsUsed = true; panelOpen = true; compactOpen = !wide
                                 } else onOpenFile(path, initialLine)
                             }, onNewChat = { guard.navigate(onNewChat) },
@@ -176,7 +206,8 @@ fun ChatWorkspaceScreen(
                             onNavigateToSession = { guard.navigate { onNavigateToSession(it) } }, searchMessageId = searchMessageId)
                     }, panel = {
                         if (desktop || toolsUsed) Box(Modifier.fillMaxSize()) {
-                            if (file != null) CodeEditorScreen(container, file!!, initialLine = line.takeIf { it > 0 },
+                            if (file != null) WorkspaceEditorScreen(container, file!!, initialLine = line.takeIf { it > 0 }, requestId = fileRequest,
+                                onOpenTerminal = { showTool("Terminal") },
                                 sessionId = chatState.sessionId, onBack = { file = null }, navigationGuard = guard,
                                 onAskAgent = { sourceId, prompt ->
                                     scope.launch {
@@ -199,7 +230,9 @@ fun ChatWorkspaceScreen(
                                     "Changes" -> chatState.sessionId?.let { sid -> ChangesScreen(container, sid,
                                         onBack = ::closePanel, onAskAgent = { container.pendingAgentPrompt.value = it; closePanel() }) }
                                     else -> FilesScreen(container, sessionId = chatState.sessionId, onBack = ::closePanel,
-                                        onOpenFile = { file = it; line = 0 },
+                                        onOpenFile = { selectFile(it, null) },
+                                        onOpenFileAtLine = ::selectFile,
+                                        onOpenTerminal = { showTool("Terminal") },
                                         onOpenChanges = chatState.sessionId?.let { { showTool("Changes") } })
                                 }
                             }

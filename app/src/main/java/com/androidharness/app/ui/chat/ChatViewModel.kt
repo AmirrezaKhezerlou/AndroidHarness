@@ -277,6 +277,11 @@ class ChatViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val workspaceFs = sessionIdFlow.flatMapLatest { c.workspace.forChat(it) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    private val webPreviewRefresh = MutableStateFlow(0L)
+    val webPreviewAvailable = webPreviewAvailability(workspaceFs, state.map {
+        WebPreviewInput(it.messages, it.streamingText, it.fileEditsByTurn.values.flatten().map { edit -> edit.relPath }.toSet())
+    }.distinctUntilChanged(), webPreviewRefresh).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    fun refreshWebPreviewSources() { webPreviewRefresh.update { it + 1 } }
     private val sessionCreation = Mutex()
 
     private suspend fun ensureSession(title: String = "New chat"): String = sessionCreation.withLock {

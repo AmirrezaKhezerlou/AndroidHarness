@@ -16,11 +16,17 @@ internal class EditorBufferViewModel : ViewModel() {
 }
 
 internal class EditorBuffer {
+    var document: io.github.rosemoe.sora.text.Content? = null
+    var selectionStart = 0
+    var selectionEnd = 0
+    var offsetX = 0
+    var offsetY = 0
     val text = mutableStateOf<String?>(null)
     val baseline = mutableStateOf("")
     val saved = mutableStateOf("")
     val editing = mutableStateOf(false)
     val dirty = mutableStateOf(false)
+    val saving = mutableStateOf(false)
     val decoded = mutableStateOf<EditorFileCodec.Decoded?>(null)
     val diskVersion = mutableStateOf<String?>(null)
     var loaded = false

@@ -3,6 +3,7 @@ package com.androidharness.app.core
 import com.androidharness.app.workspace.WorkspaceFs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.ensureActive
 
 enum class WebTargetType {
     LOCAL_SERVER,
@@ -22,6 +23,7 @@ object WebResourceExtractor {
 
     private val markdownLinkRegex = Regex("""\[([^\]]+)\]\((https?://[^\)\s]+|localhost:[^\)\s]+|127\.0\.0\.1:[^\)\s]+|preview:[^\)\s]+)\)""", RegexOption.IGNORE_CASE)
     private val rawUrlRegex = Regex("""\b(https?://[a-zA-Z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+)\b""", RegexOption.IGNORE_CASE)
+    private val bareLocalUrlRegex = Regex("""(?<![\w/:.])((?:localhost|127\.0\.0\.1):\d{1,5}(?!\d)(?:/[^\s`"<>]*)?)""", RegexOption.IGNORE_CASE)
     private val htmlFileRegex = Regex("""\b([a-zA-Z0-9_\-./]+\.(?:html|htm))\b""", RegexOption.IGNORE_CASE)
     private val explicitPreviewDirectiveRegex = Regex("""(?:::web-preview|\{preview|\{web-preview)\{target=["']([^"']+)["'](?:,\s*title=["']([^"']+)["'])?\}""", RegexOption.IGNORE_CASE)
 
@@ -76,6 +78,7 @@ object WebResourceExtractor {
         rawUrlRegex.findAll(text).forEach { match ->
             urls += match.groupValues[1]
         }
+        bareLocalUrlRegex.findAll(text).forEach { match -> urls += match.groupValues[1] }
         return urls.map { it.trimEnd('.', ',', ';', ':', ')', ']') }.distinct()
     }
 
@@ -93,16 +96,19 @@ object WebResourceExtractor {
     /**
      * Collect all HTML files present in the current workspace.
      */
-    suspend fun findWorkspaceHtmlFiles(workspace: WorkspaceFs?): List<String> =
+    suspend fun findWorkspaceHtmlFiles(workspace: WorkspaceFs?, limit: Int = 50): List<String> =
         withContext(Dispatchers.IO) {
             if (workspace == null) return@withContext emptyList()
+            val coroutine = kotlinx.coroutines.currentCoroutineContext()
             try {
                 workspace.walk(".")
+                    .onEach { coroutine.ensureActive() }
                     .filter { it.isFile && (it.name.endsWith(".html", ignoreCase = true) || it.name.endsWith(".htm", ignoreCase = true)) }
                     .map { it.relPath }
-                    .take(50)
+                    .take(limit)
                     .toList()
-            } catch (_: Exception) {
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) {
                 emptyList()
             }
         }

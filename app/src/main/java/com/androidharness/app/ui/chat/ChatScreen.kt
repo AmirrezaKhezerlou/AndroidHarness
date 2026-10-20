@@ -196,6 +196,10 @@ private fun ChatScreenContent(
 ) {
     // Lazy list content and its derived lookup maps must use the same snapshot.
     val state = viewModel.state.collectAsStateWithLifecycle().value
+    val webPreviewAvailable by viewModel.webPreviewAvailable.collectAsStateWithLifecycle()
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_START) {
+        viewModel.refreshWebPreviewSources()
+    }
     val desktopLayout = com.androidharness.app.ui.LocalDesktopLayout.current
     val currentProject by viewModel.activeWorkspace.collectAsStateWithLifecycle(initialValue = null)
     var githubProject by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -547,8 +551,12 @@ private fun ChatScreenContent(
         val fs by viewModel.workspaceFs.collectAsStateWithLifecycle(initialValue = null)
         WebPreviewSheet(
             initialTarget = webPreviewUrl,
+            startAtSources = webPreviewUrl == null,
             workspace = fs,
             messages = state.messages,
+            additionalLinks = remember(state.streamingText) {
+                com.androidharness.app.core.WebResourceExtractor.extractUrls(state.streamingText.orEmpty())
+            },
             browserController = viewModel.container.browser,
             agentActivity = latestBrowserActivity,
             agentRunning = state.busy,
@@ -1063,7 +1071,8 @@ private fun ChatScreenContent(
                     // Keep the review tied to the workspace selected when opened.
                     currentProject?.let { githubProject = it.id to it.name }
                 },
-                onOpenWebPreview = { showWebPreview = true },
+                showWebPreviewShortcut = webPreviewAvailable,
+                onOpenWebPreview = { webPreviewUrl = null; showWebPreview = true },
             )
             }
         },

@@ -72,6 +72,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -114,6 +115,8 @@ fun FilesScreen(
     onOpenFile: (String) -> Unit,
     onOpenChanges: (() -> Unit)? = null,
     projectId: String? = null,
+    onOpenFileAtLine: ((String, Int?) -> Unit)? = null,
+    onOpenTerminal: (() -> Unit)? = null,
 ) {
     com.androidharness.app.ui.common.ShizukuWorkspaceWarningEffect(container.shizuku)
     val context = LocalContext.current
@@ -261,8 +264,27 @@ fun FilesScreen(
     var creatingFile by remember { mutableStateOf(false) }
     var creatingFolder by remember { mutableStateOf(false) }
     var headerMenuOpen by remember { mutableStateOf(false) }
+    var workspaceTools by remember(workspaceKey) { mutableStateOf<WorkspaceToolMode?>(null) }
+    workspaceTools?.let { mode ->
+        WorkspaceToolsSheet(container, sessionId, projectId, mode, onDismiss = { workspaceTools = null },
+            onOpenFile = { path, line -> workspaceTools = null; onOpenFileAtLine?.invoke(path, line) ?: onOpenFile(path) },
+            commands = listOf(
+                WorkspaceCommand("Refresh files", "Reload the current folder", Icons.Outlined.Refresh) { workspaceTools = null; refreshTick++ },
+                WorkspaceCommand("Filter current folder", "Filter names in this folder", Icons.Outlined.Search) { workspaceTools = null; filterActive = true },
+            ) + listOfNotNull(
+                currentWorkspace?.let { project -> WorkspaceCommand("GitHub · Commit & push", "Review and publish workspace changes", Icons.Outlined.Code) { workspaceTools = null; githubProject = project.id to project.name } },
+                onOpenChanges?.let { action -> WorkspaceCommand("Show changes", "Review changes made in this chat", Icons.Outlined.Difference) { workspaceTools = null; action() } },
+                onOpenTerminal?.let { action -> WorkspaceCommand("Open terminal", "Terminal for this workspace", Icons.Outlined.Code) { workspaceTools = null; action() } },
+            ))
+    }
 
     Scaffold(
+        modifier = Modifier.onPreviewKeyEvent { event ->
+            if(event.isCtrlPressed && !event.isAltPressed) {
+                val mode = when { event.key == Key.P && event.isShiftPressed -> WorkspaceToolMode.COMMANDS; event.key == Key.P -> WorkspaceToolMode.FILES; event.key == Key.F && event.isShiftPressed -> WorkspaceToolMode.SEARCH; else -> null }
+                if(mode != null) { if(event.type == KeyEventType.KeyDown) workspaceTools = mode; true } else false
+            } else false
+        },
         containerColor = scheme.surface,
         topBar = {
             AppHeader(
@@ -289,8 +311,8 @@ fun FilesScreen(
                                 tint = if (currentWorkspace != null) scheme.onSurfaceVariant else scheme.primary,
                             )
                         }
-                        IconButton(onClick = { filterActive = !filterActive }) {
-                            Icon(Icons.Outlined.Search, contentDescription = "Filter")
+                        IconButton(onClick = { workspaceTools = WorkspaceToolMode.SEARCH }) {
+                            Icon(Icons.Outlined.Search, contentDescription = "Search project")
                         }
                         IconButton(onClick = { refreshTick++ }) {
                             Icon(Icons.Outlined.Refresh, contentDescription = "Refresh")
@@ -300,6 +322,10 @@ fun FilesScreen(
                                 Icon(Icons.Filled.MoreVert, contentDescription = "More")
                             }
                             DropdownMenu(expanded = headerMenuOpen, onDismissRequest = { headerMenuOpen = false }) {
+                                DropdownMenuItem(text = { Text("Quick Open") }, onClick = { headerMenuOpen = false; workspaceTools = WorkspaceToolMode.FILES })
+                                DropdownMenuItem(text = { Text("Command palette") }, onClick = { headerMenuOpen = false; workspaceTools = WorkspaceToolMode.COMMANDS })
+                                DropdownMenuItem(text = { Text("Filter current folder") }, onClick = { headerMenuOpen = false; filterActive = !filterActive })
+                                HorizontalDivider()
                                 DropdownMenuItem(
                                     text = { Text("GitHub · Commit & push") },
                                     enabled = currentWorkspace != null,

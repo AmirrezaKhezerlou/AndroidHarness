@@ -176,8 +176,10 @@ private const val ERUDA_INJECT_JS = """
 @Composable
 fun WebPreviewSheet(
     initialTarget: String? = null,
+    startAtSources: Boolean = false,
     workspace: WorkspaceFs? = null,
     messages: List<ChatMessage> = emptyList(),
+    additionalLinks: List<String> = emptyList(),
     browserController: com.androidharness.app.browser.BrowserController? = null,
     onSendPrompt: ((String) -> Unit)? = null,
     agentActivity: com.androidharness.app.browser.BrowserToolActivity? = null,
@@ -189,7 +191,7 @@ fun WebPreviewSheet(
     val scope = rememberCoroutineScope()
     val scheme = MaterialTheme.colorScheme
 
-    val effectiveInitial = initialTarget ?: browserController?.getActiveUrl()
+    val effectiveInitial = if (startAtSources) null else initialTarget ?: browserController?.getActiveUrl()
     var stage by remember {
         mutableStateOf(if (!effectiveInitial.isNullOrBlank()) WebPreviewStage.WEB_VIEW else WebPreviewStage.SOURCE_HUB)
     }
@@ -198,7 +200,9 @@ fun WebPreviewSheet(
     var isScanningSources by remember { mutableStateOf(true) }
     var activePorts by remember { mutableStateOf<List<Int>>(emptyList()) }
     var workspaceHtmlFiles by remember { mutableStateOf<List<String>>(emptyList()) }
-    var chatLinks by remember { mutableStateOf<List<String>>(emptyList()) }
+    val chatLinks = remember(messages, additionalLinks) {
+        (messages.flatMap { WebResourceExtractor.extractUrls(it.text) } + additionalLinks).distinct()
+    }
 
     var isFullscreen by remember { mutableStateOf(false) }
     var showConsole by remember { mutableStateOf(false) }
@@ -209,7 +213,6 @@ fun WebPreviewSheet(
         isScanningSources = true
         activePorts = LocalPortProbe.probe()
         workspaceHtmlFiles = WebResourceExtractor.findWorkspaceHtmlFiles(workspace)
-        chatLinks = messages.flatMap { WebResourceExtractor.extractUrls(it.text) }.distinct()
         isScanningSources = false
     }
 

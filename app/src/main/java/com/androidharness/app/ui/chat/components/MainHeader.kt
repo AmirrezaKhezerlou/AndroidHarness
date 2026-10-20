@@ -101,6 +101,7 @@ internal fun MainHeader(
     onOpenGitHub: () -> Unit,
     canOpenGitHub: Boolean = true,
     onOpenWebPreview: () -> Unit = {},
+    showWebPreviewShortcut: Boolean = false,
     modelScopeLabel: String? = null,
     workspaceName: String? = null,
     thinkingResolved: com.androidharness.app.agent.ThinkingSpecs.ResolvedThinking? = null,
@@ -117,7 +118,8 @@ internal fun MainHeader(
     if (com.androidharness.app.ui.LocalDesktopLayout.current) {
         DesktopConversationHeader(sessionTitle, busy, pickerLabel, thinkingLevel, thinkingLevels, mode,
             permissionMode, onPickModel, onSetThinking, onSetMode, onSetPermission,
-            onOpenContext, onOpenUndo, canUndo, onOpenGitHub, canOpenGitHub, onOpenWebPreview, thinkingResolved, onCustomizeThinking, onSetCustomThinking, onAddThinkingLevel)
+            onOpenContext, onOpenUndo, canUndo, onOpenGitHub, canOpenGitHub, onOpenWebPreview, thinkingResolved, onCustomizeThinking, onSetCustomThinking, onAddThinkingLevel,
+            showPreviewShortcut = showWebPreviewShortcut)
         return
     }
 
@@ -169,6 +171,7 @@ internal fun MainHeader(
                             Icon(painterResource(R.drawable.ic_chat_ellipsis_vertical), contentDescription = "More options", modifier = Modifier.size(18.dp))
                         }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            WorkspaceMenuEntries { menu = false }
                             DropdownMenuItem(
                                 text = { Text("GitHub") }, enabled = canOpenGitHub,
                                 leadingIcon = { Icon(painterResource(R.drawable.ic_github), null, Modifier.size(18.dp)) },
@@ -319,6 +322,9 @@ internal fun MainHeader(
                         Icon(painterResource(R.drawable.ic_github), contentDescription = "Open GitHub",
                             modifier = Modifier.size(18.dp))
                     }
+                    if (showWebPreviewShortcut) ExpressiveIconButton(onClick = onOpenWebPreview) {
+                        Icon(Icons.Outlined.Language, contentDescription = "Open web browser", modifier = Modifier.size(18.dp))
+                    }
                 }
             }
         }
@@ -337,6 +343,7 @@ private fun DesktopConversationHeader(
     onCustomizeThinking: (() -> Unit)?,
     onSetCustomThinking: (String) -> Unit,
     onAddThinkingLevel: (() -> Unit)?,
+    showPreviewShortcut: Boolean,
 ) {
     val scheme = MaterialTheme.colorScheme
     var menu by remember { mutableStateOf(false) }
@@ -356,11 +363,15 @@ private fun DesktopConversationHeader(
             ExpressiveIconButton(onClick = onGitHub, enabled = canGitHub, modifier = Modifier.size(36.dp)) {
                 Icon(painterResource(R.drawable.ic_github), "Open GitHub", Modifier.size(18.dp))
             }
+            if (showPreviewShortcut) ExpressiveIconButton(onClick = onPreview, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Outlined.Language, "Open web browser", Modifier.size(18.dp))
+            }
             Box {
                 IconButton(onClick = { menu = true }, modifier = Modifier.size(36.dp)) {
                     Icon(Icons.Filled.MoreVert, "Conversation actions", Modifier.size(18.dp))
                 }
                 DropdownMenu(menu, { menu = false }) {
+                    WorkspaceMenuEntries { menu = false }
                     DropdownMenuItem(text = { Text("Context & limits") }, onClick = { menu = false; onContext() })
                     DropdownMenuItem(text = { Text("Web preview") }, onClick = { menu = false; onPreview() })
                     DropdownMenuItem(text = { Text("GitHub") }, enabled = canGitHub, onClick = { menu = false; onGitHub() })
@@ -519,3 +530,16 @@ private fun ThinkingMenuOption(label: String, isSelected: Boolean, onClick: () -
 
 /** Accent for the Full access permission mode, warning orange, distinct from error red. */
 internal val FullAccessOrange = Color(0xFFF59E0B)
+
+@Composable
+private fun WorkspaceMenuEntries(onDismiss: () -> Unit) {
+    val launcher = com.androidharness.app.ui.files.LocalWorkspaceToolLauncher.current ?: return
+    listOf(
+        com.androidharness.app.ui.files.WorkspaceToolMode.FILES to "Quick Open",
+        com.androidharness.app.ui.files.WorkspaceToolMode.SEARCH to "Search project",
+        com.androidharness.app.ui.files.WorkspaceToolMode.COMMANDS to "Command palette",
+    ).forEach { (mode, label) ->
+        DropdownMenuItem(text = { Text(label) }, onClick = { onDismiss(); launcher(mode) })
+    }
+    HorizontalDivider()
+}
