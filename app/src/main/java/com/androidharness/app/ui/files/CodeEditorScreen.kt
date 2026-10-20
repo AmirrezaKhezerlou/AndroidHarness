@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.AutoAwesome
@@ -106,13 +108,19 @@ fun CodeEditorScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val scheme = MaterialTheme.colorScheme
-    val fs by remember(sessionId, projectId) { container.workspace.forTools(sessionId, projectId) }.collectAsStateWithLifecycle(initialValue = null)
+    val fs by androidx.compose.runtime.key(sessionId, projectId) {
+        remember(sessionId, projectId) { container.workspace.forTools(sessionId, projectId) }
+            .collectAsStateWithLifecycle(initialValue = null)
+    }
 
     // ---- load state ----
-    var loadState by remember(path) { mutableStateOf<Load>(Load.Loading) }
+    val draftKey = remember(path, sessionId, projectId, fs?.displayPath) {
+        fs?.let { EditorDraftStore.key(sessionId, projectId, it.displayPath, path) }
+    }
+    var loadState by remember(draftKey) { mutableStateOf<Load>(Load.Loading) }
     val buffers: EditorBufferViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
-    val buffer = remember(path, sessionId, fs?.displayPath) {
-        fs?.let { buffers.acquire("${sessionId.orEmpty()}:${it.displayPath}:$path") } ?: buffers.buffer
+    val buffer = remember(draftKey) {
+        draftKey?.let { buffers.acquire(it) } ?: buffers.buffer
     }
     val diskBaseline = buffer.baseline
     val lastSavedText = buffer.saved
@@ -122,6 +130,18 @@ fun CodeEditorScreen(
         if (fs == null) return@LaunchedEffect
         if (buffer.text.value != null) {
             loadState = Load.Ready
+            return@LaunchedEffect
+        }
+        val key = draftKey ?: return@LaunchedEffect
+        try {
+            container.editorDrafts.read(key)?.let { draft ->
+                buffer.restore(draft)
+                loadState = Load.Ready
+                return@LaunchedEffect
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) {
+            loadState = Load.Failed("Could not recover the editor draft. It has been kept on the device; the saved file has not been changed.")
             return@LaunchedEffect
         }
         val node = withContext(Dispatchers.IO) {
@@ -151,6 +171,7 @@ fun CodeEditorScreen(
                         diskBaseline.value = dec.text
                         lastSavedText.value = dec.text
                         buffer.diskVersion.value = EditorDiskSnapshot(bytes).version
+                        buffer.loaded = true
                     }
                     loadState = Load.Ready
                 }
@@ -163,7 +184,7 @@ fun CodeEditorScreen(
         .collectAsStateWithLifecycle(initialValue = null)
     var selection by remember(path) { mutableStateOf<SelectedCode?>(null) }
     var selectedLength by remember(path) { mutableIntStateOf(0) }
-    var editorRef by remember { mutableStateOf<CodeEditor?>(null) }
+    var editorRef by remember(draftKey) { mutableStateOf<CodeEditor?>(null) }
     var editing by buffer.editing
     var dirty by buffer.dirty
     var saving by remember { mutableStateOf(false) }
@@ -171,11 +192,30 @@ fun CodeEditorScreen(
     var searchOpen by remember { mutableStateOf(false) }
     var gotoOpen by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
-    var wordwrapOn by remember { mutableStateOf(false) }
+    val editorSettings by container.settings.settings.collectAsStateWithLifecycle(initialValue = com.androidharness.app.data.AppSettings())
+    val wordwrapOn = editorSettings.editorWordWrap
+    val draftStatus by remember(draftKey) { container.editorDrafts.status(draftKey.orEmpty()) }
+        .collectAsStateWithLifecycle(initialValue = EditorDraftStatus.IDLE)
     var pendingNavigation by remember { mutableStateOf<(() -> Unit)?>(null) }
     var conflict by remember(buffer) { mutableStateOf<EditorDiskSnapshot?>(null) }
     var conflictThenExit by remember(buffer) { mutableStateOf(false) }
     var compareConflict by remember(buffer) { mutableStateOf(false) }
+
+    fun persistDraft(immediate: Boolean = false) {
+        val key = draftKey ?: return
+        if (buffer.loaded) container.editorDrafts.submit(key, buffer.draft(), immediate)
+    }
+    val editorLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    androidx.compose.runtime.DisposableEffect(buffer, draftKey, editorLifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) persistDraft(immediate = true)
+        }
+        editorLifecycle.addObserver(observer)
+        onDispose {
+            editorLifecycle.removeObserver(observer)
+            persistDraft(immediate = true)
+        }
+    }
 
     fun editorText(): String = editorRef?.text?.toString().orEmpty()
     fun leave() {
@@ -228,6 +268,8 @@ fun CodeEditorScreen(
                     buffer.text.value = editorText()
                     lastSavedText.value = newText
                     dirty = buffer.text.value != newText
+                    buffer.recovered.value = false
+                    persistDraft(immediate = true)
                     Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
                     // Feed the Files-changed tracker; repository keeps the
                     // earliest baseline even though we resend ours each time.
@@ -279,6 +321,7 @@ fun CodeEditorScreen(
                         editing = !editing
                         editorRef?.isEditable = editing
                         if (editing) searchOpen = false
+                        persistDraft()
                     }) {
                         Icon(
                             if (editing) Icons.Outlined.Check else Icons.Outlined.Edit,
@@ -309,8 +352,9 @@ fun CodeEditorScreen(
                                 text = { Text(if (wordwrapOn) "Word wrap: on" else "Word wrap: off") },
                                 onClick = {
                                     menuOpen = false
-                                    wordwrapOn = !wordwrapOn
-                                    editorRef?.setWordwrap(wordwrapOn)
+                                    val enabled = !wordwrapOn
+                                    editorRef?.setWordwrap(enabled)
+                                    container.editorScope.launch { container.settings.setEditorWordWrap(enabled) }
                                 },
                             )
                             DropdownMenuItem(
@@ -412,6 +456,17 @@ fun CodeEditorScreen(
                 )
 
                 Load.Ready -> Column(Modifier.fillMaxSize()) {
+                    if (dirty) Text(
+                        when {
+                            draftStatus == EditorDraftStatus.FAILED -> "Draft recovery could not be saved. Keep this editor open or save the file."
+                            draftStatus == EditorDraftStatus.SAVING -> "Saving draft on device…"
+                            buffer.recovered.value -> "Recovered unsaved draft · file unchanged"
+                            else -> "Draft saved on device · file unsaved"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (draftStatus == EditorDraftStatus.FAILED) scheme.error else scheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                    )
                     if (onAskAgent != null && selectedLength > 0) Surface(color = scheme.secondaryContainer) {
                         Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(if (selectedLength > SelectedCode.MAX_CHARS) "Select less code to ask the agent" else "Selected code",
@@ -423,53 +478,65 @@ fun CodeEditorScreen(
                             }) { Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Ask agent") }
                         }
                     }
-                    AndroidView(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                            .imePadding()
-                            .background(scheme.surface),
-                        factory = { ctx ->
-                            CodeEditor(ctx).apply {
-                                setOnKeyListener { _, keyCode, event ->
-                                    if (desktopInput && event.isCtrlPressed && keyCode == android.view.KeyEvent.KEYCODE_S) {
-                                        if (event.action == android.view.KeyEvent.ACTION_UP) keyboardSave()
-                                        true
-                                    } else false
+                    androidx.compose.runtime.key(draftKey) {
+                        AndroidView(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .imePadding()
+                                .background(scheme.surface),
+                            factory = { ctx ->
+                                CodeEditor(ctx).apply {
+                                    setOnKeyListener { _, keyCode, event ->
+                                        if (desktopInput && event.isCtrlPressed && keyCode == android.view.KeyEvent.KEYCODE_S) {
+                                            if (event.action == android.view.KeyEvent.ACTION_UP) keyboardSave()
+                                            true
+                                        } else false
+                                    }
+                                    typefaceText = Typeface.MONOSPACE
+                                    typefaceLineNumber = Typeface.MONOSPACE
+                                    isHighlightCurrentLine = false
+                                    props.stickyScroll = false
+                                    getComponent(EditorAutoCompletion::class.java)?.setEnabled(false)
+                                    isEditable = editing
+                                    setWordwrap(wordwrapOn)
+                                    setEditorLanguage(BasicCodeLanguage(path))
+                                    setText(buffer.text.value ?: decoded.value!!.text)
+                                    applyEditorTheme(this, scheme)
+                                    // Dirty flag via the event bus, survives setText
+                                    // swapping out the Content object.
+                                    subscribeEvent(
+                                        io.github.rosemoe.sora.event.ContentChangeEvent::class.java,
+                                    ) { _, _ ->
+                                        buffer.text.value = text.toString()
+                                        dirty = buffer.text.value != lastSavedText.value
+                                        persistDraft()
+                                    }
+                                    subscribeEvent(io.github.rosemoe.sora.event.SelectionChangeEvent::class.java) { _, _ ->
+                                        selectedLength = cursor.right - cursor.left
+                                    }
+                                    editorRef = this
                                 }
-                                typefaceText = Typeface.MONOSPACE
-                                typefaceLineNumber = Typeface.MONOSPACE
-                                isHighlightCurrentLine = false
-                                props.stickyScroll = false
-                                getComponent(EditorAutoCompletion::class.java)?.setEnabled(false)
-                                isEditable = editing
-                                setWordwrap(false)
-                                setEditorLanguage(BasicCodeLanguage(path))
-                                setText(buffer.text.value ?: decoded.value!!.text)
-                                applyEditorTheme(this, scheme)
-                                // Dirty flag via the event bus, survives setText
-                                // swapping out the Content object.
-                                subscribeEvent(
-                                    io.github.rosemoe.sora.event.ContentChangeEvent::class.java,
-                                ) { _, _ ->
-                                    buffer.text.value = text.toString()
-                                    dirty = buffer.text.value != lastSavedText.value
-                                }
-                                subscribeEvent(io.github.rosemoe.sora.event.SelectionChangeEvent::class.java) { _, _ ->
-                                    selectedLength = cursor.right - cursor.left
-                                }
-                                editorRef = this
-                            }
-                        },
-                        update = { ed ->
-                            applyEditorTheme(ed, scheme)
-                        },
-                    )
+                            },
+                            update = { ed ->
+                                applyEditorTheme(ed, scheme)
+                                if (ed.isWordwrap != wordwrapOn) ed.setWordwrap(wordwrapOn)
+                            },
+                        )
+                    }
 
                     if (searchOpen) {
                         FindBar(
                             editor = editorRef,
                             editingEnabled = editing,
+                            matchCase = editorSettings.editorMatchCase,
+                            regexOn = editorSettings.editorRegexSearch,
+                            onMatchCaseChanged = { enabled ->
+                                container.editorScope.launch { container.settings.setEditorSearchOptions(matchCase = enabled) }
+                            },
+                            onRegexChanged = { enabled ->
+                                container.editorScope.launch { container.settings.setEditorSearchOptions(regex = enabled) }
+                            },
                             onClosed = { searchOpen = false },
                         )
                     }
@@ -544,6 +611,8 @@ fun CodeEditorScreen(
                         lastSavedText.value = text
                         buffer.diskVersion.value = reviewed.version
                         dirty = false
+                        buffer.recovered.value = false
+                        persistDraft(immediate = true)
                         conflict = null
                         pendingNavigation = null
                     }) { Text("Reload file") }
@@ -566,7 +635,15 @@ fun CodeEditorScreen(
             dismissButton = {
                 Row {
                     TextButton(onClick = { showExitPrompt = false; pendingNavigation = null }) { Text("Cancel") }
-                    TextButton(onClick = { showExitPrompt = false; dirty = false; buffer.text.value = lastSavedText.value; leave() }) {
+                    TextButton(onClick = {
+                        showExitPrompt = false
+                        editorRef?.setText(lastSavedText.value)
+                        buffer.text.value = lastSavedText.value
+                        dirty = false
+                        buffer.recovered.value = false
+                        persistDraft(immediate = true)
+                        leave()
+                    }) {
                         Text("Discard")
                     }
                 }
@@ -656,7 +733,7 @@ private fun NotTextView(
 // Find / replace bar
 
 /**
- * Owns its own query/options state. Re-runs search on debounced typing;
+ * Owns its query state and uses saved matching preferences. Re-runs search on debounced typing;
  * matches read back from the searcher with a short settle poll (the search
  * pass runs on a worker thread).
  */
@@ -664,13 +741,15 @@ private fun NotTextView(
 private fun FindBar(
     editor: CodeEditor?,
     editingEnabled: Boolean,
+    matchCase: Boolean,
+    regexOn: Boolean,
+    onMatchCaseChanged: (Boolean) -> Unit,
+    onRegexChanged: (Boolean) -> Unit,
     onClosed: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     var query by remember { mutableStateOf("") }
     var replaceWith by remember { mutableStateOf("") }
-    var matchCase by remember { mutableStateOf(false) }
-    var regexOn by remember { mutableStateOf(false) }
     var patternError by remember { mutableStateOf(false) }
     var matchInfo by remember { mutableStateOf(0 to 0) } // count to current
 
@@ -703,8 +782,8 @@ private fun FindBar(
                     s.gotoNext()
                     matchInfo = matchInfo.first to s.getCurrentMatchedPositionIndex()
                 }) { Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = "Next match") }
-                ToggleChip("Aa", matchCase, "Match case") { matchCase = it }
-                ToggleChip(".*", regexOn, "Regex") { regexOn = it }
+                ToggleChip("Aa", matchCase, "Match case", onMatchCaseChanged)
+                ToggleChip(".*", regexOn, "Regex", onRegexChanged)
                 IconButton(onClick = {
                     editor?.searcher?.stopSearch()
                     onClosed()
@@ -775,7 +854,7 @@ private fun ToggleChip(label: String, selected: Boolean, description: String, on
         selected = selected,
         onClick = { onChange(!selected) },
         label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-        modifier = Modifier.padding(start = 4.dp),
+        modifier = Modifier.padding(start = 4.dp).semantics { contentDescription = description },
     )
 }
 

@@ -61,6 +61,9 @@ class AppContainer(val appContext: Context) {
 
     val keys = KeyStoreManager(appContext)
     val settings = SettingsRepository(appContext)
+    internal val editorScope = kotlinx.coroutines.CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    internal val editorDrafts = com.androidharness.app.ui.files.EditorDraftStore(
+        java.io.File(appContext.noBackupFilesDir, "editor-drafts"), editorScope)
     val localModels = com.androidharness.app.local.LocalModelManager(appContext)
     val chatGpt = com.androidharness.app.chatgpt.ChatGptAccounts(keys::chatGptCredentials, keys::putChatGptCredentials,
         onConnected = { config ->

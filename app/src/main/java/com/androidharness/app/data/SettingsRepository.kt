@@ -31,6 +31,9 @@ data class AppSettings(
     val dynamicColor: Boolean = true,
     val progressBarStyle: ProgressBarStyle = ProgressBarStyle.FLAT,
     val workspaceLayout: WorkspaceLayoutMode = WorkspaceLayoutMode.AUTO,
+    val editorWordWrap: Boolean = false,
+    val editorMatchCase: Boolean = false,
+    val editorRegexSearch: Boolean = false,
     val activeProviderId: String? = null,
     val providerOrder: List<String> = emptyList(),
     val disabledProviderIds: Set<String> = emptySet(),
@@ -153,6 +156,9 @@ class SettingsRepository(private val context: Context) {
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val PROGRESS_BAR_STYLE = stringPreferencesKey("progress_bar_style")
         val WORKSPACE_LAYOUT = stringPreferencesKey("workspace_layout")
+        val EDITOR_WORD_WRAP = booleanPreferencesKey("editor_word_wrap")
+        val EDITOR_MATCH_CASE = booleanPreferencesKey("editor_match_case")
+        val EDITOR_REGEX_SEARCH = booleanPreferencesKey("editor_regex_search")
         val ACTIVE_PROVIDER = stringPreferencesKey("active_provider_id")
         val PROVIDER_ORDER = stringPreferencesKey("provider_order")
         val DISABLED_PROVIDERS = stringSetPreferencesKey("disabled_providers")
@@ -211,6 +217,9 @@ class SettingsRepository(private val context: Context) {
                 ?: ProgressBarStyle.FLAT,
             workspaceLayout = WorkspaceLayoutMode.fromStored(prefs[Keys.WORKSPACE_LAYOUT])
                 ?: WorkspaceLayoutMode.AUTO,
+            editorWordWrap = prefs[Keys.EDITOR_WORD_WRAP] ?: false,
+            editorMatchCase = prefs[Keys.EDITOR_MATCH_CASE] ?: false,
+            editorRegexSearch = prefs[Keys.EDITOR_REGEX_SEARCH] ?: false,
             activeProviderId = prefs[Keys.ACTIVE_PROVIDER] ?: com.androidharness.app.llm.HarnessProvider.ID,
             providerOrder = ProviderListPreferences.decodeOrder(prefs[Keys.PROVIDER_ORDER]),
             disabledProviderIds = prefs[Keys.DISABLED_PROVIDERS] ?: emptySet(),
@@ -270,6 +279,9 @@ class SettingsRepository(private val context: Context) {
             p[Keys.DYNAMIC_COLOR] = s.dynamicColor
             p[Keys.PROGRESS_BAR_STYLE] = s.progressBarStyle.name
             p[Keys.WORKSPACE_LAYOUT] = s.workspaceLayout.name
+            p[Keys.EDITOR_WORD_WRAP] = s.editorWordWrap
+            p[Keys.EDITOR_MATCH_CASE] = s.editorMatchCase
+            p[Keys.EDITOR_REGEX_SEARCH] = s.editorRegexSearch
             p[Keys.PROVIDER_ORDER] = ProviderListPreferences.encodeOrder(s.providerOrder)
             p[Keys.DISABLED_PROVIDERS] = s.disabledProviderIds
             p[Keys.FALLBACK_POLICY] = com.androidharness.app.llm.FallbackPolicy.encode(s.fallbackPolicy)
@@ -345,6 +357,17 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setWorkspaceLayout(mode: WorkspaceLayoutMode) {
         context.settingsStore.edit { it[Keys.WORKSPACE_LAYOUT] = mode.name }
+    }
+
+    suspend fun setEditorWordWrap(enabled: Boolean) {
+        context.settingsStore.edit { it[Keys.EDITOR_WORD_WRAP] = enabled }
+    }
+
+    suspend fun setEditorSearchOptions(matchCase: Boolean? = null, regex: Boolean? = null) {
+        context.settingsStore.edit {
+            if (matchCase != null) it[Keys.EDITOR_MATCH_CASE] = matchCase
+            if (regex != null) it[Keys.EDITOR_REGEX_SEARCH] = regex
+        }
     }
 
     suspend fun setAllowScreenshots(enabled: Boolean) {
