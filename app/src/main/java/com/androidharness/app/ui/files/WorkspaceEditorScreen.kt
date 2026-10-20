@@ -33,6 +33,11 @@ internal class EditorActions {
     var find: (() -> Unit)? = null
     var goToLine: (() -> Unit)? = null
     var toggleWrap: (() -> Unit)? = null
+    var outline: (() -> Unit)? = null
+    var format: (() -> Unit)? = null
+    var definition: (() -> Unit)? = null
+    var references: (() -> Unit)? = null
+    var rename: (() -> Unit)? = null
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -61,6 +66,8 @@ internal fun WorkspaceEditorScreen(
     var openFiles by remember(workspaceKey) { mutableStateOf(false) }
     var pendingClose by remember(workspaceKey) { mutableStateOf<String?>(null) }
     var jumpLine by remember(workspaceKey) { mutableStateOf<Int?>(null) }
+    var jumpColumn by remember(workspaceKey) { mutableStateOf<Int?>(null) }
+    var jumpRequest by remember(workspaceKey) { mutableLongStateOf(0) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(workspaceKey, requestId, path, initialLine) {
         val key = workspaceKey ?: return@LaunchedEffect
@@ -92,9 +99,22 @@ internal fun WorkspaceEditorScreen(
         onDispose { lifecycle.removeObserver(observer) }
     }
     val saving = state?.buffers?.values?.any { it.saving.value } == true
-    fun select(tab: String, line: Int? = null) { if(!saving) { state?.open(tab); jumpLine = line; state?.let(container.editorTabs::persist) } }
+    fun select(tab: String, line: Int? = null) { if(!saving) { state?.open(tab); jumpLine = line; jumpColumn = null; jumpRequest++; state?.let(container.editorTabs::persist) } }
     val active = state?.active
     val actions = remember(active, state?.revision) { EditorActions() }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val smart = remember(workspaceKey, state, fs) {
+        val workspaceFs = fs
+        if (state == null || workspaceFs == null) null else SmartEditorController(context, workspaceFs,
+            container.editorDrafts, { file -> EditorDraftStore.key(sessionId, projectId, identity.orEmpty(), file) },
+            buffers = { state.buffers.toMap() }, bufferFor = state::buffer, openRenamed = { files ->
+                val current = state.active
+                files.forEach(state::open)
+                current?.let(state::open)
+                container.editorTabs.persist(state)
+            })
+    }
+    DisposableEffect(smart) { onDispose { smart?.close() } }
     LaunchedEffect(pendingClose, active, actions.ready) {
         val target = pendingClose ?: return@LaunchedEffect
         if (active == target && actions.ready) {
@@ -115,6 +135,12 @@ internal fun WorkspaceEditorScreen(
         WorkspaceCommand("Find in current file", "Search inside the active editor", Icons.Outlined.FindInPage) { runCommand(actions.find) },
         WorkspaceCommand("Go to line", "Jump to a line in the active document", Icons.Outlined.FormatListNumbered) { runCommand(actions.goToLine) },
         WorkspaceCommand("Toggle word wrap", "Wrap long lines in the editor", Icons.Outlined.WrapText) { runCommand(actions.toggleWrap) },
+    ).filter { actions.textAvailable } + listOfNotNull(
+        active?.takeIf { SmartEditorSupport.outline(it) }?.let { WorkspaceCommand("Code outline", "Jump to a function, class or document symbol", Icons.Outlined.AccountTree) { runCommand(actions.outline) } },
+        active?.takeIf { SmartEditorSupport.format(it) }?.let { WorkspaceCommand("Format Document", "Format the draft · Undo available", Icons.Outlined.AutoFixHigh) { runCommand(actions.format) } },
+        active?.takeIf { SmartEditorSupport.navigation(it) }?.let { WorkspaceCommand("Go to Definition", "Open the symbol's project definition", Icons.Outlined.SubdirectoryArrowRight) { runCommand(actions.definition) } },
+        active?.takeIf { SmartEditorSupport.navigation(it) }?.let { WorkspaceCommand("Find References", "Find uses of this symbol", Icons.Outlined.ManageSearch) { runCommand(actions.references) } },
+        active?.takeIf { SmartEditorSupport.rename(it) }?.let { WorkspaceCommand("Rename Symbol", "Review semantic edits across the project", Icons.Outlined.DriveFileRenameOutline) { runCommand(actions.rename) } },
     ).filter { actions.textAvailable } + listOf(
         WorkspaceCommand("Open files", "Switch or close an editor tab", Icons.Outlined.Tab) { tools = null; openFiles = true },
     ) + listOfNotNull(onOpenTerminal?.let { action -> WorkspaceCommand("Open terminal", "Terminal for this workspace", Icons.Outlined.Terminal) { tools = null; actions.close?.invoke(action) ?: action() } })
@@ -162,10 +188,12 @@ internal fun WorkspaceEditorScreen(
         }) {
             if(active != null && state != null) key(workspaceKey, active, state.revision) {
                 CodeEditorScreen(container, active, initialLine = jumpLine, sessionId = sessionId, projectId = projectId,
+                    initialColumn = jumpColumn, jumpRequest = jumpRequest,
                     onBack = onBack, navigationGuard = navigationGuard, onAskAgent = onAskAgent,
                     suppliedBuffer = state.buffer(active), workspaceChrome = chrome, actions = actions,
                     onQuickOpen = { tools = WorkspaceToolMode.FILES }, onProjectSearch = { tools = WorkspaceToolMode.SEARCH },
-                    onCommands = { tools = WorkspaceToolMode.COMMANDS })
+                    onCommands = { tools = WorkspaceToolMode.COMMANDS }, smart = smart,
+                    onOpenSmartLocation = { location -> select(location.path, location.line); jumpColumn = location.column })
             } else Scaffold(topBar = chrome) { padding ->
                 Column(Modifier.fillMaxSize().padding(padding).padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                     when {

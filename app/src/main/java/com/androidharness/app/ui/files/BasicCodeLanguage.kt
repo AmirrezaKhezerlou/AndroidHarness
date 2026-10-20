@@ -8,21 +8,56 @@ import io.github.rosemoe.sora.lang.styling.SpanFactory
 import io.github.rosemoe.sora.lang.styling.Styles
 import io.github.rosemoe.sora.lang.styling.TextStyle
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme
+import io.github.rosemoe.sora.lang.completion.CompletionItem
+import io.github.rosemoe.sora.lang.completion.CompletionPublisher
+import io.github.rosemoe.sora.text.Content
+import io.github.rosemoe.sora.text.ContentReference
+import io.github.rosemoe.sora.text.CharPosition
+import io.github.rosemoe.sora.widget.CodeEditor
+import kotlinx.coroutines.runBlocking
 
 /**
  * Keyword-based language for the editor built on [CodeTokenizer]. Token types
  * map onto [EditorColorScheme] slots so the host app theme drives the colors
  * (the editor view overrides those slots with Material colors at setup).
  *
- * Highlighting only, no completion, the right scope for a harness file
- * editor without shipping TextMate grammars.
+ * Optional semantic completion comes from the bundled language worker.
  */
-class BasicCodeLanguage(path: String) : EmptyLanguage() {
+internal class BasicCodeLanguage(private val path: String, private val smart: SmartEditorController? = null) : EmptyLanguage() {
 
     private val lang = CodeTokenizer.langFor(path)
     private val analyzer = Analyzer()
 
     override fun getAnalyzeManager(): AnalyzeManager = analyzer
+
+    override fun requireAutoComplete(content: ContentReference, position: CharPosition, publisher: CompletionPublisher, extraArguments: android.os.Bundle) {
+        val controller = smart ?: return
+        if (!SmartEditorSupport.completion(path) || position.index == 0 || content.length > 512_000) return
+        val source = content.toString()
+        val previous = source.getOrNull(position.index - 1) ?: return
+        if (!previous.isLetterOrDigit() && previous !in "_$.-<\"'") return
+        try {
+            publisher.checkCancelled()
+            val items = runBlocking { controller.completions(path, source, position.index) }
+            publisher.checkCancelled()
+            for (suggestion in items) {
+                if (suggestion.start !in 0..position.index || suggestion.end !in position.index..source.length) continue
+                publisher.addItem(object : CompletionItem(suggestion.label, suggestion.detail) {
+                    init { prefixLength = position.index - suggestion.start }
+                    override fun performCompletion(editor: CodeEditor, text: Content, line: Int, column: Int) {
+                        // A delayed completion must never overwrite edits or a moved selection.
+                        if (!editor.isEditable || text.toString() != source || editor.cursor.isSelected || editor.cursor.left != position.index) return
+                        text.replace(suggestion.start, suggestion.end, suggestion.text)
+                        val cursor = text.indexer.getCharPosition(suggestion.start + suggestion.cursor.coerceIn(0, suggestion.text.length))
+                        editor.setSelection(cursor.line, cursor.column)
+                    }
+                })
+            }
+            publisher.updateList()
+        } catch (_: Exception) {
+            // Manual language actions display actionable errors; typing must remain uninterrupted.
+        }
+    }
 
     private inner class Analyzer : SimpleAnalyzeManager<Unit>() {
 

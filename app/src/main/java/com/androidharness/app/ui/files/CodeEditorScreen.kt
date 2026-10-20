@@ -17,6 +17,9 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.semantics.contentDescription
@@ -72,6 +75,8 @@ import com.androidharness.app.ui.common.AppHeader
 import io.github.rosemoe.sora.widget.CodeEditor
 import io.github.rosemoe.sora.widget.EditorSearcher
 import io.github.rosemoe.sora.widget.component.EditorAutoCompletion
+import androidx.compose.material.icons.outlined.AccountTree
+import androidx.compose.material.icons.outlined.AutoFixHigh
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -110,6 +115,10 @@ internal fun CodeEditorScreen(
     onQuickOpen: (() -> Unit)? = null,
     onProjectSearch: (() -> Unit)? = null,
     onCommands: (() -> Unit)? = null,
+    smart: SmartEditorController? = null,
+    onOpenSmartLocation: ((SmartLocation) -> Unit)? = null,
+    initialColumn: Int? = null,
+    jumpRequest: Long = 0,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -193,6 +202,8 @@ internal fun CodeEditorScreen(
     var selectedLength by remember(path) { mutableIntStateOf(0) }
     var editorRef by remember(draftKey) { mutableStateOf<CodeEditor?>(null) }
     var editRevision by remember(buffer) { mutableIntStateOf(0) }
+    var completionRevision by remember(buffer) { mutableIntStateOf(0) }
+    var completionAt by remember(buffer) { mutableIntStateOf(0) }
     var editing by buffer.editing
     var dirty by buffer.dirty
     var saving by buffer.saving
@@ -200,6 +211,8 @@ internal fun CodeEditorScreen(
     var searchOpen by remember { mutableStateOf(false) }
     var gotoOpen by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
+    var smartAction by remember(path) { mutableStateOf<SmartEditorAction?>(null) }
+    var languageSupport by remember { mutableStateOf(false) }
     val editorSettings by container.settings.settings.collectAsStateWithLifecycle(initialValue = com.androidharness.app.data.AppSettings())
     val wordwrapOn = editorSettings.editorWordWrap
     val draftStatus by remember(draftKey) { container.editorDrafts.status(draftKey.orEmpty()) }
@@ -314,9 +327,26 @@ internal fun CodeEditorScreen(
         actions?.find = { searchOpen = true }
         actions?.goToLine = { gotoOpen = true }
         actions?.toggleWrap = { container.editorScope.launch { container.settings.setEditorWordWrap(!wordwrapOn) } }
+        actions?.outline = { smartAction = SmartEditorAction.OUTLINE }
+        actions?.format = { smartAction = SmartEditorAction.FORMAT }
+        actions?.definition = { smartAction = SmartEditorAction.DEFINITION }
+        actions?.references = { smartAction = SmartEditorAction.REFERENCES }
+        actions?.rename = { smartAction = SmartEditorAction.RENAME }
     }
     val undoAvailable = editRevision.let { editorRef?.text?.canUndo() == true }
     val redoAvailable = editRevision.let { editorRef?.text?.canRedo() == true }
+    val completionImeHeight = WindowInsets.ime.getBottom(LocalDensity.current)
+    LaunchedEffect(completionRevision, editorRef, completionImeHeight) {
+        if (completionRevision == 0 || smart == null) return@LaunchedEffect
+        val ed = editorRef ?: return@LaunchedEffect
+        val at = completionAt
+        // Hardware keyboards do not always trigger Sora's IME completion path. Debounce both paths.
+        delay(180)
+        if (smartAction == null && !saving && ed.isEditable && ed.hasFocus() && !ed.cursor.isSelected && ed.cursor.left == at) {
+            ed.ensurePositionVisible(ed.cursor.leftLine, ed.cursor.leftColumn)
+            ed.getComponent(EditorAutoCompletion::class.java)?.requireCompletion()
+        }
+    }
     val controls: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
         IconButton(
             onClick = { editorRef?.text?.undo() },
@@ -327,6 +357,9 @@ internal fun CodeEditorScreen(
             enabled = redoAvailable,
         ) { Icon(Icons.Outlined.Redo, contentDescription = "Redo") }
         if (workspaceChrome != null) Spacer(Modifier.weight(1f))
+        if (smart != null && SmartEditorSupport.outline(path)) IconButton(onClick = { smartAction = SmartEditorAction.OUTLINE }, enabled = editorRef != null && !saving) {
+            Icon(Icons.Outlined.AccountTree, contentDescription = "Code outline")
+        }
         IconButton(onClick = {
             editing = !editing
             editorRef?.isEditable = editing
@@ -349,6 +382,17 @@ internal fun CodeEditorScreen(
                 Icon(Icons.Filled.MoreVert, contentDescription = "More")
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                if (smart != null) {
+                    if (SmartEditorSupport.format(path)) DropdownMenuItem(text = { Text("Format Document") }, leadingIcon = { Icon(Icons.Outlined.AutoFixHigh, null) }, enabled = editorRef != null && !saving,
+                        onClick = { menuOpen = false; smartAction = SmartEditorAction.FORMAT })
+                    if (SmartEditorSupport.navigation(path)) {
+                        DropdownMenuItem(text = { Text("Go to Definition") }, enabled = editorRef != null, onClick = { menuOpen = false; smartAction = SmartEditorAction.DEFINITION })
+                        DropdownMenuItem(text = { Text("Find References") }, enabled = editorRef != null, onClick = { menuOpen = false; smartAction = SmartEditorAction.REFERENCES })
+                    }
+                    if (SmartEditorSupport.rename(path)) DropdownMenuItem(text = { Text("Rename Symbol") }, enabled = editorRef != null && !saving, onClick = { menuOpen = false; smartAction = SmartEditorAction.RENAME })
+                    DropdownMenuItem(text = { Text("Language support") }, onClick = { menuOpen = false; languageSupport = true })
+                    androidx.compose.material3.HorizontalDivider()
+                }
                 onQuickOpen?.let { action -> DropdownMenuItem(text = { Text("Quick Open") }, leadingIcon = { Icon(Icons.Outlined.OpenInNew, null) }, onClick = { menuOpen = false; action() }) }
                 onProjectSearch?.let { action -> DropdownMenuItem(text = { Text("Search project") }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, onClick = { menuOpen = false; action() }) }
                 onCommands?.let { action -> DropdownMenuItem(text = { Text("Command palette") }, onClick = { menuOpen = false; action() }) }
@@ -512,7 +556,17 @@ internal fun CodeEditorScreen(
                             factory = { ctx ->
                                 CodeEditor(ctx).apply {
                                     setOnKeyListener { _, keyCode, event ->
-                                        if (event.isCtrlPressed && keyCode == android.view.KeyEvent.KEYCODE_S) {
+                                        val smartKeyAction = when {
+                                            smart == null -> null
+                                            keyCode == android.view.KeyEvent.KEYCODE_F12 && SmartEditorSupport.navigation(path) -> if (event.isShiftPressed) SmartEditorAction.REFERENCES else SmartEditorAction.DEFINITION
+                                            keyCode == android.view.KeyEvent.KEYCODE_F2 && SmartEditorSupport.rename(path) -> SmartEditorAction.RENAME
+                                            event.isCtrlPressed && event.isShiftPressed && keyCode == android.view.KeyEvent.KEYCODE_I && SmartEditorSupport.format(path) -> SmartEditorAction.FORMAT
+                                            else -> null
+                                        }
+                                        if (smartKeyAction != null) {
+                                            if (event.action == android.view.KeyEvent.ACTION_UP && !saving) smartAction = smartKeyAction
+                                            true
+                                        } else if (event.isCtrlPressed && keyCode == android.view.KeyEvent.KEYCODE_S) {
                                             if (event.action == android.view.KeyEvent.ACTION_UP) keyboardSave()
                                             true
                                         } else if (event.isCtrlPressed && keyCode == android.view.KeyEvent.KEYCODE_P && onQuickOpen != null) {
@@ -527,10 +581,11 @@ internal fun CodeEditorScreen(
                                     typefaceLineNumber = Typeface.MONOSPACE
                                     isHighlightCurrentLine = false
                                     props.stickyScroll = false
-                                    getComponent(EditorAutoCompletion::class.java)?.setEnabled(false)
+                                    getComponent(EditorAutoCompletion::class.java)?.setEnabled(smart != null && SmartEditorSupport.completion(path))
+                                    if (smart != null && SmartEditorSupport.completion(path)) getComponent(EditorAutoCompletion::class.java)?.setAdapter(MaterialCompletionAdapter())
                                     isEditable = editing
                                     setWordwrap(wordwrapOn)
-                                    setEditorLanguage(BasicCodeLanguage(path))
+                                    setEditorLanguage(BasicCodeLanguage(path, smart))
                                     setText(buffer.document ?: io.github.rosemoe.sora.text.Content(buffer.text.value ?: decoded.value!!.text), true, null)
                                     buffer.document = text
                                     val left = text.indexer.getCharPosition(buffer.selectionStart.coerceIn(0, text.length))
@@ -549,12 +604,18 @@ internal fun CodeEditorScreen(
                                     // swapping out the Content object.
                                     subscribeEvent(
                                         io.github.rosemoe.sora.event.ContentChangeEvent::class.java,
-                                    ) { _, _ ->
+                                    ) { event, _ ->
                                         editRevision++
                                         buffer.document = text
                                         buffer.text.value = text.toString()
                                         dirty = buffer.text.value != lastSavedText.value
                                         persistDraft()
+                                        if (smart != null && smartAction == null && SmartEditorSupport.completion(path) && isEditable && hasFocus() &&
+                                            event.action == io.github.rosemoe.sora.event.ContentChangeEvent.ACTION_INSERT &&
+                                            !event.isCausedByUndoManager && event.changedText.length in 1..2) {
+                                            completionAt = event.changeEnd.index
+                                            completionRevision++
+                                        }
                                     }
                                     subscribeEvent(io.github.rosemoe.sora.event.SelectionChangeEvent::class.java) { _, _ ->
                                         selectedLength = cursor.right - cursor.left
@@ -596,14 +657,15 @@ internal fun CodeEditorScreen(
                         )
                     }
 
-                    LaunchedEffect(initialLine, editorRef) {
+                    LaunchedEffect(initialLine, initialColumn, jumpRequest, editorRef) {
                         val ed = editorRef ?: return@LaunchedEffect
                         val line = (initialLine ?: 0) - 1
-                        if (line > 0 && ed.text.lineCount > 0) {
+                        if (line >= 0 && ed.text.lineCount > 0) {
                             delay(120)
                             val target = line.coerceAtMost(ed.text.lineCount - 1).coerceAtLeast(0)
-                            ed.setSelection(target, 0)
-                            ed.ensurePositionVisible(target, 0)
+                            val column = ((initialColumn ?: 1) - 1).coerceIn(0, ed.text.getColumnCount(target))
+                            ed.setSelection(target, column)
+                            ed.ensurePositionVisible(target, column)
                         }
                     }
                 }
@@ -639,6 +701,19 @@ internal fun CodeEditorScreen(
         }
     }
     if (gotoOpen) GoToLineDialog(editor = editorRef, onDismiss = { gotoOpen = false })
+    if (smart != null && editorRef != null) smartAction?.let { action ->
+        androidx.compose.runtime.key(action, path) {
+            SmartEditorSheet(action, path, editorRef!!, buffer, smart, onDismiss = { smartAction = null }, onOpenLocation = onOpenSmartLocation)
+        }
+    }
+    if (languageSupport) AlertDialog(onDismissRequest = { languageSupport = false }, title = { Text("Language support") },
+        text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("JavaScript & TypeScript: autocomplete, definitions, references, rename, outline and formatting.")
+            Text("HTML, CSS, SCSS, LESS & JSON: autocomplete, outline and formatting. CSS languages also support definitions and references within a file.")
+            Text("Markdown: outline and formatting. YAML: formatting.")
+            Text("Other languages keep syntax highlighting and the existing editor tools. Project indexing excludes dependency and generated folders.")
+            Text("Formatting reads JSON Prettier settings. JavaScript configs and external formatter plugins must run in Terminal.")
+        } }, confirmButton = { TextButton(onClick = { languageSupport = false }) { Text("Got it") } })
 
     conflict?.let { reviewed ->
         AlertDialog(
@@ -720,6 +795,11 @@ private fun applyEditorTheme(ed: CodeEditor, scheme: androidx.compose.material3.
     set(EditorColorScheme.LINE_NUMBER_CURRENT, scheme.primary)
     set(EditorColorScheme.TEXT_NORMAL, scheme.onSurface)
     set(EditorColorScheme.SELECTION_INSERT, scheme.primary.copy(alpha = 0.35f))
+    set(EditorColorScheme.COMPLETION_WND_BACKGROUND, scheme.surfaceContainerHigh)
+    set(EditorColorScheme.COMPLETION_WND_CORNER, scheme.outlineVariant)
+    set(EditorColorScheme.COMPLETION_WND_TEXT_PRIMARY, scheme.onSurface)
+    set(EditorColorScheme.COMPLETION_WND_TEXT_SECONDARY, scheme.onSurfaceVariant)
+    set(EditorColorScheme.COMPLETION_WND_ITEM_CURRENT, scheme.secondaryContainer)
 
     // Colors come from the palette shared with chat code blocks, so the two
     // render the same snippet identically.

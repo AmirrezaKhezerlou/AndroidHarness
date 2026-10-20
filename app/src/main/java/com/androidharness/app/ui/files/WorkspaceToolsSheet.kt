@@ -76,9 +76,13 @@ internal fun WorkspaceToolsSheet(
     var receipt by remember { mutableStateOf<ReplacementReceipt?>(null) }
     val options = ProjectSearchOptions(query, matchCase, regex, include, exclude)
     val focus = remember { FocusRequester() }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var highlighted by remember(mode, query) { mutableIntStateOf(0) }
     val currentFs = fs
-    LaunchedEffect(mode) { delay(120); focus.requestFocus() }
+    LaunchedEffect(mode, sheetState.currentValue) {
+        // Requesting focus during the opening animation can leave a blank sheet with a hardware keyboard.
+        if (sheetState.currentValue == SheetValue.Expanded) focus.requestFocus()
+    }
 
     LaunchedEffect(currentFs) {
         index = null
@@ -182,7 +186,7 @@ internal fun WorkspaceToolsSheet(
     MaterialTheme(motionScheme = MotionScheme.expressive()) {
         ModalBottomSheet(
             onDismissRequest = { if (!applying) onDismiss() },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            sheetState = sheetState,
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ) {
