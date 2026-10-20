@@ -26,9 +26,15 @@
         android:name="android.hardware.microphone"
         android:required="false" />
 
-    <!-- Allow discovering speech recognition service engines on Android 11+ -->
+    <!-- Allow discovering speech recognition service engines and installed
+         root managers on Android 11+. Root identification is display-only. -->
     <queries>
         <package android:name="moe.shizuku.privileged.api" />
+        <package android:name="me.weishu.kernelsu" />
+        <package android:name="com.rifsxd.ksunext" />
+        <package android:name="org.sukisu.manager" />
+        <package android:name="me.bmax.apatch" />
+        <package android:name="com.topjohnwu.magisk" />
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>

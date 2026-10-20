@@ -48,6 +48,8 @@ class DeviceAccessManager(
             combine(shizuku.state, shizuku.serviceState) { _, _ -> shizuku.isServiceReady() }
                 .collect { if (!it) szUid.value = null }
         }
+        // Package-only; never invokes su. The full check runs after a grant.
+        scope.launch { root.refreshManagerDetection() }
     }
 
     suspend fun grantRoot(projectId: String?, sessionId: String?): Boolean {
@@ -169,7 +171,7 @@ class DeviceAccessManager(
         return (workspace as? com.androidharness.app.workspace.ChatWorkspaceFs)?.bindings?.joinToString("; ", postfix = ". ") {
             "${it.name}: root requests ${if (rootAllowed(AccessRequest(it.id, sessionId), prefs)) "allowed" else "not allowed"}"
         }.orEmpty() + "Device access: ${prefs.mode.label}; auto fallback ${if (prefs.mode == AccessMode.AUTO || prefs.autoFallback) "on" else "off"}; " +
-            "direct root ${root.state.value.status.label}; Shizuku ${if (shizuku.isServiceReady()) "ready (${szUid.value?.let { "UID $it" } ?: "identity checked before execution"})" else "unavailable"}; " +
+            "direct root ${root.state.value.status.label}${root.state.value.provider?.let { " (${it.label})" } ?: ""}; Shizuku ${if (shizuku.isServiceReady()) "ready (${szUid.value?.let { "UID $it" } ?: "identity checked before execution"})" else "unavailable"}; " +
             "root ${if (allowed) "allowed" else "not allowed"} for this project/chat; ${allowance.value}; privileged access ${if (stopped.value) "paused" else "enabled"}. " +
             "App workspaces use the app user by default. Use shell access=\"root\" only when root is required; project restrictions still apply. " +
             "Do not invoke su or sudo directly; request root through the access parameter. " +
@@ -199,7 +201,8 @@ class DeviceAccessManager(
     fun report(): String = buildString {
         appendLine("AndroidHarness device access")
         appendLine("Mode: ${preferences.value.mode.label}; auto fallback: ${preferences.value.mode == AccessMode.AUTO || preferences.value.autoFallback}")
-        appendLine("Direct root: ${root.state.value.status.label}")
+        appendLine("Direct root: ${root.state.value.status.label}${root.state.value.provider?.let { " (${it.label})" } ?: ""}")
+        appendLine("Root manager: ${root.state.value.provider?.label ?: "Not detected"} (${root.state.value.providerEvidence ?: "no evidence"})")
         appendLine(root.state.value.detail)
         appendLine("Root checked at: ${root.state.value.checkedAt.takeIf { it > 0 }?.let(java.time.Instant::ofEpochMilli) ?: "Not checked"}")
         appendLine("Shizuku ready: ${shizuku.isServiceReady()}; UID: ${szUid.value ?: "not verified"}")

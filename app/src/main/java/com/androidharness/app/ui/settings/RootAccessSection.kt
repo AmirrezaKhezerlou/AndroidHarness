@@ -57,6 +57,10 @@ internal fun RootAccessSection(container: AppContainer) {
                 if (busy || root.status == RootStatus.REQUESTING) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
             }
             Text(root.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            root.provider?.let { provider ->
+                Text("Root manager: ${provider.label}", style = MaterialTheme.typography.labelMedium,
+                    color = if (root.status == RootStatus.READY) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             if (shizukuUid == 0) Text("Shizuku · Root available", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             AccessActionPair(first = { buttonModifier ->
                 Button(onClick = { scope.launch {

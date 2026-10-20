@@ -12,13 +12,39 @@ import kotlinx.coroutines.flow.asStateFlow
 internal enum class RootStatus(val label: String) {
     NOT_CHECKED("Not checked"), REQUESTING("Requesting access…"), READY("Ready · UID 0"), DENIED("Access denied"), UNAVAILABLE("Unavailable")
 }
-internal data class RootState(val status: RootStatus = RootStatus.NOT_CHECKED, val detail: String = "Enable root to request access.", val checkedAt: Long = 0)
+internal data class RootState(
+    val status: RootStatus = RootStatus.NOT_CHECKED,
+    val detail: String = "Enable root to request access.",
+    val checkedAt: Long = 0,
+    val provider: RootProvider? = null,
+    val providerEvidence: String? = null,
+)
 
 class RootManager(private val context: Context) {
+    private val installedPackages: Set<String> by lazy {
+        runCatching {
+            context.packageManager.getInstalledPackages(0).mapTo(mutableSetOf()) { it.packageName }
+        }.getOrDefault(emptySet())
+    }
+    private val kernelVersion: String by lazy {
+        runCatching { java.io.File("/proc/version").readText() }.getOrDefault("")
+    }
     private val mutableState = MutableStateFlow(RootState())
     internal val state = mutableState.asStateFlow()
     @Volatile internal var service: IHarnessService? = null
         private set
+
+    /** Package-only detection, so the settings card can name the manager before any prompt. */
+    internal suspend fun refreshManagerDetection() = withContext(Dispatchers.IO) {
+        if (mutableState.value.status == RootStatus.READY || mutableState.value.status == RootStatus.REQUESTING) return@withContext
+        val detection = RootProviderDetector.classify(installedPackages, kernelVersion, emptySet())
+        mutableState.value = mutableState.value.copy(
+            detail = detection.provider?.let { "${it.label} detected. Grant root access to verify." }
+                ?: "Enable root to request access.",
+            provider = detection.provider,
+            providerEvidence = detection.evidence.takeIf { detection.provider != null },
+        )
+    }
     private var connection: ServiceConnection? = null
     private var waiting: CompletableDeferred<IHarnessService>? = null
     private val requestLock = kotlinx.coroutines.sync.Mutex()
@@ -26,7 +52,9 @@ class RootManager(private val context: Context) {
     internal suspend fun requestAccess(): Boolean {
         requestLock.lock()
         try {
-            mutableState.value = RootState(RootStatus.REQUESTING, "Waiting for your root manager.")
+            mutableState.value = mutableState.value.copy(
+                status = RootStatus.REQUESTING, detail = "Waiting for your root manager.", checkedAt = 0,
+            )
             return try {
                 val existing = service
                 if (existing != null && verify()) return true
@@ -51,12 +79,20 @@ class RootManager(private val context: Context) {
                 true
             } catch (e: CancellationException) {
                 withContext(NonCancellable) { disconnect() }
-                mutableState.value = RootState(RootStatus.UNAVAILABLE, "Root request ended before verification.", System.currentTimeMillis())
+                mutableState.value = mutableState.value.copy(
+                    status = RootStatus.UNAVAILABLE,
+                    detail = "Root request ended before verification.",
+                    checkedAt = System.currentTimeMillis(),
+                )
                 throw e
             }
             catch (e: Exception) {
                 disconnect()
-                mutableState.value = RootState(RootStatus.DENIED, e.message ?: "Root access is unavailable.", System.currentTimeMillis())
+                mutableState.value = mutableState.value.copy(
+                    status = RootStatus.DENIED,
+                    detail = e.message ?: "Root access is unavailable.",
+                    checkedAt = System.currentTimeMillis(),
+                )
                 false
             } finally { waiting = null }
         } finally { requestLock.unlock() }
@@ -69,9 +105,24 @@ class RootManager(private val context: Context) {
             unavailable("No active root connection. Tap Grant root access to connect.")
             return@withContext false
         }
-        val ready = runCatching { svc.asBinder().pingBinder() && svc.uid == 0 && parsePrivilegedResult(svc.exec(arrayOf("/system/bin/sh", "-c", "id -u"), null, null, 1024, 2_000)).let { it.exitCode == 0 && it.output.trim() == "0" } }.getOrDefault(false)
-        if (ready) mutableState.value = RootState(RootStatus.READY, "Root identity verified by the running command service.", System.currentTimeMillis())
-        else unavailable("Root access was lost or could not be verified.")
+        val probe = runCatching {
+            // Identity and manager markers share one root call, so detection
+            // never adds a second prompt or a visible shell invocation.
+            val script = "id -u\n" + RootProviderDetector.markerScript
+            parsePrivilegedResult(svc.exec(arrayOf("/system/bin/sh", "-c", script), null, null, 4096, 5_000))
+        }.getOrNull()
+        val lines = probe?.output?.lineSequence()?.map { it.trim() }?.filter { it.isNotEmpty() }?.toList().orEmpty()
+        val ready = probe?.exitCode == 0 && lines.firstOrNull() == "0"
+        val detection = RootProviderDetector.classify(installedPackages, kernelVersion, lines.drop(1).map { it.uppercase() }.toSet())
+        if (ready && svc.asBinder().pingBinder() && svc.uid == 0) {
+            mutableState.value = RootState(
+                RootStatus.READY,
+                "${detection.provider?.label ?: "Root"} · identity verified by the running command service.",
+                System.currentTimeMillis(),
+                detection.provider,
+                detection.evidence,
+            )
+        } else unavailable("Root access was lost or could not be verified.")
         ready
     }
 
@@ -97,7 +148,12 @@ class RootManager(private val context: Context) {
         val conn = connection; connection = null
         if (conn != null) withContext(Dispatchers.Main) { runCatching { RootService.unbind(conn) } }
     }
-    private fun unavailable(detail: String) { service = null; mutableState.value = RootState(RootStatus.UNAVAILABLE, detail, System.currentTimeMillis()) }
+    private fun unavailable(detail: String) {
+        service = null
+        mutableState.value = mutableState.value.copy(
+            status = RootStatus.UNAVAILABLE, detail = detail, checkedAt = System.currentTimeMillis(),
+        )
+    }
 }
 
 internal fun parsePrivilegedResult(raw: String): PrivilegedResult {
