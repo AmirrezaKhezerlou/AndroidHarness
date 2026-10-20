@@ -256,7 +256,7 @@ class ReasoningDeviceTest {
                 it.execSQL("ALTER TABLE messages DROP COLUMN generationJson")
                 it.version = 17
             }
-            db = Room.databaseBuilder(context, AppDatabase::class.java, name).addMigrations(AppDatabase.MIGRATION_17_18).build()
+            db = Room.databaseBuilder(context, AppDatabase::class.java, name).addMigrations(AppDatabase.MIGRATION_17_18, AppDatabase.MIGRATION_18_19).build()
             sessions = SessionRepository(db)
             assertEquals("Existing question", sessions.messages(sid).single().text)
             assertNull(sessions.messages(sid).single().generation.state)
@@ -276,7 +276,12 @@ class ReasoningDeviceTest {
             assertEquals(restored.generation, sessions.messages(fork).last().generation)
             ChatBackupManager(db, context).exportTo(Uri.fromFile(backup))
             imported = Room.databaseBuilder(context, AppDatabase::class.java, importedName).build()
-            ChatBackupManager(imported, context).importFrom(Uri.fromFile(backup))
+            run {
+                val manager = ChatBackupManager(imported, context)
+                val target = com.androidharness.app.workspace.WorkspaceManager(context, imported.dao()).currentProjectOnce()
+                val preview = manager.prepareImport(Uri.fromFile(backup))
+                manager.importPrepared(preview, preview.missingWorkspaces.associate { it.id to target.id })
+            }
             assertEquals(restored.generation, SessionRepository(imported).messages(sid).last().generation)
             assertEquals(2, SessionRepository(imported).messages(sid).size)
         } finally {

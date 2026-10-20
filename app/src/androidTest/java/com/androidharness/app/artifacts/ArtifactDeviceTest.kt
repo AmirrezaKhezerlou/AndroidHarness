@@ -200,7 +200,7 @@ class ArtifactDeviceTest {
             SQLiteDatabase.openDatabase(context.getDatabasePath(name).path, null, 0).use {
                 it.execSQL("ALTER TABLE messages DROP COLUMN artifactJson"); it.execSQL("ALTER TABLE messages DROP COLUMN generationJson"); it.version = 16
             }
-            db = Room.databaseBuilder(context, AppDatabase::class.java, name).addMigrations(AppDatabase.MIGRATION_16_17, AppDatabase.MIGRATION_17_18).build()
+            db = Room.databaseBuilder(context, AppDatabase::class.java, name).addMigrations(AppDatabase.MIGRATION_16_17, AppDatabase.MIGRATION_17_18, AppDatabase.MIGRATION_18_19).build()
             repo = SessionRepository(db)
             assertEquals("Keep this old message", repo.messages(sid).single().text)
             val concept = ChatArtifact.create("Saved counter", "<button>Saved offline</button><!--" + "x".repeat(251_000) + "-->")
@@ -224,7 +224,12 @@ class ArtifactDeviceTest {
             assertEquals(listOf(concept, updated), SessionRepository(db).artifacts(sid))
             ChatBackupManager(db, context).exportTo(Uri.fromFile(export))
             imported = Room.databaseBuilder(context, AppDatabase::class.java, importedName).build()
-            ChatBackupManager(imported, context).importFrom(Uri.fromFile(export))
+            run {
+                val manager = ChatBackupManager(imported, context)
+                val target = com.androidharness.app.workspace.WorkspaceManager(context, imported.dao()).currentProjectOnce()
+                val preview = manager.prepareImport(Uri.fromFile(export))
+                manager.importPrepared(preview, preview.missingWorkspaces.associate { it.id to target.id })
+            }
             assertEquals(listOf(concept, updated), SessionRepository(imported).artifacts(sid))
         } finally { db.close(); imported?.close(); context.deleteDatabase(name); context.deleteDatabase(importedName); export.delete() }
     }

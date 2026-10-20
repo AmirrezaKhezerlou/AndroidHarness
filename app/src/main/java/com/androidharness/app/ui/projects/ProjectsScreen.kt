@@ -38,7 +38,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
 @Composable
-fun ProjectsScreen(container: AppContainer, onBack: () -> Unit, onOpenProject: (String) -> Unit) {
+fun ProjectsScreen(container: AppContainer, onBack: () -> Unit, onOpenProject: (String) -> Unit,
+    onProjectDeleted: () -> Unit = {}) {
     val projects by container.workspace.projects.collectAsStateWithLifecycle(initialValue = emptyList())
     val sessions by container.sessions.sessions.collectAsStateWithLifecycle(initialValue = emptyList())
     val settings by container.settings.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
@@ -47,6 +48,7 @@ fun ProjectsScreen(container: AppContainer, onBack: () -> Unit, onOpenProject: (
     }
     var adding by rememberSaveable { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var deleting by remember { mutableStateOf<ProjectEntity?>(null) }
     val scope = rememberCoroutineScope()
     fun finishAdd(id: String?) {
         adding = false
@@ -65,8 +67,23 @@ fun ProjectsScreen(container: AppContainer, onBack: () -> Unit, onOpenProject: (
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
             items(projects, key = { it.id }) { project ->
                 val count = counts[project.id] ?: 0
-                ProjectRow(project.name, "${container.workspace.describe(project).kindLabel} · $count ${if (count == 1) "chat" else "chats"}",
-                    Icons.Outlined.Folder, onClick = { onOpenProject(project.id) })
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) {
+                        ProjectRow(project.name, "${container.workspace.describe(project).kindLabel} · $count ${if (count == 1) "chat" else "chats"}",
+                            Icons.Outlined.Folder, onClick = { onOpenProject(project.id) })
+                    }
+                    if (project.kind != com.androidharness.app.workspace.WorkspaceManager.KIND_APP) {
+                        var menu by remember { mutableStateOf(false) }
+                        Box {
+                            IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreHoriz, "Actions for project ${project.name}") }
+                            DropdownMenu(menu, { menu = false }) {
+                                DropdownMenuItem(text = { Text("Delete project", color = MaterialTheme.colorScheme.error) },
+                                    leadingIcon = { Icon(Icons.Outlined.DeleteOutline, null) },
+                                    onClick = { menu = false; deleting = project })
+                            }
+                        }
+                    }
+                }
             }
             item {
                 HorizontalDivider(Modifier.padding(vertical = 12.dp))
@@ -82,6 +99,8 @@ fun ProjectsScreen(container: AppContainer, onBack: () -> Unit, onOpenProject: (
     }
     if (adding) AddWorkspaceDialog(container, onDismiss = { finishAdd(null) },
         onPickSaf = { adding = false; picker.launch(null) }, onSelected = { finishAdd(it) }, activateWorkspace = false)
+    deleting?.let { project -> ProjectDeletionDialog(container, project,
+        onDismiss = { deleting = null }, onDeleted = { deleting = null; onProjectDeleted() }) }
 }
 
 @Composable
@@ -99,6 +118,7 @@ fun ProjectScreen(
     onOpenTerminal: () -> Unit,
     onOpenBuildTest: () -> Unit,
     onSendPrompt: (String) -> Unit,
+    onProjectDeleted: () -> Unit = onBack,
 ) {
     val projects by container.workspace.projects.collectAsStateWithLifecycle(initialValue = emptyList())
     val sessions by container.sessions.sessions.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -116,6 +136,7 @@ fun ProjectScreen(
     var tab by rememberSaveable(projectId) { mutableIntStateOf(0) }
     var showRepository by rememberSaveable(projectId) { mutableStateOf(false) }
     var showDetails by rememberSaveable(projectId) { mutableStateOf(false) }
+    var deletingProject by remember(projectId) { mutableStateOf<ProjectEntity?>(null) }
     var repository by remember(projectId) { mutableStateOf<String?>(null) }
     val environment by container.linuxEnv.state.collectAsStateWithLifecycle()
     var refresh by remember(projectId) { mutableIntStateOf(0) }
@@ -273,7 +294,10 @@ fun ProjectScreen(
     }
     if (showRepository && project != null) GitHubWorkspaceDialog(container, project.id, project.name,
         onOpenSettings = onOpenSettings, onDismiss = { showRepository = false })
-    if (showDetails && project != null) ProjectDetailsDialog(container, project, onDismiss = { showDetails = false })
+    if (showDetails && project != null) ProjectDetailsDialog(container, project, onDismiss = { showDetails = false },
+        onDelete = { showDetails = false; deletingProject = project })
+    deletingProject?.let { target -> ProjectDeletionDialog(container, target,
+        onDismiss = { deletingProject = null }, onDeleted = { deletingProject = null; onProjectDeleted() }) }
 }
 
 private fun AutomationTask.projectStatus(): String = when {
@@ -298,7 +322,7 @@ internal fun ProjectRow(title: String, subtitle: String? = null, icon: ImageVect
 }
 
 @Composable
-private fun ProjectDetailsDialog(container: AppContainer, project: ProjectEntity, onDismiss: () -> Unit) {
+private fun ProjectDetailsDialog(container: AppContainer, project: ProjectEntity, onDismiss: () -> Unit, onDelete: () -> Unit) {
     var name by rememberSaveable(project.id) { mutableStateOf(project.name) }
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
@@ -310,6 +334,13 @@ private fun ProjectDetailsDialog(container: AppContainer, project: ProjectEntity
             Text("Workspace", style = MaterialTheme.typography.labelMedium)
             SelectionContainer { Text(runCatching { container.workspace.fsFor(project).displayPath }.getOrDefault("Unavailable"),
                 style = MaterialTheme.typography.bodySmall) }
+            if (project.kind != com.androidharness.app.workspace.WorkspaceManager.KIND_APP) {
+                HorizontalDivider()
+                TextButton(onClick = onDelete, enabled = !saving,
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                    Icon(Icons.Outlined.DeleteOutline, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Delete project")
+                }
+            } else Text("The app workspace cannot be deleted.", style = MaterialTheme.typography.bodySmall)
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
     }, confirmButton = {

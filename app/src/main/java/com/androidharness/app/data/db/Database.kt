@@ -132,6 +132,18 @@ data class FileEditEntity(
     val createdAt: Long,
 )
 
+/** Historical AI activity survives chat deletion and undo; no file contents or readable paths. */
+@Entity(tableName = "code_activity", indices = [Index("createdAt")])
+data class CodeActivityEntity(
+    @PrimaryKey val id: String,
+    val fileKey: String,
+    val added: Long,
+    val removed: Long,
+    val createdAt: Long,
+)
+
+data class CodeActivityTotals(val added: Long = 0, val removed: Long = 0, val files: Long = 0, val edits: Long = 0)
+
 /**
  * Cumulative per-file change tracking for one chat session, powers the
  * GitHub-style "Files changed" view. Rows key on (session, path) and
@@ -245,6 +257,31 @@ interface HarnessDao {
 
     @Query("SELECT COUNT(*) FROM sessions WHERE projectId = :projectId OR instr(workspaceSelectionJson, '\"' || :projectId || '\"') > 0")
     suspend fun projectSessionCount(projectId: String): Int
+
+    @Query("SELECT * FROM sessions WHERE projectId = :projectId OR instr(workspaceSelectionJson, '\"' || :projectId || '\"') > 0")
+    suspend fun projectSessions(projectId: String): List<SessionEntity>
+
+    @androidx.room.Transaction
+    suspend fun deleteProjectAndChats(projectId: String, expectedChatIds: Set<String>) {
+        val project = requireNotNull(project(projectId)) { "This project is no longer available." }
+        check(project.kind != "APP") { "The app workspace cannot be deleted." }
+        val chats = projectSessions(projectId)
+        check(chats.all { it.projectId == projectId }) {
+            "Chats in another project still use this workspace. Remove its access from those chats before deleting it."
+        }
+        check(chats.map { it.id }.toSet() == expectedChatIds) {
+            "The project's chats changed. Close this dialog and review deletion again."
+        }
+        chats.forEach { chat ->
+            deleteMessages(chat.id)
+            deleteCheckpoints(chat.id)
+            deleteUsageEvents(chat.id)
+            deleteFileEdits(chat.id)
+            deleteSessionFileChanges(chat.id)
+            deleteSession(chat)
+        }
+        deleteProject(project)
+    }
 
     @Insert
     suspend fun insertSession(session: SessionEntity)
@@ -473,6 +510,12 @@ interface HarnessDao {
     @Insert
     suspend fun insertFileEdit(edit: FileEditEntity)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertCodeActivity(activity: CodeActivityEntity)
+
+    @Query("SELECT COALESCE(SUM(added), 0) AS added, COALESCE(SUM(removed), 0) AS removed, COUNT(DISTINCT fileKey) AS files, COUNT(*) AS edits FROM code_activity WHERE createdAt >= :since AND createdAt < :until")
+    fun codeActivityBetween(since: Long, until: Long): Flow<CodeActivityTotals>
+
     @Query("SELECT * FROM file_edits WHERE sessionId = :sessionId ORDER BY createdAt ASC")
     fun fileEditsFlow(sessionId: String): Flow<List<FileEditEntity>>
 
@@ -505,16 +548,33 @@ interface HarnessDao {
         SnippetEntity::class,
         UsageEventEntity::class,
         FileEditEntity::class,
+        CodeActivityEntity::class,
         SessionFileChangeEntity::class,
         MessageFtsEntity::class,
     ],
-    version = 18,
+    version = 19,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun dao(): HarnessDao
 
     companion object {
+        val MIGRATION_18_19 = object : androidx.room.migration.Migration(18, 19) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS code_activity (id TEXT NOT NULL PRIMARY KEY, fileKey TEXT NOT NULL, added INTEGER NOT NULL, removed INTEGER NOT NULL, createdAt INTEGER NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_code_activity_createdAt ON code_activity(createdAt)")
+                db.query("SELECT rowId, sessionId, relPath, added, removed, createdAt FROM file_edits").use { rows ->
+                    while (rows.moveToNext()) {
+                        val path = rows.getString(2)
+                        if (com.androidharness.app.data.CodeFilePolicy.counts(path) && (rows.getLong(3) > 0 || rows.getLong(4) > 0)) {
+                            db.execSQL("INSERT OR IGNORE INTO code_activity (id, fileKey, added, removed, createdAt) VALUES (?, ?, ?, ?, ?)", arrayOf<Any>(
+                                "legacy-${rows.getLong(0)}", com.androidharness.app.data.CodeFilePolicy.fileKey(rows.getString(1), path),
+                                rows.getLong(3), rows.getLong(4), rows.getLong(5)))
+                        }
+                    }
+                }
+            }
+        }
         val MIGRATION_17_18 = object : androidx.room.migration.Migration(17, 18) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE messages ADD COLUMN generationJson TEXT")

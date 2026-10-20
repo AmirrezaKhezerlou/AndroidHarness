@@ -125,6 +125,12 @@ class WorkspaceManager(
     /** Called under RunManager's guard, after the user saves the selection. */
     suspend fun assignSelection(sessionId: String, selection: ChatWorkspaceSelection) {
         val saved = requireNotNull(dao.session(sessionId)) { "This chat no longer exists." }
+        validateSelection(selection)
+        dao.saveChatWorkspaces(sessionId, selection.primaryId, ChatWorkspaceSelection.encode(selection), qualifyLegacy = saved.workspaceSelectionJson == null)
+    }
+
+    /** Restores use the same overlap and availability checks as the normal access editor. */
+    suspend fun validateSelection(selection: ChatWorkspaceSelection) {
         val available = projects.first()
         val fs = scopedFs(ChatWorkspaceSelection.encode(selection),
             requireNotNull(available.firstOrNull { it.id == selection.primaryId }) { "The primary workspace is unavailable." }, available) as ChatWorkspaceFs
@@ -135,7 +141,6 @@ class WorkspaceManager(
                 }
             }
         }
-        dao.saveChatWorkspaces(sessionId, selection.primaryId, ChatWorkspaceSelection.encode(selection), qualifyLegacy = saved.workspaceSelectionJson == null)
     }
 
     /** Call through RunManager, which guards active tasks and saved file changes. */
@@ -248,6 +253,20 @@ class WorkspaceManager(
             releaseSafPermission(project.uri)
         }
         dao.deleteProject(project)
+        releaseProjectResources(project)
+    }
+
+    suspend fun projectChats(projectId: String) = dao.projectSessions(projectId)
+
+    /** App metadata only; the workspace directory and its contents are never removed. */
+    suspend fun deleteProjectAndChats(projectId: String, expectedChatIds: Set<String>) {
+        val project = requireNotNull(dao.project(projectId)) { "This project is no longer available." }
+        dao.deleteProjectAndChats(projectId, expectedChatIds)
+        if (project.kind == KIND_SAF && project.uri != null) releaseSafPermission(project.uri)
+        releaseProjectResources(project)
+    }
+
+    private suspend fun releaseProjectResources(project: ProjectEntity) {
         if (project.kind == KIND_SSH) {
             val id = runCatching { kotlinx.serialization.json.Json.decodeFromString<SshLocation>(requireNotNull(project.uri)).connectionId }.getOrNull()
             if (id != null && projects.first().none {

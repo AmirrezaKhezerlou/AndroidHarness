@@ -21,4 +21,6 @@ internal class EditorBuffer {
     val saved = mutableStateOf("")
     val editing = mutableStateOf(false)
     val dirty = mutableStateOf(false)
+    val decoded = mutableStateOf<EditorFileCodec.Decoded?>(null)
+    val diskVersion = mutableStateOf<String?>(null)
 }

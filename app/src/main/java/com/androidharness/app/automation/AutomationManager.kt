@@ -116,6 +116,12 @@ class AutomationManager(private val c: AppContainer) {
 
     fun delete(id: String) { cancel(id); repository.delete(id) }
 
+    /** Do not race a worker creating chats or publishing a result during project removal. */
+    internal suspend fun <T> withIdleAutomations(action: suspend () -> T): T {
+        check(mutex.tryLock()) { "Wait for the running automation to finish before deleting a project." }
+        try { return action() } finally { mutex.unlock() }
+    }
+
     fun pause(id: String) {
         work.cancelUniqueWork("automation-run-$id")
         work.cancelUniqueWork("automation-schedule-$id")

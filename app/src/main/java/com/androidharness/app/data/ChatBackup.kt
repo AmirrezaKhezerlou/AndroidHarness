@@ -8,6 +8,7 @@ import com.androidharness.app.data.db.MessageEntity
 import com.androidharness.app.data.db.SessionEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -26,7 +27,35 @@ data class ChatBackupFile(
     val version: Int = ChatBackupCodec.VERSION,
     val exportedAt: Long = 0,
     val sessions: List<BackupSession> = emptyList(),
+    val workspaces: List<BackupWorkspace> = emptyList(),
 )
+
+@Serializable
+data class BackupWorkspace(val id: String, val name: String)
+
+data class ChatImportPreview(val sessions: List<BackupSession>, val missingWorkspaces: List<BackupWorkspace>, val skipped: Int)
+
+internal object ChatRestoreMapping {
+    const val UNASSIGNED = "legacy-unassigned-workspace"
+    fun referenced(session: BackupSession): Set<String> = buildSet {
+        add(session.projectId ?: UNASSIGNED)
+        session.workspaceSelectionJson?.let { raw ->
+            val selection = com.androidharness.app.workspace.ChatWorkspaceSelection.decode(raw)
+            require(selection.primaryId == session.projectId) { "A restored chat has inconsistent workspace access." }
+            addAll(selection.grants.map { it.projectId })
+        }
+    }
+    fun remap(session: BackupSession, mapping: Map<String, String>): BackupSession {
+        val primary = session.projectId ?: UNASSIGNED
+        val selection = session.workspaceSelectionJson?.let {
+            val saved = com.androidharness.app.workspace.ChatWorkspaceSelection.decode(it)
+            val grants = saved.grants.map { grant -> grant.copy(projectId = mapping[grant.projectId] ?: grant.projectId) }
+            com.androidharness.app.workspace.ChatWorkspaceSelection.encode(
+                saved.copy(primaryId = mapping[saved.primaryId] ?: saved.primaryId, grants = grants).validated())
+        }
+        return session.copy(projectId = mapping[primary] ?: session.projectId, workspaceSelectionJson = selection)
+    }
+}
 
 @Serializable
 data class BackupSession(
@@ -73,7 +102,7 @@ data class BackupMessage(
 /** Pure encode/decode plus file validation; no Android types, so JVM-testable. */
 object ChatBackupCodec {
     const val FORMAT = "androidharness-chats"
-    const val VERSION = 2
+    const val VERSION = 3
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -116,6 +145,7 @@ object ChatBackupMerge {
 class ChatBackupManager(
     private val db: AppDatabase,
     private val appContext: Context,
+    private val workspace: com.androidharness.app.workspace.WorkspaceManager = com.androidharness.app.workspace.WorkspaceManager(appContext, db.dao()),
 ) {
     data class ExportResult(val sessions: Int, val messages: Int)
     data class ImportResult(val sessions: Int, val messages: Int, val skipped: Int)
@@ -125,6 +155,7 @@ class ChatBackupManager(
         val bySession = db.dao().allMessages().groupBy { it.sessionId }
         val file = ChatBackupFile(
             exportedAt = System.currentTimeMillis(),
+            workspaces = db.dao().projectsFlow().first().map { BackupWorkspace(it.id, it.name) },
             sessions = sessions.map { s ->
                 BackupSession(
                     id = s.id,
@@ -175,14 +206,40 @@ class ChatBackupManager(
         ExportResult(file.sessions.size, file.sessions.sumOf { it.messages.size })
     }
 
-    suspend fun importFrom(uri: Uri): ImportResult = withContext(Dispatchers.IO) {
+    suspend fun prepareImport(uri: Uri): ChatImportPreview = withContext(Dispatchers.IO) {
         val text = appContext.contentResolver.openInputStream(uri)?.use {
             it.bufferedReader(Charsets.UTF_8).readText()
         } ?: throw ChatBackupException("Could not open the file")
         val file = ChatBackupCodec.decode(text)
         val plan = ChatBackupMerge.plan(db.dao().allSessionIds().toSet(), file.sessions)
-        if (plan.toImport.isNotEmpty()) {
-            db.withTransaction {
+        val available = db.dao().projectsFlow().first().map { it.id }.toSet()
+        val missing = plan.toImport.flatMap { ChatRestoreMapping.referenced(it) }.distinct().filterNot { it in available }
+            .map { id -> BackupWorkspace(id, file.workspaces.firstOrNull { it.id == id }?.name
+                ?: if (id == ChatRestoreMapping.UNASSIGNED) "Chats without a workspace" else
+                    plan.toImport.firstOrNull { it.projectId == id }?.title?.let { "Workspace for $it" } ?: "Restored workspace") }
+        ChatImportPreview(plan.toImport, missing, plan.skipped)
+    }
+
+    suspend fun importFrom(uri: Uri): ImportResult = importPrepared(prepareImport(uri), emptyMap())
+
+    suspend fun importPrepared(preview: ChatImportPreview, workspaceMapping: Map<String, String>): ImportResult = withContext(Dispatchers.IO) {
+        require(preview.missingWorkspaces.all { !workspaceMapping[it.id].isNullOrBlank() }) {
+            "Choose a workspace for each restored project before importing."
+        }
+        var imported = emptyList<BackupSession>()
+        db.withTransaction {
+            val available = db.dao().projectsFlow().first().map { it.id }.toSet()
+            val fresh = ChatBackupMerge.plan(db.dao().allSessionIds().toSet(), preview.sessions)
+            imported = fresh.toImport.map { session ->
+                val remapped = ChatRestoreMapping.remap(session, workspaceMapping)
+                require(ChatRestoreMapping.referenced(remapped).all { it in available }) {
+                    "A chosen workspace is no longer available. Review the restored projects again."
+                }
+                remapped.workspaceSelectionJson?.let { workspace.validateSelection(com.androidharness.app.workspace.ChatWorkspaceSelection.decode(it)) }
+                remapped
+            }
+            val plan = ChatBackupMerge.Plan(imported, fresh.skipped)
+            if (plan.toImport.isNotEmpty()) {
                 for (s in plan.toImport) {
                     db.dao().insertSession(
                         SessionEntity(
@@ -230,6 +287,6 @@ class ChatBackupManager(
                 }
             }
         }
-        ImportResult(plan.toImport.size, plan.toImport.sumOf { it.messages.size }, plan.skipped)
+        ImportResult(imported.size, imported.sumOf { it.messages.size }, preview.skipped + preview.sessions.size - imported.size)
     }
 }

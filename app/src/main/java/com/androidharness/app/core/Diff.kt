@@ -232,6 +232,50 @@ object Diff {
         return added to removed
     }
 
+    /** Full-file counts for usage. Returns null when the exact diff exceeds the work budget. */
+    fun exactLineCounts(oldText: String, newText: String): Pair<Int, Int>? {
+        if (oldText == newText) return 0 to 0
+        if (oldText.length.toLong() + newText.length > 1_024_000L) return null
+        val old = splitLines(oldText)
+        val new = splitLines(newText)
+        var start = 0
+        while (start < old.size && start < new.size && old[start] == new[start]) start++
+        var oldEnd = old.size
+        var newEnd = new.size
+        while (oldEnd > start && newEnd > start && old[oldEnd - 1] == new[newEnd - 1]) {
+            oldEnd--; newEnd--
+        }
+        val n = oldEnd - start
+        val m = newEnd - start
+        if (n == 0) return m to 0
+        if (m == 0) return 0 to n
+
+        // Counts need only the edit distance, not Myers' full trace. Keep memory
+        // linear and skip an expensive diff rather than recording partial counts.
+        val max = n + m
+        val offset = max + 1
+        val frontier = IntArray(2 * max + 3)
+        var work = 2_000_000
+        for (distance in 0..max) {
+            for (diagonal in -distance..distance step 2) {
+                if (--work < 0) return null
+                val index = offset + diagonal
+                var x = if (diagonal == -distance ||
+                    (diagonal != distance && frontier[index - 1] < frontier[index + 1])) {
+                    frontier[index + 1]
+                } else frontier[index - 1] + 1
+                var y = x - diagonal
+                while (x < n && y < m && old[start + x] == new[start + y]) {
+                    if (--work < 0) return null
+                    x++; y++
+                }
+                frontier[index] = x
+                if (x >= n && y >= m) return (distance + m - n) / 2 to (distance + n - m) / 2
+            }
+        }
+        return null
+    }
+
     data class UndoSection(val offset: Int, val before: String, val after: String)
 
     /** Exact text chunks, including CRLF and final newlines. Never use a truncated preview for writes. */

@@ -89,7 +89,7 @@ class AppContainer(val appContext: Context) {
 
     private val db = Room.databaseBuilder(appContext, AppDatabase::class.java, "harness.db")
         .addMigrations(
-            AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6,
+            AppDatabase.MIGRATION_18_19, AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6,
             AppDatabase.MIGRATION_6_7, AppDatabase.MIGRATION_7_8,
             AppDatabase.MIGRATION_8_9, AppDatabase.MIGRATION_9_10, AppDatabase.MIGRATION_10_11, AppDatabase.MIGRATION_11_12, AppDatabase.MIGRATION_12_13, AppDatabase.MIGRATION_13_14, AppDatabase.MIGRATION_14_15, AppDatabase.MIGRATION_15_16, AppDatabase.MIGRATION_16_17, AppDatabase.MIGRATION_17_18,
         )
@@ -100,7 +100,7 @@ class AppContainer(val appContext: Context) {
         .build()
     val sessions = SessionRepository(db)
     val chatModels = com.androidharness.app.data.ChatModelRepository(settings, providers, sessions)
-    val chatBackup = ChatBackupManager(db, appContext)
+    val chatBackup by lazy { ChatBackupManager(db, appContext, workspace) }
     val snippets = com.androidharness.app.data.SnippetRepository(db.dao())
 
     val sshConnections = com.androidharness.app.workspace.SshConnections(keys)
@@ -230,6 +230,7 @@ class AppContainer(val appContext: Context) {
         keys::githubCredential, keys::putGitHubCredential, { refreshGitHubAuth() })
     val githubRepositories = com.androidharness.app.github.GitHubWorkspaces(this)
     val automation = com.androidharness.app.automation.AutomationManager(this)
+    val projectDeletion = com.androidharness.app.workspace.ProjectDeletion(this)
     internal var telegram = com.androidharness.app.telegram.TelegramManager(this)
     val terminal = com.androidharness.app.data.TerminalManager(appContext, linuxEnv, shizuku, runManager)
     val storage = com.androidharness.app.data.storage.StorageManager(this)

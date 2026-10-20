@@ -121,8 +121,17 @@ fun FilesScreen(
     val scheme = MaterialTheme.colorScheme
     val statusSuccess = LocalStatusColors.current.success
     val fs by remember(sessionId, projectId) { container.workspace.forTools(sessionId, projectId) }.collectAsStateWithLifecycle(initialValue = null)
+    val currentWorkspace by remember(sessionId, projectId) { container.workspace.projectForTools(sessionId, projectId) }
+        .collectAsStateWithLifecycle(initialValue = null)
 
-    var currentPath by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(".") }
+    // Include the project location: picked folders can have identical display names.
+    val workspaceKey = currentWorkspace?.let { project ->
+        fs?.let { "${project.id}:${project.kind}:${project.uri}:${it.displayPath}" }
+    }
+    var lastWorkspaceKey by androidx.compose.runtime.saveable.rememberSaveable(sessionId, projectId) {
+        mutableStateOf<String?>(null)
+    }
+    var currentPath by androidx.compose.runtime.saveable.rememberSaveable(sessionId, projectId) { mutableStateOf(".") }
     var refreshTick by remember { mutableIntStateOf(0) }
     var filter by remember { mutableStateOf("") }
     var filterActive by remember { mutableStateOf(false) }
@@ -130,11 +139,11 @@ fun FilesScreen(
     var loadError by remember { mutableStateOf<String?>(null) }
     var entries by remember { mutableStateOf<List<FsNode>>(emptyList()) }
 
-    var selecting by remember(fs, currentPath) { mutableStateOf(false) }
-    var selectedPaths by remember(fs, currentPath) { mutableStateOf<Set<String>>(emptySet()) }
+    var selecting by remember(sessionId, projectId, workspaceKey, currentPath) { mutableStateOf(false) }
+    var selectedPaths by remember(sessionId, projectId, workspaceKey, currentPath) { mutableStateOf<Set<String>>(emptySet()) }
     var batchBusy by remember { mutableStateOf(false) }
-    var batchAction by remember(fs) { mutableStateOf<String?>(null) }
-    var batchTargets by remember(fs) { mutableStateOf<List<FsNode>>(emptyList()) }
+    var batchAction by remember(sessionId, projectId, workspaceKey) { mutableStateOf<String?>(null) }
+    var batchTargets by remember(sessionId, projectId, workspaceKey) { mutableStateOf<List<FsNode>>(emptyList()) }
     var batchErrors by remember { mutableStateOf<List<String>>(emptyList()) }
     val visibleEntries = if (filter.isBlank()) entries else entries.filter { it.name.contains(filter, ignoreCase = true) }
     val selectedNodes = entries.filter { it.relPath in selectedPaths }
@@ -160,8 +169,6 @@ fun FilesScreen(
     val activeChanges = mergedChanges.filter { !it.isDeleted }
 
     // ---- workspace switcher (same sheet the drawer and chat overflow use) ----
-    val currentWorkspace by remember(sessionId, projectId) { container.workspace.projectForTools(sessionId, projectId) }
-        .collectAsStateWithLifecycle(initialValue = null)
     val allWorkspaces by container.workspace.projects
         .collectAsStateWithLifecycle(initialValue = emptyList())
     var showWorkspaceSheet by remember { mutableStateOf(false) }
@@ -182,11 +189,16 @@ fun FilesScreen(
         catch (e: Exception) { loadError = e.message }
     } } }
 
-    // A workspace switch restarts the listing at its root.
-    LaunchedEffect(fs) {
-        currentPath = "."
-        filter = ""
-        filterActive = false
+    // Session updates can recreate fs without changing its workspace. Keep navigation
+    // through those refreshes and the initial null emission after activity recreation.
+    LaunchedEffect(workspaceKey) {
+        val key = workspaceKey ?: return@LaunchedEffect
+        if (lastWorkspaceKey != null && lastWorkspaceKey != key) {
+            currentPath = "."
+            filter = ""
+            filterActive = false
+        }
+        lastWorkspaceKey = key
     }
 
     LaunchedEffect(fs, currentPath, refreshTick) {

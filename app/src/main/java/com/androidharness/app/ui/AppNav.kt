@@ -230,6 +230,7 @@ fun AppNav(container: AppContainer) {
     var actionsSession by remember { mutableStateOf<SessionEntity?>(null) }
     var renamingSession by remember { mutableStateOf<SessionEntity?>(null) }
     var renamingProject by remember { mutableStateOf<ProjectEntity?>(null) }
+    var deletingProject by remember { mutableStateOf<ProjectEntity?>(null) }
     var projectName by remember { mutableStateOf("") }
     var detailsSession by remember { mutableStateOf<SessionEntity?>(null) }
     var deletingSession by remember { mutableStateOf<SessionEntity?>(null) }
@@ -348,6 +349,10 @@ fun AppNav(container: AppContainer) {
             onProjectAction = { project, action -> when (action) {
                 SidebarProjectAction.OPEN -> navigateFromSidebar { nav.navigate("project/${encode(project.id)}") { launchSingleTop = true } }
                 SidebarProjectAction.RENAME -> { projectName = project.name; renamingProject = project }
+                SidebarProjectAction.DELETE -> {
+                    val show = { deletingProject = project; Unit }
+                    if (desktopNavigation) desktopGuard.navigate(show) else show()
+                }
                 SidebarProjectAction.PIN -> scope.launch { container.settings.setProjectPinned(project.id, project.id !in settings.pinnedProjects) }
                 SidebarProjectAction.ARCHIVE -> scope.launch {
                     val wasArchived = project.id in settings.archivedProjects
@@ -582,7 +587,11 @@ fun AppNav(container: AppContainer) {
             }
             composable("projects") {
                 ProjectsScreen(container, onBack = { nav.popBackStack() },
-                    onOpenProject = { nav.navigate("project/${encode(it)}") })
+                    onOpenProject = { nav.navigate("project/${encode(it)}") },
+                    onProjectDeleted = {
+                        draftSessionId = null
+                        nav.navigate("projects") { popUpTo(nav.graph.id); launchSingleTop = true }
+                    })
             }
             composable("project/{projectId}", arguments = listOf(navArgument("projectId") { type = NavType.StringType })) { entry ->
                 val id = requireNotNull(entry.arguments?.getString("projectId"))
@@ -609,7 +618,11 @@ fun AppNav(container: AppContainer) {
                     onOpenFiles = { nav.navigate("files?project=${encode(id)}") },
                     onOpenTerminal = { nav.navigate("terminal?project=${encode(id)}") },
                     onOpenBuildTest = { nav.navigate("build-test?project=${encode(id)}") },
-                    onSendPrompt = { openProjectChat(id, it) })
+                    onSendPrompt = { openProjectChat(id, it) },
+                    onProjectDeleted = {
+                        draftSessionId = null
+                        nav.navigate("projects") { popUpTo(nav.graph.id); launchSingleTop = true }
+                    })
             }
             composable("project/{projectId}/memory", arguments = listOf(navArgument("projectId") { type = NavType.StringType })) { entry ->
                 ProjectMemoryScreen(container, requireNotNull(entry.arguments?.getString("projectId")), onBack = { nav.popBackStack() })
@@ -819,6 +832,16 @@ fun AppNav(container: AppContainer) {
                 Text("Tokens used: ${formatTokens(session.totalInputTokens + session.totalOutputTokens)}")
                 Text("Updated: ${formatRelativeTime(session.updatedAt)}")
             } }, confirmButton = { TextButton(onClick = { detailsSession = null }) { Text("Close") } })
+    }
+
+    deletingProject?.let { project ->
+        com.androidharness.app.ui.projects.ProjectDeletionDialog(container, project,
+            onDismiss = { deletingProject = null }, onDeleted = { deletedChats ->
+                deletingProject = null
+                scope.launch { drawerState.close() }
+                if (draftSessionId in deletedChats) draftSessionId = null
+                nav.navigate("projects") { popUpTo(nav.graph.id); launchSingleTop = true }
+            })
     }
 
     renamingProject?.let { project ->

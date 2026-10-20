@@ -514,6 +514,16 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
+    suspend fun removeProjectReferences(projectId: String, chatIds: Set<String>) {
+        context.settingsStore.edit { prefs ->
+            prefs[Keys.PINNED_PROJECTS] = (prefs[Keys.PINNED_PROJECTS] ?: emptySet()) - projectId
+            prefs[Keys.ARCHIVED_PROJECTS] = (prefs[Keys.ARCHIVED_PROJECTS] ?: emptySet()) - projectId
+            prefs[Keys.PINNED] = (prefs[Keys.PINNED] ?: emptySet()) - chatIds
+            prefs[Keys.ARCHIVED] = (prefs[Keys.ARCHIVED] ?: emptySet()) - chatIds
+            if (prefs[Keys.LAST_ACTIVE_SESSION] in chatIds) prefs.remove(Keys.LAST_ACTIVE_SESSION)
+        }
+    }
+
     suspend fun setArchived(sessionId: String, archived: Boolean) {
         context.settingsStore.edit { prefs ->
             val current = prefs[Keys.ARCHIVED] ?: emptySet()

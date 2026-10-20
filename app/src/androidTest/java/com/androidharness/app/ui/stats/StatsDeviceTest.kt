@@ -151,7 +151,7 @@ class StatsDeviceTest {
         error("Missing Stats UI node")
     }
     private fun awaitSummary(requests: Int, sessions: Int) = await {
-        it.text?.toString()?.contains("total tokens · $requests requests · $sessions sessions") == true
+        it.text?.toString()?.contains("total tokens · $requests ${if (requests == 1) "request" else "requests"} · $sessions ${if (sessions == 1) "session" else "sessions"}") == true
     }
     private fun awaitText(text: String) = await { it.text?.toString() == text }
     private fun tap(text: String) {

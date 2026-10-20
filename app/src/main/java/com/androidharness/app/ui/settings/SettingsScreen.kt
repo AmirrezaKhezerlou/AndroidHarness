@@ -2880,6 +2880,7 @@ private fun ChatsBackupSection(container: AppContainer) {
     var busy by remember { mutableStateOf(false) }
     var statusText by remember { mutableStateOf<String?>(null) }
     var statusIsError by remember { mutableStateOf(false) }
+    var restorePreview by remember { mutableStateOf<com.androidharness.app.data.ChatImportPreview?>(null) }
 
     val suggestedName = remember {
         "androidharness-chats-" +
@@ -2920,7 +2921,12 @@ private fun ChatsBackupSection(container: AppContainer) {
             busy = true
             statusText = null
             try {
-                val r = container.chatBackup.importFrom(uri)
+                val preview = container.chatBackup.prepareImport(uri)
+                if (preview.missingWorkspaces.isNotEmpty()) {
+                    restorePreview = preview
+                    return@launch
+                }
+                val r = container.chatBackup.importPrepared(preview, emptyMap())
                 report(
                     "Imported ${r.sessions} chats (${r.messages} messages)" +
                         if (r.skipped > 0) ", ${r.skipped} already present." else ".",
@@ -2935,6 +2941,11 @@ private fun ChatsBackupSection(container: AppContainer) {
         }
     }
 
+    restorePreview?.let { preview -> ChatRestoreDialog(container, preview,
+        onDismiss = { restorePreview = null }, onImported = { result ->
+            restorePreview = null
+            report("Imported ${result.sessions} chats (${result.messages} messages). ${result.skipped} already present.")
+        }) }
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -112,6 +112,12 @@ class AutomationRepository(context: Context) {
         prefs.edit().putString("history", json.encodeToString(historySerializer, next)).apply()
     }
 
+    internal fun detachDeletedChats(chatIds: Set<String>) = synchronized(lock) {
+        val next = _history.value.map { if (it.sessionId in chatIds) it.copy(sessionId = null) else it }
+        prefs.edit().putString("history", json.encodeToString(historySerializer, next)).apply()
+        _history.value = next
+    }
+
     fun updateHistory(id: String, transform: (AutomationHistoryEntry) -> AutomationHistoryEntry) = synchronized(lock) {
         val next = _history.value.map { if (it.id == id) transform(it) else it }
         _history.value = next

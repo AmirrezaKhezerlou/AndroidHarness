@@ -47,7 +47,7 @@ class MultiWorkspaceDeviceTest {
                 old.execSQL("ALTER TABLE messages DROP COLUMN generationJson")
                 old.version = 15
             }
-            val migrated = Room.databaseBuilder(context, AppDatabase::class.java, name).addMigrations(AppDatabase.MIGRATION_15_16, AppDatabase.MIGRATION_16_17, AppDatabase.MIGRATION_17_18).build()
+            val migrated = Room.databaseBuilder(context, AppDatabase::class.java, name).addMigrations(AppDatabase.MIGRATION_15_16, AppDatabase.MIGRATION_16_17, AppDatabase.MIGRATION_17_18, AppDatabase.MIGRATION_18_19).build()
             try {
                 val row = requireNotNull(migrated.dao().session("legacy"))
                 assertEquals("Keep this chat", row.title); assertEquals("original", row.projectId)
@@ -206,6 +206,10 @@ class MultiWorkspaceDeviceTest {
             try {
                 fun openAccess(count: Int, primary: String) {
                     tap("Open navigation")
+                    awaitNode("Tools")
+                    SystemClock.sleep(350)
+                    instrumentation.uiAutomation.clearCache()
+                    if (find("Workspaces for this chat") == null) tap("Tools")
                     awaitNode("$count workspace${if (count == 1) "" else "s"} · Primary: $primary")
                     val projects = Rect().also { awaitNode("Projects").getBoundsInScreen(it) }
                     val access = Rect().also { awaitNode("Workspaces for this chat").getBoundsInScreen(it) }
@@ -276,7 +280,12 @@ class MultiWorkspaceDeviceTest {
                     putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "Keep this unsent draft")
                 }))
                 assertNull(c.settings.settings.first().lastActiveSessionId)
-                tap("Open navigation"); tap("Workspaces for this chat")
+                tap("Open navigation")
+                awaitNode("Tools")
+                SystemClock.sleep(350)
+                instrumentation.uiAutomation.clearCache()
+                if (find("Workspaces for this chat") == null) tap("Tools")
+                tap("Workspaces for this chat")
                 awaitNode("Choose access for each project. Primary is the default place for new files.")
                 tap(b.name); tap("Use 2 workspaces"); awaitSheetClosed()
                 draftChat = c.settings.settings.first().lastActiveSessionId

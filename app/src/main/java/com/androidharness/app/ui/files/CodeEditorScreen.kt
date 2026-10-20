@@ -110,16 +110,20 @@ fun CodeEditorScreen(
 
     // ---- load state ----
     var loadState by remember(path) { mutableStateOf<Load>(Load.Loading) }
-    val decoded = remember { mutableStateOf<EditorFileCodec.Decoded?>(null) }
     val buffers: EditorBufferViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
     val buffer = remember(path, sessionId, fs?.displayPath) {
         fs?.let { buffers.acquire("${sessionId.orEmpty()}:${it.displayPath}:$path") } ?: buffers.buffer
     }
     val diskBaseline = buffer.baseline
     val lastSavedText = buffer.saved
+    val decoded = buffer.decoded
 
     LaunchedEffect(path, fs) {
         if (fs == null) return@LaunchedEffect
+        if (buffer.text.value != null) {
+            loadState = Load.Ready
+            return@LaunchedEffect
+        }
         val node = withContext(Dispatchers.IO) {
             fs?.let { f -> runCatching { f.resolve(path).takeIf { it.exists && it.isFile } }.getOrNull() }
         }
@@ -146,6 +150,7 @@ fun CodeEditorScreen(
                         buffer.text.value = dec.text
                         diskBaseline.value = dec.text
                         lastSavedText.value = dec.text
+                        buffer.diskVersion.value = EditorDiskSnapshot(bytes).version
                     }
                     loadState = Load.Ready
                 }
@@ -168,6 +173,9 @@ fun CodeEditorScreen(
     var menuOpen by remember { mutableStateOf(false) }
     var wordwrapOn by remember { mutableStateOf(false) }
     var pendingNavigation by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var conflict by remember(buffer) { mutableStateOf<EditorDiskSnapshot?>(null) }
+    var conflictThenExit by remember(buffer) { mutableStateOf(false) }
+    var compareConflict by remember(buffer) { mutableStateOf(false) }
 
     fun editorText(): String = editorRef?.text?.toString().orEmpty()
     fun leave() {
@@ -187,21 +195,39 @@ fun CodeEditorScreen(
         onDispose { navigationGuard?.confirm = null }
     }
 
-    fun save(thenExit: Boolean = false) {
+    fun save(thenExit: Boolean = false, reviewedVersion: String? = null) {
+        if (saving) return
         val dec = decoded.value ?: return
         val ed = editorRef ?: return
-        val preSave = lastSavedText.value
+        val f = fs ?: return
+        val expected = reviewedVersion ?: buffer.diskVersion.value ?: return
         val newText = editorText()
         saving = true
         scope.launch {
             val result = withContext(Dispatchers.IO) {
-                runCatching { fs?.resolve(path)?.writeBytes(EditorFileCodec.encode(dec, newText)) }
+                runCatching {
+                    container.runManager.withIdleWorkspace(f, "An agent is working in this workspace. Wait for it to finish before saving; your edits are kept.") {
+                        saveEditorFile(f, path, expected, EditorFileCodec.encode(dec, newText))
+                    }
+                }
             }
             saving = false
+            var saved = false
             result
-                .onSuccess {
+                .onSuccess { outcome ->
+                    if (outcome is EditorSaveResult.Conflict) {
+                        conflict = outcome.current
+                        conflictThenExit = thenExit
+                        compareConflict = false
+                        return@onSuccess
+                    }
+                    outcome as EditorSaveResult.Saved
+                    saved = true
+                    conflict = null
+                    buffer.diskVersion.value = outcome.snapshot.version
+                    buffer.text.value = editorText()
                     lastSavedText.value = newText
-                    dirty = false
+                    dirty = buffer.text.value != newText
                     Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
                     // Feed the Files-changed tracker; repository keeps the
                     // earliest baseline even though we resend ours each time.
@@ -211,9 +237,9 @@ fun CodeEditorScreen(
                             container.sessions.recordFileChange(
                                 sessionId = sid,
                                 relPath = path,
-                                added = Diff.lineCounts(preSave, newText).first.toLong(),
-                                removed = Diff.lineCounts(preSave, newText).second.toLong(),
-                                existedBefore = true,
+                                added = Diff.lineCounts(outcome.previous.text.orEmpty(), newText).first.toLong(),
+                                removed = Diff.lineCounts(outcome.previous.text.orEmpty(), newText).second.toLong(),
+                                existedBefore = outcome.previous.bytes != null,
                                 existsAfter = true,
                                 beforeText = diskBaseline.value,
                             )
@@ -223,7 +249,7 @@ fun CodeEditorScreen(
                 .onFailure { e ->
                     Toast.makeText(context, "Save failed: ${e.message}", Toast.LENGTH_LONG).show()
                 }
-            if (thenExit && result.isSuccess) leave()
+            if (thenExit && saved && !dirty) leave()
         }
     }
 
@@ -492,6 +518,41 @@ fun CodeEditorScreen(
     }
     if (gotoOpen) GoToLineDialog(editor = editorRef, onDismiss = { gotoOpen = false })
 
+    conflict?.let { reviewed ->
+        AlertDialog(
+            onDismissRequest = { conflict = null },
+            title = { Text(if (compareConflict) "Compare changes" else "File changed on disk") },
+            text = {
+                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("The saved file changed after you opened it. Your edits are still here. Reload replaces your edits with the saved version.")
+                    if (compareConflict) {
+                        Text("Current saved file", style = MaterialTheme.typography.titleSmall)
+                        androidx.compose.foundation.text.selection.SelectionContainer {
+                            Text(reviewed.text?.take(12000) ?: if (reviewed.bytes == null) "File was deleted" else "File is no longer text",
+                                fontFamily = com.androidharness.app.ui.theme.HarnessMono, style = MaterialTheme.typography.bodySmall)
+                        }
+                        androidx.compose.material3.HorizontalDivider()
+                        Text("Your edits", style = MaterialTheme.typography.titleSmall)
+                        Text(editorText().take(12000), fontFamily = com.androidharness.app.ui.theme.HarnessMono, style = MaterialTheme.typography.bodySmall)
+                        if ((reviewed.text?.length ?: 0) > 12000 || editorText().length > 12000) Text("Preview shortened to 12,000 characters per version.")
+                    } else TextButton(onClick = { compareConflict = true }) { Text("Compare") }
+                    if (reviewed.text != null) TextButton(onClick = {
+                        val text = requireNotNull(reviewed.text)
+                        decoded.value = EditorFileCodec.decode(requireNotNull(reviewed.bytes))
+                        editorRef?.setText(text)
+                        buffer.text.value = text
+                        lastSavedText.value = text
+                        buffer.diskVersion.value = reviewed.version
+                        dirty = false
+                        conflict = null
+                        pendingNavigation = null
+                    }) { Text("Reload file") }
+                }
+            },
+            confirmButton = { TextButton(enabled = !saving, onClick = { save(conflictThenExit, reviewed.version) }) { Text("Keep my edits") } },
+            dismissButton = { TextButton(onClick = { conflict = null; pendingNavigation = null }) { Text("Cancel") } },
+        )
+    }
     if (showExitPrompt) {
         AlertDialog(
             onDismissRequest = { showExitPrompt = false; pendingNavigation = null },

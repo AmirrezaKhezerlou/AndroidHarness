@@ -50,7 +50,7 @@ import com.androidharness.app.ui.common.formatRelativeTime
 import com.androidharness.app.ui.theme.expressiveEffectsSpec
 import com.androidharness.app.ui.theme.expressiveSpatialSpec
 
-internal enum class SidebarProjectAction { OPEN, RENAME, PIN, ARCHIVE }
+internal enum class SidebarProjectAction { OPEN, RENAME, PIN, ARCHIVE, DELETE }
 internal enum class SidebarChatAction { RENAME, PIN, ARCHIVE, DETAILS, DELETE }
 internal enum class SidebarActivity { WORKING, NEEDS_YOU }
 
@@ -329,6 +329,12 @@ private fun SidebarProjectRow(project: ProjectEntity, expanded: Boolean, pinned:
                     Triple(SidebarProjectAction.PIN, if (pinned) "Unpin project" else "Pin project", Icons.Outlined.PushPin),
                     Triple(SidebarProjectAction.ARCHIVE, if (archived) "Restore project" else "Archive project", Icons.Outlined.Archive)).forEach { (action, label, icon) ->
                     DropdownMenuItem(text = { Text(label) }, leadingIcon = { Icon(icon, null) }, onClick = { menu = false; onAction(action) })
+                }
+                if (project.kind != com.androidharness.app.workspace.WorkspaceManager.KIND_APP) {
+                    HorizontalDivider()
+                    DropdownMenuItem(text = { Text("Delete project", color = scheme.error) },
+                        leadingIcon = { Icon(Icons.Outlined.DeleteOutline, null, tint = scheme.error) },
+                        onClick = { menu = false; onAction(SidebarProjectAction.DELETE) })
                 }
             }
         }

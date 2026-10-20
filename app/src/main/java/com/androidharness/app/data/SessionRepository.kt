@@ -181,11 +181,12 @@ class SessionRepository(
         db.dao().setModelSelection(id, ChatModelSelection.encode(selection))
     }
 
-    suspend fun createSession(title: String, projectId: String? = null): String {
+    suspend fun createSession(title: String, projectId: String? = null): String = db.withTransaction {
+        if (projectId != null) requireNotNull(db.dao().project(projectId)) { "This project is no longer available." }
         val id = UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
         db.dao().insertSession(SessionEntity(id, title, now, now, projectId = projectId))
-        return id
+        id
     }
 
     /** Create an assigned chat without changing the default or any other chat. */
@@ -526,18 +527,32 @@ class SessionRepository(
         relPath: String,
         added: Long,
         removed: Long,
+        activityId: String = UUID.randomUUID().toString(),
+        countForUsage: Boolean = true,
     ) {
-        db.dao().insertFileEdit(
-            com.androidharness.app.data.db.FileEditEntity(
-                sessionId = sessionId,
-                turnId = turnId,
-                relPath = relPath,
-                added = added,
-                removed = removed,
-                createdAt = System.currentTimeMillis(),
+        db.withTransaction {
+            db.dao().insertFileEdit(
+                com.androidharness.app.data.db.FileEditEntity(
+                    sessionId = sessionId,
+                    turnId = turnId,
+                    relPath = relPath,
+                    added = added,
+                    removed = removed,
+                    createdAt = System.currentTimeMillis(),
+                )
             )
-        )
+            if (countForUsage) recordCodeActivity(sessionId, relPath, added, removed, activityId)
+        }
     }
+
+    suspend fun recordCodeActivity(sessionId: String, path: String, added: Long, removed: Long, activityId: String) {
+        require(added >= 0 && removed >= 0)
+        if ((added == 0L && removed == 0L) || !CodeFilePolicy.counts(path)) return
+        db.dao().insertCodeActivity(com.androidharness.app.data.db.CodeActivityEntity(
+            CodeFilePolicy.digest(activityId), CodeFilePolicy.fileKey(sessionId, path), added, removed, System.currentTimeMillis()))
+    }
+
+    fun codeActivityBetween(since: Long, until: Long) = db.dao().codeActivityBetween(since, until)
 
     /** Per-turn file-edit stats for one session, oldest first. */
     fun fileEditsFor(sessionId: String): Flow<List<com.androidharness.app.data.db.FileEditEntity>> =

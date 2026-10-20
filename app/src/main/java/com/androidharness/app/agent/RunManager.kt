@@ -132,6 +132,14 @@ class RunManager(
         action()
     }
 
+    /** Uses the same gate as run starts so a removed chat cannot start working mid-delete. */
+    suspend fun <T> withIdleProject(projectId: String, action: suspend () -> T): T = workspaceGuard.withLock {
+        check(workspace.projectChats(projectId).none { isRunning(it.id) || hasPendingFollowUp(it.id) }) {
+            "Stop running tasks in this project before deleting it."
+        }
+        action()
+    }
+
     suspend fun assignWorkspace(sessionId: String, projectId: String) = workspaceGuard.withLock {
         if (sessions.session(sessionId)?.projectId == projectId) return@withLock
         check(!isRunning(sessionId)) { "Wait for this chat's task to finish before changing its workspace." }
@@ -718,6 +726,7 @@ class RunManager(
             is AgentEvent.SubagentMessageCommitted ->
                 sessions.addMessage(sessionId, event.message, turnId)
 
+            is AgentEvent.CodeActivity -> sessions.recordCodeActivity(sessionId, event.path, event.added, event.removed, event.activityId)
             is AgentEvent.FileEdited -> {
                 live.update { st -> st.copy(codeDrafts = st.codeDrafts.mapValues { (id, draft) ->
                     if (id != event.callId) draft else draft.copy(comparisonAvailable = true, files = draft.files.map { file ->
@@ -730,6 +739,8 @@ class RunManager(
                 repoMap?.invalidate(event.relPath)
                 sessions.recordFileEdit(
                     sessionId, event.turnId, event.relPath, event.added, event.removed,
+                    activityId = "$sessionId:${event.turnId}:${event.callId ?: UUID.randomUUID()}:${event.relPath}",
+                    countForUsage = event.countsKnown,
                 )
                 // Cumulative per-session tracking for the Files-changed view.
                 sessions.recordFileChange(

@@ -178,7 +178,10 @@ sealed interface AgentEvent {
         val existsAfter: Boolean = true,
         val beforeText: String? = null,
         val callId: String? = null,
+        val countsKnown: Boolean = true,
     ) : AgentEvent
+
+    data class CodeActivity(val path: String, val added: Long, val removed: Long, val activityId: String) : AgentEvent
 
     /**
      * The run ended. [reason] explains an abnormal end (the model produced no
@@ -992,6 +995,7 @@ class AgentEngine(
         // the before-text for "+N −M" diff stats. existed flags distinguish
         // "file absent" (empty baseline) from "file too big to capture".
         val beforeTexts = LinkedHashMap<String, Pair<Boolean, String?>>()
+        val shellBefore = if (call.name == "shell") CodeActivityCapture.capture(workspace) else null
         checkpointTargets(call.name, args).forEach { path ->
             try { checkpointer.snapshot(sessionId, turnId, checkpointWorkspace, route.path(path)) }
             catch (e: CancellationException) { throw e }
@@ -1074,6 +1078,14 @@ class AgentEngine(
             executed
         }
 
+        if (shellBefore != null) {
+            CodeActivityCapture.capture(workspace)?.let { after ->
+                CodeActivityCapture.changes(shellBefore, after).forEach { change ->
+                    val path = route.path(change.path)
+                    emitEvent(AgentEvent.CodeActivity(path, change.added, change.removed, "$sessionId:$turnId:${call.id}:$path"))
+                }
+            }
+        }
         // Diff stats: only when the tool succeeded and actually changed lines.
         // Newly created directories must not surface as file changes.
         if (result.ok && beforeTexts.isNotEmpty()) {
@@ -1084,9 +1096,10 @@ class AgentEngine(
                     val nodeIsFile = node.exists && node.isFile
                     val after =
                         if (nodeIsFile && node.length <= 512_000) node.readText() else ""
-                    val (added, removed) = com.androidharness.app.core.Diff.lineCounts(
-                        before ?: "", after,
-                    )
+                    val textsKnown = (!existedBefore || before != null) && (!nodeIsFile || node.length <= 512_000) &&
+                        before?.contains('\u0000') != true && !after.contains('\u0000')
+                    val exactCounts = if (textsKnown) com.androidharness.app.core.Diff.exactLineCounts(before.orEmpty(), after) else null
+                    val (added, removed) = exactCounts ?: com.androidharness.app.core.Diff.lineCounts(before.orEmpty(), after)
                     val changedLines = added > 0 || removed > 0
                     val newlyCreated = !existedBefore && !node.isDirectory
                     val deleted = existedBefore && !nodeIsFile
@@ -1102,6 +1115,7 @@ class AgentEngine(
                                 existsAfter = nodeIsFile,
                                 beforeText = before,
                                 callId = call.id,
+                                countsKnown = exactCounts != null,
                             ),
                         )
                     }
