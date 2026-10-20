@@ -51,6 +51,7 @@ class RootManager(private val context: Context) {
 
     internal suspend fun requestAccess(): Boolean {
         requestLock.lock()
+        android.util.Log.d("HarnessRoot", "requestAccess: start")
         try {
             mutableState.value = mutableState.value.copy(
                 status = RootStatus.REQUESTING, detail = "Waiting for your root manager.", checkedAt = 0,
@@ -64,6 +65,7 @@ class RootManager(private val context: Context) {
                     Shell.setDefaultBuilder(Shell.Builder.create().setTimeout(15))
                     check(Shell.getShell().isRoot) { "Root was denied or no working su provider is available." }
                 }
+                android.util.Log.d("HarnessRoot", "requestAccess: su shell reports root")
                 val deferred = CompletableDeferred<IHarnessService>()
                 waiting = deferred
                 val conn = object : ServiceConnection {
@@ -75,7 +77,10 @@ class RootManager(private val context: Context) {
                 connection = conn
                 withContext(Dispatchers.Main) { RootService.bind(Intent(context, RootHarnessService::class.java), conn) }
                 service = withTimeout(20_000) { deferred.await() }
+                // A rebind can reuse a service instance that was stopped earlier.
+                runCatching { service?.resumeCommands() }
                 check(verify()) { "The connected runner did not verify root access." }
+                android.util.Log.d("HarnessRoot", "grant: root service bound and verified")
                 true
             } catch (e: CancellationException) {
                 withContext(NonCancellable) { disconnect() }
@@ -87,6 +92,7 @@ class RootManager(private val context: Context) {
                 throw e
             }
             catch (e: Exception) {
+                android.util.Log.w("HarnessRoot", "requestAccess failed", e)
                 disconnect()
                 mutableState.value = mutableState.value.copy(
                     status = RootStatus.DENIED,
@@ -105,25 +111,38 @@ class RootManager(private val context: Context) {
             unavailable("No active root connection. Tap Grant root access to connect.")
             return@withContext false
         }
-        val probe = runCatching {
-            // Identity and manager markers share one root call, so detection
-            // never adds a second prompt or a visible shell invocation.
-            val script = "id -u\n" + RootProviderDetector.markerScript
-            parsePrivilegedResult(svc.exec(arrayOf("/system/bin/sh", "-c", script), null, null, 4096, 5_000))
-        }.getOrNull()
-        val lines = probe?.output?.lineSequence()?.map { it.trim() }?.filter { it.isNotEmpty() }?.toList().orEmpty()
-        val ready = probe?.exitCode == 0 && lines.firstOrNull() == "0"
-        val detection = RootProviderDetector.classify(installedPackages, kernelVersion, lines.drop(1).map { it.uppercase() }.toSet())
-        if (ready && svc.asBinder().pingBinder() && svc.uid == 0) {
-            mutableState.value = RootState(
-                RootStatus.READY,
-                "${detection.provider?.label ?: "Root"} · identity verified by the running command service.",
-                System.currentTimeMillis(),
-                detection.provider,
-                detection.evidence,
-            )
-        } else unavailable("Root access was lost or could not be verified.")
-        ready
+        // The exact identity probe stays allowed even while commands are paused.
+        val identity = runCatching {
+            parsePrivilegedResult(svc.exec(arrayOf("/system/bin/sh", "-c", "id -u"), null, null, 1024, 2_000))
+        }.onFailure { android.util.Log.w("HarnessRoot", "identity probe failed", it) }.getOrNull()
+        val serviceUid = runCatching { svc.uid }.getOrNull()
+        val ready = identity?.exitCode == 0 && identity.output.trim() == "0" &&
+            identity.let { runCatching { svc.asBinder().pingBinder() }.getOrDefault(false) } && serviceUid == 0
+        android.util.Log.d("HarnessRoot",
+            "verify exit=${identity?.exitCode} output=${identity?.output?.trim()?.take(60)} uid=$serviceUid ready=$ready stderr=${identity?.stderr?.trim()?.take(160)}")
+        if (!ready) {
+            val reason = identity?.stderr?.trim()?.takeIf { it.isNotEmpty() }
+            unavailable("Root service is connected but identity verification failed" + (reason?.let { ": $it" } ?: "."))
+            return@withContext false
+        }
+        // Detection is best effort; an unreadable marker path must never turn a
+        // verified connection into a failure.
+        val markers = runCatching {
+            val probe = parsePrivilegedResult(svc.exec(
+                arrayOf("/system/bin/sh", "-c", RootProviderDetector.markerScript), null, null, 4096, 5_000))
+            if (probe.exitCode == 0) probe.output.lineSequence().map { it.trim() }
+                .filter { it.isNotEmpty() }.map { it.uppercase() }.toSet() else emptySet()
+        }.onFailure { android.util.Log.w("HarnessRoot", "root manager detection failed", it) }.getOrDefault(emptySet())
+        val detection = RootProviderDetector.classify(installedPackages, kernelVersion, markers)
+        android.util.Log.d("HarnessRoot", "verify detected=${detection.provider?.label} via=${detection.evidence} markers=$markers")
+        mutableState.value = RootState(
+            RootStatus.READY,
+            "${detection.provider?.label ?: "Root"} · identity verified by the running command service.",
+            System.currentTimeMillis(),
+            detection.provider,
+            detection.evidence,
+        )
+        true
     }
 
     internal suspend fun run(cmd: Array<String>, env: Array<String>?, dir: String?, timeoutMs: Int, maxBytes: Int): PrivilegedResult? = withContext(Dispatchers.IO) {

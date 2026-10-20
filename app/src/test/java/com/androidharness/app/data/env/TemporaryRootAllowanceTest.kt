@@ -41,6 +41,18 @@ class TemporaryRootAllowanceTest {
         assertTrue(grant.claim("a", RootLease()))
         assertFalse(grant.claim("a", tool))
     }
+    @Test fun uiActivityTracksTheScopeWithoutConsumingAnAllowance() {
+        val grant = TemporaryRootAllowance()
+        assertFalse(grant.activeFor("a"))
+        grant.grant(RootUse.SESSION, null)
+        assertTrue(grant.activeFor("a")); assertTrue(grant.activeFor(null))
+        grant.grant(RootUse.CHAT, "a")
+        assertTrue(grant.activeFor("a")); assertFalse(grant.activeFor("b")); assertFalse(grant.activeFor(null))
+        grant.grant(RootUse.NEXT_ACTION, null)
+        assertTrue(grant.activeFor("a"))
+        assertTrue(grant.claim("a", RootLease()))
+        assertFalse(grant.activeFor("a"))
+    }
     @Test fun concurrentToolsCannotBothConsumeNextAction() {
         val grant = TemporaryRootAllowance()
         grant.grant(RootUse.NEXT_ACTION, null)

@@ -13,14 +13,17 @@ class DeviceAccessStore(context: Context) {
     private val fallback = booleanPreferencesKey("auto_fallback")
     private val rootUse = stringPreferencesKey("root_use")
     private val projects = stringSetPreferencesKey("root_projects")
+    private val temporaryRoot = booleanPreferencesKey("temporary_root")
     val preferences = store.data.map { p -> AccessPreferences(
-        mode = p[mode]?.let { runCatching { AccessMode.valueOf(if (it == "BOTH") "AUTO" else it) }.getOrNull() } ?: AccessMode.AUTO,
+        mode = p[mode]?.let { runCatching { AccessMode.valueOf(it) }.getOrNull() } ?: AccessMode.AUTO,
         autoFallback = p[fallback] ?: true,
         rootUse = p[rootUse]?.let { runCatching { RootUse.valueOf(it) }.getOrNull() } ?: RootUse.SESSION,
         rootProjects = p[projects].orEmpty(),
+        temporaryRoot = p[temporaryRoot] ?: true,
     ) }
     suspend fun setMode(value: AccessMode) { store.edit { it[mode] = value.name } }
     suspend fun setFallback(value: Boolean) { store.edit { it[fallback] = value } }
     suspend fun setRootUse(value: RootUse) { store.edit { it[rootUse] = value.name } }
+    suspend fun setTemporaryRoot(enabled: Boolean) { store.edit { it[temporaryRoot] = enabled } }
     suspend fun allowProject(id: String, allow: Boolean) { store.edit { it[projects] = if (allow) it[projects].orEmpty() + id else it[projects].orEmpty() - id } }
 }

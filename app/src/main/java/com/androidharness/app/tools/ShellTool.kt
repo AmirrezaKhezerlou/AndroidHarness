@@ -19,17 +19,18 @@ class ShellTool(
     override val name = "shell"
     override val description =
         "Run a shell command on the device. Uses SSH for an SSH workspace; " +
-        "otherwise follows the selected Auto, Normal, Shizuku or Root access mode: " +
+        "otherwise follows the selected Auto, Normal, Shizuku, Root or Both access mode: " +
         "a full Linux userspace (bash, git, python, node…) as the app when installed, " +
-        "Shizuku ADB-shell privileges (plus the same toolchain) when Shizuku is connected and " +
-        "the target folder needs it, otherwise toybox sh. If the active workspace is a picked " +
-        "folder (SAF), the command runs in the app's shell workspace and a note is added. " +
-        "Returns the exit code plus captured stdout and stderr as separate sections; output " +
-        "written before a timeout is preserved."
+        "Shizuku ADB-shell privileges (plus the same toolchain) when Shizuku is connected, " +
+        "or direct root when requested. In Both mode ordinary commands use Shizuku and " +
+        "access=\"root\" uses the direct root service, so both can be used in the same task. " +
+        "If the active workspace is a picked folder (SAF), the command runs in the app's shell " +
+        "workspace and a note is added. Returns the exit code plus captured stdout and stderr " +
+        "as separate sections; output written before a timeout is preserved."
     override val parametersSchema = Schema.obj(
         mapOf(
             "command" to Schema.string("The shell command to run."),
-            "access" to Schema.string("auto (default) or root. Root requires a verified root-capable backend and project permission; it never falls back to non-root execution."),
+            "access" to Schema.string("auto (default) or root. In Both mode auto uses Shizuku and root uses the direct root service. Root requires a verified root-capable backend and project permission; it never falls back to non-root execution."),
             "cwd" to Schema.string(
                 "Working directory relative to the workspace root (default: the root). " +
                     "Use it instead of 'cd dir && …' chains.",

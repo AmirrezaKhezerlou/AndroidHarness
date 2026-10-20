@@ -60,6 +60,27 @@ class DeviceAccessPolicyTest {
         assertEquals(DeviceBackend.NORMAL, choose(AccessMode.ROOT, root = true, allowed = true, app = true).backend)
         assertEquals(DeviceBackend.ROOT, choose(root = true, allowed = true, app = true, requireRoot = true).backend)
     }
+    @Test fun bothKeepsShizukuForOrdinaryWorkAndRootForRootRequests() {
+        assertEquals(DeviceBackend.SHIZUKU,
+            choose(AccessMode.BOTH, root = true, shizuku = 2000, allowed = true).backend)
+        assertEquals(DeviceBackend.ROOT,
+            choose(AccessMode.BOTH, root = true, shizuku = 2000, allowed = true, requireRoot = true).backend)
+        assertEquals(DeviceBackend.ROOT,
+            choose(AccessMode.BOTH, root = true, shizuku = null, allowed = true).backend)
+    }
+    @Test fun bothWithoutFallbackNeverUsesNormalOrAnotherBackendSilently() {
+        assertNull(choose(AccessMode.BOTH, fallback = false, root = false, shizuku = null).backend)
+        assertEquals(DeviceBackend.NORMAL, choose(AccessMode.BOTH, fallback = true, root = false, shizuku = null).backend)
+        assertEquals(DeviceBackend.SHIZUKU,
+            choose(AccessMode.BOTH, fallback = false, root = true, shizuku = 2000, allowed = true).backend)
+    }
+    @Test fun temporaryRootModeGatesRootWithoutTouchingTheConnectionRules() {
+        assertFalse(DeviceAccessPolicy.rootPermitted(temporaryMode = true, manual = false, projectAllowed = false, allowanceActive = false))
+        assertFalse(DeviceAccessPolicy.rootPermitted(temporaryMode = true, manual = false, projectAllowed = true, allowanceActive = false))
+        assertTrue(DeviceAccessPolicy.rootPermitted(temporaryMode = true, manual = false, projectAllowed = true, allowanceActive = true))
+        assertTrue(DeviceAccessPolicy.rootPermitted(temporaryMode = true, manual = true, projectAllowed = false, allowanceActive = true))
+        assertTrue(DeviceAccessPolicy.rootPermitted(temporaryMode = false, manual = false, projectAllowed = false, allowanceActive = false))
+    }
     @Test fun receiptsSurviveSavedHistoryAndDistinguishAdbFromRootShizuku() {
         val metadata = GenerationMetadata(execution = listOf(
             ExecutionReceipt(DeviceBackend.SHIZUKU, 2000, "Root is unavailable"),

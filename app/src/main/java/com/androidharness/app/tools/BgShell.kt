@@ -18,11 +18,13 @@ class ShellBackgroundTool(
         "Start a long-running shell command in the background (e.g. a dev server). " +
         "When Shizuku is connected the process runs inside its server and survives the app " +
         "being minimized or even killed; otherwise it runs as an app child kept alive by the " +
-        "foreground service. Returns a process id; its output goes to a log file. " +
+        "foreground service. In Both mode a normal background command uses Shizuku and " +
+        "access=\"root\" uses the direct root service, which lasts only while that connection " +
+        "survives. Returns a process id; its output goes to a log file. " +
         "Use bg_list to inspect and bg_kill to stop it."
     override val parametersSchema = Schema.obj(
         mapOf("command" to Schema.string("The shell command to run in the background."),
-            "access" to Schema.string("auto (default) or root. Root requires a verified backend and project permission.")),
+            "access" to Schema.string("auto (default) or root. In Both mode auto uses Shizuku and root uses the direct root service. Root requires a verified backend and project permission.")),
         required = listOf("command"),
     )
     override val isReadOnly = false

@@ -60,7 +60,8 @@ class DeviceAccessManager(
         }
         if (!root.requestAccess() && probeShizuku() != 0) return false
         if (projectId != null) store.allowProject(projectId, true)
-        enableTemporaryUse(prefs.rootUse, sessionId)
+        if (prefs.temporaryRoot) enableTemporaryUse(prefs.rootUse, sessionId)
+        else allowance.value = "Temporary mode off · root is allowed in every project"
         return resume() == null
     }
     fun enableTemporaryUse(use: RootUse, sessionId: String?) {
@@ -72,17 +73,31 @@ class DeviceAccessManager(
         }
     }
     fun disableRootUse() { temporaryRoot.revoke(); allowance.value = "Root use is disabled" }
+
+    /** True when the current chat/session may use the connected root service right now. */
+    fun rootUseActive(sessionId: String?, prefs: AccessPreferences): Boolean =
+        !prefs.temporaryRoot || temporaryRoot.activeFor(sessionId)
     suspend fun resume(): String? = try {
         root.resume(); shizuku.resumeCommands(); stopped.value = false; null
     } catch (e: CancellationException) { throw e }
     catch (e: Exception) { "Could not resume privileged access: ${e.message}" }
 
     private fun rootAllowed(request: AccessRequest, prefs: AccessPreferences): Boolean =
-        (request.manual || request.projectId in prefs.rootProjects) && temporaryRoot.allows(request.sessionId, request.rootLease)
+        DeviceAccessPolicy.rootPermitted(
+            temporaryMode = prefs.temporaryRoot,
+            manual = request.manual,
+            projectAllowed = request.projectId in prefs.rootProjects,
+            allowanceActive = temporaryRoot.allows(request.sessionId, request.rootLease),
+        )
     private suspend fun claimRoot(request: AccessRequest): Boolean {
-        if (stopped.value || !rootAllowed(request, store.preferences.first())) return false
+        if (stopped.value) return false
+        val prefs = store.preferences.first()
+        // Unlimited mode still requires a live root connection and an unpaused
+        // service; it only removes the per-project and per-use limits.
+        if (!prefs.temporaryRoot) return true
+        if (!rootAllowed(request, prefs)) return false
         val claimed = temporaryRoot.claim(request.sessionId, request.rootLease)
-        if (claimed && preferences.value.rootUse == RootUse.NEXT_ACTION) allowance.value = "Next-action allowance used"
+        if (claimed && prefs.rootUse == RootUse.NEXT_ACTION) allowance.value = "Next-action allowance used"
         return claimed
     }
     private suspend fun probeShizuku(): Int? {
@@ -168,12 +183,22 @@ class DeviceAccessManager(
         if (workspace is com.androidharness.app.workspace.SshFs) return "SSH commands run on the remote host. Local Android root/Shizuku grants do not grant root on that host."
         val project = (workspace as? com.androidharness.app.workspace.ChatWorkspaceFs)?.primaryId ?: sessionId?.let { projectForSession(it) }
         val allowed = rootAllowed(AccessRequest(project, sessionId), prefs)
+        val modeHint = when (prefs.mode) {
+            AccessMode.BOTH -> "Both transports are connected and usable in the same task: ordinary shell and file work uses Shizuku, while shell access=\"root\" uses the direct root service. Run normal calls for ordinary work and add access=\"root\" only to the calls that need UID 0; do not switch the whole session just for one root call."
+            AccessMode.AUTO -> "Auto prefers direct root when it is allowed and ready, then Shizuku, then the app shell."
+            AccessMode.ROOT -> "Direct root is preferred. Shizuku or the app shell is used only when fallback is on and root is unavailable."
+            AccessMode.SHIZUKU -> "Shizuku is preferred. The app shell is used only when fallback is on and Shizuku is unavailable."
+            AccessMode.NORMAL -> "Only the app shell is used; root and Shizuku are not requested."
+        }
         return (workspace as? com.androidharness.app.workspace.ChatWorkspaceFs)?.bindings?.joinToString("; ", postfix = ". ") {
             "${it.name}: root requests ${if (rootAllowed(AccessRequest(it.id, sessionId), prefs)) "allowed" else "not allowed"}"
         }.orEmpty() + "Device access: ${prefs.mode.label}; auto fallback ${if (prefs.mode == AccessMode.AUTO || prefs.autoFallback) "on" else "off"}; " +
+            "temporary root mode ${if (prefs.temporaryRoot) "on" else "off (root allowed everywhere while connected)"}; " +
             "direct root ${root.state.value.status.label}${root.state.value.provider?.let { " (${it.label})" } ?: ""}; Shizuku ${if (shizuku.isServiceReady()) "ready (${szUid.value?.let { "UID $it" } ?: "identity checked before execution"})" else "unavailable"}; " +
-            "root ${if (allowed) "allowed" else "not allowed"} for this project/chat; ${allowance.value}; privileged access ${if (stopped.value) "paused" else "enabled"}. " +
-            "App workspaces use the app user by default. Use shell access=\"root\" only when root is required; project restrictions still apply. " +
+            "root ${if (allowed) "allowed" else "not allowed"} for this project/chat; ${if (prefs.temporaryRoot) allowance.value else "temporary mode is off"}; privileged access ${if (stopped.value) "paused" else "enabled"}. " +
+            modeHint + " " +
+            "App workspaces use the app user by default. Use shell access=\"root\" only when UID 0 is required; " +
+            (if (prefs.temporaryRoot) "project restrictions still apply. " else "root is available in every project while the connection is active. ") +
             "Do not invoke su or sudo directly; request root through the access parameter. " +
             "A dispatched command is never automatically replayed after a connection failure."
     }
@@ -203,10 +228,11 @@ class DeviceAccessManager(
         appendLine("Mode: ${preferences.value.mode.label}; auto fallback: ${preferences.value.mode == AccessMode.AUTO || preferences.value.autoFallback}")
         appendLine("Direct root: ${root.state.value.status.label}${root.state.value.provider?.let { " (${it.label})" } ?: ""}")
         appendLine("Root manager: ${root.state.value.provider?.label ?: "Not detected"} (${root.state.value.providerEvidence ?: "no evidence"})")
+        appendLine("Temporary root mode: ${if (preferences.value.temporaryRoot) "on (per-project and per-use limits)" else "off (root allowed everywhere while connected)"}")
         appendLine(root.state.value.detail)
         appendLine("Root checked at: ${root.state.value.checkedAt.takeIf { it > 0 }?.let(java.time.Instant::ofEpochMilli) ?: "Not checked"}")
         appendLine("Shizuku ready: ${shizuku.isServiceReady()}; UID: ${szUid.value ?: "not verified"}")
-        appendLine("Temporary use: ${allowance.value}; paused: ${stopped.value}")
+        appendLine("Temporary use: ${if (preferences.value.temporaryRoot) allowance.value else "off (root allowed everywhere while connected)"}; paused: ${stopped.value}")
         appendLine("Last execution: ${last.value}")
         append("Active tracked calls: ${active.value}")
     }

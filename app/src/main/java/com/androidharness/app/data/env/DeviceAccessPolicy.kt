@@ -3,7 +3,11 @@ package com.androidharness.app.data.env
 import kotlinx.serialization.Serializable
 
 @Serializable
-enum class AccessMode(val label: String) { AUTO("Auto"), NORMAL("Normal"), SHIZUKU("Shizuku"), ROOT("Root") }
+enum class AccessMode(val label: String) {
+    AUTO("Auto"), NORMAL("Normal"), SHIZUKU("Shizuku"), ROOT("Root"),
+    /** Keeps both privileged transports connected: Shizuku for ordinary work, root for root requests. */
+    BOTH("Both"),
+}
 @Serializable
 enum class RootUse(val label: String) { SESSION("App session"), CHAT("Current chat"), NEXT_ACTION("Next action") }
 @Serializable
@@ -27,12 +31,18 @@ data class AccessPreferences(
     val autoFallback: Boolean = true,
     val rootUse: RootUse = RootUse.SESSION,
     val rootProjects: Set<String> = emptySet(),
+    /** When false, an active root connection may be used everywhere without a per-session grant. */
+    val temporaryRoot: Boolean = true,
 )
 
 data class AccessDecision(val backend: DeviceBackend?, val reason: String? = null, val uid: Int? = null)
 
 /** Pure selection rules; readiness is verified by the executor immediately before dispatch. */
 object DeviceAccessPolicy {
+    /** Unlimited root still needs the connection and the paused gate; it skips only the per-use limits. */
+    fun rootPermitted(temporaryMode: Boolean, manual: Boolean, projectAllowed: Boolean, allowanceActive: Boolean): Boolean =
+        !temporaryMode || ((manual || projectAllowed) && allowanceActive)
+
     fun choose(
         mode: AccessMode, fallback: Boolean, rootReady: Boolean, shizukuUid: Int?,
         rootAllowed: Boolean, paused: Boolean = false, appWorkspace: Boolean = false,
@@ -47,6 +57,13 @@ object DeviceAccessPolicy {
                 if (rootAllowed || requireRoot) add(DeviceBackend.ROOT)
                 add(DeviceBackend.SHIZUKU)
                 add(DeviceBackend.NORMAL)
+            }
+            // Normal commands stay on the ADB shell while both connections are
+            // live; explicit root requests still use the direct root service.
+            AccessMode.BOTH -> when {
+                requireRoot -> listOf(DeviceBackend.ROOT, DeviceBackend.SHIZUKU)
+                fallback -> listOf(DeviceBackend.SHIZUKU, DeviceBackend.ROOT, DeviceBackend.NORMAL)
+                else -> listOf(DeviceBackend.SHIZUKU, DeviceBackend.ROOT)
             }
         }
         val unavailable = mutableListOf<String>()
@@ -88,6 +105,14 @@ internal class TemporaryRootAllowance {
             RootUse.SESSION -> true
             RootUse.CHAT -> chat != null && chat == sessionId
             RootUse.NEXT_ACTION -> next || lease.generation == generation
+            null -> false
+        }
+    /** UI-facing check without a tool lease. */
+    @Synchronized fun activeFor(sessionId: String?): Boolean =
+        when (use) {
+            RootUse.SESSION -> true
+            RootUse.CHAT -> chat != null && chat == sessionId
+            RootUse.NEXT_ACTION -> next
             null -> false
         }
     @Synchronized fun claim(sessionId: String?, lease: RootLease): Boolean {

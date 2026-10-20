@@ -122,7 +122,7 @@ fun TerminalScreen(
                 Text("Auto fallback", Modifier.weight(1f))
                 Switch(accessPrefs.mode == com.androidharness.app.data.env.AccessMode.AUTO || accessPrefs.autoFallback, enabled = accessPrefs.mode != com.androidharness.app.data.env.AccessMode.AUTO, onCheckedChange = { enabled -> accessScope.launch { container.deviceAccess.store.setFallback(enabled) } })
             }
-            Text("Root → Shizuku → Normal. Root access and project permissions are managed in Settings → Terminal & device.", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+            Text("Auto: Root → Shizuku → Normal. Both: Shizuku for ordinary commands, root for root requests. Root access, temporary mode and project permissions are managed in Settings → Terminal & device.", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
         } },
         confirmButton = { androidx.compose.material3.TextButton(onClick = { showAccess = false }) { Text("Done") } },
     )
