@@ -49,7 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -109,23 +109,30 @@ internal fun ToolCallCard(
         return
     }
     var expanded by rememberSaveable(call.id) { mutableStateOf(false) }
-    val chevronRotation by animateFloatAsState(
+    val chevronRotation = animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
         animationSpec = expressiveSpatialSpec(),
         label = "tool card chevron",
     )
-    // JSON work is memoized: these cards recompose on every state emission,
-    // and parsing args per frame was a measurable cost during runs.
     val presentation = remember(call, result) { toolPresentation(call, result) }
-    val pretty = remember(call.argumentsJson) { prettyArgs(call.argumentsJson) }
-    val patchDiff = remember(call) {
-        if (call.name == "apply_patch") {
-            runCatching {
-                val obj = Json.parseToJsonElement(call.argumentsJson).jsonObject
-                obj["patch"]?.jsonPrimitive?.content
-            }.getOrNull()
-        } else null
+    // Prepare large argument/patch payloads away from the animation's UI thread.
+    // Keep raw arguments immediately readable while formatting is in flight.
+    val details by produceState<ToolCardDetails?>(null, call.name, call.argumentsJson) {
+        value = null
+        value = withContext(Dispatchers.Default) {
+            ToolCardDetails(
+                name = call.name,
+                raw = call.argumentsJson,
+                arguments = prettyArgs(call.argumentsJson),
+                patch = if (call.name == "apply_patch") runCatching {
+                    Json.parseToJsonElement(call.argumentsJson).jsonObject["patch"]?.jsonPrimitive?.content
+                }.getOrNull() else null,
+            )
+        }
     }
+    val currentDetails = details?.takeIf { it.name == call.name && it.raw == call.argumentsJson }
+    val pretty = currentDetails?.arguments ?: call.argumentsJson.take(3000)
+    val patchDiff = currentDetails?.patch
     val active = running && result == null
     val ok = result?.let { !it.isError }
     val scheme = MaterialTheme.colorScheme
@@ -209,7 +216,7 @@ internal fun ToolCallCard(
                     modifier = Modifier
                         .padding(start = 2.dp)
                         .size(20.dp)
-                        .rotate(chevronRotation),
+                        .graphicsLayer { rotationZ = chevronRotation.value },
                 )
             }
             if (active) {
@@ -286,7 +293,7 @@ internal fun ToolGroupCard(
     browserTargets: Map<String, String> = emptyMap(),
 ) {
     var expanded by rememberSaveable(calls.joinToString(",") { it.id }) { mutableStateOf(false) }
-    val rotation by animateFloatAsState(
+    val rotation = animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
         animationSpec = expressiveSpatialSpec(),
         label = "tool group chevron",
@@ -384,7 +391,7 @@ internal fun ToolGroupCard(
                     modifier = Modifier
                         .padding(start = 2.dp)
                         .size(20.dp)
-                        .rotate(rotation),
+                        .graphicsLayer { rotationZ = rotation.value },
                 )
             }
             if (anyRunning) {
@@ -414,7 +421,7 @@ internal fun ToolGroupCard(
                     modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
                 ) {
                     HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.5f))
-                    calls.forEach { call ->
+                    CardHistory(calls, key = { it.id }) { call ->
                         if (call.name == "task") {
                             SubagentCard(
                                 call = call,
@@ -455,8 +462,18 @@ internal fun TurnActivityCard(
     browserTargets: Map<String, String> = emptyMap(),
 ) {
     if (activity.isEmpty()) return
+    val rows = remember(activity) {
+        buildList {
+            activity.forEachIndexed { index, message ->
+                val messageKey = message.id ?: index.toString()
+                if (message.thinking.isNotBlank()) add(ActivityRow.Thinking("$messageKey-thinking", message.thinking))
+                if (message.text.isNotBlank()) add(ActivityRow.Text("$messageKey-text", message.text))
+                message.toolCalls.forEach { add(ActivityRow.Tool("$messageKey-tool-${it.id}", it)) }
+            }
+        }
+    }
     var expanded by rememberSaveable(calls.joinToString(",") { it.id }) { mutableStateOf(false) }
-    val rotation by animateFloatAsState(
+    val rotation = animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
         animationSpec = fastEffectsSpec(),
         label = "turn activity chevron",
@@ -494,7 +511,7 @@ internal fun TurnActivityCard(
                     painterResource(R.drawable.ic_chat_chevron_right),
                     contentDescription = if (expanded) "Collapse activity" else "Expand activity",
                     tint = scheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 8.dp).size(18.dp).rotate(rotation / 2),
+                    modifier = Modifier.padding(start = 8.dp).size(18.dp).graphicsLayer { rotationZ = rotation.value / 2 },
                 )
             }
             AnimatedVisibility(
@@ -508,21 +525,18 @@ internal fun TurnActivityCard(
                 ) {
                     if (workedLabel.isNotBlank()) Text("Worked for $workedLabel", style = MaterialTheme.typography.labelSmall,
                         color = scheme.onSurfaceVariant)
-                    activity.forEach { message ->
-                        if (message.thinking.isNotBlank() || (message.generation.reasoningTokens ?: 0) > 0) {
-                            ThinkingBlock(message.thinking, durationMs = message.thinkingMs,
-                                reportedTokens = message.generation.reasoningTokens, setting = message.generation.reasoningSetting)
-                        }
-                        if (message.text.isNotBlank()) AssistantText(message.text)
-                        message.toolCalls.forEach { call ->
-                            ToolCallCard(
-                                call = call,
-                                result = results[call.id],
+                    CardHistory(rows, key = { it.key }) { row ->
+                        when (row) {
+                            is ActivityRow.Thinking -> ThinkingBlock(row.text)
+                            is ActivityRow.Text -> AssistantText(row.text)
+                            is ActivityRow.Tool -> ToolCallCard(
+                                call = row.call,
+                                result = results[row.call.id],
                                 running = false,
                                 onOpenFile = onOpenFile,
                                 showLiveCode = showLiveCode,
                                 onWatchBrowser = onWatchBrowser,
-                                browserTarget = browserTargets[call.id],
+                                browserTarget = browserTargets[row.call.id],
                             )
                         }
                     }
@@ -569,3 +583,12 @@ private fun ToolResultImage(ref: ImageRef) {
         )
     }
 }
+
+private sealed interface ActivityRow {
+    val key: String
+    data class Thinking(override val key: String, val text: String) : ActivityRow
+    data class Text(override val key: String, val text: String) : ActivityRow
+    data class Tool(override val key: String, val call: ToolCallData) : ActivityRow
+}
+
+private data class ToolCardDetails(val name: String, val raw: String, val arguments: String, val patch: String?)

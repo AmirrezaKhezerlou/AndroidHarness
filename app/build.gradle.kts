@@ -63,6 +63,7 @@ android {
         // Instrumented tests drive the real WebView (screenshots, history,
         // promise staging), which no JVM test can exercise.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        manifestPlaceholders["localImportFixtureEnabled"] = !providers.gradleProperty("cardBenchmark").isPresent
     }
 
     signingConfigs {
@@ -90,6 +91,24 @@ android {
         }
         debug {
             applicationIdSuffix = ".debug"
+        }
+        // Opt-in, non-debuggable release-equivalent window for card frame measurements.
+        // Test hosts never enter the normal release APK.
+        if (providers.gradleProperty("cardBenchmark").isPresent) {
+            create("benchmark") {
+                initWith(getByName("release"))
+                applicationIdSuffix = ".benchmark"
+                matchingFallbacks += "release"
+                isDebuggable = false
+            }
+        }
+    }
+
+    if (providers.gradleProperty("cardBenchmark").isPresent) {
+        testBuildType = "benchmark"
+        sourceSets.getByName("benchmark") {
+            java.srcDir("src/debug/java")
+            manifest.srcFile("src/debug/AndroidManifest.xml")
         }
     }
 

@@ -32,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,7 +40,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.androidharness.app.agent.describeToolCall
@@ -80,7 +81,7 @@ internal fun SubagentHeaderRow(
     running: Boolean,
     ok: Boolean?,
     modifier: Modifier = Modifier,
-    chevronRotation: Float? = null,
+    chevronRotation: State<Float>? = null,
     /** When set, a trailing affordance opens this agent's full-screen page. */
     onOpenFull: (() -> Unit)? = null,
 ) {
@@ -167,7 +168,7 @@ internal fun SubagentHeaderRow(
                 modifier = Modifier
                     .padding(start = 2.dp)
                     .size(20.dp)
-                    .rotate(chevronRotation),
+                    .graphicsLayer { rotationZ = chevronRotation.value },
             )
         }
     }
@@ -238,7 +239,7 @@ internal fun SubagentCard(
     onOpenFull: (() -> Unit)? = null,
 ) {
     var expanded by rememberSaveable(call.id) { mutableStateOf(false) }
-    val chevronRotation by animateFloatAsState(
+    val chevronRotation = animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
         animationSpec = fastEffectsSpec(),
         label = "subagent chevron",

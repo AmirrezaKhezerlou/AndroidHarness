@@ -1294,10 +1294,9 @@ private fun ChatScreenContent(
                                 val isSearchTurn = searchMessageId != null && message.turnId == searchTurnId
                                 val hasFinishedActivity = !isTurnRunning && !isSearchTurn && activity.isNotEmpty()
                                 if (hasFinishedActivity && !isTurnFinal) continue
-                                if (!hasFinishedActivity && (message.thinking.isNotBlank() || (message.generation.reasoningTokens ?: 0) > 0)) {
+                                if (!hasFinishedActivity && message.thinking.isNotBlank()) {
                                     indexedItem(key = "message-$messageKey-thinking", contentType = ChatListContentType.Thinking) {
-                                        Box(Modifier.animateItem(fadeInSpec = fastEffectsSpec(), placementSpec = null, fadeOutSpec = null)) { ThinkingBlock(message.thinking, durationMs = message.thinkingMs,
-                                            reportedTokens = message.generation.reasoningTokens, setting = message.generation.reasoningSetting) }
+                                        Box(Modifier.animateItem(fadeInSpec = fastEffectsSpec(), placementSpec = null, fadeOutSpec = null)) { ThinkingBlock(message.thinking) }
                                     }
                                 }
                                 if (message.text.isNotBlank() || hasFinishedActivity) {

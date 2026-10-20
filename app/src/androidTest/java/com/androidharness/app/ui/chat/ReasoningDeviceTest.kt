@@ -311,10 +311,11 @@ class ReasoningDeviceTest {
                             onSetPermission = {}, onSetMode = {}, onOpenContext = {}, onOpenUndo = {},
                             onOpenFiles = {}, onOpenGitHub = {}, thinkingResolved = resolved)
                         }
-                        ThinkingBlock("Short summary", reportedTokens = 5_000, setting = "Thinking: Max")
+                        ThinkingBlock("Short summary")
                     } }
                 } } }
-                await("5K reasoning tokens", contains = true)
+                await("Thinking")
+                assertNull(find(instrumentation.uiAutomation.rootInActiveWindow, "5K reasoning tokens"))
                 tap("Thinking level")
                 await("Low"); await("High"); await("Max")
                 await("Applies to your next message")

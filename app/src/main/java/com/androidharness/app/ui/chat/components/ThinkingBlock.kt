@@ -7,21 +7,17 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -35,16 +31,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.androidharness.app.ui.chat.UserScrollObserver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.LayoutDirection
 import com.androidharness.app.ui.common.DotLoading
-import com.androidharness.app.ui.common.formatDuration
 import com.androidharness.app.ui.theme.defaultEffectsSpec
 import com.androidharness.app.ui.theme.fastEffectsSpec
 import com.androidharness.app.ui.theme.fastSpatialSpec
@@ -62,13 +63,10 @@ import com.androidharness.app.ui.theme.fastSpatialSpec
 internal fun ThinkingBlock(
     thinking: String,
     live: Boolean = false,
-    /** How long reasoning took, shown as "Thought for Ns" once committed. */
-    durationMs: Long = 0,
-    reportedTokens: Int? = null,
-    setting: String? = null,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    val rotation by animateFloatAsState(
+    if (thinking.isBlank() && !live) return
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val rotation = animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
         animationSpec = fastEffectsSpec(),
         label = "reasoning chevron",
@@ -89,30 +87,17 @@ internal fun ThinkingBlock(
                     Spacer(Modifier.width(8.dp))
                 }
                 Text(
-                    when {
-                        live -> "Thinking…"
-                        durationMs > 0 -> "Thinking · ${formatDuration(durationMs)}"
-                        else -> "Thinking"
-                    },
+                    if (live) "Thinking…" else "Thinking",
                     style = MaterialTheme.typography.labelMedium,
                     color = scheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f),
                 )
-                if (!expanded) {
-                    Text(
-                        if (reportedTokens != null) "${com.androidharness.app.ui.common.formatTokens(reportedTokens)} reasoning tokens"
-                        else "≈ ${com.androidharness.app.ui.common.formatTokens((thinking.length + 3) / 4)} text tokens",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = scheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                }
                 Icon(
                     Icons.Filled.KeyboardArrowDown,
                     contentDescription = if (expanded) "Collapse" else "Expand",
                     modifier = Modifier
                         .size(18.dp)
-                        .rotate(rotation),
+                        .graphicsLayer { rotationZ = rotation.value },
                     tint = scheme.onSurfaceVariant,
                 )
             }
@@ -133,38 +118,52 @@ internal fun ThinkingBlock(
                         }
                     }
                 }
-                Row(
+                // Paint the rail after measurement instead of asking the entire text for
+                // an intrinsic height before laying it out a second time.
+                Box(
                     Modifier
                         .padding(top = 8.dp)
                         .nestedScroll(userScrollObserver)
-                        .height(IntrinsicSize.Min),
+                        .drawBehind {
+                            val railWidth = 2.dp.toPx()
+                            drawRoundRect(
+                                color = scheme.outlineVariant.copy(alpha = 0.7f),
+                                topLeft = Offset(if (layoutDirection == LayoutDirection.Rtl) size.width - railWidth else 0f, 0f),
+                                size = Size(railWidth, size.height),
+                                cornerRadius = CornerRadius(1.dp.toPx()),
+                            )
+                        }
+                        .padding(start = 12.dp),
                 ) {
-                    Box(
-                        Modifier
-                            .fillMaxHeight()
-                            .width(2.dp)
-                            .background(
-                                scheme.outlineVariant.copy(alpha = 0.7f),
-                                RoundedCornerShape(1.dp),
-                            ),
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        buildString {
-                            setting?.let { append(it).append("\n\n") }
-                            append(thinking.ifBlank { "The provider did not return a thinking summary." })
-                            if (durationMs > 0) append("\n\nDuration measures received thinking text.")
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        fontStyle = FontStyle.Italic,
-                        color = scheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(max = 260.dp)
-                            .verticalScroll(scroll),
-                    )
+                    // A completed, long transcript can lay out only visible paragraphs.
+                    // Live thinking retains the exact scroll observer/following path above.
+                    val paragraphs = remember(thinking, live) {
+                        if (!live && thinking.length > 8_000) thinking.split('\n').takeIf { it.size > 80 }
+                        else null
+                    }
+                    val textModifier = Modifier.fillMaxWidth().heightIn(max = 260.dp)
+                    if (paragraphs != null) {
+                        LazyColumn(modifier = textModifier) {
+                            items(paragraphs.size, key = { it }) { index ->
+                                ThinkingText(paragraphs[index], Modifier.fillMaxWidth())
+                            }
+                        }
+                    } else {
+                        ThinkingText(thinking, textModifier.verticalScroll(scroll))
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun ThinkingText(text: String, modifier: Modifier) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        fontStyle = FontStyle.Italic,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier,
+    )
 }
