@@ -7,7 +7,7 @@
 </p>
 
 [![Debug build](https://github.com/Sanuu7/AndroidHarness/actions/workflows/nightly.yml/badge.svg)](https://github.com/Sanuu7/AndroidHarness/actions/workflows/nightly.yml)
-[![Version](https://img.shields.io/badge/version-2.5-blue)](https://github.com/Sanuu7/AndroidHarness/releases/latest)
+[![Version](https://img.shields.io/badge/version-2.6-blue)](https://github.com/Sanuu7/AndroidHarness/releases/latest)
 [![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3ddc84)](https://developer.android.com/about/versions/oreo)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 
@@ -32,13 +32,13 @@ AndroidHarness is a native Android app, written in Kotlin with Jetpack Compose, 
 - **A real shell on a phone.** Commands route through Shizuku, optional direct root, a Termux toolchain, or a toybox fallback, with a shell policy and secret redactor on top.
 - **Long runs survive interruptions.** Foreground service, resume cards, a persistent message queue, and optional auto-continue keep work safe across screen-off stretches and connection drops.
 
-### New in 2.5
+### New in 2.6
 
-- **Project deletion with a review.** Remove a project, its chats, and its automations together, with blockers for running tasks or shared workspaces. The folder and its files stay on disk.
-- **A real editor.** Tabs, Quick Open, project search and replace, offline completion, outline, definitions, references, rename, formatting, persistent find options, and unsaved draft recovery.
-- **Optional root access.** Auto, Normal, Shizuku, Root or Both, with per-project permissions, a temporary or unlimited mode, a root browser, execution receipts, and KernelSU, KernelSU Next, SukiSU, APatch and Magisk detection.
-- **Usage you can trust.** AI code changes in Usage, and DeepSeek estimates that follow the request's UTC peak or off-peak rate instead of always charging peak.
-- **Calmer chat.** Per-call browser cards, live task progress, and faster tool groups and thinking blocks on long conversations.
+- **Speak replies aloud.** Read any assistant message with the device voice or a Groq voice, pick the model, voice and speed, and optionally read every new reply automatically.
+- **Simplified Chinese and a language picker.** The interface is translated into Simplified Chinese, and Settings → App language switches between the system language, English and 简体中文 immediately, without a restart.
+- **Live activities.** On Android 16 and up, the current run can appear as a Live Update on Pixel, a Now Bar card on Samsung and a Live alert on ColorOS and OxygenOS, with Approve and Deny on the card when the agent needs you.
+- **Full access behind device authentication.** Turning on Full access asks for your fingerprint, face or PIN, including when a settings backup would restore it.
+- **Honest root status.** Root enabled lights up only after the direct root service is verified; root through Shizuku keeps its own status line.
 
 ## Quick start
 
@@ -66,6 +66,7 @@ Open a workspace, point the agent at a project, and ask for a change. `/doctor` 
 - Inline Writing/Edit rows show filenames and animated added/removed line counts while file arguments stream. Tap a row for the syntax-colored preview and token details. Successful writes retain measured counts in chat history. Toggle them in Settings → Chat & commands → Show live code. Providers that return complete arguments at once show the row when those arguments arrive.
 - Verification cards: turns that touch files or run checks end with a list of every build, test, or lint command and its recorded outcome (passed, failed, or unconfirmed). Checks invalidated by a later edit are marked for a recheck.
 - Voice input with live waveforms, transcribed by Groq Whisper (`whisper-large-v3` / `turbo`) or native Android speech. Tap the mic to lock recording, or hold with slide-up lock and slide-left cancel.
+- **Read replies aloud.** Every assistant message has a speaker control that reads it with the device voice or a Groq PlayAI voice, with a spinner while a Groq clip is generated and a stop control while it plays. Settings → Voice & speech → Voice output picks the engine, model, voice and speed (0.75× to 1.5×), tests the voice, and can read every new reply automatically, including the commentary between tool calls. Code, tables, links and other markdown are cleaned up before speaking, long replies are split to each engine's limit, Groq clips are prefetched so sentences do not gap, and generated audio is cached.
 - Fork any assistant turn into a fresh session with cloned context.
 - The last active chat resumes automatically on launch behind shimmering skeleton loading.
 - Long chats open with the most recent messages. Load older messages when needed; pages keep complete turns together, search still jumps to older results, and paging does not change the context used by the model.
@@ -146,14 +147,16 @@ Commands route by path, so the agent always runs in the strongest environment th
 
 A shell policy and a secret redactor keep the agent from escaping the workspace, touching system paths without permission, or leaking API keys.
 
-**Optional root access.** Settings → Terminal & device adds opt-in root through a verified local service. Access modes are Auto, Normal, Shizuku, Root and Both, with an auto-fallback switch. Both keeps both connections live: ordinary commands use Shizuku and `access="root"` calls use the direct root service in the same task. Root is limited by default to an app session, one chat or one action and to projects you allow; a temporary root mode switch, behind a confirmation dialog, removes those limits for every project while the connection stays active. The root browser opens protected folders and text files up to 64 KB, and its saves refuse stale edits with a SHA-256 check. Tool cards show which backend ran (Normal, Shizuku · ADB, Shizuku · Root or Root), detached root jobs can be stopped or resumed, and tracked kills verify the process start time and log. KernelSU, KernelSU Next, SukiSU Ultra, APatch and Magisk are detected and named in the card and diagnostics. Root is granted once after each app start.
+**Optional root access.** Settings → Terminal & device adds opt-in root through a verified local service. Access modes are Auto, Normal, Shizuku, Root and Both, with an auto-fallback switch. Both keeps both connections live: ordinary commands use Shizuku and `access="root"` calls use the direct root service in the same task. Root is limited by default to an app session, one chat or one action and to projects you allow; a temporary root mode switch, behind a confirmation dialog, removes those limits for every project while the connection stays active. The root browser opens protected folders and text files up to 64 KB, and its saves refuse stale edits with a SHA-256 check. Tool cards show which backend ran (Normal, Shizuku · ADB, Shizuku · Root or Root), detached root jobs can be stopped or resumed, and tracked kills verify the process start time and log. KernelSU, KernelSU Next, SukiSU Ultra, APatch and Magisk are detected and named in the card and diagnostics. Root is granted once after each app start. The Root enabled chip appears only after the direct root service is verified; when a direct grant is denied but Shizuku runs as UID 0, the card says privileged commands will use Shizuku instead.
 
 The app-tier shell and the terminal run bundled Bash directly on Android 8 and 9, and through the system dynamic linker from Android 10 up, where Android requires it for app-storage binaries.
 
 ### Reliability
 
 - Setup requires storage access before starting. Notifications are optional; you can continue using progress and approvals inside the app without granting notification permission.
+- **App language.** Settings → App language offers System default, English and 简体中文, applies immediately without a restart, persists on Android 12 and earlier, and follows Android's per-app language picker on Android 13 and up. The interface is translated into Simplified Chinese; model and provider names, tool descriptions, agent prompts and shell output stay in English. The page links to the POEditor project for anyone who wants to help translate, and CONTRIBUTING.md explains the workflow.
 - A foreground service keeps the agent and terminals alive while the screen is off.
+- **Live activities on Android 16.** While a run or terminal is active, the ongoing notification can be promoted to a Live Update: Live updates on Pixel and near-stock Android, a Now Bar card on Samsung One UI, Live alerts on ColorOS and OxygenOS. The card shows a short state and progress, and offers Approve or Deny, or Skip or Install, while the agent waits for you. Idle services are never promoted, and Settings → Agent behavior → Live activities has the switch, the detected device and skin, its real permission state and per-brand setup steps.
 - The privileged shell verifies its connection. The standard Shizuku user service remains the default. If its startup fails on API 11–13, AndroidHarness automatically tries a private pipe-based compatibility runner using the same command and background-job implementation. This bypasses the Android Application initialization crash seen with Shizuku 13.6 on some OEM devices. Compatibility mode is marked ready only after checking the runner's identity and executing a privileged command. Terminal, tools, setup and diagnostics recognize both modes; Shizuku permission is still required.
 - A Shizuku runner that cannot bind shows a failure reason, expandable details and copy actions in Terminal & device and Troubleshooting. Copy startup log reads recent startup logs through Shizuku's main server on API 11–13, even when the runner cannot bind; no computer is needed. Reports include app/server versions, error time and logs filtered to this app's helper and service records. Missing logs and collection failures are reported explicitly. Compatibility recovery keeps the original startup error available without showing the working connection as failed. Late callbacks from old attempts cannot replace the live connection.
 - Interrupted tasks come back as a Resume card. Tool results are saved before the next action, completed writes are not replayed on recovery, and uncertain operations ask you to inspect the current state.
@@ -163,7 +166,7 @@ The app-tier shell and the terminal run bundled Bash directly on Android 8 and 9
 - Context & limits lets you edit the saved summary, pin instructions, and remove older model context while retaining the visible chat.
 - Compaction never deletes messages. When a context nears its limit it summarizes a snapshot of the older conversation into a hidden note and commits only if the chat has not changed meanwhile; if anything moved, the summary is refused and your history is kept. /compact can be stopped, a failure is saved in the chat as a card with Details and Retry, and a context that is too large for the model says so instead of quietly dropping the oldest messages.
 - Optional task-wide limits for tokens, estimated USD cost, and active time, including subagents and compaction. Tasks pause at request or action boundaries with progress saved, in-flight work can exceed a limit, and a reached limit is raised before resuming.
-- Approve or deny sensitive actions from the notification shade, with four permission modes up to a full access mode that lifts every sandbox for workspaces you trust.
+- Approve or deny sensitive actions from the notification shade, with four permission modes up to a full access mode that lifts every sandbox for workspaces you trust. Turning on Full access requires your fingerprint, face or device PIN, in Settings, the chat header, the workspace access menu and when a settings backup would restore it.
 - Review and revoke every remembered tool permission individually in their own settings section.
 - The phone drawer and desktop sidebar share one project tree, with Chats and Projects views, search, pinning, archived chats, chat actions and undo, a delete confirmation, and a Tools footer with Files, Terminal, Automations and Build & Test.
 
@@ -214,6 +217,7 @@ The app-tier shell and the terminal run bundled Bash directly on Android 8 and 9
 - **Do I need an API key?** No. The built-in provider serves free models with no account, and local GGUF models run fully offline. Keys unlock cloud providers when you want them.
 - **Do I need root?** No. Shizuku grants shell-level access over wireless debugging without unlocking the bootloader. Direct root is optional if the device is rooted, and both can be used together in Both mode.
 - **Does it work offline?** Local models run offline after setup. Web search, page fetches, and GitHub need a connection.
+- **Can I change the language?** Yes. Settings → App language switches between the system language, English and Simplified Chinese, and applies without a restart. More languages can be added through the POEditor project.
 - **Where do my chats and keys go?** Chat traffic goes to the provider you pick, nothing else. Credentials stay in encrypted storage on the device, secrets are redacted before they reach a model, settings backups include API keys only if you ask, and ChatGPT sign-ins are excluded from backups entirely.
 - **Can it damage my files?** It is sandboxed to the workspace, every write is diffable, and Files changed offers rewind, full-file undo, and section undo.
 - **Which devices are supported?** Android 8.0 and up. Local models need a compatible 64-bit device.
@@ -263,7 +267,7 @@ A generated architecture reference covering the agent engine, tools, providers, 
 
 ## Contributing
 
-Bug reports, fixes, test improvements, and documentation are all welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), and use the issue forms for bug reports and feature requests. Privacy details are in [PRIVACY.md](PRIVACY.md), and release notes are in [CHANGELOG.md](CHANGELOG.md).
+Bug reports, fixes, test improvements, and documentation are all welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), and use the issue forms for bug reports and feature requests. Translations are managed on [POEditor](https://poeditor.com/join/project/ZPbHNa9WWc); CONTRIBUTING.md covers the workflow. Privacy details are in [PRIVACY.md](PRIVACY.md), and release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Inspirations
 
