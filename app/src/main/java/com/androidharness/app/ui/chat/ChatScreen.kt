@@ -12,7 +12,9 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.androidharness.app.data.AppSettings
+import com.androidharness.app.data.audio.TtsError
 import com.androidharness.app.data.audio.TtsPhase
+import com.androidharness.app.ui.common.TtsTermsDialog
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -201,11 +203,14 @@ private fun ChatScreenContent(
     // Lazy list content and its derived lookup maps must use the same snapshot.
     val state = viewModel.state.collectAsStateWithLifecycle().value
     val ttsState by viewModel.container.tts.state.collectAsStateWithLifecycle()
+    var ttsTermsError by remember { mutableStateOf<TtsError?>(null) }
     LaunchedEffect(Unit) {
-        viewModel.container.tts.errors.collect { message ->
-            Toast.makeText(uiContext, message, Toast.LENGTH_LONG).show()
+        viewModel.container.tts.errors.collect { error ->
+            if (error.termsRequired) ttsTermsError = error
+            else Toast.makeText(uiContext, error.message, Toast.LENGTH_LONG).show()
         }
     }
+    ttsTermsError?.let { TtsTermsDialog(it) { ttsTermsError = null } }
     val webPreviewAvailable by viewModel.webPreviewAvailable.collectAsStateWithLifecycle()
     androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_START) {
         viewModel.refreshWebPreviewSources()

@@ -109,6 +109,7 @@ import com.androidharness.app.llm.effectiveApiKey
 import com.androidharness.app.data.AppSettings
 import com.androidharness.app.data.ChatBackupException
 import com.androidharness.app.data.audio.GroqTtsClient
+import com.androidharness.app.data.audio.TtsError
 import com.androidharness.app.data.audio.TtsVoiceOption
 import com.androidharness.app.data.ThemeMode
 import com.androidharness.app.ui.chat.components.FullAccessOrange
@@ -123,6 +124,7 @@ import com.androidharness.app.ui.common.HarnessMark
 import com.androidharness.app.ui.common.openOAuthBrowser
 import com.androidharness.app.ui.common.AddWorkspaceDialog
 import com.androidharness.app.ui.common.BiometricAuth
+import com.androidharness.app.ui.common.TtsTermsDialog
 import com.androidharness.app.ui.common.findFragmentActivity
 import com.androidharness.app.ui.common.SecureDialogEffect
 import com.androidharness.app.ui.common.SecureScreenEffect
@@ -1050,6 +1052,7 @@ private fun VoiceSpeechSection(
     var modelEpoch by remember { mutableStateOf(0) }
     var customVoice by remember { mutableStateOf("") }
     var customModel by remember { mutableStateOf("") }
+    var ttsTermsError by remember { mutableStateOf<TtsError?>(null) }
     val hasGroqKey = remember(keyEpoch) { container.keys.groqApiKey() != null }
     val groqKeyUrl = "https://console.groq.com/keys"
 
@@ -1064,8 +1067,9 @@ private fun VoiceSpeechSection(
 
     // "Test voice" failures otherwise have no surface to appear on.
     LaunchedEffect(Unit) {
-        container.tts.errors.collect { message ->
-            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+        container.tts.errors.collect { error ->
+            if (error.termsRequired) ttsTermsError = error
+            else android.widget.Toast.makeText(context, error.message, android.widget.Toast.LENGTH_LONG).show()
         }
     }
 
@@ -1599,6 +1603,8 @@ private fun VoiceSpeechSection(
             },
         )
     }
+
+    ttsTermsError?.let { TtsTermsDialog(it) { ttsTermsError = null } }
 }
 
 // ---------------------------------------------------------------------------

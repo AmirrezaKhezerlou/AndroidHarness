@@ -256,4 +256,8 @@
     <string name="tts_error_unavailable">此设备不支持文字转语音。</string>
     <string name="tts_error_playback">无法播放朗读内容。</string>
     <string name="tts_error_groq">无法通过 Groq 生成语音。</string>
+    <string name="tts_terms_title">接受模型条款</string>
+    <string name="tts_terms_body">使用此模型前，需要组织管理员先在 Groq 控制台中接受该模型的条款。打开控制台接受条款后，请返回重试。</string>
+    <string name="tts_terms_accept">打开 Groq 控制台</string>
+    <string name="tts_terms_later">稍后</string>
 </resources>

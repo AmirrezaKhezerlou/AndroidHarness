@@ -46,6 +46,13 @@ data class TtsState(
 /** One selectable Android TTS voice. */
 data class TtsVoiceOption(val id: String, val label: String)
 
+/** A failure worth showing. Terms errors carry the console link Groq returned. */
+data class TtsError(
+    val message: String,
+    val termsRequired: Boolean = false,
+    val actionUrl: String? = null,
+)
+
 /**
  * Owns both output engines and the single media player, so starting a new
  * reply always stops the previous one. The UI only calls [toggle]/[autoSpeak]
@@ -62,8 +69,8 @@ class TtsController(
     private val _state = MutableStateFlow(TtsState())
     val state: StateFlow<TtsState> = _state.asStateFlow()
 
-    private val _errors = MutableSharedFlow<String>(extraBufferCapacity = 4)
-    val errors: SharedFlow<String> = _errors.asSharedFlow()
+    private val _errors = MutableSharedFlow<TtsError>(extraBufferCapacity = 4)
+    val errors: SharedFlow<TtsError> = _errors.asSharedFlow()
 
     private var job: Job? = null
     private var player: MediaPlayer? = null
@@ -154,7 +161,7 @@ class TtsController(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                reportError(e.message ?: context.getString(R.string.tts_error_playback))
+                reportError(e)
             }
         }
     }
@@ -199,7 +206,7 @@ class TtsController(
             val file = GroqTtsClient.synthesizeCached(
                 context.cacheDir, chunk, apiKey, model, voice, saved.ttsSpeed,
             ).getOrElse { error ->
-                return reportError(error.message ?: context.getString(R.string.tts_error_groq))
+                return reportError(error)
             }
             if (index == 0) _state.value = TtsState(messageId, TtsPhase.SPEAKING)
             if (!play(file)) return report(R.string.tts_error_playback)
@@ -319,10 +326,28 @@ class TtsController(
         focusRequest = null
     }
 
-    private fun report(@StringRes message: Int): Boolean = reportError(context.getString(message))
+    private fun report(@StringRes message: Int): Boolean =
+        reportError(TtsError(context.getString(message)))
 
-    private fun reportError(message: String): Boolean {
-        _errors.tryEmit(message)
+    private fun reportError(error: Throwable): Boolean {
+        val message = error.message ?: context.getString(R.string.tts_error_groq)
+        val api = error as? GroqTtsClient.GroqApiException
+        val terms = api != null && (
+            api.code == "model_terms_required" ||
+                message.contains("terms acceptance", ignoreCase = true) ||
+                message.contains("accept the terms", ignoreCase = true)
+            )
+        return reportError(
+            TtsError(
+                message = message,
+                termsRequired = terms,
+                actionUrl = api?.actionUrl,
+            ),
+        )
+    }
+
+    private fun reportError(error: TtsError): Boolean {
+        _errors.tryEmit(error)
         stop()
         return false
     }

@@ -77,6 +77,25 @@ object GroqTtsClient {
         .build()
 
     private val json = Json { ignoreUnknownKeys = true }
+    private val urlPattern = Regex("""https?://[^\s"'<>]+""")
+
+    /** Groq errors carry a machine code and, for model terms, a direct link. */
+    class GroqApiException(
+        override val message: String,
+        val code: String? = null,
+        val actionUrl: String? = null,
+    ) : IOException(message)
+
+    internal fun apiError(body: String, status: Int): GroqApiException {
+        val error = runCatching {
+            json.parseToJsonElement(body).jsonObject["error"]?.jsonObject
+        }.getOrNull()
+        val message = error?.get("message")?.jsonPrimitive?.content
+            ?: "Groq request failed (HTTP $status)"
+        val code = runCatching { error?.get("code")?.jsonPrimitive?.content }.getOrNull()
+        val url = urlPattern.find(message)?.value?.trimEnd('.', ',', ')', ']')
+        return GroqApiException(message, code, url)
+    }
 
     /**
      * Returns a cached MP3 for this exact voice/speed/text, generating it once.
@@ -135,12 +154,7 @@ object GroqTtsClient {
         return try {
             execute(request).use { response ->
                 if (!response.isSuccessful) {
-                    val body = response.body?.string().orEmpty()
-                    val message = runCatching {
-                        json.parseToJsonElement(body).jsonObject["error"]
-                            ?.jsonObject?.get("message")?.jsonPrimitive?.content
-                    }.getOrNull() ?: "Groq speech failed (HTTP ${response.code})"
-                    Result.failure(IOException(message))
+                    Result.failure(apiError(response.body?.string().orEmpty(), response.code))
                 } else {
                     val bytes = response.body?.bytes()
                     if (bytes == null || bytes.isEmpty()) {
@@ -172,11 +186,7 @@ object GroqTtsClient {
             execute(request).use { response ->
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    val message = runCatching {
-                        json.parseToJsonElement(body).jsonObject["error"]
-                            ?.jsonObject?.get("message")?.jsonPrimitive?.content
-                    }.getOrNull() ?: "Groq model list failed (HTTP ${response.code})"
-                    Result.failure(IOException(message))
+                    Result.failure(apiError(body, response.code))
                 } else {
                     val ids = runCatching {
                         json.parseToJsonElement(body).jsonObject["data"]?.jsonArray

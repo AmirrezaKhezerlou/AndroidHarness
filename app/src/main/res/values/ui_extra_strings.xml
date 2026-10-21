@@ -258,4 +258,8 @@
     <string name="tts_error_unavailable">Text-to-speech is not available on this device.</string>
     <string name="tts_error_playback">Could not play the spoken reply.</string>
     <string name="tts_error_groq">Could not generate speech with Groq.</string>
+    <string name="tts_terms_title">Accept the model terms</string>
+    <string name="tts_terms_body">Groq requires an organization admin to accept this model\'s terms before it can be used. Open the console, accept them, then come back and try again.</string>
+    <string name="tts_terms_accept">Open Groq Console</string>
+    <string name="tts_terms_later">Not now</string>
 </resources>
