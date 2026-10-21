@@ -40,6 +40,10 @@
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>
+        <!-- Android 11+ package visibility: discover installed TTS engines/voices. -->
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
     </queries>
 
     <!-- Terminal/storage: let the app use real filesystem paths across shared

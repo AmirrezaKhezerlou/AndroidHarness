@@ -61,6 +61,8 @@ class AppContainer(val appContext: Context) {
 
     val keys = KeyStoreManager(appContext)
     val settings = SettingsRepository(appContext)
+    /** Reads assistant replies with Android TTS or Groq PlayAI. */
+    val tts = com.androidharness.app.data.audio.TtsController(appContext, settings, keys)
     internal val editorScope = kotlinx.coroutines.CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     internal val editorDrafts = com.androidharness.app.ui.files.EditorDraftStore(
         java.io.File(appContext.noBackupFilesDir, "editor-drafts"), editorScope)

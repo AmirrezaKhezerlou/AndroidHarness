@@ -3,6 +3,7 @@ package com.androidharness.app.data
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
@@ -95,6 +96,16 @@ data class AppSettings(
     val voiceEngine: String = "inbuilt",
     /** Groq Whisper model: "whisper-large-v3" (default) or "whisper-large-v3-turbo". */
     val groqWhisperModel: String = "whisper-large-v3",
+    /** Text-to-speech engine: "system" (Android TTS) or "groq" (Groq PlayAI). */
+    val ttsEngine: String = TTS_ENGINE_SYSTEM,
+    /** Groq TTS voice id, e.g. "Fritz-PlayAI". */
+    val ttsGroqVoice: String = DEFAULT_TTS_GROQ_VOICE,
+    /** Android TTS voice name; null picks the best voice for the app language. */
+    val ttsSystemVoice: String? = null,
+    /** Speech rate multiplier shared by both engines. */
+    val ttsSpeed: Float = 1f,
+    /** Read every finished assistant reply automatically. */
+    val ttsAlwaysSpeak: Boolean = false,
     /** The one-time voice configuration promo dialog was dismissed. */
     val voicePromoSeen: Boolean = false,
     /** Resume the last opened chat session when app launches. */
@@ -118,6 +129,9 @@ data class AppSettings(
         const val VOICE_ENGINE_GROQ = "groq"
         const val GROQ_MODEL_WHISPER_V3 = "whisper-large-v3"
         const val GROQ_MODEL_WHISPER_TURBO = "whisper-large-v3-turbo"
+        const val TTS_ENGINE_SYSTEM = "system"
+        const val TTS_ENGINE_GROQ = "groq"
+        const val DEFAULT_TTS_GROQ_VOICE = "Fritz-PlayAI"
     }
 }
 
@@ -195,6 +209,11 @@ class SettingsRepository(private val context: Context) {
         val BIOMETRIC_LOCK_TIMEOUT = intPreferencesKey("biometric_lock_timeout_minutes")
         val VOICE_ENGINE = stringPreferencesKey("voice_engine")
         val GROQ_WHISPER_MODEL = stringPreferencesKey("groq_whisper_model")
+        val TTS_ENGINE = stringPreferencesKey("tts_engine")
+        val TTS_GROQ_VOICE = stringPreferencesKey("tts_groq_voice")
+        val TTS_SYSTEM_VOICE = stringPreferencesKey("tts_system_voice")
+        val TTS_SPEED = floatPreferencesKey("tts_speed")
+        val TTS_ALWAYS_SPEAK = booleanPreferencesKey("tts_always_speak")
         val VOICE_PROMO_SEEN = booleanPreferencesKey("voice_promo_seen")
         val RESUME_LAST_CHAT = booleanPreferencesKey("resume_last_chat")
         val SHOW_LIVE_CODE = booleanPreferencesKey("show_live_code")
@@ -263,6 +282,11 @@ class SettingsRepository(private val context: Context) {
             biometricLockTimeoutMinutes = prefs[Keys.BIOMETRIC_LOCK_TIMEOUT] ?: 0,
             voiceEngine = prefs[Keys.VOICE_ENGINE] ?: AppSettings.VOICE_ENGINE_INBUILT,
             groqWhisperModel = prefs[Keys.GROQ_WHISPER_MODEL] ?: AppSettings.GROQ_MODEL_WHISPER_V3,
+            ttsEngine = prefs[Keys.TTS_ENGINE] ?: AppSettings.TTS_ENGINE_SYSTEM,
+            ttsGroqVoice = prefs[Keys.TTS_GROQ_VOICE] ?: AppSettings.DEFAULT_TTS_GROQ_VOICE,
+            ttsSystemVoice = prefs[Keys.TTS_SYSTEM_VOICE]?.ifBlank { null },
+            ttsSpeed = prefs[Keys.TTS_SPEED] ?: 1f,
+            ttsAlwaysSpeak = prefs[Keys.TTS_ALWAYS_SPEAK] ?: false,
             voicePromoSeen = prefs[Keys.VOICE_PROMO_SEEN] ?: false,
             resumeLastChat = prefs[Keys.RESUME_LAST_CHAT] ?: true,
             showLiveCode = prefs[Keys.SHOW_LIVE_CODE] ?: true,
@@ -302,6 +326,11 @@ class SettingsRepository(private val context: Context) {
             p[Keys.WEB_SEARCH_PROVIDER] = s.webSearchProvider
             p[Keys.VOICE_ENGINE] = s.voiceEngine
             p[Keys.GROQ_WHISPER_MODEL] = s.groqWhisperModel
+            p[Keys.TTS_ENGINE] = s.ttsEngine
+            p[Keys.TTS_GROQ_VOICE] = s.ttsGroqVoice
+            p[Keys.TTS_SYSTEM_VOICE] = s.ttsSystemVoice.orEmpty()
+            p[Keys.TTS_SPEED] = s.ttsSpeed
+            p[Keys.TTS_ALWAYS_SPEAK] = s.ttsAlwaysSpeak
             p[Keys.RESUME_LAST_CHAT] = s.resumeLastChat
             p[Keys.SHOW_LIVE_CODE] = s.showLiveCode
             p[Keys.REPO_MAP_ENABLED] = s.repoMapEnabled
@@ -405,6 +434,26 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setGroqWhisperModel(model: String) {
         context.settingsStore.edit { it[Keys.GROQ_WHISPER_MODEL] = model }
+    }
+
+    suspend fun setTtsEngine(engine: String) {
+        context.settingsStore.edit { it[Keys.TTS_ENGINE] = engine }
+    }
+
+    suspend fun setTtsGroqVoice(voice: String) {
+        context.settingsStore.edit { it[Keys.TTS_GROQ_VOICE] = voice }
+    }
+
+    suspend fun setTtsSystemVoice(voice: String?) {
+        context.settingsStore.edit { it[Keys.TTS_SYSTEM_VOICE] = voice.orEmpty() }
+    }
+
+    suspend fun setTtsSpeed(speed: Float) {
+        context.settingsStore.edit { it[Keys.TTS_SPEED] = speed.coerceIn(0.5f, 2f) }
+    }
+
+    suspend fun setTtsAlwaysSpeak(enabled: Boolean) {
+        context.settingsStore.edit { it[Keys.TTS_ALWAYS_SPEAK] = enabled }
     }
 
     suspend fun setVoicePromoSeen(seen: Boolean) {

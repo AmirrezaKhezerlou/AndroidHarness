@@ -12,6 +12,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.androidharness.app.data.AppSettings
+import com.androidharness.app.data.audio.TtsPhase
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -60,6 +61,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.outlined.ForkRight
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.StopCircle
+import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.MoreHoriz
@@ -197,6 +200,12 @@ private fun ChatScreenContent(
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     // Lazy list content and its derived lookup maps must use the same snapshot.
     val state = viewModel.state.collectAsStateWithLifecycle().value
+    val ttsState by viewModel.container.tts.state.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) {
+        viewModel.container.tts.errors.collect { message ->
+            Toast.makeText(uiContext, message, Toast.LENGTH_LONG).show()
+        }
+    }
     val webPreviewAvailable by viewModel.webPreviewAvailable.collectAsStateWithLifecycle()
     androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_START) {
         viewModel.refreshWebPreviewSources()
@@ -1161,6 +1170,27 @@ private fun ChatScreenContent(
                     map
                 }
 
+                // "Speak every reply" only reads turns that ran on this screen.
+                // The turn is remembered while busy so a reply committed a
+                // moment after the run stops is still found and read once.
+                val appSettings by viewModel.container.settings.settings
+                    .collectAsStateWithLifecycle(initialValue = AppSettings())
+                var pendingSpeakTurn by remember { mutableStateOf<String?>(null) }
+                LaunchedEffect(state.busy, state.currentTurnId) {
+                    if (state.busy) pendingSpeakTurn = state.currentTurnId ?: pendingSpeakTurn
+                }
+                LaunchedEffect(state.messages, state.busy, pendingSpeakTurn, appSettings.ttsAlwaysSpeak) {
+                    val turn = pendingSpeakTurn ?: return@LaunchedEffect
+                    if (state.busy || !appSettings.ttsAlwaysSpeak) return@LaunchedEffect
+                    val reply = state.messages.lastOrNull {
+                        it.role == Role.ASSISTANT && it.turnId == turn && it.toolCallId == null &&
+                            it.text.isNotBlank() && it.id != null &&
+                            it.id == turnFinalAssistantIds[it.turnId]
+                    } ?: return@LaunchedEffect
+                    pendingSpeakTurn = null
+                    reply.id?.let { viewModel.container.tts.autoSpeak(it, reply.text) }
+                }
+
                 // FAB visibility tracks the pin (not the raw at-bottom check),
                 // so the brief off-bottom moments between follow scrolls don't
                 // flash the button during streaming. The badge pulses when new
@@ -1361,6 +1391,16 @@ private fun ChatScreenContent(
                                                     verticalAlignment = Alignment.CenterVertically,
                                                 ) {
                                                     CopyIconButton(message.text)
+                                                    message.id?.let { messageId ->
+                                                        val isThisMessage = ttsState.messageId == messageId
+                                                        SpeakIconButton(
+                                                            active = isThisMessage,
+                                                            preparing = isThisMessage && ttsState.phase == TtsPhase.PREPARING,
+                                                            onClick = {
+                                                                viewModel.container.tts.toggle(messageId, message.text)
+                                                            },
+                                                        )
+                                                    }
                                                     ResponseActions(
                                                         onFork = { viewModel.requestFork(message) { onNavigateToSession(it) } },
                                                         onUndo = if (canRewind) ({ message.turnId?.let { confirmRewindTurn = it } }) else null,
@@ -1869,6 +1909,29 @@ internal fun CopyIconButton(text: String) {
         if (copied) {
             delay(1500)
             copied = false
+        }
+    }
+}
+
+/** Read-aloud control: speaker, spinner while a Groq voice is generated, stop while playing. */
+@Composable
+internal fun SpeakIconButton(active: Boolean, preparing: Boolean, onClick: () -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
+    IconButton(onClick = onClick) {
+        when {
+            active && preparing -> CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp)
+            active -> Icon(
+                Icons.Outlined.StopCircle,
+                contentDescription = uiContext.getString(R.string.settings_tts_stop_reading),
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
+            else -> Icon(
+                Icons.Outlined.VolumeUp,
+                contentDescription = uiContext.getString(R.string.settings_tts_read_aloud),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
         }
     }
 }

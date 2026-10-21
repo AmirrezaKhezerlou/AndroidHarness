@@ -36,8 +36,8 @@
     <string name="settings_page_codegraph_desc">安装 CodeGraph 并管理项目索引</string>
     <string name="settings_page_caveman_title">Caveman</string>
     <string name="settings_page_caveman_desc">更短的回复、可选的编程技能与 Token 报告</string>
-    <string name="settings_page_voice_title">语音输入</string>
-    <string name="settings_page_voice_desc">语音识别与语音提供商偏好</string>
+    <string name="settings_page_voice_title">语音与朗读</string>
+    <string name="settings_page_voice_desc">语音识别、文字转语音与语音提供商</string>
     <string name="settings_page_skills_title">技能</string>
     <string name="settings_page_skills_desc">管理助手可用的技能手册</string>
     <string name="settings_page_appearance_title">外观</string>

@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -49,6 +50,7 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.SdStorage
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SystemUpdate
@@ -67,6 +69,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -86,6 +89,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.key
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -93,6 +97,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -103,6 +108,8 @@ import com.androidharness.app.agent.PermissionMode
 import com.androidharness.app.llm.effectiveApiKey
 import com.androidharness.app.data.AppSettings
 import com.androidharness.app.data.ChatBackupException
+import com.androidharness.app.data.audio.GroqTtsClient
+import com.androidharness.app.data.audio.TtsVoiceOption
 import com.androidharness.app.data.ThemeMode
 import com.androidharness.app.ui.chat.components.FullAccessOrange
 import com.androidharness.app.ui.chat.components.ModelPickerSheet
@@ -1030,103 +1037,55 @@ private fun VoiceSpeechSection(
     val voiceEngine = settings.voiceEngine
     val groqModel = settings.groqWhisperModel
     val isGroq = voiceEngine == AppSettings.VOICE_ENGINE_GROQ
+    val ttsEngine = settings.ttsEngine
+    val isTtsGroq = ttsEngine == AppSettings.TTS_ENGINE_GROQ
 
     var keyDraft by remember { mutableStateOf("") }
     var keyEpoch by remember { mutableStateOf(0) }
     var expanded by remember { mutableStateOf(false) }
     var checking by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
+    var voicePicker by remember { mutableStateOf(false) }
     val hasGroqKey = remember(keyEpoch) { container.keys.groqApiKey() != null }
     val groqKeyUrl = "https://console.groq.com/keys"
 
     // The pasted key is only on screen while the entry form is open.
-    SecureScreenEffect(container, expanded)
+    SecureScreenEffect(container, expanded && (isGroq || isTtsGroq))
+
+    // "Test voice" failures otherwise have no surface to appear on.
+    LaunchedEffect(Unit) {
+        container.tts.errors.collect { message ->
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
 
     SettingsHeader(uiContext.getString(R.string.ui_voice_speech))
-    SettingsPanel(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Outlined.Mic,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    SettingsAnchor(R.string.settings_anchor_stt) {
-                        Text(stringResource(R.string.settings_anchor_stt), style = MaterialTheme.typography.titleSmall)
-                    }
-                    Text(
-                        when {
-                            !isGroq -> uiContext.getString(R.string.ui_inbuilt_android_recognizer)
-                            hasGroqKey -> uiContext.getString(R.string.ui_groq_whisper_key_saved, (groqModel).toString())
-                            else -> uiContext.getString(R.string.ui_groq_whisper_no_key_yet)
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+
+    // One key serves both Whisper (input) and PlayAI (output).
+    if (isGroq || isTtsGroq) {
+        SettingsPanel(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Outlined.Key,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
                     )
-                }
-                StatusText(
-                    when {
-                        !isGroq -> uiContext.getString(R.string.ui_inbuilt)
-                        hasGroqKey -> uiContext.getString(R.string.ui_on)
-                        else -> uiContext.getString(R.string.ui_no_key)
-                    },
-                    ok = !isGroq || hasGroqKey,
-                )
-            }
-
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                listOf(
-                    AppSettings.VOICE_ENGINE_INBUILT to uiContext.getString(R.string.ui_inbuilt),
-                    AppSettings.VOICE_ENGINE_GROQ to "Groq",
-                ).forEachIndexed { index, (value, label) ->
-                    SegmentedButton(
-                        selected = voiceEngine == value,
-                        onClick = {
-                            if (voiceEngine != value) {
-                                expanded = false
-                                status = null
-                                keyDraft = ""
-                                scope.launch { container.settings.setVoiceEngine(value) }
-                            }
-                        },
-                        shape = SegmentedButtonDefaults.itemShape(index = index, count = 2),
-                    ) { Text(label) }
-                }
-            }
-
-            if (!isGroq) {
-                Text(
-                    uiContext.getString(R.string.ui_uses_the_on_device_or_system_speech),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                SettingsAnchor(R.string.settings_anchor_whisper) {
-                    Text(
-                        stringResource(R.string.settings_anchor_whisper),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    listOf(
-                        AppSettings.GROQ_MODEL_WHISPER_V3 to "Whisper 3",
-                        AppSettings.GROQ_MODEL_WHISPER_TURBO to "Turbo",
-                    ).forEachIndexed { index, (value, label) ->
-                        SegmentedButton(
-                            selected = groqModel == value,
-                            onClick = {
-                                if (groqModel != value) {
-                                    scope.launch { container.settings.setGroqWhisperModel(value) }
-                                }
-                            },
-                            shape = SegmentedButtonDefaults.itemShape(index = index, count = 2),
-                        ) { Text(label) }
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.settings_tts_groq_key), style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            if (hasGroqKey) uiContext.getString(R.string.settings_tts_groq_key_saved)
+                            else uiContext.getString(R.string.settings_tts_groq_key_needed),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
+                    StatusText(
+                        if (hasGroqKey) uiContext.getString(R.string.ui_on) else uiContext.getString(R.string.ui_no_key),
+                        ok = hasGroqKey,
+                    )
                 }
 
                 when {
@@ -1227,6 +1186,266 @@ private fun VoiceSpeechSection(
                 }
             }
         }
+    }
+
+    SettingsPanel(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Outlined.Mic,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    SettingsAnchor(R.string.settings_anchor_stt) {
+                        Text(stringResource(R.string.settings_anchor_stt), style = MaterialTheme.typography.titleSmall)
+                    }
+                    Text(
+                        when {
+                            !isGroq -> uiContext.getString(R.string.ui_inbuilt_android_recognizer)
+                            hasGroqKey -> uiContext.getString(R.string.ui_groq_whisper_key_saved, (groqModel).toString())
+                            else -> uiContext.getString(R.string.ui_groq_whisper_no_key_yet)
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                StatusText(
+                    when {
+                        !isGroq -> uiContext.getString(R.string.ui_inbuilt)
+                        hasGroqKey -> uiContext.getString(R.string.ui_on)
+                        else -> uiContext.getString(R.string.ui_no_key)
+                    },
+                    ok = !isGroq || hasGroqKey,
+                )
+            }
+
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                listOf(
+                    AppSettings.VOICE_ENGINE_INBUILT to uiContext.getString(R.string.ui_inbuilt),
+                    AppSettings.VOICE_ENGINE_GROQ to "Groq",
+                ).forEachIndexed { index, (value, label) ->
+                    SegmentedButton(
+                        selected = voiceEngine == value,
+                        onClick = {
+                            if (voiceEngine != value) {
+                                expanded = false
+                                status = null
+                                keyDraft = ""
+                                scope.launch { container.settings.setVoiceEngine(value) }
+                            }
+                        },
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = 2),
+                    ) { Text(label) }
+                }
+            }
+
+            if (!isGroq) {
+                Text(
+                    uiContext.getString(R.string.ui_uses_the_on_device_or_system_speech),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                SettingsAnchor(R.string.settings_anchor_whisper) {
+                    Text(
+                        stringResource(R.string.settings_anchor_whisper),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    listOf(
+                        AppSettings.GROQ_MODEL_WHISPER_V3 to "Whisper 3",
+                        AppSettings.GROQ_MODEL_WHISPER_TURBO to "Turbo",
+                    ).forEachIndexed { index, (value, label) ->
+                        SegmentedButton(
+                            selected = groqModel == value,
+                            onClick = {
+                                if (groqModel != value) {
+                                    scope.launch { container.settings.setGroqWhisperModel(value) }
+                                }
+                            },
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = 2),
+                        ) { Text(label) }
+                    }
+                }
+            }
+        }
+    }
+
+    SettingsHeader(uiContext.getString(R.string.settings_tts_output))
+    SettingsPanel(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Outlined.VolumeUp,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    SettingsAnchor(R.string.settings_anchor_tts) {
+                        Text(stringResource(R.string.settings_anchor_tts), style = MaterialTheme.typography.titleSmall)
+                    }
+                    Text(
+                        if (isTtsGroq) uiContext.getString(R.string.settings_tts_groq_hint)
+                        else uiContext.getString(R.string.settings_tts_device_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                StatusText(
+                    when {
+                        isTtsGroq && !hasGroqKey -> uiContext.getString(R.string.ui_no_key)
+                        isTtsGroq -> "Groq"
+                        else -> uiContext.getString(R.string.ui_inbuilt)
+                    },
+                    ok = !isTtsGroq || hasGroqKey,
+                )
+            }
+
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                listOf(
+                    AppSettings.TTS_ENGINE_SYSTEM to uiContext.getString(R.string.settings_tts_device),
+                    AppSettings.TTS_ENGINE_GROQ to "Groq",
+                ).forEachIndexed { index, (value, label) ->
+                    SegmentedButton(
+                        selected = ttsEngine == value,
+                        onClick = {
+                            if (ttsEngine != value) scope.launch { container.settings.setTtsEngine(value) }
+                        },
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = 2),
+                    ) { Text(label) }
+                }
+            }
+
+            if (isTtsGroq && !hasGroqKey) {
+                Text(
+                    uiContext.getString(R.string.settings_tts_no_key),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+
+            Text(
+                stringResource(R.string.settings_tts_voice),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedButton(onClick = { voicePicker = true }, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    if (isTtsGroq) settings.ttsGroqVoice
+                    else settings.ttsSystemVoice?.replace('_', ' ')
+                        ?: uiContext.getString(R.string.settings_tts_voice_automatic),
+                    Modifier.weight(1f),
+                )
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
+            }
+
+            Text(
+                stringResource(R.string.settings_tts_speed),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                listOf(0.75f to "0.75×", 1f to "1×", 1.25f to "1.25×", 1.5f to "1.5×")
+                    .forEachIndexed { index, (value, label) ->
+                        SegmentedButton(
+                            selected = kotlin.math.abs(settings.ttsSpeed - value) < 0.01f,
+                            onClick = {
+                                if (kotlin.math.abs(settings.ttsSpeed - value) >= 0.01f) {
+                                    scope.launch { container.settings.setTtsSpeed(value) }
+                                }
+                            },
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = 4),
+                        ) { Text(label) }
+                    }
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text(stringResource(R.string.settings_tts_always_speak), style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        stringResource(R.string.settings_tts_always_speak_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = settings.ttsAlwaysSpeak,
+                    onCheckedChange = { scope.launch { container.settings.setTtsAlwaysSpeak(it) } },
+                )
+            }
+
+            OutlinedButton(onClick = { container.tts.preview() }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Outlined.VolumeUp, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.settings_tts_test))
+            }
+        }
+    }
+
+    if (voicePicker) {
+        val deviceVoices by produceState(initialValue = emptyList<TtsVoiceOption>(), ttsEngine) {
+            value = if (ttsEngine == AppSettings.TTS_ENGINE_SYSTEM) container.tts.systemVoices() else emptyList()
+        }
+        val options = if (isTtsGroq) {
+            GroqTtsClient.VOICES.map { TtsVoiceOption(it, it.replace('-', ' ')) }
+        } else {
+            listOf(TtsVoiceOption("", uiContext.getString(R.string.settings_tts_voice_automatic))) + deviceVoices
+        }
+        val selectedId = if (isTtsGroq) settings.ttsGroqVoice else settings.ttsSystemVoice.orEmpty()
+
+        AlertDialog(
+            onDismissRequest = { voicePicker = false },
+            title = { Text(stringResource(R.string.settings_tts_voice)) },
+            text = {
+                Column(
+                    Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    options.forEach { option ->
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .selectable(
+                                    selected = option.id == selectedId,
+                                    role = Role.RadioButton,
+                                    onClick = {
+                                        voicePicker = false
+                                        scope.launch {
+                                            if (isTtsGroq) container.settings.setTtsGroqVoice(option.id)
+                                            else container.settings.setTtsSystemVoice(option.id.ifBlank { null })
+                                        }
+                                    },
+                                )
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            RadioButton(selected = option.id == selectedId, onClick = null)
+                            Text(option.label, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                    if (!isTtsGroq && deviceVoices.isEmpty()) {
+                        Text(
+                            uiContext.getString(R.string.settings_tts_no_device_voices),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { voicePicker = false }) {
+                    Text(stringResource(R.string.settings_action_done))
+                }
+            },
+        )
     }
 }
 

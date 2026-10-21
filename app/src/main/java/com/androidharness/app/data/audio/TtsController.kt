@@ -1,0 +1,323 @@
+package com.androidharness.app.data.audio
+
+import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
+import android.media.MediaPlayer
+import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.Voice
+import androidx.annotation.StringRes
+import com.androidharness.app.R
+import com.androidharness.app.core.response.RichResponse
+import com.androidharness.app.data.AppSettings
+import com.androidharness.app.data.KeyStoreManager
+import com.androidharness.app.data.SettingsRepository
+import java.io.File
+import java.util.Locale
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.resume
+
+enum class TtsPhase { IDLE, PREPARING, SPEAKING }
+
+/** Which message is being read, so only its button shows a stop state. */
+data class TtsState(
+    val messageId: String? = null,
+    val phase: TtsPhase = TtsPhase.IDLE,
+)
+
+/** One selectable Android TTS voice. */
+data class TtsVoiceOption(val id: String, val label: String)
+
+/**
+ * Owns both output engines and the single media player, so starting a new
+ * reply always stops the previous one. The UI only calls [toggle]/[autoSpeak]
+ * and renders [state]; it never touches TextToSpeech or MediaPlayer.
+ */
+class TtsController(
+    private val context: Context,
+    private val settings: SettingsRepository,
+    private val keys: KeyStoreManager,
+) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val audioManager = context.getSystemService(AudioManager::class.java)
+
+    private val _state = MutableStateFlow(TtsState())
+    val state: StateFlow<TtsState> = _state.asStateFlow()
+
+    private val _errors = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val errors: SharedFlow<String> = _errors.asSharedFlow()
+
+    private var job: Job? = null
+    private var player: MediaPlayer? = null
+    private var focusRequest: AudioFocusRequest? = null
+
+    private var systemTts: TextToSpeech? = null
+    private var systemInit: CompletableDeferred<Boolean>? = null
+    private var playbackGeneration = 0
+    private var pendingUtterances = 0
+
+    /** Auto-speak fires once per message even across rotations and recompositions. */
+    private val autoSpoken = LinkedHashSet<String>()
+
+    fun toggle(messageId: String, text: String) {
+        val current = _state.value
+        if (current.messageId == messageId && current.phase != TtsPhase.IDLE) stop()
+        else speak(messageId, text)
+    }
+
+    fun autoSpeak(messageId: String, text: String) {
+        if (text.isBlank() || !autoSpoken.add(messageId)) return
+        if (autoSpoken.size > 200) autoSpoken.remove(autoSpoken.first())
+        val current = _state.value
+        if (current.messageId == messageId && current.phase != TtsPhase.IDLE) return
+        speak(messageId, text)
+    }
+
+    /** Speaks a sample with the currently saved engine/voice/speed. */
+    fun preview() {
+        speak(PREVIEW_ID, context.getString(R.string.settings_tts_test_sentence))
+    }
+
+    fun stop() {
+        job?.cancel()
+        job = null
+        playbackGeneration++
+        pendingUtterances = 0
+        player?.let { mp ->
+            runCatching { if (mp.isPlaying) mp.stop() }
+            runCatching { mp.release() }
+        }
+        player = null
+        runCatching { systemTts?.stop() }
+        abandonFocus()
+        _state.value = TtsState()
+    }
+
+    fun release() {
+        stop()
+        runCatching { systemTts?.shutdown() }
+        systemTts = null
+        systemInit = null
+        scope.cancel()
+    }
+
+    /** Voices of the installed engine that fit the app's language. */
+    suspend fun systemVoices(): List<TtsVoiceOption> {
+        val tts = ensureSystemTts() ?: return emptyList()
+        val locale = appLocale()
+        return tts.voices.orEmpty()
+            .filter { !it.isNetworkConnectionRequired && it.locale.language == locale.language }
+            .sortedWith(
+                compareByDescending<Voice> { it.locale.country == locale.country }
+                    .thenByDescending { it.quality }
+                    .thenBy { it.name },
+            )
+            .map { TtsVoiceOption(it.name, "${it.name.replace('_', ' ')} · ${it.locale.displayName}") }
+    }
+
+    private fun speak(messageId: String, text: String) {
+        val plain = RichResponse.plainText(text).trim()
+        if (plain.isBlank()) return
+        stop()
+        _state.value = TtsState(messageId, TtsPhase.PREPARING)
+        job = scope.launch {
+            val saved = settings.settings.first()
+            try {
+                when (saved.ttsEngine) {
+                    AppSettings.TTS_ENGINE_GROQ -> speakGroq(messageId, plain, saved)
+                    else -> speakSystem(messageId, plain, saved)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                reportError(e.message ?: context.getString(R.string.tts_error_playback))
+            }
+        }
+    }
+
+    private suspend fun speakSystem(messageId: String, text: String, saved: AppSettings): Boolean {
+        val tts = ensureSystemTts() ?: return report(R.string.tts_error_unavailable)
+        applySystemVoice(tts, saved)
+        val limit = TextToSpeech.getMaxSpeechInputLength().coerceAtMost(GroqTtsClient.MAX_INPUT_CHARS)
+        val chunks = TtsTextChunker.chunk(text, limit)
+        if (chunks.isEmpty()) return false
+
+        val generation = ++playbackGeneration
+        pendingUtterances = chunks.size
+        _state.value = TtsState(messageId, TtsPhase.SPEAKING)
+        requestFocus()
+        tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) = Unit
+            override fun onDone(utteranceId: String?) = completeUtterance(generation)
+            @Deprecated("Deprecated in Java")
+            override fun onError(utteranceId: String?) = failUtterance(generation)
+            override fun onError(utteranceId: String?, errorCode: Int) = failUtterance(generation)
+        })
+        chunks.forEachIndexed { index, chunk ->
+            val mode = if (index == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
+            if (tts.speak(chunk, mode, null, "$generation-$index") == TextToSpeech.ERROR) {
+                return report(R.string.tts_error_playback)
+            }
+        }
+        return true
+    }
+
+    private suspend fun speakGroq(messageId: String, text: String, saved: AppSettings): Boolean {
+        val apiKey = keys.groqApiKey() ?: return report(R.string.tts_error_no_key)
+        val chunks = TtsTextChunker.chunk(text, GroqTtsClient.MAX_INPUT_CHARS)
+        if (chunks.isEmpty()) return false
+        requestFocus()
+        chunks.forEachIndexed { index, chunk ->
+            val file = GroqTtsClient.synthesizeCached(
+                context.cacheDir, chunk, apiKey, saved.ttsGroqVoice, saved.ttsSpeed,
+            ).getOrElse { error ->
+                return reportError(error.message ?: context.getString(R.string.tts_error_groq))
+            }
+            if (index == 0) _state.value = TtsState(messageId, TtsPhase.SPEAKING)
+            if (!play(file)) return report(R.string.tts_error_playback)
+        }
+        finish()
+        return true
+    }
+
+    private fun completeUtterance(generation: Int) {
+        scope.launch {
+            if (generation != playbackGeneration) return@launch
+            pendingUtterances -= 1
+            if (pendingUtterances <= 0) finish()
+        }
+    }
+
+    private fun failUtterance(generation: Int) {
+        // Engine callbacks can arrive off the main thread; state and player
+        // teardown stay on the controller's dispatcher.
+        if (generation != playbackGeneration) return
+        scope.launch {
+            if (generation == playbackGeneration) report(R.string.tts_error_playback)
+        }
+    }
+
+    private fun finish() {
+        playbackGeneration++
+        _state.value = TtsState()
+        abandonFocus()
+    }
+
+    private suspend fun play(file: File): Boolean = suspendCancellableCoroutine { continuation ->
+        val mp = MediaPlayer()
+        player = mp
+        try {
+            mp.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build(),
+            )
+            mp.setDataSource(file.absolutePath)
+            mp.setOnPreparedListener { it.start() }
+            mp.setOnCompletionListener { done ->
+                if (player === done) player = null
+                runCatching { done.release() }
+                if (continuation.isActive) continuation.resume(true)
+            }
+            mp.setOnErrorListener { _, _, _ ->
+                if (player === mp) player = null
+                runCatching { mp.release() }
+                if (continuation.isActive) continuation.resume(false)
+                true
+            }
+            continuation.invokeOnCancellation {
+                runCatching { mp.stop() }
+                runCatching { mp.release() }
+            }
+            mp.prepareAsync()
+        } catch (e: Exception) {
+            runCatching { mp.release() }
+            if (continuation.isActive) continuation.resume(false)
+        }
+    }
+
+    private suspend fun ensureSystemTts(): TextToSpeech? {
+        val existing = systemTts
+        if (existing != null) {
+            val ready = systemInit?.let { withTimeoutOrNull(10_000) { it.await() } } ?: false
+            return existing.takeIf { ready }
+        }
+        val init = CompletableDeferred<Boolean>()
+        systemInit = init
+        systemTts = TextToSpeech(context) { status -> init.complete(status == TextToSpeech.SUCCESS) }
+        val ready = withTimeoutOrNull(10_000) { init.await() } ?: false
+        return systemTts?.takeIf { ready }
+    }
+
+    private fun applySystemVoice(tts: TextToSpeech, saved: AppSettings) {
+        val selected = saved.ttsSystemVoice
+            ?.let { name -> tts.voices?.firstOrNull { it.name == name } }
+        if (selected != null) {
+            runCatching { tts.voice = selected }
+        } else {
+            val locale = appLocale()
+            val result = tts.setLanguage(locale)
+            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                tts.setLanguage(Locale.US)
+            }
+        }
+        tts.setSpeechRate(saved.ttsSpeed.coerceIn(0.5f, 2f))
+    }
+
+    private fun appLocale(): Locale {
+        val configuration = context.resources.configuration
+        return configuration.locales.takeIf { it.size() > 0 }?.get(0) ?: Locale.getDefault()
+    }
+
+    private fun requestFocus() {
+        val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build(),
+            )
+            .setOnAudioFocusChangeListener { change ->
+                if (change == AudioManager.AUDIOFOCUS_LOSS || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) stop()
+            }
+            .build()
+        focusRequest = request
+        runCatching { audioManager?.requestAudioFocus(request) }
+    }
+
+    private fun abandonFocus() {
+        focusRequest?.let { runCatching { audioManager?.abandonAudioFocusRequest(it) } }
+        focusRequest = null
+    }
+
+    private fun report(@StringRes message: Int): Boolean = reportError(context.getString(message))
+
+    private fun reportError(message: String): Boolean {
+        _errors.tryEmit(message)
+        stop()
+        return false
+    }
+
+    companion object {
+        const val PREVIEW_ID = "__tts_preview__"
+    }
+}

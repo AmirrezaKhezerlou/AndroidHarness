@@ -37,8 +37,8 @@
     <string name="settings_page_codegraph_desc">Install CodeGraph and manage project indexes</string>
     <string name="settings_page_caveman_title">Caveman</string>
     <string name="settings_page_caveman_desc">Shorter replies, optional coding skills and token reports</string>
-    <string name="settings_page_voice_title">Voice input</string>
-    <string name="settings_page_voice_desc">Speech recognition and voice provider preferences</string>
+    <string name="settings_page_voice_title">Voice &amp; speech</string>
+    <string name="settings_page_voice_desc">Speech recognition, text-to-speech and voice providers</string>
     <string name="settings_page_skills_title">Skills</string>
     <string name="settings_page_skills_desc">Manage the playbooks your assistant can use</string>
     <string name="settings_page_appearance_title">Appearance</string>

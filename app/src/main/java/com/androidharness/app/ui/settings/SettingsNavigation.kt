@@ -87,7 +87,7 @@ internal enum class SettingsPage(
         R.string.settings_page_voice_title,
         R.string.settings_page_voice_desc,
         R.string.settings_group_your_assistant,
-        "microphone groq whisper transcription speech",
+        "microphone groq whisper transcription speech tts text to speech read aloud voice output",
     ),
     SKILLS(
         R.string.settings_page_skills_title,
@@ -359,6 +359,13 @@ private val subSettingsEntries = listOfNotNull(
         SettingsPage.VOICE,
         "groq voice transcription",
         anchor = R.string.settings_anchor_whisper,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_tts_title,
+        R.string.settings_search_tts_desc,
+        SettingsPage.VOICE,
+        "tts text to speech read aloud speak replies voice output groq playai",
+        anchor = R.string.settings_anchor_tts,
     ),
     SettingsSearchEntry(
         R.string.settings_search_theme_title,
