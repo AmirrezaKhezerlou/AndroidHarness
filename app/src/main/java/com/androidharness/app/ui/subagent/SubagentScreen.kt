@@ -174,8 +174,10 @@ fun SubagentScreen(
             }
 
             innerTurns.forEach { turn ->
-                if (turn.thinking.isNotBlank()) {
-                    item(key = "${turn.id}-thinking") { ThinkingBlock(turn.thinking) }
+                if (turn.thinking.isNotBlank() || (turn.generation.reasoningTokens ?: 0) > 0) {
+                    item(key = "${turn.id}-thinking") {
+                        ThinkingBlock(turn.thinking, thinkingMs = turn.thinkingMs, reasoningTokens = turn.generation.reasoningTokens)
+                    }
                 }
                 if (turn.text.isNotBlank()) {
                     item(key = "${turn.id}-text") { AssistantText(turn.text) }

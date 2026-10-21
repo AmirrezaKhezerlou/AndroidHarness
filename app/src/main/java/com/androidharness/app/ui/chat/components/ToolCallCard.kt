@@ -183,8 +183,8 @@ internal fun ToolCallCard(
                     }
                     result?.generation?.execution?.distinctBy { it.label }?.forEach { receipt ->
                         androidx.compose.material3.Surface(
-                            color = if (receipt.uid == 0) scheme.tertiaryContainer else scheme.secondaryContainer,
-                            contentColor = if (receipt.uid == 0) scheme.onTertiaryContainer else scheme.onSecondaryContainer,
+                            color = if (receipt.backend == com.androidharness.app.data.env.DeviceBackend.ROOT) scheme.tertiaryContainer else scheme.secondaryContainer,
+                            contentColor = if (receipt.backend == com.androidharness.app.data.env.DeviceBackend.ROOT) scheme.onTertiaryContainer else scheme.onSecondaryContainer,
                             shape = RoundedCornerShape(50), modifier = Modifier.padding(top = 4.dp),
                         ) {
                             Text(receipt.label + if (receipt.fallbackReason != null) " · fallback" else "",
@@ -480,7 +480,8 @@ internal fun TurnActivityCard(
         buildList {
             activity.forEachIndexed { index, message ->
                 val messageKey = message.id ?: index.toString()
-                if (message.thinking.isNotBlank()) add(ActivityRow.Thinking("$messageKey-thinking", message.thinking))
+                if (message.thinking.isNotBlank() || (message.generation.reasoningTokens ?: 0) > 0)
+                    add(ActivityRow.Thinking("$messageKey-thinking", message))
                 if (message.text.isNotBlank()) add(ActivityRow.Text("$messageKey-text", message.text))
                 message.toolCalls.forEach { add(ActivityRow.Tool("$messageKey-tool-${it.id}", it)) }
             }
@@ -541,7 +542,8 @@ internal fun TurnActivityCard(
                         color = scheme.onSurfaceVariant)
                     CardHistory(rows, key = { it.key }) { row ->
                         when (row) {
-                            is ActivityRow.Thinking -> ThinkingBlock(row.text)
+                            is ActivityRow.Thinking -> ThinkingBlock(row.message.thinking,
+                                thinkingMs = row.message.thinkingMs, reasoningTokens = row.message.generation.reasoningTokens)
                             is ActivityRow.Text -> AssistantText(row.text)
                             is ActivityRow.Tool -> ToolCallCard(
                                 call = row.call,
@@ -600,7 +602,7 @@ private fun ToolResultImage(ref: ImageRef) {
 
 private sealed interface ActivityRow {
     val key: String
-    data class Thinking(override val key: String, val text: String) : ActivityRow
+    data class Thinking(override val key: String, val message: ChatMessage) : ActivityRow
     data class Text(override val key: String, val text: String) : ActivityRow
     data class Tool(override val key: String, val call: ToolCallData) : ActivityRow
 }

@@ -75,6 +75,7 @@ class ToolRegistry(private val tools: List<Tool>) {
             searchApi: () -> com.androidharness.app.tools.SearchApiConfig? = { null },
             artifactLoader: ArtifactLoader? = null,
             toolOutputLoader: ToolOutputLoader? = null,
+            fileHistory: com.androidharness.app.data.WorkspaceFileHistory? = null,
         ): ToolRegistry {
             val baseTools = mutableListOf<Tool>(
                 ListDirTool(),
@@ -132,6 +133,10 @@ class ToolRegistry(private val tools: List<Tool>) {
                 baseTools.add(ReadArtifactTool(artifactLoader))
             }
             if (toolOutputLoader != null) baseTools.add(ReadToolOutputTool(toolOutputLoader))
+            if (fileHistory != null) {
+                baseTools.add(FileHistoryTool(fileHistory))
+                baseTools.add(FileRestoreTool(fileHistory))
+            }
             if (imageStore != null) {
                 baseTools.add(ReadImageTool(imageStore))
             }
@@ -151,6 +156,7 @@ class ToolRegistry(private val tools: List<Tool>) {
                         BrowserForwardTool(browserController),
                         BrowserRefreshTool(browserController),
                         BrowserGetUrlTool(browserController),
+                        BrowserOpenExternalTool(browserController),
                     )
                 )
             }

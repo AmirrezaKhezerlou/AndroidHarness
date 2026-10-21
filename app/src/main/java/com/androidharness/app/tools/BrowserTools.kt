@@ -19,6 +19,8 @@ internal fun formatBrowserState(state: BrowserState): String {
     sb.append("URL: ").append(state.url.ifBlank { "(blank)" }).append("\n")
     sb.append("Title: ").append(state.title.ifBlank { "(no title)" }).append("\n")
     sb.append("Scroll: y=${state.scrollY}\n")
+    sb.append("Surface: ${state.visibility}; focused: ${state.hasFocus}\n")
+    if (state.visibility == "hidden") sb.append("Hidden surface: tool scrolling uses instant behavior. Screenshots require opening the visible browser preview.\n")
 
     if (!state.error.isNullOrBlank()) {
         sb.append("Warning: ").append(state.error).append("\n")
@@ -271,7 +273,7 @@ class BrowserScreenshotTool(
     override val name = "browser_screenshot"
     override val description =
         "Capture a screenshot image of the current page/WebView viewport. The image is shown inline in the " +
-        "chat transcript so the user sees it, and the tool result reports the saved file details."
+        "chat transcript. Requires an attached visible preview and waits for loaded fonts, images and finite animations; hidden surfaces return an error instead of a blank image."
     override val parametersSchema = Schema.obj(emptyMap())
     override val isReadOnly = true
 

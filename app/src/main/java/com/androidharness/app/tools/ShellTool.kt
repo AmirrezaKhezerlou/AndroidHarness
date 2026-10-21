@@ -22,7 +22,7 @@ class ShellTool(
         "otherwise follows the selected Auto, Normal, Shizuku, Root or Both access mode: " +
         "a full Linux userspace (bash, git, python, node…) as the app when installed, " +
         "Shizuku ADB-shell privileges (plus the same toolchain) when Shizuku is connected, " +
-        "or direct root when requested. In Both mode ordinary commands use Shizuku and " +
+        "or direct root when requested. App-workspace development uses the app UID by default. Choose access=\"shizuku\" for Android system commands. In Both mode other ordinary commands use Shizuku and " +
         "access=\"root\" uses the direct root service, so both can be used in the same task. " +
         "If the active workspace is a picked folder (SAF), the command runs in the app's shell " +
         "workspace and a note is added. Returns the exit code plus captured stdout and stderr " +
@@ -30,7 +30,7 @@ class ShellTool(
     override val parametersSchema = Schema.obj(
         mapOf(
             "command" to Schema.string("The shell command to run."),
-            "access" to Schema.string("auto (default) or root. In Both mode auto uses Shizuku and root uses the direct root service. Root requires a verified root-capable backend and project permission; it never falls back to non-root execution."),
+            "access" to Schema.string("auto (default), shizuku, or root. App-workspace development uses the app UID by default. Choose shizuku for Android system commands; this explicitly pins Shizuku and never falls back to root or the app UID. In Both mode auto uses Shizuku and root uses the direct root service. Root requires a verified root-capable backend and project permission; it never falls back to non-root execution."),
             "cwd" to Schema.string(
                 "Working directory relative to the workspace root (default: the root). " +
                     "Use it instead of 'cd dir && …' chains.",
@@ -45,8 +45,8 @@ class ShellTool(
         withContext(Dispatchers.IO) {
             val rawCommand = args["command"]?.jsonPrimitive?.content
                 ?: throw ToolFailure("Missing required argument: command")
-            require(args["access"]?.jsonPrimitive?.content in listOf(null, "auto", "root")) { "access must be auto or root" }
             val remote = ctx.workspace as? com.androidharness.app.workspace.SshFs
+            validateShellAccess(args["access"]?.jsonPrimitive?.content, remote != null)
             val root = remote?.root?.let { File(it) } ?: ctx.workspace.shellRoot
                 ?: throw ToolFailure(
                     "This workspace has no real filesystem path, so the shell cannot run here. " +
@@ -120,6 +120,14 @@ class ShellTool(
     private fun String.truncated(): String =
         if (length <= MAX_OUTPUT_CHARS) this
         else substring(0, MAX_OUTPUT_CHARS) + "\n[truncated]"
+}
+
+/** A pinned Android transport must never silently execute on an SSH host. */
+internal fun validateShellAccess(access: String?, remote: Boolean) {
+    require(access in listOf(null, "auto", "shizuku", "root")) { "access must be auto, shizuku or root" }
+    require(!remote || access == null || access == "auto") {
+        "Shizuku and direct root are Android-local. Select a local workspace for this access request; SSH commands require access=auto."
+    }
 }
 
 internal fun resolveShellWorkingDirectory(raw: String?, root: File, sandboxOff: Boolean): File {

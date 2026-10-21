@@ -18,13 +18,13 @@ class ShellBackgroundTool(
         "Start a long-running shell command in the background (e.g. a dev server). " +
         "When Shizuku is connected the process runs inside its server and survives the app " +
         "being minimized or even killed; otherwise it runs as an app child kept alive by the " +
-        "foreground service. In Both mode a normal background command uses Shizuku and " +
+        "foreground service. App-workspace development uses the app UID by default; access=\"shizuku\" explicitly selects Shizuku. In Both mode other background commands use Shizuku and " +
         "access=\"root\" uses the direct root service, which lasts only while that connection " +
         "survives. Returns a process id; its output goes to a log file. " +
         "Use bg_list to inspect and bg_kill to stop it."
     override val parametersSchema = Schema.obj(
         mapOf("command" to Schema.string("The shell command to run in the background."),
-            "access" to Schema.string("auto (default) or root. In Both mode auto uses Shizuku and root uses the direct root service. Root requires a verified backend and project permission.")),
+            "access" to Schema.string("auto (default), shizuku, or root. App-workspace development uses the app UID by default. Choose shizuku for Android system commands; this explicitly pins Shizuku and never falls back to root or the app UID. In Both mode auto uses Shizuku and root uses the direct root service. Root requires a verified backend and project permission.")),
         required = listOf("command"),
     )
     override val isReadOnly = false
@@ -33,8 +33,8 @@ class ShellBackgroundTool(
         withContext(Dispatchers.IO) {
             val rawCommand = args["command"]?.jsonPrimitive?.content
                 ?: throw ToolFailure("Missing required argument: command")
-            require(args["access"]?.jsonPrimitive?.content in listOf(null, "auto", "root")) { "access must be auto or root" }
             val remote = ctx.workspace as? com.androidharness.app.workspace.SshFs
+            validateShellAccess(args["access"]?.jsonPrimitive?.content, remote != null)
             if (remote != null) {
                 val deny = if (ctx.sandboxOff) null else ShellPolicy.denyReason(rawCommand, java.io.File(remote.root), java.io.File(remote.root))
                 if (deny != null) return@withContext ToolResult(false, deny)
@@ -57,7 +57,7 @@ class ShellBackgroundTool(
             val (command, npmNote) = NpmOnSharedStorage.prepare(rawCommand, cwd)
 
             try {
-                val started = store.start(command, cwd)
+                val started = store.start(command, cwd, ctx.sessionId)
                 val notes = StringBuilder()
                 npmNote?.let { notes.append(it).append('\n') }
                 if (started.entry.source == "ROOT") notes.append("[note: running via direct root; tied to this root service/app session]\n")
@@ -89,8 +89,8 @@ class BgListTool(
 ) : Tool {
     override val name = "bg_list"
     override val description =
-        "List active background jobs and up to 100 recent completed jobs, with exit codes and recent log output."
-    override val parametersSchema = Schema.obj(emptyMap())
+        "List background jobs owned by this chat by default. Use scope=workspace or scope=all to inspect earlier or other chats before starting another server. Includes working directories, ownership and previous-app-session labels."
+    override val parametersSchema = Schema.obj(mapOf("scope" to Schema.string("chat (default), workspace, or all. Older jobs without chat ownership are shown only in workspace/all.")))
     override val isReadOnly = true
 
     override suspend fun execute(args: JsonObject, ctx: ToolContext): ToolResult =
@@ -98,17 +98,30 @@ class BgListTool(
             (ctx.workspace as? com.androidharness.app.workspace.SshFs)?.let {
                 return@withContext com.androidharness.app.workspace.SshJobs.list(it)
             }
-            val entries = store.list()
-            if (entries.isEmpty()) return@withContext ToolResult(true, "No tracked background jobs.")
+            val scope = args["scope"]?.jsonPrimitive?.content ?: "chat"
+            require(scope in setOf("chat", "workspace", "all")) { "scope must be chat, workspace or all" }
+            val all = store.listForDisplay()
+            val entries = all.filter { (entry, _) -> backgroundJobMatches(entry, scope, ctx) }
+            val hidden = all.size - entries.size
+            if (entries.isEmpty() && hidden == 0) return@withContext ToolResult(true, "No tracked background jobs.")
             val sb = StringBuilder()
+            if (entries.isEmpty()) sb.append("No jobs in this scope.\n")
+            if (hidden > 0) sb.append("$hidden job(s) outside this scope; use scope=workspace or scope=all to inspect possible port conflicts.\n")
             entries.forEach { (e, alive) ->
                 val uptime = ((e.finishedAt ?: System.currentTimeMillis()) - e.startedAt) / 1000
                 sb.append("[${e.id}] ")
-                    .append(if (alive) "running" else "${e.termination ?: "exited"} (exit ${e.exitCode?.toString() ?: "unknown"})")
+                    .append(if (e.termination == "unverified") "status unknown (reconnect ${e.source.lowercase()})"
+                        else if (alive) "running" else "${e.termination ?: "exited"} (exit ${e.exitCode?.toString() ?: "unknown"})")
                     .append(" (${uptime}s, via ").append(e.source.lowercase()).append(")")
                     .append(if (e.startedAt < store.bootAt) " [prev app session]" else "")
                     .append(" ")
                     .append(e.command.take(100)).append('\n')
+                sb.append("  cwd: ").append(e.cwd).append('\n')
+                sb.append("  owner: ").append(when {
+                    e.ownerSessionId == null -> "unknown (legacy job)"
+                    e.ownerSessionId == ctx.sessionId -> "this chat"
+                    else -> "another chat (${e.ownerSessionId})"
+                }).append('\n')
                 val log = store.tail(e, 800)
                 if (log.isNotBlank()) sb.append(log.trimEnd()).append('\n')
             }
@@ -140,4 +153,12 @@ class BgKillTool(
             else if (store.kill(id)) ToolResult(true, "Killed background process $id.")
             else ToolResult(false, "Failed to kill process $id.")
         }
+}
+
+internal fun backgroundJobMatches(entry: com.androidharness.app.data.BgProcessEntry, scope: String, ctx: ToolContext): Boolean = when (scope) {
+    "all" -> true
+    "workspace" -> ctx.workspace.shellRoot?.let { root ->
+        java.io.File(entry.cwd).canonicalFile.toPath().startsWith(root.canonicalFile.toPath())
+    } == true
+    else -> ctx.sessionId != null && entry.ownerSessionId == ctx.sessionId
 }

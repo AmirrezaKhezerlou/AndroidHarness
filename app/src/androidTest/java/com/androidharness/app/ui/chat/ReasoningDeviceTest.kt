@@ -30,6 +30,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collect
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
@@ -39,6 +40,72 @@ import org.junit.runner.RunWith
 class ReasoningDeviceTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val context get() = instrumentation.targetContext
+
+    @Test fun engineKeepsReasoningDurationAndUsageSeparateFromAnswerStreaming() = runBlocking {
+        val c = (context.applicationContext as com.androidharness.app.HarnessApp).container
+        val provider = object : LlmProvider {
+            override fun streamChat(config: ProviderConfig, apiKey: String, systemPrompt: String,
+                messages: List<ChatMessage>, tools: List<ToolSchema>, options: RequestOptions) = kotlinx.coroutines.flow.flow {
+                emit(StreamEvent.ThinkingDelta("Check the request"))
+                kotlinx.coroutines.delay(150)
+                emit(StreamEvent.TextDelta("Answer"))
+                kotlinx.coroutines.delay(350)
+                emit(StreamEvent.Usage(10, 50, reasoningTokens = 42))
+                emit(StreamEvent.Done("stop"))
+            }
+        }
+        val engine = AgentEngine({ provider }, com.androidharness.app.tools.ToolRegistry(emptyList()),
+            c.checkpoints, c.images, c.linuxEnv, c.shizuku, c.skills)
+        val events = mutableListOf<AgentEvent>()
+        engine.run("thinking-metrics-fixture", "turn",
+            ProviderConfig("fixture", "Fixture", ProviderType.OPENAI_COMPAT, "https://fixture.invalid", "fixture-model"),
+            "fixture", listOf(ChatMessage(Role.USER, "Question")), { PermissionMode.CONFIRM_ALL }, mutableSetOf(),
+            com.androidharness.app.workspace.FileFs(context.cacheDir), RequestOptions(), 32_000, AgentMode.ACT,
+            repoMapEnabled = false).collect { events += it }
+        val message = events.filterIsInstance<AgentEvent.AssistantCommitted>().single().message
+        assertEquals(42, message.generation.reasoningTokens)
+        assertEquals(42, events.filterIsInstance<AgentEvent.Usage>().single().reasoningTokens)
+        assertTrue("Reasoning must have a measured duration", message.thinkingMs >= 100)
+        assertTrue("Answer streaming must be excluded", message.generationMs - message.thinkingMs >= 300)
+        val progress = events.filterIsInstance<AgentEvent.ThinkingProgress>()
+        assertNotNull(progress.first().timing.startedAt)
+        assertNull(progress.last().timing.startedAt)
+        assertEquals(message.thinkingMs, progress.last().timing.elapsedMs)
+    }
+
+    @Test fun thinkingMetricsAdvanceLiveThenFreezeAndReplaceEstimatesWithReportedUsage() {
+        val text = mutableStateOf("1234")
+        val timing = mutableStateOf(ThinkingTiming().start(ThinkingTiming.now() - 2_000))
+        val live = mutableStateOf(true)
+        val tokens = mutableStateOf<Int?>(null)
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            scenario.onActivity { it.setContent { HarnessTheme {
+                Surface(Modifier.fillMaxSize()) { Column {
+                    ThinkingBlock(text.value, live = live.value, timing = timing.value, reasoningTokens = tokens.value)
+                    ThinkingBlock("Saved summary", thinkingMs = 5_000, reasoningTokens = 120)
+                    ThinkingBlock("", reasoningTokens = 7)
+                } }
+            } } }
+            await("5s · 120 tokens")
+            await("7 tokens") // Hidden reasoning has usage, without invented duration or text.
+            val initial = await("~1 tokens (estimated)", contains = true).text.toString()
+            SystemClock.sleep(1_200)
+            val advanced = await("~1 tokens (estimated)", contains = true).text.toString()
+            assertNotEquals("Elapsed time must update without new text deltas", initial, advanced)
+            scenario.onActivity { text.value = "1234567890123456" }
+            await("~4 tokens (estimated)", contains = true)
+            scenario.onActivity {
+                timing.value = timing.value.stop(ThinkingTiming.now())
+                live.value = false
+                tokens.value = 42
+            }
+            val finished = await("42 tokens", contains = true).text.toString()
+            assertFalse(finished.contains("estimated"))
+            SystemClock.sleep(1_200)
+            assertEquals("The clock must stop when reasoning ends", finished, await("42 tokens", contains = true).text.toString())
+            screenshot("thinking-live-and-saved-metrics")
+        }
+    }
 
     @Test fun thinkingPopupStaysCenteredOnItsButtonAndInsetFromWindowEdges() {
         val label = mutableStateOf("deepseek-v4-1-flash")
@@ -261,7 +328,7 @@ class ReasoningDeviceTest {
             assertEquals("Existing question", sessions.messages(sid).single().text)
             assertNull(sessions.messages(sid).single().generation.state)
             val c = ProviderConfig("fixture", "Fixture", ProviderType.OPENAI_RESPONSES, "https://api.openai.com/v1", "gpt-6.1-sol")
-            val assistant = ChatMessage(Role.ASSISTANT, "Answer", thinking = "Visible summary", turnId = "turn")
+            val assistant = ChatMessage(Role.ASSISTANT, "Answer", thinking = "Visible summary", thinkingMs = 5_000, turnId = "turn")
             val state = ProviderMessageState.of(c, "responses",
                 listOf(Json.parseToJsonElement("""{"type":"reasoning","id":"r1","encrypted_content":"fixture-opaque"}""").jsonObject)).boundTo(assistant)
             sessions.addMessage(sid, assistant.copy(generation = GenerationMetadata(state, 42, "Thinking: Max")), "turn")
@@ -271,6 +338,7 @@ class ReasoningDeviceTest {
             val restored = sessions.messages(sid).last()
             assertEquals("Answer", restored.text)
             assertEquals(42, restored.generation.reasoningTokens)
+            assertEquals(5_000L, restored.thinkingMs)
             assertTrue(restored.generation.state!!.matches(c, "responses", restored))
             val fork = sessions.forkSession(sid, restored.id!!)
             assertEquals(restored.generation, sessions.messages(fork).last().generation)

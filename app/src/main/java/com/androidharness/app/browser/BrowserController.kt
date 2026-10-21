@@ -89,6 +89,9 @@ data class BrowserState(
     val consoleErrorCount: Int = 0,
     val scrollY: Int = 0,
     val notices: List<String> = emptyList(),
+    val visibility: String = "unknown",
+    val hasFocus: Boolean = false,
+    val documentVisibility: String = "unknown",
 )
 
 /**
@@ -1210,7 +1213,57 @@ class BrowserController(
     }
 
     private suspend fun evalRaw(code: String): String = withContext(Dispatchers.Main) {
-        evalRawOn(getOrCreateWebView(), code)
+        val view = getOrCreateWebView()
+        val hidden = !view.isAttachedToWindow || !view.isShown || view.windowVisibility != View.VISIBLE
+        evalRawOn(view, "window.__harnessSurfaceHidden=$hidden;\n" + HIDDEN_SCROLL_SCRIPT)
+        evalRawOn(view, code)
+    }
+
+    /** Ask Android to resolve the user's browser without impersonating the shell package. */
+    suspend fun openExternal(url: String) = withContext(Dispatchers.Main) {
+        val uri = android.net.Uri.parse(url)
+        require(uri.scheme?.lowercase() in setOf("http", "https") && !uri.host.isNullOrBlank()) {
+            "Use an absolute http or https URL"
+        }
+        appContext.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+            .addCategory(android.content.Intent.CATEGORY_BROWSABLE)
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    private fun requireVisibleCapture(view: WebView) {
+        check(view.isAttachedToWindow && view.isShown && view.windowVisibility == View.VISIBLE) {
+            "Browser preview is hidden or detached. Open the browser preview and keep Harness visible, then retry the screenshot. No image was captured."
+        }
+    }
+
+    private suspend fun awaitCaptureFrame(view: WebView) {
+        requireVisibleCapture(view)
+        val ready = withTimeoutOrNull(5_000) {
+            while (isActive) {
+                requireVisibleCapture(view)
+                val raw = evalRawOn(view, """
+                    (function(){return document.visibilityState === 'visible' && document.readyState === 'complete' &&
+                      (!document.fonts || document.fonts.status === 'loaded') &&
+                      Array.from(document.images).every(function(i){return i.complete;}) &&
+                      (!document.getAnimations || !document.getAnimations().some(function(a){
+                        var t=a.effect && a.effect.getComputedTiming();
+                        return a.playState === 'running' && t && isFinite(t.endTime);
+                      }));})()
+                """.trimIndent())
+                if (raw == "true") return@withTimeoutOrNull true
+                delay(100)
+            }
+            false
+        } == true
+        check(ready) { "Page is hidden, loading, or still animating. Wait for a visible stable page and retry; no image was captured." }
+        val frame = CompletableDeferred<Unit>()
+        view.postVisualStateCallback(System.nanoTime(), object : WebView.VisualStateCallback() {
+            override fun onComplete(requestId: Long) { frame.complete(Unit) }
+        })
+        check(withTimeoutOrNull(2_000) { frame.await(); true } == true) {
+            "Browser did not produce a rendered frame. Open the preview and retry; no image was captured."
+        }
+        requireVisibleCapture(view)
     }
 
     /**
@@ -1219,6 +1272,7 @@ class BrowserController(
      */
     suspend fun screenshot(workspace: WorkspaceFs? = currentWorkspace): BrowserScreenshotResult? = withContext(Dispatchers.Main) {
         val wv = getOrCreateWebView()
+        awaitCaptureFrame(wv)
         runCatching {
             val width = wv.width.takeIf { it > 0 } ?: 1080
             val height = wv.height.takeIf { it > 0 } ?: 1920
@@ -1299,7 +1353,7 @@ class BrowserController(
                 sizeBytes = jpegBytes.size.toLong(),
                 mime = "image/jpeg",
             )
-        }.onFailure { track("screenshot", "failed: ${it.message.orEmpty().take(60)}", ok = false) }.getOrNull()
+        }.onFailure { track("screenshot", "failed: ${it.message.orEmpty().take(60)}", ok = false) }.getOrThrow()
     }
 
     /**
@@ -1351,6 +1405,35 @@ class BrowserController(
     }
 
     companion object {
+        // Hidden WebViews do not advance smooth scroll animations reliably.
+        // Keep page behavior intact while visible; normalize only hidden tool actions.
+        private val HIDDEN_SCROLL_SCRIPT = """
+            (function(){
+              if(window.__harnessHiddenScroll){window.__harnessUpdateScroll();return;}
+              window.__harnessHiddenScroll=true;
+              var style=document.createElement('style');
+              style.setAttribute('data-harness-scroll','');
+              (document.head || document.documentElement).appendChild(style);
+              function hidden(){return document.hidden || window.__harnessSurfaceHidden;}
+              function update(){style.textContent=hidden() ? '*{scroll-behavior:auto!important}' : '';}
+              window.__harnessUpdateScroll=update;
+              document.addEventListener('visibilitychange',update); update();
+              function wrap(owner,name){
+                var original=owner[name]; if(typeof original!=='function') return;
+                owner[name]=function(){
+                  var args=Array.prototype.slice.call(arguments);
+                  if(hidden()) {
+                    if(args[0] && typeof args[0]==='object') args[0]=Object.assign({},args[0],{behavior:'instant'});
+                    else if(name==='scrollIntoView') args[0]={block:args[0]===false?'end':'start',behavior:'instant'};
+                    else args=[{left:Number(args[0]||0),top:Number(args[1]||0),behavior:'instant'}];
+                  }
+                  return original.apply(this,args);
+                };
+              }
+              ['scroll','scrollTo','scrollBy'].forEach(function(n){wrap(window,n);wrap(Element.prototype,n);});
+              wrap(Element.prototype,'scrollIntoView');
+            })();
+        """.trimIndent()
         /** Trail entries kept in memory for the WebPreviewSheet activity panel. */
         private const val MAX_TRACK = 50
 
@@ -1785,7 +1868,10 @@ class BrowserController(
                         interactiveElements: elements.slice(0, 120),
                         textSummary: bodyText.substring(0, 2000),
                         consoleErrorCount: 0,
-                        scrollY: Math.round(window.scrollY || 0)
+                        scrollY: Math.round(window.scrollY || 0),
+                        visibility: window.__harnessSurfaceHidden ? 'hidden' : document.visibilityState,
+                        documentVisibility: document.visibilityState,
+                        hasFocus: document.hasFocus()
                     });
                 } catch (e) {
                     return JSON.stringify({

@@ -133,6 +133,10 @@ internal object TermuxShebangs {
         "wm", "start", "stop",
     )
 
+    // cmd is also shipped as an ELF bridge; termux-am needs Termux's socket
+    // service, which Harness does not run. Use Android's system commands.
+    fun isUnsupportedBridge(name: String): Boolean = name in setOf("cmd", "termux-am", "termux-am-socket")
+
     /**
      * True when [name] is a termux-tools Android-bridge wrapper. The wrappers
      * are POSIX shell scripts, they all carry a Termux bin/sh shebang, so a
@@ -750,6 +754,10 @@ class LinuxEnvironmentManager(
         val binDir = File(prefix, "bin")
         binDir.listFiles()?.forEach { f ->
             if (!f.isFile) return@forEach
+            if (TermuxShebangs.isUnsupportedBridge(f.name)) {
+                if (f.delete()) removed++
+                return@forEach
+            }
             if (f.isElf()) return@forEach
             val text = runCatching { f.readText() }.getOrNull() ?: return@forEach
             val nl = text.indexOf('\n')
@@ -1293,7 +1301,7 @@ class LinuxEnvironmentManager(
             File(prefix, CODEGRAPH_VERSION_MARKER).readText().trim()
         }.getOrDefault("")
         val bundlePatchVersion = CodeGraphBundlePatches.VERSION
-        return ("v22-coreutils-env-github-exec-codegraph-p$bundlePatchVersion\n$codeGraphVersion\n" + installedPackages().sorted().joinToString("\n"))
+        return ("v23-no-android-bridges-coreutils-env-github-exec-codegraph-p$bundlePatchVersion\n$codeGraphVersion\n" + installedPackages().sorted().joinToString("\n"))
             .let { MessageDigest.getInstance("SHA-256").digest(it.toByteArray()).joinToString("") { b -> "%02x".format(b) } }
     }
 
@@ -1345,7 +1353,8 @@ class LinuxEnvironmentManager(
             if (!File(prefix, "bin/bash").exists()) return
             // Repair earlier env shebangs before checking or creating the tarball.
             // The package set may be unchanged while an old script is still broken.
-            if (purgeDeadTermuxShims().second > 0) stagingMarker.delete()
+            val repairedBridges = purgeDeadTermuxShims()
+            if (repairedBridges.first > 0 || repairedBridges.second > 0) stagingMarker.delete()
             LocaleCommand.ensureInstalled(prefix)
             // Bug 5 fix: the safe.directory config must exist before the
             // prefix is tarred, or the deployed copy exports a missing file.
@@ -1723,7 +1732,8 @@ class LinuxEnvironmentManager(
                             val rewritten = TermuxShebangs.rewrittenFirstLine(firstLine, tmpPrefix)
                             val binEntry = rel.startsWith("bin/") && !rel.contains("/applets/")
                             when {
-                                TermuxShebangs.isWrapperScript(rel.substringAfterLast('/'), firstLine) ||
+                                (binEntry && TermuxShebangs.isUnsupportedBridge(rel.substringAfterLast('/'))) ||
+                                    TermuxShebangs.isWrapperScript(rel.substringAfterLast('/'), firstLine) ||
                                     (binEntry && firstLine.startsWith(TermuxShebangs.TERMUX_PREFIX_MARK) && rewritten == null) -> {
                                     // drain the rest of the entry without writing it
                                     tar.copyTo(object : java.io.OutputStream() {

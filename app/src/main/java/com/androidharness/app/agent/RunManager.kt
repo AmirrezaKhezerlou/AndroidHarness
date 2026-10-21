@@ -95,9 +95,8 @@ class RunManager(
         val error: String? = null,
         /** Transient "Retrying in Ns…" status while the engine backs off. */
         val retryStatus: String? = null,
-        /** When this turn's reasoning stream started/ended, drives "Thought for Ns". */
-        val thinkingStartedAt: Long? = null,
-        val thinkingEndedAt: Long? = null,
+        val thinkingTiming: ThinkingTiming = ThinkingTiming(),
+        val reasoningTokens: Int? = null,
         val queuedMessage: String? = null,
         val pendingPlan: String? = null,
         val estimate: ContextEstimate? = null,
@@ -339,6 +338,12 @@ class RunManager(
             "This chat's workspace changed while preparing the request. Send the message again."
         }
         val runWorkspace = workspaceOverride ?: assignedWorkspace
+        checkpoints.history?.missingFiles(sid, runWorkspace)?.takeIf { it.isNotEmpty() }?.let { missing ->
+            sessions.addMessage(sid, ChatMessage(role = Role.SYSTEM,
+                text = "Saved workspace files are missing: ${missing.take(20).joinToString()}. " +
+                    "Durable copies are available through file_history and file_restore. Inspect prior tool results and recover saved versions if the deletion was unintended. Do not replay completed edits.",
+                isError = true))
+        }
         if (replacementMessageId != null) {
             check(!resume) { "Cannot replace a message while resuming" }
             check(!workspaceBusy(runWorkspace, except = sid)) {
@@ -400,6 +405,7 @@ class RunManager(
             it.copy(
                 running = true, cancelled = false, error = null, turnId = turnId,
                 streamingText = "", streamingThinking = null,
+                thinkingTiming = ThinkingTiming(), reasoningTokens = null,
                 codeDrafts = emptyMap(),
                 liveMessageId = UUID.randomUUID().toString(), lastCommittedId = null,
                 queuedMessage = null, pendingPlan = null,
@@ -636,6 +642,7 @@ class RunManager(
         val live = stateOf(sessionId)
         val turnId = synchronized(lock) { turnIds[sessionId] }
         when (event) {
+            is AgentEvent.ThinkingProgress -> live.update { it.copy(thinkingTiming = event.timing) }
             is AgentEvent.Text -> {
                 val buf = buffer(sessionId) ?: return
                 synchronized(buf) {
@@ -644,8 +651,8 @@ class RunManager(
                 }
                 live.update {
                     // Answer text closes the latest received reasoning span.
-                    if (it.thinkingStartedAt != null && it.thinkingEndedAt == null) {
-                        it.copy(thinkingEndedAt = System.currentTimeMillis(), retryStatus = null)
+                    if (event.delta.isNotEmpty() && it.thinkingTiming.startedAt != null) {
+                        it.copy(thinkingTiming = it.thinkingTiming.stop(ThinkingTiming.now()), retryStatus = null)
                     } else if (it.retryStatus != null) {
                         it.copy(retryStatus = null)
                     } else it
@@ -660,8 +667,7 @@ class RunManager(
                 }
                 live.update {
                     it.copy(
-                        thinkingStartedAt = it.thinkingStartedAt ?: System.currentTimeMillis(),
-                        thinkingEndedAt = null,
+                        thinkingTiming = if (event.delta.isNotEmpty()) it.thinkingTiming.start(ThinkingTiming.now()) else it.thinkingTiming,
                         retryStatus = null,
                     )
                 }
@@ -672,16 +678,13 @@ class RunManager(
                 // Commit under the id the live bubble has been using, so the UI
                 // swaps live → committed in place instead of remove + insert.
                 val id = live.value.liveMessageId ?: UUID.randomUUID().toString()
-                val thinkingMs = live.value.thinkingStartedAt?.let { start ->
-                    (live.value.thinkingEndedAt ?: System.currentTimeMillis()) - start
-                } ?: 0L
-                val msg = event.message.copy(turnId = turnId, id = id, thinkingMs = thinkingMs)
+                val msg = event.message.copy(turnId = turnId, id = id)
                 sessions.addMessage(sessionId, msg, turnId)
                 live.update {
                     it.copy(
                         streamingText = null, streamingThinking = null,
                         liveMessageId = null, lastCommittedId = id,
-                        thinkingStartedAt = null, thinkingEndedAt = null,
+                        thinkingTiming = ThinkingTiming(), reasoningTokens = null,
                         codeDrafts = it.codeDrafts.filterValues { draft -> draft.stage != CodeDraftStage.GENERATING },
                     )
                 }
@@ -689,7 +692,8 @@ class RunManager(
 
             is AgentEvent.CodeDraft -> live.update { st ->
                 val current = st.codeDrafts.filterValues { it.stage != CodeDraftStage.SAVED && it.stage != CodeDraftStage.FAILED }
-                st.copy(codeDrafts = (current + (event.draft.id to event.draft)).entries.toList().takeLast(8).associate { it.toPair() }, retryStatus = null)
+                st.copy(codeDrafts = (current + (event.draft.id to event.draft)).entries.toList().takeLast(8).associate { it.toPair() },
+                    thinkingTiming = st.thinkingTiming.stop(ThinkingTiming.now()), retryStatus = null)
             }
             AgentEvent.CodeDraftsCleared -> live.update { st -> st.copy(codeDrafts = st.codeDrafts.filterValues {
                 it.stage == CodeDraftStage.SAVED || it.stage == CodeDraftStage.FAILED
@@ -782,7 +786,7 @@ class RunManager(
             }
 
             is AgentEvent.Usage -> {
-                if (event.parentCallId == null) live.update { st -> st.copy(codeDrafts = st.codeDrafts.mapValues { (_, draft) ->
+                if (event.parentCallId == null) live.update { st -> st.copy(reasoningTokens = event.reasoningTokens, codeDrafts = st.codeDrafts.mapValues { (_, draft) ->
                     if (draft.stage == CodeDraftStage.SAVED || draft.stage == CodeDraftStage.FAILED) draft
                     else draft.copy(responseOutputTokens = event.outputTokens.takeIf { it > 0 })
                 }) }
@@ -1108,11 +1112,13 @@ class RunManager(
         val turnIds = msgs.drop(index).mapNotNull { it.turnId }.distinct().reversed()
         val fs = workspace.forSession(sessionId)
         check(!workspaceBusy(fs, except = sessionId)) { "Pause other tasks in these workspaces before editing or retrying a message." }
-        for (tid in turnIds) {
-            val result = checkpoints.rewind(sessionId, tid, fs)
-            check(result.failed == 0) { "Some files could not be restored. History and failed checkpoints were kept; retry undo." }
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+            for (tid in turnIds) {
+                val result = checkpoints.rewind(sessionId, tid, fs)
+                check(result.failed == 0) { "Some files could not be restored. History and failed checkpoints were kept; retry undo." }
+            }
+            sessions.truncateFrom(sessionId, messageId)
         }
-        sessions.truncateFrom(sessionId, messageId)
     }
 
     /**
@@ -1123,7 +1129,7 @@ class RunManager(
      * rows of the removed turns are dropped, and cumulative change counters
      * are recomputed against the session baseline.
      */
-    suspend fun rewindFromTurn(sessionId: String, turnId: String): RewindSummary = kotlinx.coroutines.withContext(Dispatchers.IO) { workspaceGuard.withLock {
+    suspend fun rewindFromTurn(sessionId: String, turnId: String): RewindSummary = kotlinx.coroutines.withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) { workspaceGuard.withLock {
         val fs = workspace.forSession(sessionId)
         check(!workspaceBusy(fs)) {
             "Pause tasks in this workspace before undoing changes"
@@ -1180,7 +1186,7 @@ class RunManager(
         expected: String,
         expectedExists: Boolean,
         section: com.androidharness.app.core.Diff.UndoSection?,
-    ) = kotlinx.coroutines.withContext(Dispatchers.IO) { workspaceGuard.withLock {
+    ) = kotlinx.coroutines.withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) { workspaceGuard.withLock {
         val fs = workspace.forSession(sessionId)
         check(!workspaceBusy(fs)) {
             "Pause tasks in this workspace before undoing changes"
@@ -1202,6 +1208,7 @@ class RunManager(
         if (section == null && change.isNew) {
             check(!node.exists || node.delete()) { "Could not remove the new file" }
         } else node.writeText(restored)
+        checkpoints.saveVersion(sessionId, fs, change.relPath, "after undo", recordMissing = true)
         repoMap?.invalidate(change.relPath)
         sessions.refreshFileChangeAfterRewind(sessionId, change.relPath, node.exists, if (node.exists) restored else null)
         sessions.addMessage(sessionId, ChatMessage(role = Role.USER,

@@ -10,7 +10,7 @@ import kotlin.coroutines.CoroutineContext
 
 internal class AccessRequest(
     val projectId: String?, val sessionId: String?, val requireRoot: Boolean = false,
-    val forceDevice: Boolean = false, val manual: Boolean = false,
+    val forceDevice: Boolean = false, val manual: Boolean = false, val requireShizuku: Boolean = false,
 ) : AbstractCoroutineContextElement(Key) {
     companion object Key : CoroutineContext.Key<AccessRequest>
     val rootLease = RootLease()
@@ -112,11 +112,11 @@ class DeviceAccessManager(
 
     internal suspend fun <T> withRequest(
         projectId: String?, sessionId: String?, requireRoot: Boolean = false, forceDevice: Boolean = false,
-        manual: Boolean = false, block: suspend () -> T,
-    ): T = withContext(AccessRequest(projectId ?: sessionId?.let { projectForSession(it) }, sessionId, requireRoot, forceDevice, manual)) { block() }
+        manual: Boolean = false, requireShizuku: Boolean = false, block: suspend () -> T,
+    ): T = withContext(AccessRequest(projectId ?: sessionId?.let { projectForSession(it) }, sessionId, requireRoot, forceDevice, manual, requireShizuku)) { block() }
 
-    suspend fun traceTool(projectId: String?, sessionId: String?, requireRoot: Boolean = false, block: suspend () -> ToolResult): ToolResult =
-        withRequest(projectId, sessionId, requireRoot) {
+    suspend fun traceTool(projectId: String?, sessionId: String?, requireRoot: Boolean = false, requireShizuku: Boolean = false, block: suspend () -> ToolResult): ToolResult =
+        withRequest(projectId, sessionId, requireRoot, requireShizuku = requireShizuku) {
             val request = currentCoroutineContext()[AccessRequest]!!
             val result = block()
             result.copy(execution = result.execution + request.receipts.distinct())
@@ -125,13 +125,13 @@ class DeviceAccessManager(
     internal suspend fun select(appWorkspace: Boolean = false, excluded: Set<DeviceBackend> = emptySet()): AccessDecision {
         val request = currentCoroutineContext()[AccessRequest] ?: AccessRequest(null, null)
         val prefs = store.preferences.first()
-        if (appWorkspace && !request.forceDevice && !request.requireRoot) return AccessDecision(DeviceBackend.NORMAL)
+        if (appWorkspace && !request.forceDevice && !request.requireRoot && !request.requireShizuku) return AccessDecision(DeviceBackend.NORMAL)
         val allowed = rootAllowed(request, prefs)
-        val rootReady = prefs.mode in setOf(AccessMode.AUTO, AccessMode.ROOT) && allowed &&
+        val rootReady = !request.requireShizuku && prefs.mode in setOf(AccessMode.AUTO, AccessMode.ROOT, AccessMode.BOTH) && allowed &&
             DeviceBackend.ROOT !in excluded && root.service != null && root.verify()
         val uid = if (prefs.mode == AccessMode.NORMAL || DeviceBackend.SHIZUKU in excluded) null else probeShizuku()
         return DeviceAccessPolicy.choose(prefs.mode, prefs.autoFallback, rootReady, uid,
-            allowed, stopped.value, appWorkspace && !request.forceDevice, request.requireRoot)
+            allowed, stopped.value, appWorkspace && !request.forceDevice, request.requireRoot, request.requireShizuku)
     }
 
     /** A null callback result means dispatch never began. Exceptions/results are never replayed. */
@@ -146,7 +146,7 @@ class DeviceAccessManager(
         while (true) {
             val decision = select(appWorkspace, excluded)
             val backend = decision.backend ?: return ShellRunResult(-1, false, "", decision.reason ?: "Selected access is unavailable.", ExecutionTier.TOYBOX, null)
-            if (decision.uid == 0 && !claimRoot(request)) {
+            if ((backend == DeviceBackend.ROOT || request.requireRoot) && !claimRoot(request)) {
                 excluded += backend
                 continue
             }
@@ -200,8 +200,8 @@ class DeviceAccessManager(
             "temporary root mode ${if (prefs.temporaryRoot) "on" else "off (root allowed everywhere while connected)"}; " +
             "direct root ${root.state.value.status.label}${root.state.value.provider?.let { " (${it.label})" } ?: ""}; Shizuku ${if (shizuku.isServiceReady()) "ready (${szUid.value?.let { "UID $it" } ?: "identity checked before execution"})" else "unavailable"}; " +
             "root ${if (allowed) "allowed" else "not allowed"} for this project/chat; ${if (prefs.temporaryRoot) allowance.value else "temporary mode is off"}; privileged access ${if (stopped.value) "paused" else "enabled"}. " +
-            modeHint + " " +
-            "App workspaces use the app user by default. Use shell access=\"root\" only when UID 0 is required; " +
+            modeHint + " Shizuku uses its own authorization; a root-started Shizuku server runs as UID 0 even when direct root use is disabled. " +
+            "App workspaces use the app user by default for builds and file work. Use shell access=\"shizuku\" for Android system commands such as /system/bin/am or /system/bin/cmd; it never falls back to direct root or the app UID. Use access=\"root\" only when UID 0 is required; " +
             (if (prefs.temporaryRoot) "project restrictions still apply. " else "root is available in every project while the connection is active. ") +
             "Do not invoke su or sudo directly; request root through the access parameter. " +
             "A dispatched command is never automatically replayed after a connection failure."

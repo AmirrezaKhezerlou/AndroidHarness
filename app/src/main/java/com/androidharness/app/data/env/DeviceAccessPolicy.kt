@@ -19,10 +19,11 @@ data class ExecutionReceipt(
     val uid: Int? = null,
     val fallbackReason: String? = null,
 ) {
+    // The badge names the transport. Keep the verified UID separately for diagnostics.
     val label: String get() = when (backend) {
         DeviceBackend.NORMAL -> "Normal"
         DeviceBackend.ROOT -> "Root"
-        DeviceBackend.SHIZUKU -> if (uid == 0) "Shizuku · Root" else "Shizuku · ADB"
+        DeviceBackend.SHIZUKU -> "Shizuku"
     }
 }
 
@@ -46,8 +47,15 @@ object DeviceAccessPolicy {
     fun choose(
         mode: AccessMode, fallback: Boolean, rootReady: Boolean, shizukuUid: Int?,
         rootAllowed: Boolean, paused: Boolean = false, appWorkspace: Boolean = false,
-        requireRoot: Boolean = false,
+        requireRoot: Boolean = false, requireShizuku: Boolean = false,
     ): AccessDecision {
+        if (requireShizuku) return when {
+            requireRoot -> AccessDecision(null, "Choose either Shizuku or direct root for this command")
+            mode == AccessMode.NORMAL -> AccessDecision(null, "Shizuku is disabled in Normal mode. Select Shizuku, Both or Auto in device access settings.")
+            paused -> AccessDecision(null, "Privileged access is paused")
+            shizukuUid == null -> AccessDecision(null, "Shizuku is unavailable; reconnect it before retrying. This command was not run as another user.")
+            else -> AccessDecision(DeviceBackend.SHIZUKU, uid = shizukuUid)
+        }
         if (appWorkspace && !requireRoot) return AccessDecision(DeviceBackend.NORMAL)
         val order = when (mode) {
             AccessMode.NORMAL -> listOf(DeviceBackend.NORMAL)
@@ -74,7 +82,9 @@ object DeviceAccessPolicy {
                 backend == DeviceBackend.ROOT && !rootAllowed -> "Root is not allowed for this project or its temporary allowance has ended"
                 backend == DeviceBackend.ROOT && !rootReady -> "Root is unavailable"
                 backend == DeviceBackend.SHIZUKU && shizukuUid == null -> "Shizuku is unavailable"
-                uid == 0 && !rootAllowed -> "Root is not allowed for this project or its temporary allowance has ended"
+                // Shizuku authorization belongs to its own connection, including
+                // root-started servers. Explicit root actions still need a grant.
+                requireRoot && !rootAllowed -> "Root is not allowed for this project or its temporary allowance has ended"
                 requireRoot && uid != 0 -> "This action requires root"
                 else -> null
             }

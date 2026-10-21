@@ -112,7 +112,8 @@ class AppContainer(val appContext: Context) {
 
     val sshConnections = com.androidharness.app.workspace.SshConnections(keys)
     val workspace = WorkspaceManager(appContext, db.dao(), sshConnections)
-    val checkpoints = CheckpointStore(db.dao())
+    val fileHistory = com.androidharness.app.data.WorkspaceFileHistory(java.io.File(appContext.filesDir, "workspace-file-history"))
+    val checkpoints = CheckpointStore(db.dao(), fileHistory)
     val images = ImageStore(appContext)
 
     val todoStore = TodoStore()
@@ -176,6 +177,7 @@ class AppContainer(val appContext: Context) {
         searchApi = { searchApiConfig },
         artifactLoader = sessions::artifacts,
         toolOutputLoader = sessions::toolOutput,
+        fileHistory = fileHistory,
     )
     val mcp = com.androidharness.app.tools.mcp.McpManager(appContext, linuxEnv, keys, codeGraph)
     fun routedProvider(): com.androidharness.app.llm.LlmProvider =

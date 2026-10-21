@@ -11,6 +11,17 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 
 class BgProcessStoreTest {
+    @Test fun `chat and workspace job scopes retain legacy records without mixing owners`() {
+        val root = tmp.newFolder("workspace")
+        val ctx = ToolContext(com.androidharness.app.workspace.FileFs(root), sessionId = "current")
+        val entry = BgProcessEntry(1, "server", root.path, "log", ownerSessionId = "other")
+        assertFalse(backgroundJobMatches(entry, "chat", ctx))
+        assertTrue(backgroundJobMatches(entry, "chat", ctx.copy(sessionId = "other")))
+        assertTrue(backgroundJobMatches(entry, "workspace", ctx))
+        assertFalse(backgroundJobMatches(entry.copy(cwd = root.path + "-other"), "workspace", ctx))
+        assertFalse(backgroundJobMatches(entry.copy(ownerSessionId = null), "chat", ctx))
+        assertTrue(backgroundJobMatches(entry.copy(ownerSessionId = null), "all", ctx))
+    }
 
     @Test fun `background monitor records success explicit failure exec and syntax error`() {
         val cases = listOf("echo hello; echo error >&2; exit 3" to 3,

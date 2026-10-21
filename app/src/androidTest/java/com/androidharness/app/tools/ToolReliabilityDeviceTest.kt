@@ -15,6 +15,23 @@ import java.io.FileInputStream
 
 @RunWith(AndroidJUnit4::class)
 class ToolReliabilityDeviceTest {
+    @Test fun defaultBrowserUsesAndroidViewIntentAndRejectsNonWebSchemes() = runBlocking {
+        val app = (context.applicationContext as com.androidharness.app.HarnessApp).container
+        val filter = android.content.IntentFilter(android.content.Intent.ACTION_VIEW).apply {
+            addDataScheme("http"); addCategory(android.content.Intent.CATEGORY_BROWSABLE)
+        }
+        val monitor = instrumentation.addMonitor(filter,
+            android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_OK, null), true)
+        try {
+            val tool = requireNotNull(app.registry.get("browser_open_external"))
+            val ctx = ToolContext(FileFs(context.cacheDir))
+            val result = tool.execute(buildJsonObject { put("url", "http://127.0.0.1:8001/") }, ctx)
+            assertTrue(result.output, result.ok)
+            assertEquals("Android VIEW request must be dispatched exactly once", 1, monitor.hits)
+            assertTrue(runCatching { tool.execute(buildJsonObject { put("url", "file:///data/private") }, ctx) }.isFailure)
+            assertEquals(1, monitor.hits)
+        } finally { instrumentation.removeMonitor(monitor) }
+    }
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val context get() = instrumentation.targetContext
     private fun shell(command: String) {

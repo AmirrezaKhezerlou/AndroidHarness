@@ -14,6 +14,12 @@ import org.junit.Test
  * Android-bridge wrapper commands (pm, cmd, am, ...) are still dropped.
  */
 class TermuxShebangTest {
+    @Test fun `ELF cmd and socket dependent Termux bridges cannot shadow system commands`() {
+        assertTrue(TermuxShebangs.isUnsupportedBridge("cmd"))
+        assertTrue(TermuxShebangs.isUnsupportedBridge("termux-am"))
+        assertFalse(TermuxShebangs.isUnsupportedBridge("python"))
+        assertFalse(TermuxShebangs.isUnsupportedBridge("node"))
+    }
 
     /** First line of Termux python-pip 26.x bin/pip3, verified against the repo. */
     private val pip3 = "#!/data/data/com.termux/files/usr/bin/python3.14"

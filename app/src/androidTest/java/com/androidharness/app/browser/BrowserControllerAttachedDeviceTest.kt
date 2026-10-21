@@ -40,12 +40,46 @@ class BrowserControllerAttachedDeviceTest {
     private fun controller(fs: FileFs): BrowserController =
         BrowserController(context, ImageStore(context)).apply { currentWorkspace = fs }
 
+    @Test fun screenshotAfterScrollingCapturesTheVisibleViewport() = runBlocking {
+        val fs = workspace()
+        fs.resolve("scroll.html").writeText("""
+            <html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+            <style>body{margin:0}</style></head><body><div style="height:2200px;background:red"></div>
+            <div style="height:2200px;background:blue"></div></body></html>
+        """.trimIndent())
+        val controller = controller(fs)
+        ActivityScenario.launch(TestHostActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val view = activity.addSheetLikeWebView()
+                view.webViewClient = object : WebViewClient() {
+                    override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? =
+                        controller.interceptWorkspaceRequest(request?.url)
+                    override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) { controller.notePageStarted() }
+                    override fun onPageFinished(view: WebView?, url: String?) { controller.notePageFinished(url) }
+                }
+                controller.bindActiveWebView(view)
+            }
+            try {
+                controller.navigate("scroll.html", fs)
+                assertTrue(controller.scroll("down", 2600).scrollY > 2000)
+                val shot = requireNotNull(controller.screenshot(fs))
+                val bitmap = BitmapFactory.decodeFile(shot.cachedFile.path)
+                val pixels = IntArray(bitmap.width * bitmap.height)
+                bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+                val blue = pixels.count { Color.blue(it) > 200 && Color.red(it) < 60 }
+                bitmap.recycle()
+                assertTrue("Scrolled visible viewport was blank or captured the wrong section", blue.toDouble() / pixels.size > 0.7)
+            } finally { controller.close() }
+        }
+    }
+
     @Test
     fun screenshotOfBoundSheetWebViewIsNotBlank() = runBlocking {
         val fs = workspace()
         fs.resolve("red.html").writeText(
             """
-            <html><head><style>html,body{margin:0;padding:0;background:#ff0000;height:100%}</style></head>
+            <html><head><style>html,body{margin:0;padding:0;height:100%}html{background:#fff}
+            body{background:#ff0000;animation:enter 2s linear both}@keyframes enter{from{opacity:0}to{opacity:1}}</style></head>
             <body><div style="width:100%;height:100%;background:#ff0000"></div></body></html>
             """.trimIndent(),
         )
@@ -91,6 +125,14 @@ class BrowserControllerAttachedDeviceTest {
                     "${bitmap.width}x${bitmap.height}",
                 red.toDouble() / pixels.size > 0.33,
             )
+            scenario.onActivity { it.container.visibility = android.view.View.GONE }
+            val hidden = com.androidharness.app.tools.BrowserScreenshotTool(controller).execute(
+                kotlinx.serialization.json.JsonObject(emptyMap()), com.androidharness.app.tools.ToolContext(fs))
+            assertTrue("Background capture must be an explicit failure: ${hidden.output}", !hidden.ok)
+            assertTrue(hidden.output, hidden.output.contains("hidden"))
+            scenario.onActivity { it.container.visibility = android.view.View.VISIBLE }
+            assertTrue("Capture must recover when the preview becomes visible", controller.screenshot(fs) != null)
+            controller.close()
         }
     }
 

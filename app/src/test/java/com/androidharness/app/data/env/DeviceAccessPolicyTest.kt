@@ -5,6 +5,22 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class DeviceAccessPolicyTest {
+    @Test fun explicitShizukuPinsTheTransportEvenForAppWorkspacesAndRootStartedServers() {
+        for (mode in listOf(AccessMode.AUTO, AccessMode.SHIZUKU, AccessMode.BOTH, AccessMode.ROOT)) {
+            for (uid in listOf(0, 2000)) {
+                val chosen = DeviceAccessPolicy.choose(mode, true, true, uid, false,
+                    appWorkspace = true, requireShizuku = true)
+                assertEquals(DeviceBackend.SHIZUKU, chosen.backend)
+                assertEquals(uid, chosen.uid)
+            }
+            assertNull(DeviceAccessPolicy.choose(mode, true, true, null, true,
+                appWorkspace = true, requireShizuku = true).backend)
+            assertNull(DeviceAccessPolicy.choose(mode, true, true, 2000, true,
+                paused = true, requireShizuku = true).backend)
+        }
+        assertNull(DeviceAccessPolicy.choose(AccessMode.NORMAL, true, true, 2000, true,
+            requireShizuku = true).backend)
+    }
     private fun choose(mode: AccessMode = AccessMode.AUTO, fallback: Boolean = true,
         root: Boolean = false, shizuku: Int? = null, allowed: Boolean = false,
         paused: Boolean = false, app: Boolean = false, requireRoot: Boolean = false) =
@@ -43,10 +59,28 @@ class DeviceAccessPolicyTest {
         assertEquals(DeviceBackend.NORMAL, choose(AccessMode.NORMAL, root = true, shizuku = 0, allowed = true).backend)
         assertNull(choose(AccessMode.NORMAL, root = true, allowed = true, requireRoot = true).backend)
     }
-    @Test fun rootBackedShizukuRequiresTheSameProjectAndTemporaryPermission() {
-        assertEquals(DeviceBackend.NORMAL, choose(shizuku = 0).backend)
-        assertNull(choose(AccessMode.SHIZUKU, fallback = false, shizuku = 0).backend)
-        assertEquals(0, choose(shizuku = 0, allowed = true).uid)
+    @Test fun rootStartedShizukuUsesItsOwnAuthorizationAndPreservesItsIdentity() {
+        for (mode in listOf(AccessMode.AUTO, AccessMode.SHIZUKU, AccessMode.BOTH)) {
+            for (fallback in listOf(false, true)) {
+                val decision = choose(mode, fallback = fallback, root = true, shizuku = 0)
+                assertEquals(DeviceBackend.SHIZUKU, decision.backend)
+                assertEquals(0, decision.uid)
+                assertNull(decision.reason)
+            }
+        }
+    }
+    @Test fun shizukuOnlyNeverSelectsTheDirectRootRunner() {
+        for (uid in listOf(0, 2000)) {
+            val decision = choose(AccessMode.SHIZUKU, root = true, shizuku = uid, allowed = true)
+            assertEquals(DeviceBackend.SHIZUKU, decision.backend)
+            assertEquals(uid, decision.uid)
+        }
+        assertEquals(DeviceBackend.NORMAL, choose(AccessMode.SHIZUKU, root = true, allowed = true).backend)
+    }
+    @Test fun explicitRootThroughShizukuStillRequiresRootAuthorization() {
+        assertNull(choose(AccessMode.SHIZUKU, shizuku = 0, requireRoot = true).backend)
+        assertEquals(DeviceBackend.SHIZUKU,
+            choose(AccessMode.SHIZUKU, shizuku = 0, allowed = true, requireRoot = true).backend)
     }
     @Test fun explicitRootCannotDowngradeToAdbOrNormal() {
         assertNull(choose(shizuku = 2000, allowed = true, requireRoot = true).backend)
@@ -81,13 +115,15 @@ class DeviceAccessPolicyTest {
         assertTrue(DeviceAccessPolicy.rootPermitted(temporaryMode = true, manual = true, projectAllowed = false, allowanceActive = true))
         assertTrue(DeviceAccessPolicy.rootPermitted(temporaryMode = false, manual = false, projectAllowed = false, allowanceActive = false))
     }
-    @Test fun receiptsSurviveSavedHistoryAndDistinguishAdbFromRootShizuku() {
+    @Test fun receiptsSurviveSavedHistoryAndLabelOnlyTheActualBackend() {
         val metadata = GenerationMetadata(execution = listOf(
             ExecutionReceipt(DeviceBackend.SHIZUKU, 2000, "Root is unavailable"),
             ExecutionReceipt(DeviceBackend.SHIZUKU, 0), ExecutionReceipt(DeviceBackend.ROOT, 0)))
         assertEquals(metadata, GenerationMetadata.decode(GenerationMetadata.encode(metadata)))
-        assertEquals("Shizuku · ADB", metadata.execution[0].label)
-        assertEquals("Shizuku · Root", metadata.execution[1].label)
+        assertEquals("Shizuku", metadata.execution[0].label)
+        assertEquals("Shizuku", metadata.execution[1].label)
+        assertEquals("Root", metadata.execution[2].label)
+        assertEquals("Normal", ExecutionReceipt(DeviceBackend.NORMAL).label)
         assertTrue(GenerationMetadata.decode("{\"reasoningTokens\":42}").execution.isEmpty())
     }
 }

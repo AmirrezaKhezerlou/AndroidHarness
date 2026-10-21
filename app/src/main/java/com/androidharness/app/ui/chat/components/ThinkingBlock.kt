@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -50,13 +51,16 @@ import com.androidharness.app.ui.common.DotLoading
 import com.androidharness.app.ui.theme.defaultEffectsSpec
 import com.androidharness.app.ui.theme.fastEffectsSpec
 import com.androidharness.app.ui.theme.fastSpatialSpec
+import com.androidharness.app.agent.ThinkingTiming
+import com.androidharness.app.agent.thinkingTokenCount
+import kotlinx.coroutines.delay
 
 /**
  * Collapsible reasoning transcript. Deliberately quiet: a label, a chevron, and
  * a hairline rail next to the body text. No brain icons, no purple, reasoning
  * is supporting evidence, not the main character.
  *
- * While live the block stays collapsed to a one-line pill (fast streams would
+ * While live the block stays collapsed with compact metrics (fast streams would
  * otherwise fight the layout); expanding mid-stream shows a height-capped,
  * auto-following view that stops following if the user scrolls up.
  */
@@ -64,9 +68,29 @@ import com.androidharness.app.ui.theme.fastSpatialSpec
 internal fun ThinkingBlock(
     thinking: String,
     live: Boolean = false,
+    thinkingMs: Long = 0,
+    reasoningTokens: Int? = null,
+    timing: ThinkingTiming? = null,
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
-    if (thinking.isBlank() && !live) return
+    if (thinking.isBlank() && !live && (reasoningTokens ?: 0) <= 0) return
+    var now by remember(live, timing?.startedAt) { mutableLongStateOf(ThinkingTiming.now()) }
+    LaunchedEffect(live, timing?.startedAt) {
+        if (live && timing?.startedAt != null) {
+            while (true) { now = ThinkingTiming.now(); delay(250) }
+        }
+    }
+    val elapsedMs = timing?.durationMs(if (live) now else ThinkingTiming.now()) ?: thinkingMs
+    val tokens = remember(thinking, reasoningTokens) { thinkingTokenCount(thinking, reasoningTokens) }
+    val metrics = buildList {
+        if (elapsedMs > 0 || (live && timing?.startedAt != null)) {
+            add(if (!live && elapsedMs in 1..999) uiContext.getString(R.string.ui_thinking_under_one_second)
+                else uiContext.getString(R.string.ui_thinking_seconds, elapsedMs / 1000))
+        }
+        tokens?.let {
+            add(uiContext.getString(if (it.estimated) R.string.ui_thinking_estimated_tokens else R.string.ui_thinking_tokens, it.count))
+        }
+    }.joinToString(" · ")
     var expanded by rememberSaveable { mutableStateOf(false) }
     val rotation = animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
@@ -103,8 +127,14 @@ internal fun ThinkingBlock(
                     tint = scheme.onSurfaceVariant,
                 )
             }
+            if (metrics.isNotEmpty()) Text(
+                metrics,
+                style = MaterialTheme.typography.labelSmall,
+                color = scheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
+            )
             AnimatedVisibility(
-                visible = expanded,
+                visible = expanded && thinking.isNotBlank(),
                 enter = fadeIn(defaultEffectsSpec()) + expandVertically(animationSpec = fastSpatialSpec()),
                 exit = fadeOut(defaultEffectsSpec()) + shrinkVertically(animationSpec = fastSpatialSpec()),
             ) {

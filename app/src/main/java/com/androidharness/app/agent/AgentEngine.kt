@@ -120,6 +120,7 @@ sealed interface AgentEvent {
     data class ProviderUsed(val providerId: String) : AgentEvent
     data class Text(val delta: String) : AgentEvent
     data class Thinking(val delta: String) : AgentEvent
+    data class ThinkingProgress(val timing: ThinkingTiming) : AgentEvent
     data class CodeDraft(val draft: LiveCodeDraft) : AgentEvent
     data object CodeDraftsCleared : AgentEvent
     data class ToolStarted(val call: ToolCallData) : AgentEvent
@@ -143,6 +144,7 @@ sealed interface AgentEvent {
         val cachePrices: com.androidharness.app.llm.ModelsDev.CachePrices? = null,
         val parentCallId: String? = null,
         val providerKey: String? = null,
+        val reasoningTokens: Int? = null,
     ) : AgentEvent
     /** A transient provider failure will be retried after [delayMs]. */
     data class Retrying(val attempt: Int, val delayMs: Long, val reason: String) : AgentEvent
@@ -367,6 +369,7 @@ class AgentEngine(
             var responseState: com.androidharness.app.core.ProviderMessageState? = null
             var reasoningTokens: Int? = null
             var reasoningSetting: String? = null
+            var thinkingTiming = ThinkingTiming()
             var responseStarted = false
             var requestStartedNs = System.nanoTime()
             var firstTokenNs = 0L
@@ -390,6 +393,8 @@ class AgentEngine(
             }
 
             val streamEventHandler: suspend (StreamEvent) -> Unit = { event ->
+                val previousTiming = thinkingTiming
+                thinkingTiming = thinkingTiming.observe(event, ThinkingTiming.now())
                 if (event.hasResponseOutput()) responseStarted = true
                 when (event) {
                     is StreamEvent.ProviderChanged -> {
@@ -454,6 +459,7 @@ class AgentEngine(
                                 event.inputTokens, event.outputTokens,
                                 event.cachedInputTokens, event.cacheWriteTokens,
                                 config.model, config.name, cacheReported = event.cacheReported,
+                                reasoningTokens = event.reasoningTokens,
                                 providerKey = com.androidharness.app.llm.ModelsDev.providerKeyFor(config.baseUrl),
                                 cachePrices = if (com.androidharness.app.chatgpt.ChatGptProtocol.isProvider(config.id)) null else com.androidharness.app.llm.ModelsDev.exactCachePrices(config.baseUrl, config.model),
                             )
@@ -462,6 +468,7 @@ class AgentEngine(
                     is StreamEvent.Done -> lastFinishReason = event.finishReason
                     else -> {}
                 }
+                if (thinkingTiming != previousTiming) emit(AgentEvent.ThinkingProgress(thinkingTiming))
             }
 
             // Request attempt loop: transient failures (429/5xx/network) are
@@ -482,6 +489,7 @@ class AgentEngine(
                     responseState = null
                     reasoningTokens = null
                     reasoningSetting = null
+                    thinkingTiming = ThinkingTiming()
                     firstTokenNs = 0L
                     lastTokenNs = 0L
                     text = StringBuilder()
@@ -516,6 +524,7 @@ class AgentEngine(
                         responseState = null
                         reasoningTokens = null
                         reasoningSetting = null
+                        thinkingTiming = ThinkingTiming()
                         firstTokenNs = 0L
                         lastTokenNs = 0L
                         text = StringBuilder()
@@ -550,6 +559,7 @@ class AgentEngine(
                     text = text.toString(),
                     toolCalls = calls.toList(),
                     thinking = thinking.toString(),
+                    thinkingMs = thinkingTiming.durationMs(ThinkingTiming.now()),
                     outputTokens = outputTokens,
                     generationMs = ((System.nanoTime() - requestStartedNs) / 1_000_000).coerceAtLeast(1),
                     firstTokenMs = if (firstTokenNs > 0L) ((firstTokenNs - requestStartedNs) / 1_000_000).coerceAtLeast(1) else 0,
@@ -700,7 +710,7 @@ class AgentEngine(
             call, mode, sessionAllowedTools, workspace, sessionId, turnId, agentMode,
             requestOptions, config, apiKey, registry, resolveSubagentModel, emitEvent,
         )
-        deterministicFailureHint(call, result)?.let { deterministicFailures[signature] = it }
+        immutableToolFailureHint(result)?.let { deterministicFailures[signature] = it }
         return result
     }
 
@@ -720,24 +730,6 @@ class AgentEngine(
         }.getOrDefault(call)
     }
 
-    private fun deterministicFailureHint(call: ToolCallData, result: ToolResult): String? {
-        if (result.ok) return null
-        val text = result.output.lowercase()
-        val editTool = call.name in setOf("edit_file", "multi_edit", "apply_patch", "write_file")
-        return when {
-            editTool && ("not found" in text || "does not match" in text || "ambiguous" in text || "patch" in text) ->
-                "Re-read the affected file and build the edit from its current contents."
-            "missing required argument" in text || "invalid tool arguments" in text || "unknown tool" in text ->
-                "Fix the tool name or arguments before retrying."
-            call.name == "shell" && ("command not found" in text || "not found" in text || "exit code 127" in text) ->
-                "The requested command or environment is unavailable; inspect env_status or use an available command."
-            "does not exist" in text || "no such file" in text || "not a directory" in text ->
-                "Inspect the current path or directory first, then retry with a valid target."
-            "file name too long" in text || "enametoolong" in text ->
-                "The filename exceeds filesystem limits (255 bytes); rename the file via shell (mv) before accessing it."
-            else -> null
-        }
-    }
 
     // ------------------------------------------------------------------
 
@@ -1020,9 +1012,24 @@ class AgentEngine(
         val executed = try {
             if (call.name in setOf("git_push", "git_pull", "http_request", "shell", "shell_background") &&
                 workspace !is com.androidharness.app.workspace.SshFs) prepareGitHub()
-            val raw = deviceAccess?.traceTool(route.binding?.id ?: (route.workspace as? ChatWorkspaceFs)?.primaryId, sessionId, args["access"]?.jsonPrimitive?.content == "root") {
-                tool.execute(args, ToolContext(workspace, sandboxOff, sessionId))
-            } ?: tool.execute(args, ToolContext(workspace, sandboxOff, sessionId))
+            val execute = suspend {
+                var outcome: ToolResult? = null
+                try {
+                    val completed = deviceAccess?.traceTool(route.binding?.id ?: (route.workspace as? ChatWorkspaceFs)?.primaryId, sessionId, args["access"]?.jsonPrimitive?.content == "root", args["access"]?.jsonPrimitive?.content == "shizuku") {
+                        tool.execute(args, ToolContext(workspace, sandboxOff, sessionId))
+                    } ?: tool.execute(args, ToolContext(workspace, sandboxOff, sessionId))
+                    outcome = completed
+                    completed
+                } finally {
+                    beforeTexts.keys.forEach { path ->
+                        checkpointer.saveVersion(sessionId, checkpointWorkspace, route.path(path), "after ${call.name}",
+                            recordMissing = outcome?.ok == true && call.name in setOf("delete_file", "move_file", "apply_patch"))
+                    }
+                }
+            }
+            // Native file writes and their durable recovery copies finish as
+            // one action even if the screen/task is paused during the write.
+            val raw = if (beforeTexts.isEmpty()) execute() else kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { execute() }
             raw.redacted()
         } catch (ce: CancellationException) {
             throw ce
@@ -1053,7 +1060,7 @@ class AgentEngine(
                     // Repaired: run the exact same command again for the model.
                     kotlin.coroutines.coroutineContext[TaskBudget]?.check()
                     val retry = try {
-                        deviceAccess?.traceTool(route.binding?.id ?: (route.workspace as? ChatWorkspaceFs)?.primaryId, sessionId, args["access"]?.jsonPrimitive?.content == "root") {
+                        deviceAccess?.traceTool(route.binding?.id ?: (route.workspace as? ChatWorkspaceFs)?.primaryId, sessionId, args["access"]?.jsonPrimitive?.content == "root", args["access"]?.jsonPrimitive?.content == "shizuku") {
                             tool.execute(args, ToolContext(workspace, sandboxOff, sessionId))
                         } ?: tool.execute(args, ToolContext(workspace, sandboxOff, sessionId))
                     } catch (ce: CancellationException) {
@@ -1137,7 +1144,7 @@ class AgentEngine(
     private fun checkpointTargets(toolName: String, args: kotlinx.serialization.json.JsonObject): List<String> {
         fun str(name: String) = args[name]?.jsonPrimitive?.content
         return when (toolName) {
-            "write_file", "edit_file", "multi_edit", "delete_file", "create_dir" ->
+            "write_file", "edit_file", "multi_edit", "delete_file", "create_dir", "file_restore" ->
                 listOfNotNull(str("path"))
             "move_file" -> listOfNotNull(str("source"), str("destination"))
         "apply_patch" -> str("patch")?.let { patch ->
@@ -1324,6 +1331,7 @@ class AgentEngine(
             var subState: com.androidharness.app.core.ProviderMessageState? = null
             var subReasoningTokens: Int? = null
             var subReasoningSetting: String? = null
+            var subThinkingTiming = ThinkingTiming()
             val liveSystem = system + deviceAccess?.statusForAgent(workspace, sessionId)?.let { "\n$it" }.orEmpty()
             val managedFallback = kotlin.coroutines.coroutineContext[com.androidharness.app.llm.FallbackRun]?.policy()?.enabled == true
 
@@ -1341,9 +1349,11 @@ class AgentEngine(
                     subState = null
                     subReasoningTokens = null
                     subReasoningSetting = null
+                    subThinkingTiming = ThinkingTiming()
                 },
                 hasOutput = { text.isNotEmpty() || calls.isNotEmpty() },
                 handleEvent = { event ->
+                    subThinkingTiming = subThinkingTiming.observe(event, ThinkingTiming.now())
                     when (event) {
                         is StreamEvent.ProviderChanged -> {
                             config = event.config
@@ -1410,6 +1420,7 @@ class AgentEngine(
 
             val assistant = ChatMessage(
                 role = Role.ASSISTANT, text = text.toString(), toolCalls = calls.toList(), thinking = subThinking.toString(),
+                thinkingMs = subThinkingTiming.durationMs(ThinkingTiming.now()),
                 generation = com.androidharness.app.core.GenerationMetadata(reasoningTokens = subReasoningTokens, reasoningSetting = subReasoningSetting),
             ).let { it.copy(generation = it.generation.copy(state = subState?.boundTo(it))) }
             history += assistant
@@ -1450,7 +1461,7 @@ class AgentEngine(
                             val route = WorkspaceToolRouting.route(tool, args, workspace)
                             val execute = suspend { tool.execute(args, ctx.copy(workspace = route.workspace,
                                 sandboxOff = ctx.sandboxOff && workspace !is ChatWorkspaceFs)).redacted() }
-                            val result = deviceAccess?.traceTool(route.binding?.id ?: (route.workspace as? ChatWorkspaceFs)?.primaryId, sessionId, args["access"]?.jsonPrimitive?.content == "root", execute) ?: execute()
+                            val result = deviceAccess?.traceTool(route.binding?.id ?: (route.workspace as? ChatWorkspaceFs)?.primaryId, sessionId, args["access"]?.jsonPrimitive?.content == "root", args["access"]?.jsonPrimitive?.content == "shizuku", execute) ?: execute()
                             route.label?.let { result.copy(output = "[Workspace: $it]\n${result.output}") } ?: result
                         } catch (ce: CancellationException) {
                             throw ce

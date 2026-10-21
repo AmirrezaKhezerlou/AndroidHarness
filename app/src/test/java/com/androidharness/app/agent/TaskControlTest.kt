@@ -59,6 +59,13 @@ class TaskControlTest {
         assertFalse(RecoveryLedger(listOf(assistant)).result(call)!!.ok)
         assertNull(completed.result(call.copy(argumentsJson = "{\"path\":\"y\"}")))
     }
+    @Test fun `conditional file recovery rechecks target state after an interruption`() {
+        val call = ToolCallData("restore", "file_restore", """{"path":"site.js","version":"saved"}""")
+        val ledger = RecoveryLedger(listOf(ChatMessage(Role.ASSISTANT, toolCalls = listOf(call)),
+            ChatMessage(Role.TOOL, "restored", toolCallId = "restore")))
+        assertNull(ledger.result(call.copy(id = "recover-again")))
+        assertNull(RecoveryLedger(listOf(ChatMessage(Role.ASSISTANT, toolCalls = listOf(call)))).result(call))
+    }
     @Test fun `removed context stays out without deleting messages`() {
         val messages = listOf(ChatMessage(Role.USER, "old", createdAt = 1),
             ChatMessage(Role.USER, "new", createdAt = 10))

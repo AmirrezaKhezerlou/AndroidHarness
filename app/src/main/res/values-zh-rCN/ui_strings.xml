@@ -2,6 +2,10 @@
 <resources>
     <string name="ui_thinking">"思考中…"</string>
     <string name="ui_thinking_2">"思考"</string>
+    <string name="ui_thinking_seconds">%1$d秒</string>
+    <string name="ui_thinking_under_one_second">少于1秒</string>
+    <string name="ui_thinking_tokens">%1$d 词元</string>
+    <string name="ui_thinking_estimated_tokens">~%1$d 词元（估算）</string>
     <string name="ui_collapse">"收起"</string>
     <string name="ui_expand">"展开"</string>
     <string name="ui_chat_workspace">"聊天工作区"</string>

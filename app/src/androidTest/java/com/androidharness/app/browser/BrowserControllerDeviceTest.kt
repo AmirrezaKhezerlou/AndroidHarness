@@ -44,7 +44,7 @@ class BrowserControllerDeviceTest {
      * draw of the viewport then had nothing left on screen.
      */
     @Test
-    fun screenshotAfterScrollShowsVisibleContent() = runBlocking {
+    fun hiddenScreenshotAfterScrollReportsErrorWithoutWritingBlankImage() = runBlocking {
         val (_, fs) = workspace()
         fs.resolve("tall.html").writeText(
             """
@@ -58,19 +58,31 @@ class BrowserControllerDeviceTest {
         controller.navigate("tall.html", fs)
         controller.scroll("down", 1_400)
 
-        val shot = controller.screenshot(fs)
-        assertTrue("screenshot returned null", shot != null)
-        val bitmap = BitmapFactory.decodeFile(shot!!.cachedFile.absolutePath)
-        val pixels = IntArray(bitmap.width * bitmap.height)
-        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
-        val blue = pixels.count { android.graphics.Color.blue(it) > 200 && android.graphics.Color.red(it) < 60 }
-        val white = pixels.count { it == android.graphics.Color.WHITE }
-        val fraction = blue.toDouble() / pixels.size
-        assertTrue(
-            "scrolled capture is blank (white=${"%.1f".format(white * 100.0 / pixels.size)}%, " +
-                "blue=${"%.1f".format(fraction * 100)}%, ${shot.sizeBytes} bytes)",
-            fraction > 0.33,
-        )
+        val result = com.androidharness.app.tools.BrowserScreenshotTool(controller).execute(
+            kotlinx.serialization.json.JsonObject(emptyMap()), com.androidharness.app.tools.ToolContext(fs))
+        assertFalse(result.ok)
+        assertTrue(result.output, result.output.contains("hidden or detached"))
+        assertTrue("No false-success JPEG should be written", fs.resolve(".harness/screenshots").let { !it.exists || it.list().isEmpty() })
+        controller.close()
+    }
+
+    @Test fun hiddenSmoothScrollingAndAnchorsMoveAndReportHiddenSurface() = runBlocking {
+        val (_, fs) = workspace()
+        fs.resolve("smooth.html").writeText("""
+            <html><head><style>html{scroll-behavior:smooth}body{margin:0}</style></head><body>
+            <a id="go" href="#target">Jump</a><div style="height:3000px"></div>
+            <h2 id="target">Target</h2><div style="height:3000px"></div></body></html>
+        """.trimIndent())
+        val controller = controller(fs)
+        try {
+            controller.navigate("smooth.html", fs)
+            assertEquals("hidden", controller.extractState().visibility)
+            controller.evalUser("window.scrollTo({top:1400,behavior:'smooth'}); window.scrollY")
+            assertTrue(controller.extractState().scrollY > 500)
+            controller.evalUser("window.scrollTo(0,0)")
+            val jumped = controller.click(selector = "#go")
+            assertTrue("Anchor did not move: $jumped", jumped.scrollY > 1000)
+        } finally { controller.close() }
     }
 
     /**
@@ -106,7 +118,7 @@ class BrowserControllerDeviceTest {
      * the agent "sees" an empty screen for every screenshot.
      */
     @Test
-    fun screenshotCapturesRenderedPage() = runBlocking {
+    fun detachedScreenshotRefusesFalseSuccess() = runBlocking {
         val (_, fs) = workspace()
         fs.resolve("red.html").writeText(
             """
@@ -118,22 +130,10 @@ class BrowserControllerDeviceTest {
         val controller = controller(fs)
         controller.navigate("red.html", fs)
 
-        val shot = controller.screenshot(fs)
-        assertTrue("screenshot returned null", shot != null)
-        val bitmap = BitmapFactory.decodeFile(shot!!.cachedFile.absolutePath)
-        assertTrue("captured JPEG did not decode", bitmap != null)
-        val pixels = IntArray(bitmap.width * bitmap.height)
-        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
-        val red = pixels.count { android.graphics.Color.red(it) > 200 && android.graphics.Color.green(it) < 60 }
-        val fraction = red.toDouble() / pixels.size
-
-        // Loose on purpose: the point is "content was rasterized at all", so a
-        // page that is at least a third red proves the draw produced the DOM.
-        assertTrue(
-            "captured image is blank/blank-ish: red=${"%.1f".format(fraction * 100)}% " +
-                "(${shot.sizeBytes} bytes, ${bitmap.width}x${bitmap.height})",
-            fraction > 0.33,
-        )
+        val result = runCatching { controller.screenshot(fs) }
+        assertTrue("Detached capture must fail explicitly", result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message.orEmpty().contains("hidden or detached"))
+        controller.close()
     }
 
     /**

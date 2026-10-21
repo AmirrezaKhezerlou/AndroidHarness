@@ -30,6 +30,7 @@ data class BgProcessEntry(
     val exitCode: Int? = null,
     val finishedAt: Long? = null,
     val termination: String? = null,
+    val ownerSessionId: String? = null,
 )
 
 /**
@@ -110,9 +111,9 @@ class BgProcessStore(
      * app death) when Shizuku is connected; otherwise an app-child process.
      * May throw when the app tier can't reach [cwd]; callers report that.
      */
-    suspend fun start(command: String, cwd: File): Started = storageLock.withLock { startLocked(command, cwd) }
+    suspend fun start(command: String, cwd: File, sessionId: String? = null): Started = storageLock.withLock { startLocked(command, cwd, sessionId) }
 
-    private suspend fun startLocked(command: String, cwd: File): Started {
+    private suspend fun startLocked(command: String, cwd: File, sessionId: String?): Started {
         val id = nextId.getAndIncrement()
         val bgDir = File(cwd, ".harness/bg").apply { mkdirs() }
         val logName = "$id-$bootToken.log"
@@ -123,7 +124,7 @@ class BgProcessStore(
         val monitoredCommand = backgroundCommand(command, exitFile.absolutePath)
 
         deviceAccess?.let { access ->
-            return startWithAccess(access, id, command, monitoredCommand, cwd, logFile, exitFile)
+            return startWithAccess(access, id, command, monitoredCommand, cwd, logFile, exitFile, sessionId)
         }
 
         if (shizuku.isGranted()) {
@@ -149,7 +150,7 @@ class BgProcessStore(
                 val entry = BgProcessEntry(
                     id = id, command = command, cwd = cwd.absolutePath,
                     logPath = logFile.absolutePath, pid = pid, source = "SHIZUKU", exitCodePath = exitFile.absolutePath,
-                    startedAt = System.currentTimeMillis(),
+                    startedAt = System.currentTimeMillis(), ownerSessionId = sessionId,
                 )
                 entries[id] = entry
                 persist()
@@ -167,7 +168,7 @@ class BgProcessStore(
         val entry = BgProcessEntry(
             id = id, command = command, cwd = cwd.absolutePath,
             logPath = logFile.absolutePath, pid = -1, source = "APP", exitCodePath = exitFile.absolutePath,
-            startedAt = System.currentTimeMillis(),
+            startedAt = System.currentTimeMillis(), ownerSessionId = sessionId,
         )
         entries[id] = entry
         persist()
@@ -177,7 +178,7 @@ class BgProcessStore(
     /** Active jobs plus the latest 100 terminal records, persisted across app restarts. */
     private suspend fun startWithAccess(
         access: com.androidharness.app.data.env.DeviceAccessManager,
-        id: Int, command: String, monitored: String, cwd: File, log: File, exit: File,
+        id: Int, command: String, monitored: String, cwd: File, log: File, exit: File, sessionId: String?,
     ): Started {
         val result = access.execute(
             appWorkspace = access.isAppWorkspace(cwd),
@@ -211,7 +212,7 @@ class BgProcessStore(
         check(result.exitCode == 0) { result.rawStderr.ifBlank { result.note ?: "Could not start the selected background backend." } }
         val source = when (result.tier) { com.androidharness.app.data.env.ExecutionTier.ROOT -> "ROOT"; com.androidharness.app.data.env.ExecutionTier.PRIVILEGED -> "SHIZUKU"; else -> "APP" }
         val entry = BgProcessEntry(id, command, cwd.path, log.path, result.rawOutput.toIntOrNull() ?: -1,
-            source, System.currentTimeMillis(), exit.path)
+            source, System.currentTimeMillis(), exit.path, ownerSessionId = sessionId)
         entries[id] = entry
         persist()
         return Started(entry, source == "SHIZUKU")
@@ -230,7 +231,10 @@ class BgProcessStore(
 
     suspend fun list(): List<Pair<BgProcessEntry, Boolean>> = storageLock.withLock { listLocked() }
 
-    private suspend fun listLocked(): List<Pair<BgProcessEntry, Boolean>> {
+    /** Listing may show an unverified job; storage cleanup must still refuse it. */
+    suspend fun listForDisplay(): List<Pair<BgProcessEntry, Boolean>> = storageLock.withLock { listLocked(allowUnverified = true) }
+
+    private suspend fun listLocked(allowUnverified: Boolean = false): List<Pair<BgProcessEntry, Boolean>> {
         val out = mutableListOf<Pair<BgProcessEntry, Boolean>>()
         var changed = false
         entries.values.sortedBy { it.id }.forEach { e ->
@@ -239,14 +243,15 @@ class BgProcessStore(
                 return@forEach
             }
             val recordedExit = e.exitCodePath?.let { runCatching { File(it).readText().trim().toIntOrNull() }.getOrNull() }
-            val alive = when (e.source) {
+            val observed = when (e.source) {
                 "ROOT" -> if (recordedExit != null) false else rootLiveness(e.pid)
-                    ?: error("Cannot verify a root background process. Reconnect root before cleaning storage.")
                 "SHIZUKU" -> if (recordedExit != null) false else privilegedLiveness(e.pid)
-                    ?: error("Cannot verify a background process. Reconnect Shizuku before cleaning storage.")
                 else -> appProcesses[e.id]?.isAlive == true
             }
-            if (alive) {
+            if (observed == null) {
+                check(allowUnverified) { "Cannot verify a ${e.source.lowercase()} background process. Reconnect it before cleaning storage." }
+                out += e.copy(termination = "unverified") to true
+            } else if (observed) {
                 out += e to true
             } else {
                 val code = recordedExit ?: appProcesses[e.id]?.let { runCatching { it.exitValue() }.getOrNull() }

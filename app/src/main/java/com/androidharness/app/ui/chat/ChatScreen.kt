@@ -1342,9 +1342,11 @@ private fun ChatScreenContent(
                                 val isSearchTurn = searchMessageId != null && message.turnId == searchTurnId
                                 val hasFinishedActivity = !isTurnRunning && !isSearchTurn && activity.isNotEmpty()
                                 if (hasFinishedActivity && !isTurnFinal) continue
-                                if (!hasFinishedActivity && message.thinking.isNotBlank()) {
+                                if (!hasFinishedActivity && (message.thinking.isNotBlank() || (message.generation.reasoningTokens ?: 0) > 0)) {
                                     indexedItem(key = "message-$messageKey-thinking", contentType = ChatListContentType.Thinking) {
-                                        Box(Modifier.animateItem(fadeInSpec = fastEffectsSpec(), placementSpec = null, fadeOutSpec = null)) { ThinkingBlock(message.thinking) }
+                                        Box(Modifier.animateItem(fadeInSpec = fastEffectsSpec(), placementSpec = null, fadeOutSpec = null)) {
+                                            ThinkingBlock(message.thinking, thinkingMs = message.thinkingMs, reasoningTokens = message.generation.reasoningTokens)
+                                        }
                                     }
                                 }
                                 if (message.text.isNotBlank() || hasFinishedActivity) {
@@ -1557,7 +1559,9 @@ private fun ChatScreenContent(
                         state.streamingThinking?.let { thinking ->
                             if (thinking.isNotBlank()) {
                                 indexedItem(key = "streaming-$streamKey-thinking", contentType = ChatListContentType.Thinking) {
-                                    ThinkingBlock(thinking, live = true)
+                                    ThinkingBlock(thinking,
+                                        live = !state.streamingCommitted && state.thinkingTiming.startedAt != null,
+                                        timing = state.thinkingTiming, reasoningTokens = state.reasoningTokens)
                                 }
                             }
                         }

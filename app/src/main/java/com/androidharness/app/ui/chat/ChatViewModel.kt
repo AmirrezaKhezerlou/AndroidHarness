@@ -135,8 +135,8 @@ data class ChatUiState(
     val currentToolAction: String? = null,
     /** Live progress lines per running subagent (task tool), newest last. */
     val subagentSteps: Map<String, List<String>> = emptyMap(),
-    /** When the current turn's reasoning stream started (drives the live "Thinking… Ns"). */
-    val thinkingStartedAt: Long? = null,
+    val thinkingTiming: com.androidharness.app.agent.ThinkingTiming = com.androidharness.app.agent.ThinkingTiming(),
+    val reasoningTokens: Int? = null,
     /** Per-turn file-edit stats ("+N −M" chips), keyed by turnId. */
     val fileEditsByTurn: Map<String, List<com.androidharness.app.data.db.FileEditEntity>> = emptyMap(),
     /** Per-request cache stats, grouped by the owning task turn. */
@@ -631,7 +631,8 @@ class ChatViewModel(
                 installingEnvironment = live.installingEnvironment,
                 currentToolAction = live.currentToolAction,
                 subagentSteps = live.subagentSteps,
-                thinkingStartedAt = live.thinkingStartedAt,
+                thinkingTiming = if (committed) st.thinkingTiming.stop(com.androidharness.app.agent.ThinkingTiming.now()) else live.thinkingTiming,
+                reasoningTokens = if (committed) st.reasoningTokens else live.reasoningTokens,
                 retryStatus = live.retryStatus,
                 queuedMessage = live.queuedMessage,
                 pendingPlan = live.pendingPlan,

@@ -151,6 +151,9 @@ class RecoveryLedger(messages: List<ChatMessage>) : AbstractCoroutineContextElem
     private val calls = messages.filter { it.role == Role.ASSISTANT && it.toolCallId == null }
         .flatMap { it.toolCalls }.associateBy { signature(it) }
     fun result(call: com.androidharness.app.core.ToolCallData): com.androidharness.app.tools.ToolResult? {
+        // Restoration rechecks missing/current-hash preconditions itself. A
+        // previously restored file may have vanished again during interruption.
+        if (call.name == "file_restore") return null
         val original = calls[signature(call)] ?: return null
         val outcome = outcomes[original.id]
         if (outcome != null && !outcome.isError) return com.androidharness.app.tools.ToolResult(true,

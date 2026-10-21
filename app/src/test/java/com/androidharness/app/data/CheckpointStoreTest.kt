@@ -43,7 +43,7 @@ class CheckpointStoreTest {
             proxy<FsNode> { op, values ->
                 when (op) {
                     "getExists" -> node.exists
-                    "getIsDirectory" -> false
+                    "getIsDirectory", "isDirectory" -> false
                     "writeText" -> {
                         if (node.cancelled) throw CancellationException("cancelled")
                         check(!node.fail) { "Access denied" }
@@ -113,5 +113,29 @@ class CheckpointStoreTest {
         val (store, fs) = fixture(rows, mapOf("dir" to Node()))
         assertEquals(1, store.rewind("session", "turn", fs).failed)
         assertEquals(1, rows.size)
+    }
+
+    @Test fun `rewinding an agent created directory preserves untracked shell files and saves removed source`() = runBlocking {
+        val root = java.nio.file.Files.createTempDirectory("rewind-safety").toFile()
+        try {
+            val fs = com.androidharness.app.workspace.FileFs(java.io.File(root, "workspace"))
+            fs.resolve("site/tracked.js").writeText("saved source")
+            fs.resolve("site/untracked.css").writeText("shell work")
+            val rows = mutableListOf(checkpoint("site", false), checkpoint("site/tracked.js", false))
+            val dao = proxy<HarnessDao> { name, args -> when (name) {
+                "checkpointsForTurn" -> rows.toList()
+                "deleteCheckpoint" -> { rows.remove(args[0]); Unit }
+                else -> error("Unexpected DAO call: $name")
+            } }
+            val history = WorkspaceFileHistory(java.io.File(root, "history"))
+            val result = CheckpointStore(dao, history).rewind("session", "turn", fs)
+            assertEquals(1, result.failed)
+            assertEquals(1, result.restored)
+            assertEquals("shell work", fs.resolve("site/untracked.css").readText())
+            assertEquals(listOf("site"), rows.map { it.relPath })
+            val version = history.versions("session", fs, "site/tracked.js").first { !it.deleted }
+            history.restore("session", fs, "site/tracked.js", version.id)
+            assertEquals("saved source", fs.resolve("site/tracked.js").readText())
+        } finally { root.deleteRecursively() }
     }
 }
