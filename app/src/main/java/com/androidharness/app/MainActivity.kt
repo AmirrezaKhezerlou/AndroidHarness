@@ -37,7 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import androidx.fragment.app.FragmentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androidharness.app.data.AppSettings
 import com.androidharness.app.data.ScreenshotPolicy
@@ -49,7 +49,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
 
-class MainActivity : FragmentActivity() {
+class MainActivity : AppCompatActivity() {
 
     private lateinit var container: AppContainer
     private var isUnlocked by mutableStateOf(false)

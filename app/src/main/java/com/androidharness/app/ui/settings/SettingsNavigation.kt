@@ -23,6 +23,12 @@ internal enum class SettingsPage(
     @StringRes val group: Int,
     val keywords: String,
 ) {
+    LANGUAGE(
+        R.string.settings_page_language_title,
+        R.string.settings_page_language_desc,
+        R.string.settings_group_language,
+        "language locale translation translate system default english chinese 中文 简体 语言 poeditor contribute",
+    ),
     GITHUB(
         R.string.settings_page_github_title,
         R.string.settings_page_github_desc,
@@ -195,6 +201,13 @@ private val primarySettingsEntries = SettingsPage.entries.map { page ->
 }
 
 private val subSettingsEntries = listOf(
+    SettingsSearchEntry(
+        R.string.settings_language_contribute_title,
+        R.string.settings_language_contribute_description,
+        SettingsPage.LANGUAGE,
+        "translation translate contribute community poeditor language",
+        anchor = R.string.settings_language_contribute_title,
+    ),
     SettingsSearchEntry(
         R.string.settings_search_progress_bar_title,
         R.string.settings_search_progress_bar_desc,
@@ -515,6 +528,7 @@ internal fun matchingSettingsPages(query: String, text: (Int) -> String): List<S
     matchingSettingsEntries(query, text).map { it.page }.distinct()
 
 internal fun settingsDeepLink(target: String): SettingsPage? = when (target) {
+    "language" -> SettingsPage.LANGUAGE
     "troubleshooting" -> SettingsPage.TROUBLESHOOTING
     "github" -> SettingsPage.GITHUB
     "chatgpt" -> SettingsPage.CONNECTED_ACCOUNTS

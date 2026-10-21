@@ -144,6 +144,7 @@ internal fun DesktopSettingsNavigation(
                     style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant) }
                 results.groupBy { it.page.group }.toList().sortedBy { (group, _) ->
                     when (group) {
+                        R.string.settings_group_language -> -1
                         R.string.settings_group_personalize -> 0
                         R.string.settings_group_your_assistant -> 1
                         else -> 2
@@ -206,6 +207,7 @@ internal fun SettingsPanel(modifier: Modifier = Modifier, content: @Composable C
 }
 
 private fun settingsIcon(page: SettingsPage): ImageVector = when (page) {
+    SettingsPage.LANGUAGE -> Icons.Outlined.Translate
     SettingsPage.CONNECTED_ACCOUNTS -> Icons.Outlined.AccountCircle
     SettingsPage.MODELS -> ProviderGlyph
     SettingsPage.SUBAGENT -> Icons.Outlined.AccountTree

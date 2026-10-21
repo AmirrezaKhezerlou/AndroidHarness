@@ -174,4 +174,14 @@
     <string name="ui_reasoning_ultra">超高</string>
     <string name="ui_batch_destination_confirm">在此%1$s %2$s 项</string>
     <plurals name="ui_model_count"><item quantity="one">%1$d 个模型</item><item quantity="other">%1$d 个模型</item></plurals>
+    <string name="settings_group_language">语言</string>
+    <string name="settings_page_language_title">应用语言</string>
+    <string name="settings_page_language_desc">选择语言或帮助翻译应用</string>
+    <string name="settings_language_system">跟随系统</string>
+    <string name="settings_language_system_description">使用设备的语言。不支持的语言将使用英语。</string>
+    <string name="settings_language_contribute_title">帮助翻译 AndroidHarness</string>
+    <string name="settings_language_contribute_description">没有你的语言，或发现翻译可以改进？欢迎通过 POEditor 参与翻译。即使只翻译几句话也很有帮助。</string>
+    <string name="settings_language_contribute_action">参与翻译</string>
+    <string name="settings_language_contribute_release_note">社区翻译经审核后会随应用更新发布。</string>
+    <string name="settings_language_link_failed">无法打开翻译页面。请检查是否已安装浏览器。</string>
 </resources>

@@ -65,6 +65,15 @@
         android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.AndroidHarness">
 
+        <!-- Persist language overrides on Android 12 and earlier; Android 13+
+             shares the same preference with the system's per-app language UI. -->
+        <service
+            android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
+            android:enabled="false"
+            android:exported="false">
+            <meta-data android:name="autoStoreLocales" android:value="true" />
+        </service>
+
         <activity
             android:name=".MainActivity"
             android:launchMode="singleTask"

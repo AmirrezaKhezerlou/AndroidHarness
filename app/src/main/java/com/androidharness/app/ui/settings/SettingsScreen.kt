@@ -239,6 +239,7 @@ fun SettingsScreen(
                     ) {
                         if (page != SettingsPage.LOCAL_MODELS && page != SettingsPage.AGENT && page != SettingsPage.TELEGRAM && page != SettingsPage.STORAGE) SettingsPageIntro(page)
                     when (page) {
+                        SettingsPage.LANGUAGE -> LanguageSection()
                         SettingsPage.CONNECTED_ACCOUNTS -> ConnectedAccountsSection(container)
                         SettingsPage.MODELS -> {
                             SettingsPanel(Modifier.fillMaxWidth()) {

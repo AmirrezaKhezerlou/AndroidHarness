@@ -174,4 +174,16 @@
     <string name="ui_reasoning_ultra">Ultra</string>
     <string name="ui_batch_destination_confirm">%1$s %2$s here</string>
     <plurals name="ui_model_count"><item quantity="one">%1$d model</item><item quantity="other">%1$d models</item></plurals>
+    <string name="settings_group_language">Language</string>
+    <string name="settings_page_language_title">App language</string>
+    <string name="settings_page_language_desc">Choose a language or help translate the app</string>
+    <string name="settings_language_system">System default</string>
+    <string name="settings_language_system_description">Follow your device language. Unsupported languages use English.</string>
+    <string name="settings_language_english" translatable="false">English</string>
+    <string name="settings_language_chinese" translatable="false">简体中文</string>
+    <string name="settings_language_contribute_title">Help translate AndroidHarness</string>
+    <string name="settings_language_contribute_description">Missing your language or spotted a translation that could be better? Contribute on POEditor. Even a few phrases help.</string>
+    <string name="settings_language_contribute_action">Contribute translations</string>
+    <string name="settings_language_contribute_release_note">Community translations are reviewed before they appear in an app update.</string>
+    <string name="settings_language_link_failed">Could not open the translation page. Please check that a browser is installed.</string>
 </resources>

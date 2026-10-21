@@ -52,10 +52,24 @@ class SettingsNavigationTest {
     }
 
     @Test
-    fun `GitHub integration is the first settings page and supports a direct link`() {
-        assertEquals(SettingsPage.GITHUB, matchingSettingsPages("", settingsTestStrings()).first())
+    fun `language is first and GitHub integration still supports a direct link`() {
+        assertEquals(SettingsPage.LANGUAGE, matchingSettingsPages("", settingsTestStrings()).first())
+        assertEquals(SettingsPage.GITHUB, matchingSettingsPages("", settingsTestStrings())[1])
+        assertEquals(SettingsPage.LANGUAGE, settingsDeepLink("language"))
         assertEquals(SettingsPage.GITHUB, settingsDeepLink("github"))
         assertEquals(listOf(SettingsPage.GITHUB), matchingSettingsPages("commit push", settingsTestStrings()))
+    }
+
+    @Test
+    fun `translation search opens the contribution section in either language`() {
+        val english = settingsTestStrings()
+        val chinese = settingsTestStrings("values-zh-rCN")
+        val anchor = R.string.settings_language_contribute_title
+        for ((query, text) in listOf("poeditor" to english, chinese(anchor) to chinese)) {
+            assertTrue(matchingSettingsEntries(query, text).any {
+                it.page == SettingsPage.LANGUAGE && it.anchor == anchor
+            })
+        }
     }
 
     @Test

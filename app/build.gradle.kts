@@ -34,6 +34,8 @@ val hasNdk: Boolean = run {
 
 android {
     namespace = "com.androidharness.app"
+    // The in-app picker must be able to switch languages without a Play download.
+    bundle { language { enableSplit = false } }
     compileSdk = 37
     if (hasNdk) {
         ndkVersion = pinnedNdk
@@ -193,6 +195,7 @@ dependencies {
     implementation(libs.security.crypto)
     implementation(libs.biometric)
     implementation(libs.fragment.ktx)
+    implementation("androidx.appcompat:appcompat:1.6.1")
 
     implementation("com.github.mwiede:jsch:2.28.7")
     // Ed25519 SSH keys on Android versions without a matching platform provider.
