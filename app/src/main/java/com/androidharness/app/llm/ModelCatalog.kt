@@ -60,7 +60,8 @@ fun visionCapable(modelId: String): Boolean {
     val m = modelId.lowercase()
     if (m.contains("-vl") || m.contains("vision") || m.contains("omni") || m.contains("4o") ||
         m.contains("gemini") || m.contains("claude") || m.contains("gpt-4-turbo") ||
-        m.contains("deepseek-v4") || m.contains("deepseek-vl")
+        // V4 Pro is text-only; only the Flash variants support image input.
+        m.contains("deepseek-v4-flash") || m.contains("deepseek-v4.1-flash")
     ) {
         return true
     }

@@ -37,6 +37,27 @@ class VisionDegradationTest {
     }
 
     @Test
+    fun `DeepSeek V4 Flash supports images while V4 Pro stays text-only`() {
+        val flashModels = listOf(
+            "deepseek-v4-flash",
+            "deepseek-v4-flash-vision-exp",
+            "deepseek-v4.1-flash",
+            "deepseek-v4.1-flash-1017",
+            "deepseek/deepseek-v4.1-flash",
+            "deepseek-flash",
+        )
+        flashModels.forEach { model -> assertTrue(model, visionCapable(model)) }
+
+        val proModels = listOf(
+            "deepseek-v4-pro",
+            "deepseek-v4-pro-0813",
+            "deepseek/deepseek-v4-pro",
+            "DeepSeek/DeepSeek-V4-Pro-0813",
+        )
+        proModels.forEach { model -> assertFalse(model, visionCapable(model)) }
+    }
+
+    @Test
     fun `stripImages removes base64 imageData and inserts descriptive text placeholder`() {
         val imageRef = ImageRef("screenshot.png", "image/png")
         val imageData = ImageData("image/png", "fakeBase64Bytes==")
