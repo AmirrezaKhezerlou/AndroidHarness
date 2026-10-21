@@ -1175,25 +1175,37 @@ private fun ChatScreenContent(
                     map
                 }
 
-                // "Speak every reply" only reads turns that ran on this screen.
-                // The turn is remembered while busy so a reply committed a
-                // moment after the run stops is still found and read once.
+                // "Speak every reply" reads each assistant block as it lands,
+                // including progress commentary between tool calls, not just
+                // the final answer. Blocks queue so they never cut each other off.
                 val appSettings by viewModel.container.settings.settings
                     .collectAsStateWithLifecycle(initialValue = AppSettings())
-                var pendingSpeakTurn by remember { mutableStateOf<String?>(null) }
-                LaunchedEffect(state.busy, state.currentTurnId) {
-                    if (state.busy) pendingSpeakTurn = state.currentTurnId ?: pendingSpeakTurn
+                var autoSpokenIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+                LaunchedEffect(appSettings.ttsAlwaysSpeak, state.sessionId) {
+                    autoSpokenIds = if (appSettings.ttsAlwaysSpeak) {
+                        state.messages.mapNotNull { it.id }.toSet()
+                    } else {
+                        emptySet()
+                    }
                 }
-                LaunchedEffect(state.messages, state.busy, pendingSpeakTurn, appSettings.ttsAlwaysSpeak) {
-                    val turn = pendingSpeakTurn ?: return@LaunchedEffect
-                    if (state.busy || !appSettings.ttsAlwaysSpeak) return@LaunchedEffect
-                    val reply = state.messages.lastOrNull {
-                        it.role == Role.ASSISTANT && it.turnId == turn && it.toolCallId == null &&
-                            it.text.isNotBlank() && it.id != null &&
-                            it.id == turnFinalAssistantIds[it.turnId]
-                    } ?: return@LaunchedEffect
-                    pendingSpeakTurn = null
-                    reply.id?.let { viewModel.container.tts.autoSpeak(it, reply.text) }
+                LaunchedEffect(state.messages, appSettings.ttsAlwaysSpeak) {
+                    if (!appSettings.ttsAlwaysSpeak) return@LaunchedEffect
+                    val known = autoSpokenIds
+                    if (known.isEmpty() && state.messages.isNotEmpty()) {
+                        // Turned on with a chat already open: don't read history.
+                        autoSpokenIds = state.messages.mapNotNull { it.id }.toSet()
+                        return@LaunchedEffect
+                    }
+                    val fresh = state.messages.filter { it.id != null && it.id !in known }
+                    if (fresh.isEmpty()) return@LaunchedEffect
+                    autoSpokenIds = known + fresh.mapNotNull { it.id }
+                    fresh.forEach { message ->
+                        if (message.role == Role.ASSISTANT && message.toolCallId == null &&
+                            message.text.isNotBlank()
+                        ) {
+                            message.id?.let { viewModel.container.tts.enqueueAuto(it, message.text) }
+                        }
+                    }
                 }
 
                 // FAB visibility tracks the pin (not the raw at-bottom check),

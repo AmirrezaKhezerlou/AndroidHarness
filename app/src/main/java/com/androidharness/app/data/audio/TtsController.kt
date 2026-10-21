@@ -87,27 +87,50 @@ class TtsController(
 
     /** Auto-speak fires once per message even across rotations and recompositions. */
     private val autoSpoken = LinkedHashSet<String>()
+    private val autoQueue = ArrayDeque<Pair<String, String>>()
 
     fun toggle(messageId: String, text: String) {
         val current = _state.value
+        autoQueue.clear()
         if (current.messageId == messageId && current.phase != TtsPhase.IDLE) stop()
         else speak(messageId, text)
     }
 
-    fun autoSpeak(messageId: String, text: String) {
+    /**
+     * Queues one assistant text block for automatic reading. Blocks arrive
+     * while earlier audio is still playing, so they wait in order instead of
+     * interrupting each other.
+     */
+    fun enqueueAuto(messageId: String, text: String) {
         if (text.isBlank() || !autoSpoken.add(messageId)) return
-        if (autoSpoken.size > 200) autoSpoken.remove(autoSpoken.first())
-        val current = _state.value
-        if (current.messageId == messageId && current.phase != TtsPhase.IDLE) return
-        speak(messageId, text)
+        if (autoSpoken.size > 500) autoSpoken.remove(autoSpoken.first())
+        autoQueue.addLast(messageId to text)
+        if (_state.value.phase == TtsPhase.IDLE) playNextAuto()
+    }
+
+    private fun playNextAuto() {
+        while (true) {
+            val next = autoQueue.removeFirstOrNull() ?: return
+            // Rich-only blocks can reduce to nothing to say; skip them so the
+            // queue keeps moving.
+            if (RichResponse.plainText(next.second).isBlank()) continue
+            speak(next.first, next.second)
+            return
+        }
     }
 
     /** Speaks a sample with the currently saved engine/voice/speed. */
     fun preview() {
+        autoQueue.clear()
         speak(PREVIEW_ID, context.getString(R.string.settings_tts_test_sentence))
     }
 
     fun stop() {
+        autoQueue.clear()
+        halt()
+    }
+
+    private fun halt() {
         job?.cancel()
         job = null
         playbackGeneration++
@@ -153,7 +176,7 @@ class TtsController(
     private fun speak(messageId: String, text: String) {
         val plain = RichResponse.plainText(text).trim()
         if (plain.isBlank()) return
-        stop()
+        halt()
         _state.value = TtsState(messageId, TtsPhase.PREPARING)
         job = scope.launch {
             val saved = settings.settings.first()
@@ -249,6 +272,7 @@ class TtsController(
         playbackGeneration++
         _state.value = TtsState()
         abandonFocus()
+        if (autoQueue.isNotEmpty()) scope.launch { playNextAuto() }
     }
 
     private suspend fun play(file: File): Boolean = suspendCancellableCoroutine { continuation ->
