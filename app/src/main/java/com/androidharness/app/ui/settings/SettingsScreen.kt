@@ -1046,8 +1046,18 @@ private fun VoiceSpeechSection(
     var checking by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
     var voicePicker by remember { mutableStateOf(false) }
+    var modelPicker by remember { mutableStateOf(false) }
+    var modelEpoch by remember { mutableStateOf(0) }
+    var customVoice by remember { mutableStateOf("") }
+    var customModel by remember { mutableStateOf("") }
     val hasGroqKey = remember(keyEpoch) { container.keys.groqApiKey() != null }
     val groqKeyUrl = "https://console.groq.com/keys"
+
+    // Model ids come from the account's /models list, so new Groq TTS models
+    // appear without an app update. Fetched only while the model dialog is open.
+    val groqModels by produceState<List<String>?>(null, modelPicker, hasGroqKey, modelEpoch) {
+        value = if (modelPicker && hasGroqKey) container.tts.groqSpeechModels() else null
+    }
 
     // The pasted key is only on screen while the entry form is open.
     SecureScreenEffect(container, expanded && (isGroq || isTtsGroq))
@@ -1332,6 +1342,24 @@ private fun VoiceSpeechSection(
                 )
             }
 
+            if (isTtsGroq) {
+                Text(
+                    stringResource(R.string.settings_tts_model),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedButton(
+                    onClick = {
+                        customModel = settings.ttsGroqModel
+                        modelPicker = true
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(GroqTtsClient.modelLabel(settings.ttsGroqModel), Modifier.weight(1f))
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
+                }
+            }
+
             Text(
                 stringResource(R.string.settings_tts_voice),
                 style = MaterialTheme.typography.labelMedium,
@@ -1394,8 +1422,9 @@ private fun VoiceSpeechSection(
         val deviceVoices by produceState(initialValue = emptyList<TtsVoiceOption>(), ttsEngine) {
             value = if (ttsEngine == AppSettings.TTS_ENGINE_SYSTEM) container.tts.systemVoices() else emptyList()
         }
+        val groqVoices = if (isTtsGroq) GroqTtsClient.voicesFor(settings.ttsGroqModel) else emptyList()
         val options = if (isTtsGroq) {
-            GroqTtsClient.VOICES.map { TtsVoiceOption(it, it.replace('-', ' ')) }
+            groqVoices.map { TtsVoiceOption(it, it.replace('-', ' ')) }
         } else {
             listOf(TtsVoiceOption("", uiContext.getString(R.string.settings_tts_voice_automatic))) + deviceVoices
         }
@@ -1438,10 +1467,133 @@ private fun VoiceSpeechSection(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                    // Groq has no voices endpoint, so an unknown model gets a free-form id.
+                    if (isTtsGroq && groqVoices.isEmpty()) {
+                        Text(
+                            uiContext.getString(R.string.settings_tts_voice_custom),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        OutlinedTextField(
+                            value = customVoice,
+                            onValueChange = { customVoice = it },
+                            label = { Text(stringResource(R.string.settings_tts_voice_id)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Button(
+                            enabled = customVoice.isNotBlank(),
+                            onClick = {
+                                voicePicker = false
+                                scope.launch { container.settings.setTtsGroqVoice(customVoice.trim()) }
+                            },
+                        ) { Text(stringResource(R.string.settings_tts_save)) }
+                    }
                 }
             },
             confirmButton = {
                 TextButton(onClick = { voicePicker = false }) {
+                    Text(stringResource(R.string.settings_action_done))
+                }
+            },
+        )
+    }
+
+    if (modelPicker) {
+        AlertDialog(
+            onDismissRequest = { modelPicker = false },
+            title = { Text(stringResource(R.string.settings_tts_model)) },
+            text = {
+                Column(
+                    Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    when {
+                        !hasGroqKey -> Text(
+                            uiContext.getString(R.string.settings_tts_no_key),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        groqModels == null -> Text(
+                            uiContext.getString(R.string.settings_tts_models_loading),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        groqModels!!.isEmpty() -> Text(
+                            uiContext.getString(R.string.settings_tts_models_empty),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        else -> groqModels!!.forEach { id ->
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .selectable(
+                                        selected = id == settings.ttsGroqModel,
+                                        role = Role.RadioButton,
+                                        onClick = {
+                                            modelPicker = false
+                                            scope.launch {
+                                                container.settings.setTtsGroqModel(id)
+                                                GroqTtsClient.defaultVoiceFor(id)?.let {
+                                                    container.settings.setTtsGroqVoice(it)
+                                                }
+                                            }
+                                        },
+                                    )
+                                    .padding(vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                RadioButton(selected = id == settings.ttsGroqModel, onClick = null)
+                                Column(Modifier.weight(1f)) {
+                                    Text(GroqTtsClient.modelLabel(id), style = MaterialTheme.typography.bodyLarge)
+                                    if (GroqTtsClient.modelLabel(id) != id) {
+                                        Text(
+                                            id,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    Text(
+                        uiContext.getString(R.string.settings_tts_models_custom),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    OutlinedTextField(
+                        value = customModel,
+                        onValueChange = { customModel = it },
+                        label = { Text(stringResource(R.string.settings_tts_model_id)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            enabled = customModel.isNotBlank(),
+                            onClick = {
+                                val id = customModel.trim()
+                                modelPicker = false
+                                scope.launch {
+                                    container.settings.setTtsGroqModel(id)
+                                    GroqTtsClient.defaultVoiceFor(id)?.let {
+                                        container.settings.setTtsGroqVoice(it)
+                                    }
+                                }
+                            },
+                        ) { Text(stringResource(R.string.settings_tts_save)) }
+                        OutlinedButton(
+                            onClick = { modelEpoch++ },
+                            enabled = hasGroqKey,
+                        ) { Text(stringResource(R.string.settings_tts_refresh)) }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { modelPicker = false }) {
                     Text(stringResource(R.string.settings_action_done))
                 }
             },

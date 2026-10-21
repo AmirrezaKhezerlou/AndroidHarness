@@ -231,8 +231,17 @@
     <string name="settings_tts_device_hint">使用设备上安装的文字转语音引擎，可离线工作。</string>
     <string name="settings_tts_groq_hint">通过已保存的 Groq 密钥联网使用 Groq PlayAI 声音。</string>
     <string name="settings_tts_no_key">请在上方添加 Groq 密钥以使用 Groq 声音。</string>
+    <string name="settings_tts_model">模型</string>
+    <string name="settings_tts_models_loading">正在从 Groq 加载模型…</string>
+    <string name="settings_tts_models_empty">未返回文字转语音模型，请手动输入模型 ID。</string>
+    <string name="settings_tts_models_custom">自定义模型 ID</string>
+    <string name="settings_tts_model_id">模型 ID</string>
     <string name="settings_tts_voice">声音</string>
     <string name="settings_tts_voice_automatic">自动（系统语言）</string>
+    <string name="settings_tts_voice_custom">此模型没有内置声音列表，请输入 Groq 文档中的声音 ID。</string>
+    <string name="settings_tts_voice_id">声音 ID</string>
+    <string name="settings_tts_save">保存</string>
+    <string name="settings_tts_refresh">刷新</string>
     <string name="settings_tts_speed">语速</string>
     <string name="settings_tts_always_speak">朗读每条回复</string>
     <string name="settings_tts_always_speak_desc">自动朗读每条新的助手回复。</string>

@@ -233,8 +233,17 @@
     <string name="settings_tts_device_hint">Uses the text-to-speech engine installed on this device. Works offline.</string>
     <string name="settings_tts_groq_hint">Uses Groq PlayAI voices over the network with your saved Groq key.</string>
     <string name="settings_tts_no_key">Add a Groq key above to use Groq voices.</string>
+    <string name="settings_tts_model">Model</string>
+    <string name="settings_tts_models_loading">Loading models from Groq…</string>
+    <string name="settings_tts_models_empty">No TTS models were returned. Enter a model id manually.</string>
+    <string name="settings_tts_models_custom">Custom model id</string>
+    <string name="settings_tts_model_id">Model id</string>
     <string name="settings_tts_voice">Voice</string>
     <string name="settings_tts_voice_automatic">Automatic (system language)</string>
+    <string name="settings_tts_voice_custom">This model has no built-in voice list. Enter the voice id from Groq\'s documentation.</string>
+    <string name="settings_tts_voice_id">Voice id</string>
+    <string name="settings_tts_save">Save</string>
+    <string name="settings_tts_refresh">Refresh</string>
     <string name="settings_tts_speed">Speed</string>
     <string name="settings_tts_always_speak">Speak every reply</string>
     <string name="settings_tts_always_speak_desc">Read each new assistant reply aloud automatically.</string>

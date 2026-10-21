@@ -5,6 +5,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -27,9 +28,17 @@ import kotlin.coroutines.resumeWithException
  * works here, so the app never asks for a second credential.
  */
 object GroqTtsClient {
-    const val MODEL = "playai-tts"
+    /** Used until the account's model list is fetched. */
+    const val DEFAULT_MODEL = "playai-tts"
 
-    /** Voices offered in Settings. Groq exposes more; these are the stable English set. */
+    /**
+     * Groq has no voices endpoint: the speech API says "list of voices can be
+     * found" in the docs, so these catalogs are the documented values per
+     * model family. Unknown models fall back to a free-form voice id in the UI.
+     */
+    val ORPHEUS_VOICES = listOf("autumn", "diana", "hannah", "austin", "daniel", "troy")
+
+    /** Voices offered in Settings for PlayAI English. */
     val VOICES = listOf(
         "Fritz-PlayAI",
         "Arista-PlayAI",
@@ -52,8 +61,12 @@ object GroqTtsClient {
         "Tiffany-PlayAI",
     )
 
-    /** Groq rejects longer input; chunk below that and leave room for punctuation. */
+    /** PlayAI rejects longer input; Orpheus is much stricter (200 chars). */
     const val MAX_INPUT_CHARS = 3_500
+    const val ORPHEUS_MAX_INPUT_CHARS = 190
+
+    /** TTS models in GET /openai/v1/models carry one of these in their id. */
+    private val SPEECH_MODEL = Regex("tts|orpheus|playai", RegexOption.IGNORE_CASE)
 
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
 
@@ -73,14 +86,15 @@ object GroqTtsClient {
         cacheDir: File,
         text: String,
         apiKey: String,
+        model: String,
         voice: String,
         speed: Float,
     ): Result<File> = withContext(Dispatchers.IO) {
         val dir = File(cacheDir, "tts").apply { mkdirs() }
-        val key = sha256("$voice|$speed|$text")
-        val file = File(dir, "$key.mp3")
+        val key = sha256("$model|$voice|$speed|$text")
+        val file = File(dir, "$key.${responseFormat(model)}")
         if (file.exists() && file.length() > 0) return@withContext Result.success(file)
-        synthesize(text, apiKey, voice, speed).mapCatching { bytes ->
+        synthesize(text, apiKey, model, voice, speed).mapCatching { bytes ->
             val temp = File(dir, "$key.part")
             temp.writeBytes(bytes)
             if (!temp.renameTo(file)) {
@@ -95,6 +109,7 @@ object GroqTtsClient {
     suspend fun synthesize(
         text: String,
         apiKey: String,
+        model: String,
         voice: String,
         speed: Float,
     ): Result<ByteArray> {
@@ -106,10 +121,10 @@ object GroqTtsClient {
             return Result.failure(IllegalArgumentException("Nothing to speak"))
         }
         val payload = buildJsonObject {
-            put("model", MODEL)
+            put("model", model.ifBlank { DEFAULT_MODEL })
             put("input", text)
             put("voice", voice)
-            put("response_format", "mp3")
+            put("response_format", responseFormat(model))
             put("speed", speed.coerceIn(0.5f, 2f))
         }.toString()
         val request = Request.Builder()
@@ -138,6 +153,72 @@ object GroqTtsClient {
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    /**
+     * Lists the account's speech models so new ones (Orpheus today, whatever
+     * replaces it later) appear without an app update. Voice ids still come
+     * from [voicesFor] because Groq does not expose a voices endpoint.
+     */
+    suspend fun fetchSpeechModels(apiKey: String): Result<List<String>> {
+        val trimmed = apiKey.trim()
+        if (trimmed.isBlank()) return Result.failure(IllegalStateException("Groq API key is missing"))
+        val request = Request.Builder()
+            .url("https://api.groq.com/openai/v1/models")
+            .header("Authorization", "Bearer $trimmed")
+            .get()
+            .build()
+        return try {
+            execute(request).use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    val message = runCatching {
+                        json.parseToJsonElement(body).jsonObject["error"]
+                            ?.jsonObject?.get("message")?.jsonPrimitive?.content
+                    }.getOrNull() ?: "Groq model list failed (HTTP ${response.code})"
+                    Result.failure(IOException(message))
+                } else {
+                    val ids = runCatching {
+                        json.parseToJsonElement(body).jsonObject["data"]?.jsonArray
+                            ?.mapNotNull { it.jsonObject["id"]?.jsonPrimitive?.content }
+                            .orEmpty()
+                    }.getOrDefault(emptyList())
+                    Result.success(ids.filter(::isSpeechModel).sorted())
+                }
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun isSpeechModel(id: String): Boolean = SPEECH_MODEL.containsMatchIn(id)
+
+    /** Documented voices for a model family; empty means the UI asks for a custom id. */
+    fun voicesFor(model: String): List<String> = when {
+        model.contains("orpheus", true) -> ORPHEUS_VOICES
+        model.contains("playai", true) && !model.contains("arabic", true) -> VOICES
+        else -> emptyList()
+    }
+
+    fun defaultVoiceFor(model: String): String? = when {
+        model.contains("orpheus", true) -> ORPHEUS_VOICES.first()
+        model.contains("playai", true) && !model.contains("arabic", true) -> VOICES.first()
+        else -> null
+    }
+
+    fun maxInputChars(model: String): Int =
+        if (model.contains("orpheus", true)) ORPHEUS_MAX_INPUT_CHARS else MAX_INPUT_CHARS
+
+    /** Orpheus only returns wav; PlayAI defaults to mp3. */
+    fun responseFormat(model: String): String =
+        if (model.contains("orpheus", true)) "wav" else "mp3"
+
+    fun modelLabel(model: String): String = when {
+        model.contains("orpheus", true) && model.contains("arabic", true) -> "Orpheus Arabic"
+        model.contains("orpheus", true) -> "Orpheus English"
+        model == "playai-tts" -> "PlayAI TTS"
+        model == "playai-tts-arabic" -> "PlayAI Arabic"
+        else -> model
     }
 
     private suspend fun execute(request: Request): Response = suspendCancellableCoroutine { continuation ->

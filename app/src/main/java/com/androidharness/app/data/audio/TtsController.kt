@@ -119,6 +119,12 @@ class TtsController(
         scope.cancel()
     }
 
+    /** TTS models the saved Groq key can use; empty when there is no key. */
+    suspend fun groqSpeechModels(): List<String> {
+        val apiKey = keys.groqApiKey() ?: return emptyList()
+        return GroqTtsClient.fetchSpeechModels(apiKey).getOrDefault(emptyList())
+    }
+
     /** Voices of the installed engine that fit the app's language. */
     suspend fun systemVoices(): List<TtsVoiceOption> {
         val tts = ensureSystemTts() ?: return emptyList()
@@ -182,12 +188,16 @@ class TtsController(
 
     private suspend fun speakGroq(messageId: String, text: String, saved: AppSettings): Boolean {
         val apiKey = keys.groqApiKey() ?: return report(R.string.tts_error_no_key)
-        val chunks = TtsTextChunker.chunk(text, GroqTtsClient.MAX_INPUT_CHARS)
+        val model = saved.ttsGroqModel.ifBlank { AppSettings.DEFAULT_TTS_GROQ_MODEL }
+        val voice = saved.ttsGroqVoice.ifBlank {
+            GroqTtsClient.defaultVoiceFor(model) ?: AppSettings.DEFAULT_TTS_GROQ_VOICE
+        }
+        val chunks = TtsTextChunker.chunk(text, GroqTtsClient.maxInputChars(model))
         if (chunks.isEmpty()) return false
         requestFocus()
         chunks.forEachIndexed { index, chunk ->
             val file = GroqTtsClient.synthesizeCached(
-                context.cacheDir, chunk, apiKey, saved.ttsGroqVoice, saved.ttsSpeed,
+                context.cacheDir, chunk, apiKey, model, voice, saved.ttsSpeed,
             ).getOrElse { error ->
                 return reportError(error.message ?: context.getString(R.string.tts_error_groq))
             }
