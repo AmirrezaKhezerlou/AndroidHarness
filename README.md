@@ -11,7 +11,7 @@
 [![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3ddc84)](https://developer.android.com/about/versions/oreo)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 
-**Languages:** English · 简体中文 (Simplified Chinese)
+**App Languages:** English · 简体中文 (Simplified Chinese)
 
 **An AI coding agent that lives on your Android phone.**
 
