@@ -617,7 +617,7 @@ private fun CodeIntelligenceSection(
                         Button(
                             enabled = !codeGraphState.busy,
                             onClick = { scope.launch { container.codeGraph.installOrUpdate() } },
-                        ) { Text(stringResource(R.string.settings_codegraph_update_to, codeGraphState.latest)) }
+                        ) { Text(stringResource(R.string.settings_codegraph_update_to, codeGraphState.latest.orEmpty())) }
                     } else {
                         OutlinedButton(
                             enabled = !codeGraphState.busy,
@@ -2156,6 +2156,10 @@ private fun PrivacySection(container: AppContainer, settings: AppSettings, scope
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                val biometricTitle = if (settings.biometricLockEnabled)
+                    stringResource(R.string.settings_privacy_lock_disable_title)
+                else stringResource(R.string.settings_privacy_lock_enable_title)
+                val biometricPrompt = stringResource(R.string.settings_privacy_biometric_prompt)
                 Switch(
                     checked = settings.biometricLockEnabled,
                     onCheckedChange = { targetState ->
@@ -2163,8 +2167,8 @@ private fun PrivacySection(container: AppContainer, settings: AppSettings, scope
                         if (activity != null) {
                             BiometricAuth.prompt(
                                 activity = activity,
-                                title = if (targetState) "Enable Biometric Lock" else "Disable Biometric Lock",
-                                subtitle = stringResource(R.string.settings_privacy_biometric_prompt),
+                                title = biometricTitle,
+                                subtitle = biometricPrompt,
                                 onSuccess = {
                                     scope.launch { container.settings.setBiometricLockEnabled(targetState) }
                                 },

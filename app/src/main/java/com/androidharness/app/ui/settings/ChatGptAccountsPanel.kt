@@ -146,10 +146,11 @@ private fun AccountSwitchRow(title: String, description: String?, checked: Boole
 private fun FallbackModelRow(account: ChatGptAccount, onSelect: (String?) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     val choice = account.models.firstOrNull { it.id == account.fallbackModel }
+    val fallbackCd = stringResource(R.string.settings_accounts_fallback_cd, account.label)
     Box(Modifier.fillMaxWidth().padding(start = 64.dp, end = 16.dp, bottom = 12.dp)) {
         Surface(onClick = { expanded = true }, color = MaterialTheme.colorScheme.surfaceContainerHigh,
             shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().semantics {
-                contentDescription = stringResource(R.string.settings_accounts_fallback_cd, account.label)
+                contentDescription = fallbackCd
             }) {
             Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp).heightIn(min = 36.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {

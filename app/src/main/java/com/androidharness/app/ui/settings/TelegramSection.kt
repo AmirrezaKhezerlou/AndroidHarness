@@ -124,7 +124,8 @@ import kotlinx.coroutines.launch
             else -> "Off"
         }
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Row(Modifier.weight(1f).semantics { contentDescription = stringResource(R.string.settings_telegram_enable) }
+            val enableCd = stringResource(R.string.settings_telegram_enable)
+            Row(Modifier.weight(1f).semantics { contentDescription = enableCd }
                 .toggleable(value = setup.enabled, enabled = canEnable, role = Role.Switch,
                     onValueChange = { checked -> if (checked) enable() else action("Telegram paused.") { manager.pause() } }),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -284,7 +285,7 @@ import kotlinx.coroutines.launch
         LaunchedEffect(challenge) { while (remaining > 0) { delay(1_000); remaining = (challenge.expiresAt - System.currentTimeMillis()).coerceAtLeast(0) } }
         AlertDialog(onDismissRequest = { manager.cancelPairing() }, title = { Text(stringResource(R.string.settings_telegram_pair_title)) }, text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(stringResource(R.string.settings_telegram_pair_note, setup.botUsername))
+                Text(stringResource(R.string.settings_telegram_pair_note, setup.botUsername.orEmpty()))
                 Text("/pair ${challenge.code}", style = MaterialTheme.typography.titleMedium)
                 Text(
                     stringResource(

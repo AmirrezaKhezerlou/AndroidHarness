@@ -271,7 +271,7 @@
     <string name="settings_agent_tool_rounds_subtitle">How many tool rounds a run can take.</string>
     <string name="settings_agent_instructions_subtitle">View or edit the rules for your current workspace.</string>
     <string name="settings_agent_permission_subtitle">Choose when the agent asks for approval. Package installs always ask; remembered approvals skip repeat prompts.</string>
-    <string name="settings_agent_context_cap_detail">A larger context can keep more history, but uses more tokens. The model's own limit still applies.</string>
+    <string name="settings_agent_context_cap_detail">A larger context can keep more history, but uses more tokens. The model\'s own limit still applies.</string>
     <string name="settings_agent_tool_rounds_detail">A round can include several tool calls. Unlimited keeps going until the task finishes or you stop it.</string>
     <string name="settings_caveman_native_pack">Native skill pack</string>
     <string name="settings_caveman_native_pack_desc">Shorter replies and five focused coding skills. Uses your existing model, with no extra API key, terminal or proxy.</string>
@@ -291,7 +291,7 @@
     <string name="settings_caveman_uninstall_title">Uninstall Caveman?</string>
     <string name="settings_caveman_uninstall_message">Removes the optional skill pack and turns reply mode off. Chats and your own skill copies are kept. Instructions already loaded into a chat remain in its history.</string>
     <string name="settings_caveman_skills_title">Caveman skills</string>
-    <string name="settings_caveman_attribution">Adapted from Julius Brussee's MIT-licensed Caveman skills. Copyright (c) 2026 Julius Brussee. This integration does not include the BSL compression engine or proxy.</string>
+    <string name="settings_caveman_attribution">Adapted from Julius Brussee\'s MIT-licensed Caveman skills. Copyright (c) 2026 Julius Brussee. This integration does not include the BSL compression engine or proxy.</string>
     <string name="settings_caveman_full_license">Full license</string>
     <string name="settings_action_close">Close</string>
     <string name="settings_chatgpt_title">ChatGPT</string>
@@ -303,14 +303,14 @@
     <string name="settings_chatgpt_refresh_models">Refresh models</string>
     <string name="settings_chatgpt_check_new_models">Check newer models</string>
     <string name="settings_chatgpt_sign_out">Sign out</string>
-    <string name="settings_chatgpt_checking_models">Checking newer models. Small test requests use this account's plan.</string>
+    <string name="settings_chatgpt_checking_models">Checking newer models. Small test requests use this account\'s plan.</string>
     <string name="settings_chatgpt_limits_usage">Limits &amp; usage in ChatGPT</string>
     <string name="settings_chatgpt_fallback_model">Fallback model</string>
     <string name="settings_chatgpt_fallback_auto">Automatic</string>
     <string name="settings_restore_reconnect_title">Reconnect restored chats</string>
     <string name="settings_restore_reconnect_note">Read-only access stays read-only. Chats that used multiple workspaces need separate folders for each one.</string>
-    <string name="settings_accounts_using_plan">You're using your ChatGPT plan</string>
-    <string name="settings_accounts_using_plan_desc">Eligible requests in AndroidHarness use your ChatGPT plan or credits. Review usage and manage this app's access in ChatGPT settings.</string>
+    <string name="settings_accounts_using_plan">You\'re using your ChatGPT plan</string>
+    <string name="settings_accounts_using_plan_desc">Eligible requests in AndroidHarness use your ChatGPT plan or credits. Review usage and manage this app\'s access in ChatGPT settings.</string>
     <string name="settings_action_got_it">Got it</string>
     <string name="settings_accounts_signout_title">Sign out of this account?</string>
     <string name="settings_accounts_signout_message">This disconnects the account from AndroidHarness and removes it from automatic switching. You can sign in again later.</string>
@@ -405,7 +405,7 @@
     <string name="settings_packages_installing">Installing…</string>
     <string name="settings_packages_review_storage">Review shared storage</string>
     <string name="settings_action_install">Install</string>
-    <string name="settings_projector_desc">For a model that supports images, add its matching vision file (often called mmproj). Find it on the model's download page.</string>
+    <string name="settings_projector_desc">For a model that supports images, add its matching vision file (often called mmproj). Find it on the model\'s download page.</string>
     <string name="settings_projector_open_page">Open model page</string>
     <string name="settings_projector_link">Vision file link (.gguf)</string>
     <string name="settings_projector_add">Add vision file</string>
@@ -703,4 +703,6 @@
     <string name="settings_env_storage_access">Storage access</string>
     <string name="settings_env_storage_granted">Granted: the shell and file tools can use shared storage.</string>
     <string name="settings_env_storage_optional">Optional: use the app workspace, or grant access for device folders.</string>
+    <string name="settings_privacy_lock_enable_title">Enable Biometric Lock</string>
+    <string name="settings_privacy_lock_disable_title">Disable Biometric Lock</string>
 </resources>

@@ -53,10 +53,16 @@ internal fun ProviderHeadersEditor(rows: List<ProviderHeaderDraft>, onChange: (L
                 Surface(color = scheme.surfaceContainerHigh, shape = RoundedCornerShape(14.dp)) {
                     Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val headerNo = (index + 1).toString()
+                        val enableCd = stringResource(R.string.settings_headers_enable_cd, headerNo)
+                        val nameCd = stringResource(R.string.settings_headers_name_cd, headerNo)
+                        val valueCd = stringResource(R.string.settings_headers_value_cd, headerNo)
+                        val hideValueCd = stringResource(R.string.settings_headers_hide_value_cd, headerNo)
+                        val showValueCd = stringResource(R.string.settings_headers_show_value_cd, headerNo)
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Row(Modifier.weight(1f).heightIn(min = 48.dp).toggleable(row.header.enabled, role = Role.Checkbox,
                                 onValueChange = { update(row.header.copy(enabled = it)) })
-                                .semantics { contentDescription = stringResource(R.string.settings_headers_enable_cd, (index + 1).toString()) },
+                                .semantics { contentDescription = enableCd },
                                 verticalAlignment = Alignment.CenterVertically) {
                                 Checkbox(checked = row.header.enabled, onCheckedChange = null)
                                 Spacer(Modifier.width(8.dp))
@@ -69,16 +75,15 @@ internal fun ProviderHeadersEditor(rows: List<ProviderHeaderDraft>, onChange: (L
                         OutlinedTextField(value = row.header.name, onValueChange = { update(row.header.copy(name = it)) },
                             label = { Text(stringResource(R.string.settings_headers_name)) }, placeholder = { Text(stringResource(R.string.settings_headers_placeholder_name)) }, singleLine = true,
                             modifier = Modifier.fillMaxWidth().focusRequester(focus)
-                                .semantics { contentDescription = stringResource(R.string.settings_headers_name_cd, (index + 1).toString()) })
+                                .semantics { contentDescription = nameCd })
                         OutlinedTextField(value = row.header.value, onValueChange = { update(row.header.copy(value = it)) },
                             label = { Text(stringResource(R.string.settings_headers_value)) }, singleLine = true,
                             visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
                             trailingIcon = { IconButton(onClick = { visible = !visible }) {
                                 Icon(if (visible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
-                                    contentDescription = if (visible) stringResource(R.string.settings_headers_hide_value_cd, (index + 1).toString())
-                                    else stringResource(R.string.settings_headers_show_value_cd, (index + 1).toString()))
+                                    contentDescription = if (visible) hideValueCd else showValueCd)
                             } },
-                            modifier = Modifier.fillMaxWidth().semantics { contentDescription = stringResource(R.string.settings_headers_value_cd, (index + 1).toString()) })
+                            modifier = Modifier.fillMaxWidth().semantics { contentDescription = valueCd })
                     }
                 }
             }

@@ -701,4 +701,6 @@
     <string name="settings_env_storage_access">存储访问</string>
     <string name="settings_env_storage_granted">已授予：Shell 和文件工具可以使用共享存储。</string>
     <string name="settings_env_storage_optional">可选：使用应用工作区，或授予设备文件夹的访问权限。</string>
+    <string name="settings_privacy_lock_enable_title">启用生物识别锁</string>
+    <string name="settings_privacy_lock_disable_title">关闭生物识别锁</string>
 </resources>

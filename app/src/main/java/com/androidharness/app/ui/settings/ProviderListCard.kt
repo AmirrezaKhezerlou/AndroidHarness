@@ -39,6 +39,11 @@ internal fun ProviderListCard(
     val scheme = MaterialTheme.colorScheme
     var menu by remember { mutableStateOf(false) }
     val editable = deletableProvider(provider)
+    val selectLabel = stringResource(R.string.settings_provider_select_label)
+    val selectCd = if (selectionMode)
+        stringResource(R.string.settings_provider_select_provider_cd, provider.name)
+    else stringResource(R.string.settings_provider_select_cd, provider.name)
+    val enableCd = stringResource(R.string.settings_provider_enable_cd, provider.name)
     Surface(color = if (selected || active && !selectionMode) scheme.secondaryContainer else scheme.surfaceContainerLow,
         shape = RoundedCornerShape(16.dp),
         border = BorderStroke(1.dp, if (selected) scheme.primary else scheme.outlineVariant.copy(alpha = .4f)),
@@ -47,10 +52,9 @@ internal fun ProviderListCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f).heightIn(min = 56.dp)
                     .combinedClickable(onClick = { if (selectionMode) onToggleSelection() else if (provider.enabled) onSelect() },
-                        onLongClick = onLongPress, onLongClickLabel = stringResource(R.string.settings_provider_select_label))
+                        onLongClick = onLongPress, onLongClickLabel = selectLabel)
                     .semantics {
-                        contentDescription = if (selectionMode) stringResource(R.string.settings_provider_select_provider_cd, provider.name)
-                        else stringResource(R.string.settings_provider_select_cd, provider.name)
+                        contentDescription = selectCd
                         if (selectionMode) {
                             role = Role.Checkbox
                             toggleableState = if (selected) ToggleableState.On else ToggleableState.Off
@@ -92,7 +96,7 @@ internal fun ProviderListCard(
             if (!selectionMode) FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Row(Modifier.heightIn(min = 48.dp)
                     .toggleable(provider.enabled, role = Role.Switch, onValueChange = onEnabledChange)
-                    .semantics { contentDescription = stringResource(R.string.settings_provider_enable_cd, provider.name) }, verticalAlignment = Alignment.CenterVertically) {
+                    .semantics { contentDescription = enableCd }, verticalAlignment = Alignment.CenterVertically) {
                     Switch(provider.enabled, onCheckedChange = null)
                     Spacer(Modifier.width(6.dp))
                     Text(

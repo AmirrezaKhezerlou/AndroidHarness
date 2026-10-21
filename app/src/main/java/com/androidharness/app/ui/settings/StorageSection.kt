@@ -108,9 +108,10 @@ internal fun StorageSection(container: AppContainer) {
             StorageRow(Icons.Outlined.Inventory2, "Unused managed packages", "Unknown ownership or workspace requirements stay protected", "Details") {
                 detail = "Managed packages" to "New installs record files, dependencies and requirements. In Shared, release a requirement only when that workspace no longer needs the tool. A package is eligible for cleanup only when no recorded requirements or installed dependents remain and its owned files are unchanged. Older installations with missing metadata remain protected."
             }
+            val alwaysKept = stringResource(R.string.settings_storage_always_kept) to
+                stringResource(R.string.settings_storage_always_kept_detail)
             StorageRow(Icons.Outlined.Shield, "Always kept", "Source folders, required dependencies, models, history, undo checkpoints and runtime deployment", "") {
-                detail = stringResource(R.string.settings_storage_always_kept) to
-                    stringResource(R.string.settings_storage_always_kept_detail)
+                detail = alwaysKept
             }
             val chosen = data.candidates.filter { it.id in selected }
             Button(onClick = { confirmation = chosen }, enabled = chosen.isNotEmpty() && !busy, modifier = Modifier.fillMaxWidth()) {

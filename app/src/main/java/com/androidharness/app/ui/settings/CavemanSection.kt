@@ -75,10 +75,11 @@ internal fun CavemanSection(container: AppContainer, settings: AppSettings) {
                     Text(stringResource(R.string.settings_caveman_classical_chinese), style = MaterialTheme.typography.bodyMedium)
                     Text(stringResource(R.string.settings_caveman_classical_chinese_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                val classicalChineseCd = stringResource(R.string.settings_caveman_classical_chinese)
                 Switch(checked = settings.cavemanWenyan,
                     onCheckedChange = { save { container.settings.setCavemanWenyan(it) } },
                     enabled = !busy && settings.cavemanIntensity != CavemanIntensity.OFF,
-                    modifier = Modifier.semantics { contentDescription = stringResource(R.string.settings_caveman_classical_chinese) })
+                    modifier = Modifier.semantics { contentDescription = classicalChineseCd })
             }
             Text(stringResource(R.string.settings_caveman_classical_chinese_note), style = MaterialTheme.typography.labelSmall)
         }

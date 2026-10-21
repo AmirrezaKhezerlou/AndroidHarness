@@ -97,10 +97,11 @@ fun ModelVisibilitySheet(
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
                 items(results, key = { "${provider?.id}:${it.id}" }) { entry ->
+                    val showCd = stringResource(R.string.settings_models_visibility_show_cd, entry.displayName ?: entry.id)
                     Row(Modifier.fillMaxWidth().heightIn(min = 64.dp)
                         .toggleable(entry.id in selected, role = Role.Checkbox, onValueChange = { checked ->
                             update(if (checked) selected + entry.id else selected - entry.id)
-                        }).semantics { contentDescription = stringResource(R.string.settings_models_visibility_show_cd, entry.displayName ?: entry.id) }
+                        }).semantics { contentDescription = showCd }
                         .padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(entry.id in selected, onCheckedChange = null)
                         Spacer(Modifier.width(12.dp))

@@ -13,6 +13,7 @@ import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -32,6 +33,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 internal fun SettingsBackupSection(container: AppContainer) {
+    val context = LocalContext.current
     val backup = remember(container) { SettingsBackup(container) }
     val scope = rememberCoroutineScope()
     var destination by remember { mutableStateOf<Uri?>(null) }
@@ -132,7 +134,7 @@ internal fun SettingsBackupSection(container: AppContainer) {
                             if (target != null) {
                                 backup.exportTo(target, chars, includeKeys)
                                 clear()
-                                message = stringResource(R.string.settings_backup_exported)
+                                message = context.getString(R.string.settings_backup_exported)
                             } else if (input != null) {
                                 preview = backup.read(input, chars)
                                 source = null
@@ -180,11 +182,11 @@ internal fun SettingsBackupSection(container: AppContainer) {
                     try {
                         backup.restore(file)
                         failed = false
-                        message = stringResource(R.string.settings_backup_restored)
+                        message = context.getString(R.string.settings_backup_restored)
                     } catch (e: CancellationException) { throw e }
                     catch (_: Exception) {
                         failed = true
-                        message = stringResource(R.string.settings_backup_restore_failed)
+                        message = context.getString(R.string.settings_backup_restore_failed)
                     } finally { clear(); busy = false }
                 }
             }) { Text(stringResource(R.string.settings_action_restore)) } },
