@@ -564,6 +564,8 @@
     <string name="settings_agent_perm_confirm_risky">读取自由放行。编辑和命令前询问。</string>
     <string name="settings_agent_perm_full_auto">自动执行，并保留工作区与命令的安全防护。</string>
     <string name="settings_agent_perm_full_access">不经批准、不受工作区限制、无命令防护地直接执行。</string>
+    <string name="settings_full_access_auth_title">允许完全访问？</string>
+    <string name="settings_full_access_auth_subtitle">请验证指纹、面容或设备 PIN。完全访问会在没有审批和沙箱限制的情况下执行命令。</string>
 
     <!-- Settings · formatted strings with counts and names. -->
     <string name="settings_accounts_models_available">可用 %1$s</string>

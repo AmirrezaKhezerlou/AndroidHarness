@@ -77,6 +77,30 @@ object BiometricAuth {
             onError?.invoke(e.message ?: activity.getString(R.string.ui_authentication_failed))
         }
     }
+
+    /**
+     * Gate for anything that enables [com.androidharness.app.agent.PermissionMode.FULL_ACCESS].
+     * The device owner must prove ownership with biometrics or the lock-screen
+     * PIN/pattern/password; cancelling leaves the previous mode in place. When
+     * no activity can host the prompt, the change is refused rather than allowed.
+     */
+    fun requireFullAccessApproval(
+        context: Context,
+        title: String,
+        subtitle: String,
+        onApproved: () -> Unit,
+    ) {
+        val activity = context.findFragmentActivity()
+        if (activity == null) {
+            Toast.makeText(
+                context,
+                R.string.ui_biometric_authentication_not_supported_on_this_device,
+                Toast.LENGTH_SHORT,
+            ).show()
+            return
+        }
+        prompt(activity, title = title, subtitle = subtitle, onSuccess = onApproved)
+    }
 }
 
 fun Context.findFragmentActivity(): FragmentActivity? {

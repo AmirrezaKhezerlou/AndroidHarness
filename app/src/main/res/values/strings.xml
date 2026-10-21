@@ -566,6 +566,8 @@
     <string name="settings_agent_perm_confirm_risky">Read freely. Ask before edits and commands.</string>
     <string name="settings_agent_perm_full_auto">Run automatically with workspace and command safeguards.</string>
     <string name="settings_agent_perm_full_access">Run without approvals, workspace limits or command safeguards.</string>
+    <string name="settings_full_access_auth_title">Allow full access?</string>
+    <string name="settings_full_access_auth_subtitle">Confirm your fingerprint, face or device PIN. Full access runs commands without approvals or sandbox limits.</string>
 
     <!-- Settings · formatted strings with counts and names. -->
     <string name="settings_accounts_models_available">%1$s available</string>

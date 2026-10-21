@@ -34,6 +34,7 @@ import com.androidharness.app.agent.PermissionMode
 import com.androidharness.app.data.AppSettings
 import com.androidharness.app.R
 import com.androidharness.app.ui.chat.components.FullAccessOrange
+import com.androidharness.app.ui.common.BiometricAuth
 import com.androidharness.app.ui.common.formatTokenCount
 
 private enum class BehaviorPicker { PERMISSIONS, CONTEXT, ITERATIONS }
@@ -58,10 +59,17 @@ internal fun AgentBehaviorSection(
     onIterationLimit: (Int) -> Unit,
     onProjectInstructions: () -> Unit,
     onLiveUpdates: (Boolean) -> Unit,
+    /**
+     * Test/preview override for the device-owner check guarding full access.
+     * Production callers leave this null so the real biometric/PIN prompt runs.
+     */
+    fullAccessApproval: ((onApproved: () -> Unit) -> Unit)? = null,
 ) {
     var pickerName by rememberSaveable { mutableStateOf<String?>(null) }
     val picker = pickerName?.let(BehaviorPicker::valueOf)
     val context = LocalContext.current
+    val fullAccessTitle = stringResource(R.string.settings_full_access_auth_title)
+    val fullAccessSubtitle = stringResource(R.string.settings_full_access_auth_subtitle)
 
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Text(
@@ -243,7 +251,19 @@ internal fun AgentBehaviorSection(
                                     role = Role.RadioButton,
                                     onClick = {
                                         when (picker) {
-                                            BehaviorPicker.PERMISSIONS -> onPermissionMode(PermissionMode.valueOf(choice.key))
+                                            BehaviorPicker.PERMISSIONS -> {
+                                                val mode = PermissionMode.valueOf(choice.key)
+                                                val apply = { onPermissionMode(mode) }
+                                                if (mode == PermissionMode.FULL_ACCESS) {
+                                                    val override = fullAccessApproval
+                                                    if (override != null) override(apply)
+                                                    else BiometricAuth.requireFullAccessApproval(
+                                                        context, fullAccessTitle, fullAccessSubtitle, apply,
+                                                    )
+                                                } else {
+                                                    apply()
+                                                }
+                                            }
                                             BehaviorPicker.CONTEXT -> onContextLimit(choice.key.toInt())
                                             BehaviorPicker.ITERATIONS -> onIterationLimit(choice.key.toInt())
                                         }

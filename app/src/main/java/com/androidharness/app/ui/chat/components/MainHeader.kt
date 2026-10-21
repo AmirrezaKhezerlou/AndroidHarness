@@ -71,6 +71,7 @@ import com.androidharness.app.agent.AgentMode
 import com.androidharness.app.agent.PermissionMode
 import com.androidharness.app.agent.ThinkingLevel
 import com.androidharness.app.ui.theme.fastEffectsSpec
+import com.androidharness.app.ui.common.BiometricAuth
 import com.androidharness.app.ui.common.ExpressiveIconButton
 
 /**
@@ -303,7 +304,19 @@ internal fun MainHeader(
                                             )
                                         }
                                     }
-                                }, onClick = { onSetPermission(entry); permissionMenu = false })
+                                }, onClick = {
+                                    permissionMenu = false
+                                    if (entry == PermissionMode.FULL_ACCESS) {
+                                        BiometricAuth.requireFullAccessApproval(
+                                            uiContext,
+                                            uiContext.getString(R.string.settings_full_access_auth_title),
+                                            uiContext.getString(R.string.settings_full_access_auth_subtitle),
+                                            onApproved = { onSetPermission(entry) },
+                                        )
+                                    } else {
+                                        onSetPermission(entry)
+                                    }
+                                })
                             }
                         }
                     }
@@ -382,7 +395,19 @@ private fun DesktopConversationHeader(
                     DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_undo_file_changes_165)) }, enabled = canUndo, onClick = { menu = false; onUndo() })
                     HorizontalDivider()
                     PermissionMode.entries.forEach { option ->
-                        DropdownMenuItem(text = { Text(localizedOption(option.label)) }, onClick = { menu = false; onPermission(option) },
+                        DropdownMenuItem(text = { Text(localizedOption(option.label)) }, onClick = {
+                            menu = false
+                            if (option == PermissionMode.FULL_ACCESS) {
+                                BiometricAuth.requireFullAccessApproval(
+                                    uiContext,
+                                    uiContext.getString(R.string.settings_full_access_auth_title),
+                                    uiContext.getString(R.string.settings_full_access_auth_subtitle),
+                                    onApproved = { onPermission(option) },
+                                )
+                            } else {
+                                onPermission(option)
+                            }
+                        },
                             trailingIcon = { if (permission == option) Icon(Icons.Filled.Check, uiContext.getString(R.string.settings_selected), Modifier.size(16.dp)) })
                     }
                 }

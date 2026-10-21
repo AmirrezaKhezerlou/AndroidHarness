@@ -21,10 +21,12 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.androidharness.app.AppContainer
 import com.androidharness.app.R
+import com.androidharness.app.agent.PermissionMode
 import com.androidharness.app.data.BackupEncryption
 import com.androidharness.app.data.SettingsBackup
 import com.androidharness.app.data.SettingsBackupFile
 import com.androidharness.app.data.settingsBackupExportError
+import com.androidharness.app.ui.common.BiometricAuth
 import com.androidharness.app.ui.common.SecureDialogEffect
 import com.androidharness.app.ui.common.SecureScreenEffect
 import com.androidharness.app.ui.common.ThinLinearProgress
@@ -178,17 +180,31 @@ internal fun SettingsBackupSection(container: AppContainer) {
                 }
             },
             confirmButton = { TextButton(enabled = !busy, onClick = {
-                busy = true
-                scope.launch {
-                    try {
-                        backup.restore(file)
-                        failed = false
-                        message = context.getString(R.string.settings_backup_restored)
-                    } catch (e: CancellationException) { throw e }
-                    catch (_: Exception) {
-                        failed = true
-                        message = context.getString(R.string.settings_backup_restore_failed)
-                    } finally { clear(); busy = false }
+                val restore: () -> Unit = {
+                    busy = true
+                    scope.launch {
+                        try {
+                            backup.restore(file)
+                            failed = false
+                            message = context.getString(R.string.settings_backup_restored)
+                        } catch (e: CancellationException) { throw e }
+                        catch (_: Exception) {
+                            failed = true
+                            message = context.getString(R.string.settings_backup_restore_failed)
+                        } finally { clear(); busy = false }
+                    }
+                }
+                // A portable settings file must not be a way to skip the
+                // device-owner check that guards full access.
+                if (file.settings.permissionMode == PermissionMode.FULL_ACCESS) {
+                    BiometricAuth.requireFullAccessApproval(
+                        context,
+                        context.getString(R.string.settings_full_access_auth_title),
+                        context.getString(R.string.settings_full_access_auth_subtitle),
+                        restore,
+                    )
+                } else {
+                    restore()
                 }
             }) { Text(stringResource(R.string.settings_action_restore)) } },
             dismissButton = { TextButton(onClick = { clear() }, enabled = !busy) { Text(stringResource(R.string.settings_action_cancel)) } },

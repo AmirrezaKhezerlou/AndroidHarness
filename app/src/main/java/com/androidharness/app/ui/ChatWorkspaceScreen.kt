@@ -31,6 +31,7 @@ import com.androidharness.app.data.useWorkspacePanes
 import com.androidharness.app.data.WorkspaceLayoutMode
 import com.androidharness.app.ui.chat.ChatScreen
 import com.androidharness.app.ui.chat.ChatViewModel
+import com.androidharness.app.ui.common.BiometricAuth
 import com.androidharness.app.ui.files.*
 import com.androidharness.app.ui.github.GitHubWorkspaceDialog
 import com.androidharness.app.ui.terminal.TerminalScreen
@@ -260,7 +261,19 @@ private fun WorkspaceAccessMode(permission: PermissionMode, onSelect: (Permissio
                 .semantics { contentDescription = uiContext.getString(R.string.ui_access_mode, (uiContext.localizedOptionLabel(permission.label)).toString()) })
         DropdownMenu(expanded, { expanded = false }) {
             PermissionMode.entries.forEach { option ->
-                DropdownMenuItem(text = { Text(localizedOption(option.label)) }, onClick = { expanded = false; onSelect(option) },
+                DropdownMenuItem(text = { Text(localizedOption(option.label)) }, onClick = {
+                    expanded = false
+                    if (option == PermissionMode.FULL_ACCESS) {
+                        BiometricAuth.requireFullAccessApproval(
+                            uiContext,
+                            uiContext.getString(R.string.settings_full_access_auth_title),
+                            uiContext.getString(R.string.settings_full_access_auth_subtitle),
+                            onApproved = { onSelect(option) },
+                        )
+                    } else {
+                        onSelect(option)
+                    }
+                },
                     trailingIcon = { if (permission == option) Icon(Icons.Outlined.Check, uiContext.getString(R.string.settings_selected), Modifier.size(16.dp)) })
             }
         }

@@ -37,7 +37,8 @@ class AgentBehaviorDeviceTest {
     fun choicesApplyCancelPreservesValuesAndRowsAreAccessible() {
         val state = mutableStateOf(AppSettings(maxContextTokens = 200_000, maxIterations = 75))
         var instructionsOpened = false
-        launch(state, dark = true, fontScale = 1f) { instructionsOpened = true }.use {
+        // Auto-approve the device-owner check only in this test; production prompts.
+        launch(state, dark = true, fontScale = 1f, fullAccessApproval = { it() }) { instructionsOpened = true }.use {
             awaitNode("Default permission mode")
             screenshot("agent-behavior-dark.png")
             click("Default permission mode")
@@ -72,6 +73,20 @@ class AgentBehaviorDeviceTest {
 
     /** The card must name this device's skin, not assume Samsung, and report the real permission state. */
     @Test
+    fun fullAccessWaitsForDeviceOwnerApproval() {
+        val state = mutableStateOf(AppSettings())
+        var approvalsRequested = 0
+        launch(state, dark = false, fontScale = 1f, fullAccessApproval = { approvalsRequested++ }).use {
+            click("Default permission mode")
+            awaitNode("Full access")
+            click("Full access")
+            awaitCondition { approvalsRequested == 1 }
+            // Declining (or never answering) must leave the previous mode in place.
+            assertEquals(AppSettings().permissionMode, state.value.permissionMode)
+        }
+    }
+
+    @Test
     @SdkSuppress(minSdkVersion = 36)
     fun liveActivityCardNamesDetectedDeviceVendorAndState() {
         val context = instrumentation.targetContext
@@ -103,6 +118,7 @@ class AgentBehaviorDeviceTest {
         dark: Boolean,
         fontScale: Float,
         subagents: Boolean = false,
+        fullAccessApproval: ((() -> Unit) -> Unit)? = null,
         onInstructions: () -> Unit = {},
     ): ActivityScenario<ChatListTestActivity> {
         val scenario = ActivityScenario.launch(ChatListTestActivity::class.java)
@@ -130,6 +146,7 @@ class AgentBehaviorDeviceTest {
                                         onIterationLimit = { state.value = state.value.copy(maxIterations = it) },
                                         onProjectInstructions = onInstructions,
                                         onLiveUpdates = { state.value = state.value.copy(liveUpdatesEnabled = it) },
+                                        fullAccessApproval = fullAccessApproval,
                                     )
                                 }
                             }
