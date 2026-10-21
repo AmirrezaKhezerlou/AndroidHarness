@@ -1,14 +1,19 @@
 # AndroidHarness
 
-<a href="https://github.com/Sanuu7/AndroidHarness/releases/latest"><img src=".github/assets/download-from-github.png" alt="Download from GitHub" height="72"></a>
-
-<a href="https://play.google.com/store/apps/details?id=com.androidharness.app"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="72"></a>
-<a href="https://buymeacoffee.com/sanuj7"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy me a coffee" height="72"></a>
+<p>
+  <a href="https://github.com/Sanuu7/AndroidHarness/releases/latest"><img src=".github/assets/download-from-github.png" alt="Download from GitHub" height="56"></a>
+  <a href="https://play.google.com/store/apps/details?id=com.androidharness.app"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="56"></a>
+</p>
+<p>
+  <a href="https://buymeacoffee.com/sanuj7"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy me a coffee" height="56"></a>
+</p>
 
 [![Debug build](https://github.com/Sanuu7/AndroidHarness/actions/workflows/nightly.yml/badge.svg)](https://github.com/Sanuu7/AndroidHarness/actions/workflows/nightly.yml)
 [![Version](https://img.shields.io/badge/version-2.5-blue)](https://github.com/Sanuu7/AndroidHarness/releases/latest)
 [![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3ddc84)](https://developer.android.com/about/versions/oreo)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
+
+**Languages:** English · 简体中文 (Simplified Chinese)
 
 **An AI coding agent that lives on your Android phone.**
 
