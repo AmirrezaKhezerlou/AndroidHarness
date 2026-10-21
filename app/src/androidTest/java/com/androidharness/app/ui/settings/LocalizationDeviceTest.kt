@@ -103,7 +103,8 @@ class LocalizationDeviceTest {
                         onPermissionMode = { state.value = state.value.copy(permissionMode = it) },
                         onContextLimit = { state.value = state.value.copy(maxContextTokens = it) },
                         onIterationLimit = { state.value = state.value.copy(maxIterations = it) },
-                        onProjectInstructions = {})
+                        onProjectInstructions = {},
+                        onLiveUpdates = { state.value = state.value.copy(liveUpdatesEnabled = it) })
                 }
             } }
             click(zh.getString(R.string.settings_anchor_default_permission))

@@ -10,9 +10,11 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Icon
+import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.Process
+import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.androidharness.app.agent.NotificationActionReceiver
 import com.androidharness.app.agent.NotificationActionReceiver.Companion.ACTION_APPROVE
@@ -33,6 +35,14 @@ import kotlinx.coroutines.launch
 object RuntimeNotifier {
     private val _status = MutableStateFlow("Running in background")
     val status: StateFlow<String> = _status
+
+    /** True while a run or terminal holds the keepalive; idle services are not promoted. */
+    private val _active = MutableStateFlow(false)
+    val active: StateFlow<Boolean> = _active
+
+    fun setActive(active: Boolean) {
+        _active.value = active
+    }
 
     /** Heads-up events posted when a run ends while the app may be backgrounded. */
     private val _results = MutableSharedFlow<RunResultNotification>(extraBufferCapacity = 8)
@@ -64,6 +74,34 @@ object RuntimeNotifier {
         _results.tryEmit(result)
     }
 }
+
+/**
+ * Live Update chips have room for a glance, not a sentence. Known run states
+ * get a short localized label; tool actions fall back to a truncated line.
+ */
+internal fun Context.liveUpdateShortText(status: String): String =
+    liveUpdateShortLabel(status)?.let(::getString) ?: liveUpdateFallbackText(status)
+
+/** Resource for a known run state, or null when [status] is free-form tool text. */
+internal fun liveUpdateShortLabel(status: String): Int? {
+    val line = status.lineSequence().firstOrNull()?.trim().orEmpty()
+    return when {
+        line.startsWith("Waiting for your approval") -> R.string.ui_live_short_approval
+        line.startsWith("Waiting for your answer") -> R.string.ui_live_short_answer
+        line.startsWith("Installing Linux environment") -> R.string.ui_live_short_installing
+        line.startsWith("Linux environment needs") -> R.string.ui_live_short_attention
+        line.startsWith("Retrying") -> R.string.ui_live_short_retrying
+        line.startsWith("Thinking") -> R.string.ui_live_short_thinking
+        line.startsWith("Writing response") -> R.string.ui_live_short_writing
+        line.startsWith("Generating code") -> R.string.ui_live_short_generating
+        line.startsWith("Working") -> R.string.ui_live_short_working
+        line.startsWith("Running in background") || line.isEmpty() -> R.string.ui_live_short_running
+        else -> null
+    }
+}
+
+internal fun liveUpdateFallbackText(status: String): String =
+    status.lineSequence().firstOrNull()?.trim().orEmpty().take(24)
 
 /**
  * One blocking prompt (tool approval, ask_user question, environment install)
@@ -146,6 +184,7 @@ class AgentService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var wakeLock: PowerManager.WakeLock? = null
+    private var liveUpdatesEnabled = true
 
     override fun onCreate() {
         super.onCreate()
@@ -160,6 +199,14 @@ class AgentService : Service() {
             }
         }
         scope.launch {
+            RuntimeNotifier.active.collect {
+                runCatching {
+                    getSystemService(NotificationManager::class.java)
+                        .notify(NOTIFICATION_ID, buildNotification(RuntimeNotifier.status.value))
+                }
+            }
+        }
+        scope.launch {
             RuntimeNotifier.results.collect { result ->
                 runCatching {
                     RunResultNotifications.post(this@AgentService, result)
@@ -169,6 +216,21 @@ class AgentService : Service() {
         scope.launch {
             RuntimeNotifier.pendingPrompts.collect { prompts ->
                 runCatching { refreshPromptAlerts(prompts) }
+                runCatching {
+                    getSystemService(NotificationManager::class.java)
+                        .notify(NOTIFICATION_ID, buildNotification(RuntimeNotifier.status.value))
+                }
+            }
+        }
+        scope.launch {
+            (applicationContext as? HarnessApp)?.container?.settings?.settings?.collect { settings ->
+                if (liveUpdatesEnabled != settings.liveUpdatesEnabled) {
+                    liveUpdatesEnabled = settings.liveUpdatesEnabled
+                    runCatching {
+                        getSystemService(NotificationManager::class.java)
+                            .notify(NOTIFICATION_ID, buildNotification(RuntimeNotifier.status.value))
+                    }
+                }
             }
         }
     }
@@ -247,8 +309,8 @@ class AgentService : Service() {
         )
     }
 
-    private fun buildNotification(text: String): Notification =
-        Notification.Builder(this, CHANNEL_ID)
+    private fun buildNotification(text: String): Notification {
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("AndroidHarness")
             .setContentText(localizedOptionLabel(text))
             .setSmallIcon(R.drawable.ic_launcher_foreground)
@@ -256,14 +318,41 @@ class AgentService : Service() {
             .setOnlyAlertOnce(true)
             .setOngoing(true)
             .setAutoCancel(false)
-            .setCategory(Notification.CATEGORY_SERVICE)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setShowWhen(false)
             .addAction(
-                Notification.Action.Builder(
-                    null as Icon?, getString(R.string.settings_action_stop), stopPendingIntent(),
+                NotificationCompat.Action.Builder(
+                    0, getString(R.string.settings_action_stop), stopPendingIntent(),
                 ).build(),
             )
-            .build()
+        // The live card only surfaces actions on this ongoing notification, so a
+        // blocked run must expose its answer buttons here too.
+        RuntimeNotifier.pendingPrompts.value.firstOrNull()?.let { prompt ->
+            when (prompt.kind) {
+                PendingPrompt.Kind.APPROVAL -> {
+                    // Keep the live card to the two answers the chip promises;
+                    // "Always allow" stays on the in-shade alert notification.
+                    builder.addAction(compatButton(ACTION_APPROVE, getString(R.string.ui_approve), prompt.sessionId))
+                    builder.addAction(compatButton(ACTION_DENY, getString(R.string.ui_deny), prompt.sessionId))
+                }
+                PendingPrompt.Kind.ENVIRONMENT -> {
+                    builder.addAction(compatButton(ACTION_ENV_SKIP, getString(R.string.ui_skip), prompt.sessionId))
+                    builder.addAction(compatButton(ACTION_ENV_INSTALL, getString(R.string.settings_action_install), prompt.sessionId))
+                }
+                PendingPrompt.Kind.QUESTION -> Unit
+            }
+        }
+        if (liveUpdatesEnabled && RuntimeNotifier.active.value && Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+            // Android 16 promotes this ongoing notification to a Live Update, which
+            // the OEM surfaces in its status bar, lock screen and live activity area
+            // (Now Bar on One UI, Live updates on Pixel and near-stock builds).
+            builder
+                .setRequestPromotedOngoing(true)
+                .setShortCriticalText(liveUpdateShortText(text))
+                .setStyle(NotificationCompat.ProgressStyle().setProgressIndeterminate(true))
+        }
+        return builder.build()
+    }
 
     private fun appPendingIntent(): PendingIntent = PendingIntent.getActivity(
         this,
@@ -371,17 +460,20 @@ class AgentService : Service() {
      * each other.
      */
     private fun button(action: String, label: String, sessionId: String): Notification.Action =
-        Notification.Action.Builder(
-            null as Icon?, label,
-            PendingIntent.getBroadcast(
-                this,
-                requestCode(sessionId, action.hashCode()),
-                Intent(this, NotificationActionReceiver::class.java)
-                    .setAction(action)
-                    .putExtra(EXTRA_SESSION_ID, sessionId),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            ),
-        ).build()
+        Notification.Action.Builder(null as Icon?, label, actionPendingIntent(action, sessionId)).build()
+
+    private fun compatButton(action: String, label: String, sessionId: String): NotificationCompat.Action =
+        NotificationCompat.Action.Builder(0, label, actionPendingIntent(action, sessionId)).build()
+
+    private fun actionPendingIntent(action: String, sessionId: String): PendingIntent =
+        PendingIntent.getBroadcast(
+            this,
+            requestCode(sessionId, action.hashCode()),
+            Intent(this, NotificationActionReceiver::class.java)
+                .setAction(action)
+                .putExtra(EXTRA_SESSION_ID, sessionId),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
 
     /**
      * [PendingIntent] delivering one ask_user answer: either a predefined

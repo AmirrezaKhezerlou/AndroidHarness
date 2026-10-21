@@ -47,6 +47,8 @@ data class AppSettings(
     val maxIterations: Int = DEFAULT_MAX_ITERATIONS,
     /** Hold a wakelock while a run is active so runs survive screen-off. */
     val keepAlive: Boolean = true,
+    /** Promote the agent-run notification to an Android 16 Live Update on this device. */
+    val liveUpdatesEnabled: Boolean = true,
     /** Drawer: pinned / archived session ids (DataStore, no DB migration). */
     val pinnedSessions: Set<String> = emptySet(),
     val archivedSessions: Set<String> = emptySet(),
@@ -170,6 +172,7 @@ class SettingsRepository(private val context: Context) {
         val MAX_OUTPUT = intPreferencesKey("max_output_tokens")
         val MAX_ITERATIONS = intPreferencesKey("max_iterations")
         val KEEP_ALIVE = booleanPreferencesKey("keep_alive")
+        val LIVE_UPDATES_ENABLED = booleanPreferencesKey("live_updates_enabled")
         val PINNED = stringSetPreferencesKey("pinned_sessions")
         val ARCHIVED = stringSetPreferencesKey("archived_sessions")
         val SIDEBAR_PROJECTS = booleanPreferencesKey("sidebar_projects")
@@ -233,6 +236,7 @@ class SettingsRepository(private val context: Context) {
             maxOutputTokens = prefs[Keys.MAX_OUTPUT] ?: AppSettings.DEFAULT_MAX_OUTPUT,
             maxIterations = prefs[Keys.MAX_ITERATIONS] ?: AppSettings.DEFAULT_MAX_ITERATIONS,
             keepAlive = prefs[Keys.KEEP_ALIVE] ?: true,
+            liveUpdatesEnabled = prefs[Keys.LIVE_UPDATES_ENABLED] ?: true,
             pinnedSessions = prefs[Keys.PINNED] ?: emptySet(),
             archivedSessions = prefs[Keys.ARCHIVED] ?: emptySet(),
             sidebarProjects = prefs[Keys.SIDEBAR_PROJECTS] ?: false,
@@ -292,6 +296,7 @@ class SettingsRepository(private val context: Context) {
             p[Keys.MAX_OUTPUT] = s.maxOutputTokens
             p[Keys.MAX_ITERATIONS] = s.maxIterations
             p[Keys.KEEP_ALIVE] = s.keepAlive
+            p[Keys.LIVE_UPDATES_ENABLED] = s.liveUpdatesEnabled
             p[Keys.SUBAGENT_FULL_ACCESS] = s.subagentFullAccess
             p[Keys.DISABLED_SKILLS] = s.disabledSkills
             p[Keys.WEB_SEARCH_PROVIDER] = s.webSearchProvider
@@ -510,6 +515,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setKeepAlive(enabled: Boolean) {
         context.settingsStore.edit { it[Keys.KEEP_ALIVE] = enabled }
+    }
+
+    suspend fun setLiveUpdatesEnabled(enabled: Boolean) {
+        context.settingsStore.edit { it[Keys.LIVE_UPDATES_ENABLED] = enabled }
     }
 
     suspend fun setPinned(sessionId: String, pinned: Boolean) {

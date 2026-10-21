@@ -1935,6 +1935,7 @@ private fun AgentSection(
         onContextLimit = { scope.launch { container.settings.setMaxContextTokens(it) } },
         onIterationLimit = { scope.launch { container.settings.setMaxIterations(it) } },
         onProjectInstructions = { showAgentsDialog = true },
+        onLiveUpdates = { scope.launch { container.settings.setLiveUpdatesEnabled(it) } },
     )
     if (showAgentsDialog) {
         AgentsInstructionsDialog(container, onDismiss = { showAgentsDialog = false })

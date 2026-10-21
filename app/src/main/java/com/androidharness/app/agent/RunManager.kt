@@ -1222,6 +1222,7 @@ class RunManager(
     /** Foreground service + wakelock while anything important is running. */
     fun acquireKeepalive() {
         if (keepaliveCount.getAndIncrement() == 0) {
+            RuntimeNotifier.setActive(true)
             runCatching { AgentService.acquireKeepalive(context) }
         }
     }
@@ -1229,6 +1230,7 @@ class RunManager(
     fun releaseKeepalive() {
         if (keepaliveCount.decrementAndGet() <= 0) {
             keepaliveCount.set(0)
+            RuntimeNotifier.setActive(false)
             RuntimeNotifier.update("Running in background")
             runCatching { AgentService.releaseKeepalive(context) }
         }

@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.filters.SdkSuppress
 import androidx.test.platform.app.InstrumentationRegistry
 import com.androidharness.app.agent.PermissionMode
 import com.androidharness.app.data.AppSettings
@@ -69,6 +70,18 @@ class AgentBehaviorDeviceTest {
         }
     }
 
+    /** The card must name this device's skin, not assume Samsung, and report the real permission state. */
+    @Test
+    @SdkSuppress(minSdkVersion = 36)
+    fun liveActivityCardNamesDetectedDeviceVendorAndState() {
+        val context = instrumentation.targetContext
+        launch(mutableStateOf(AppSettings()), dark = false, fontScale = 1f).use {
+            awaitTextContaining(android.os.Build.MODEL)
+            awaitTextContaining(context.getString(liveUpdateVendor.label))
+            awaitTextContaining(context.getString(liveUpdateState(context).description))
+        }
+    }
+
     @Test
     fun narrowScreenWithLargeTextKeepsAllControlsReachable() {
         val state = mutableStateOf(AppSettings())
@@ -116,6 +129,7 @@ class AgentBehaviorDeviceTest {
                                         onContextLimit = { state.value = state.value.copy(maxContextTokens = it) },
                                         onIterationLimit = { state.value = state.value.copy(maxIterations = it) },
                                         onProjectInstructions = onInstructions,
+                                        onLiveUpdates = { state.value = state.value.copy(liveUpdatesEnabled = it) },
                                     )
                                 }
                             }
@@ -144,6 +158,26 @@ class AgentBehaviorDeviceTest {
             match != null
         }
         return requireNotNull(match)
+    }
+
+    private fun awaitTextContaining(text: String) {
+        repeat(16) { attempt ->
+            val root = instrumentation.uiAutomation.rootInActiveWindow
+            if (root != null && findNodeContaining(root, text) != null) {
+                instrumentation.waitForIdleSync()
+                return
+            }
+            swipe(forward = attempt < 8)
+        }
+        throw AssertionError("Unreachable text containing: $text")
+    }
+
+    private fun findNodeContaining(node: AccessibilityNodeInfo, text: String): AccessibilityNodeInfo? {
+        if (node.text?.toString()?.contains(text) == true) return node
+        for (index in 0 until node.childCount) {
+            node.getChild(index)?.let { findNodeContaining(it, text)?.let { found -> return found } }
+        }
+        return null
     }
 
     private fun findNode(node: AccessibilityNodeInfo, text: String): AccessibilityNodeInfo? {

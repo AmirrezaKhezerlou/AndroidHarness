@@ -200,7 +200,14 @@ private val primarySettingsEntries = SettingsPage.entries.map { page ->
     SettingsSearchEntry(page.title, page.description, page, page.keywords, primary = true)
 }
 
-private val subSettingsEntries = listOf(
+private val subSettingsEntries = listOfNotNull(
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.BAKLAVA) SettingsSearchEntry(
+        R.string.settings_search_live_updates_title,
+        R.string.settings_search_live_updates_desc,
+        SettingsPage.AGENT,
+        "live activity updates now bar samsung one ui pixel hyperos coloros oxygenos originos magicos status bar lock screen notification foreground",
+        anchor = R.string.settings_agent_live_updates,
+    ) else null,
     SettingsSearchEntry(
         R.string.settings_language_contribute_title,
         R.string.settings_language_contribute_description,

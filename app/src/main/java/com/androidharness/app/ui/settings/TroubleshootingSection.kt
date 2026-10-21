@@ -213,6 +213,11 @@ internal fun TroubleshootingSection(container: AppContainer, onOpen: (SettingsPa
         if (notifications) uiContext.getString(R.string.ui_notifications_are_allowed_by_android) else uiContext.getString(R.string.ui_you_can_use_the_app_with_notifications)) {
         TextButton(onClick = { context.startActivity(Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
             .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)) }) { Text(stringResource(R.string.settings_troubleshooting_notifications)) }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+            TextButton(onClick = { context.openLiveUpdateSettings() }) {
+                Text(stringResource(R.string.settings_troubleshooting_live_updates))
+            }
+        }
     }
 }
 

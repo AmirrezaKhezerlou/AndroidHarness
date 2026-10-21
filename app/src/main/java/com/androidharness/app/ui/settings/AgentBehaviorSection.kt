@@ -1,8 +1,13 @@
 package com.androidharness.app.ui.settings
 
 import com.androidharness.app.ui.common.localizedOption
+import android.os.Build
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -10,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.*
@@ -17,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
@@ -50,9 +57,11 @@ internal fun AgentBehaviorSection(
     onContextLimit: (Int) -> Unit,
     onIterationLimit: (Int) -> Unit,
     onProjectInstructions: () -> Unit,
+    onLiveUpdates: (Boolean) -> Unit,
 ) {
     var pickerName by rememberSaveable { mutableStateOf<String?>(null) }
     val picker = pickerName?.let(BehaviorPicker::valueOf)
+    val context = LocalContext.current
 
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Text(
@@ -89,6 +98,76 @@ internal fun AgentBehaviorSection(
                     description = stringResource(R.string.settings_agent_tool_rounds_subtitle),
                     onClick = { pickerName = BehaviorPicker.ITERATIONS.name },
                 )
+            }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+            BehaviorGroup(stringResource(R.string.settings_agent_group_live_updates), Icons.Outlined.Notifications) {
+                SettingsAnchor(R.string.settings_agent_live_updates) {
+                    val vendor = remember { liveUpdateVendor }
+                    var state by remember { mutableStateOf(liveUpdateState(context)) }
+                    // The user usually returns here after granting the appop in system settings.
+                    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { state = liveUpdateState(context) }
+                    Column(
+                        Modifier.fillMaxWidth().padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(stringResource(R.string.settings_agent_live_updates), style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    stringResource(R.string.settings_agent_live_updates_subtitle),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Switch(checked = settings.liveUpdatesEnabled, onCheckedChange = onLiveUpdates)
+                        }
+                        Text(
+                            stringResource(
+                                R.string.settings_agent_live_updates_device,
+                                liveUpdateDeviceName,
+                                stringResource(vendor.label),
+                            ),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            val tint = when (state) {
+                                LiveUpdateState.READY -> MaterialTheme.colorScheme.primary
+                                LiveUpdateState.BLOCKED -> MaterialTheme.colorScheme.error
+                                LiveUpdateState.UNSUPPORTED -> MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                            Box(Modifier.size(8.dp).background(tint, CircleShape))
+                            Text(
+                                stringResource(state.description),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = tint,
+                            )
+                        }
+                        Text(
+                            stringResource(vendor.steps),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            stringResource(R.string.settings_agent_live_updates_usage),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        TextButton(
+                            onClick = { context.openLiveUpdateSettings() },
+                            contentPadding = PaddingValues(0.dp),
+                        ) {
+                            Text(stringResource(R.string.settings_agent_live_updates_open))
+                        }
+                    }
+                }
             }
         }
         BehaviorGroup(stringResource(R.string.settings_agent_instructions_group), Icons.Outlined.Description) {
