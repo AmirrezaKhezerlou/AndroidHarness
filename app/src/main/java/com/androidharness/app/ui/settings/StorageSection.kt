@@ -16,11 +16,13 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.androidharness.app.AppContainer
+import com.androidharness.app.R
 import com.androidharness.app.data.storage.StorageCandidate
 import com.androidharness.app.data.storage.StorageInventory
 import kotlinx.coroutines.CancellationException
@@ -78,10 +80,10 @@ internal fun StorageSection(container: AppContainer) {
         val data = inventory
         if (data == null) {
             Text(if (scanning) "Measuring files…" else "Storage is unavailable.", style = MaterialTheme.typography.bodyMedium)
-            if (!scanning) OutlinedButton(onClick = { scope.launch { scan() } }) { Text("Try again") }
+            if (!scanning) OutlinedButton(onClick = { scope.launch { scan() } }) { Text(stringResource(R.string.settings_action_try_again)) }
         } else if (reviewing) {
-            Text("Only select caches and build folders you can regenerate. Every path is checked again before deletion.", style = MaterialTheme.typography.bodySmall)
-            if (data.candidates.isEmpty()) Text("Nothing safe to clean right now.", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.settings_storage_cleanup_note), style = MaterialTheme.typography.bodySmall)
+            if (data.candidates.isEmpty()) Text(stringResource(R.string.settings_storage_nothing_to_clean), style = MaterialTheme.typography.bodyMedium)
             data.candidates.groupBy { it.group }.forEach { (group, items) ->
                 Text(group, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 SettingsPanel(Modifier.fillMaxWidth()) {
@@ -106,14 +108,16 @@ internal fun StorageSection(container: AppContainer) {
             StorageRow(Icons.Outlined.Inventory2, "Unused managed packages", "Unknown ownership or workspace requirements stay protected", "Details") {
                 detail = "Managed packages" to "New installs record files, dependencies and requirements. In Shared, release a requirement only when that workspace no longer needs the tool. A package is eligible for cleanup only when no recorded requirements or installed dependents remain and its owned files are unchanged. Older installations with missing metadata remain protected."
             }
+            val alwaysKept = stringResource(R.string.settings_storage_always_kept) to
+                stringResource(R.string.settings_storage_always_kept_detail)
             StorageRow(Icons.Outlined.Shield, "Always kept", "Source folders, required dependencies, models, history, undo checkpoints and runtime deployment", "") {
-                detail = "Always kept" to "Cleanup only touches the exact paths you select. Required or unverifiable packages, source folders, models, recovery data and runtime staging stay protected."
+                detail = alwaysKept
             }
             val chosen = data.candidates.filter { it.id in selected }
             Button(onClick = { confirmation = chosen }, enabled = chosen.isNotEmpty() && !busy, modifier = Modifier.fillMaxWidth()) {
-                Text("Review ${storageSize(chosen.sumOf { it.bytes })}")
+                Text(stringResource(R.string.settings_storage_review_size, storageSize(chosen.sumOf { it.bytes })))
             }
-            TextButton(onClick = { reviewing = false }, enabled = !busy) { Text("Back to storage") }
+            TextButton(onClick = { reviewing = false }, enabled = !busy) { Text(stringResource(R.string.settings_storage_back)) }
         } else {
             val tabs: @Composable () -> Unit = {
                 listOf("Overview", "Shared", "Workspaces").forEachIndexed { i, title ->
@@ -129,7 +133,7 @@ internal fun StorageSection(container: AppContainer) {
                     Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(14.dp)) {
                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             Text(storageSize(data.bytes), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
-                            Text("Measured files · shared tools counted once", style = MaterialTheme.typography.bodySmall)
+                            Text(stringResource(R.string.settings_storage_measured_note), style = MaterialTheme.typography.bodySmall)
                             Text(if (data.candidates.isEmpty()) "Nothing safe to clean right now" else
                                 "${storageSize(data.candidates.sumOf { it.bytes })} available to review", style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.primary)
@@ -157,14 +161,14 @@ internal fun StorageSection(container: AppContainer) {
                         }
                     }
                     Button(onClick = { reviewing = true; selected = data.candidates.filter { it.group == "Downloads" }.map { it.id }.toSet() },
-                        enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Review cleanup") }
+                        enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.settings_storage_review_cleanup)) }
                 }
                 1 -> {
-                    Text("One local toolchain, available across workspaces. Shell/root use their own required runtime and cache.", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.settings_storage_toolchain_note), style = MaterialTheme.typography.bodySmall)
                     StorageRow(Icons.Outlined.Download, "Shared download caches", "npm · pip · existing Gradle home", "Details") {
                         detail = "Shared caches" to "Downloads can be reused across local workspaces without merging project configuration, node_modules or Python environments. App and privileged execution have separate caches because Android separates their permissions. The privileged cache is not measured here."
                     }
-                    if (data.packages.isEmpty()) Text("No Linux packages installed.", style = MaterialTheme.typography.bodyMedium)
+                    if (data.packages.isEmpty()) Text(stringResource(R.string.settings_storage_no_packages), style = MaterialTheme.typography.bodyMedium)
                     SettingsPanel(Modifier.fillMaxWidth()) {
                         Column {
                             data.packages.forEachIndexed { index, name ->
@@ -180,8 +184,8 @@ internal fun StorageSection(container: AppContainer) {
                     }
                 }
                 2 -> {
-                    Text("Workspace totals exclude shared tools. Aliases and nested folders count once in the measured total.", style = MaterialTheme.typography.bodySmall)
-                    if (data.workspaces.isEmpty()) Text("No saved workspaces.")
+                    Text(stringResource(R.string.settings_storage_totals_note), style = MaterialTheme.typography.bodySmall)
+                    if (data.workspaces.isEmpty()) Text(stringResource(R.string.settings_storage_no_workspaces))
                     data.workspaces.forEach { workspace ->
                         SettingsPanel(Modifier.fillMaxWidth()) {
                             StorageRow(Icons.Outlined.Folder, workspace.name, workspace.note,
@@ -194,7 +198,11 @@ internal fun StorageSection(container: AppContainer) {
                     }
                 }
             }
-            Text("Logical file sizes, not Android's disk allocation. ${if (data.incomplete) "Some files could not be measured. " else ""}Picker-only folders, SSH hosts and the privileged runtime are excluded. Links are not followed.",
+            Text(
+                stringResource(
+                    R.string.settings_storage_measure_note,
+                    if (data.incomplete) stringResource(R.string.settings_storage_measure_incomplete) else "",
+                ),
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -205,44 +213,52 @@ internal fun StorageSection(container: AppContainer) {
             text = {
                 Column(Modifier.heightIn(max = 350.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(protection ?: "No recorded requirements or installed dependents. Eligible files appear in Review cleanup.")
-                    Text("Recorded requirements are separate from project configuration. Releasing one keeps the shared install until you explicitly clean it up.", style = MaterialTheme.typography.bodySmall)
-                    if (tool == null) Text("This older install has no file manifest. Ownership, size and workspace usage are unknown; removal stays protected.", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.settings_storage_requirements_note), style = MaterialTheme.typography.bodySmall)
+                    if (tool == null) Text(stringResource(R.string.settings_storage_no_manifest), style = MaterialTheme.typography.bodySmall)
                     else {
-                        if (!tool.complete) Text("Some owned files could not be verified. This package stays protected.", style = MaterialTheme.typography.bodySmall)
-                        if (tool.depends.isNotEmpty()) Text("Dependencies: ${tool.depends.joinToString()}", style = MaterialTheme.typography.bodySmall)
+                        if (!tool.complete) Text(stringResource(R.string.settings_storage_unverified), style = MaterialTheme.typography.bodySmall)
+                        if (tool.depends.isNotEmpty()) Text(
+                            stringResource(R.string.settings_storage_dependencies, tool.depends.joinToString()),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                         tool.requirements.sorted().forEach { owner ->
                             Text(owner, style = MaterialTheme.typography.bodySmall)
-                            if (protection != "Required by the app toolchain") OutlinedButton(onClick = { release = name to owner }, enabled = !busy) { Text("Release requirement") }
+                            if (protection != "Required by the app toolchain") OutlinedButton(onClick = { release = name to owner }, enabled = !busy) { Text(stringResource(R.string.settings_storage_release_confirm)) }
                         }
-                        Text("Recorded uses may not include commands started outside Harness. Keep a requirement for any workspace that still uses this tool.", style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(R.string.settings_storage_release_note), style = MaterialTheme.typography.bodySmall)
                     }
                 }
-            }, confirmButton = { TextButton(onClick = { toolDetail = null }) { Text("Done") } })
+            }, confirmButton = { TextButton(onClick = { toolDetail = null }) { Text(stringResource(R.string.settings_action_done)) } })
     }
     release?.let { (name, owner) ->
-        AlertDialog(onDismissRequest = { release = null }, title = { Text("Release $name requirement?") },
-            text = { Text("$owner\n\nRelease this recorded requirement only if it no longer needs $name. Other requirements and the installed tool stay kept. Project configuration is not changed.") },
+        AlertDialog(onDismissRequest = { release = null }, title = { Text(stringResource(R.string.settings_storage_release_title, name)) },
+            text = { Text(stringResource(R.string.settings_storage_release_message, owner, name)) },
             confirmButton = { TextButton(enabled = !busy, onClick = {
                 scope.launch {
                     try { container.linuxEnv.releasePackageRequirement(name, owner); release = null; scan() }
                     catch (e: CancellationException) { throw e }
                     catch (e: Exception) { error = e.message; release = null }
                 }
-            }) { Text("Release requirement") } },
-            dismissButton = { TextButton(onClick = { release = null }) { Text("Cancel") } })
+            }) { Text(stringResource(R.string.settings_storage_release_confirm)) } },
+            dismissButton = { TextButton(onClick = { release = null }) { Text(stringResource(R.string.settings_action_cancel)) } })
     }
     detail?.let { (title, body) ->
         AlertDialog(onDismissRequest = { detail = null }, title = { Text(title) }, text = { Text(body) },
-            confirmButton = { TextButton(onClick = { detail = null }) { Text("Done") } })
+            confirmButton = { TextButton(onClick = { detail = null }) { Text(stringResource(R.string.settings_action_done)) } })
     }
     confirmation?.let { chosen ->
         AlertDialog(onDismissRequest = { if (!cleaning) confirmation = null },
-            title = { Text("Free ${storageSize(chosen.sumOf { it.bytes })}?") },
+            title = { Text(stringResource(R.string.settings_storage_free_title, storageSize(chosen.sumOf { it.bytes }))) },
             text = {
                 Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Delete only these reviewed files. Caches will download again; builds may need to run again.")
-                    chosen.forEach { Text("${it.title} · ${storageSize(it.bytes)}\n${candidatePath(it)}", style = MaterialTheme.typography.bodySmall) }
-                    Text("Changed or linked files are skipped. Source folders, models and recovery data stay kept.")
+                    Text(stringResource(R.string.settings_storage_free_note))
+                    chosen.forEach {
+                        Text(
+                            stringResource(R.string.settings_storage_candidate, it.title, storageSize(it.bytes), candidatePath(it)),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Text(stringResource(R.string.settings_storage_cleanup_skip_note))
                 }
             },
             confirmButton = {
@@ -260,7 +276,7 @@ internal fun StorageSection(container: AppContainer) {
                         finally { cleaning = false }
                     }
                 }) { Text(if (cleaning) "Cleaning…" else "Free ${storageSize(chosen.sumOf { it.bytes })}") }
-            }, dismissButton = { TextButton(enabled = !cleaning, onClick = { confirmation = null }) { Text("Cancel") } })
+            }, dismissButton = { TextButton(enabled = !cleaning, onClick = { confirmation = null }) { Text(stringResource(R.string.settings_action_cancel)) } })
     }
 }
 

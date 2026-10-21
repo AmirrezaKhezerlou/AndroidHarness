@@ -6,6 +6,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -13,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import com.androidharness.app.AppContainer
 import com.androidharness.app.caveman.CavemanIntensity
 import com.androidharness.app.caveman.CavemanPolicy
+import com.androidharness.app.R
 import com.androidharness.app.data.AppSettings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -37,17 +39,17 @@ internal fun CavemanSection(container: AppContainer, settings: AppSettings) {
     }
     CavemanPanel("Caveman") {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Native skill pack", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.settings_caveman_native_pack), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
             Text(if (settings.cavemanInstalled) "Installed" else "Not installed",
                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         }
-        Text("Shorter replies and five focused coding skills. Uses your existing model, with no extra API key, terminal or proxy.",
+        Text(stringResource(R.string.settings_caveman_native_pack_desc),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (settings.cavemanInstalled) {
-            OutlinedButton(onClick = { confirmRemove = true }, enabled = !busy) { Text("Uninstall") }
+            OutlinedButton(onClick = { confirmRemove = true }, enabled = !busy) { Text(stringResource(R.string.settings_action_uninstall)) }
         } else {
-            Button(onClick = { save { container.settings.setCavemanInstalled(true) } }, enabled = !busy) { Text("Install Caveman") }
-            Text("Installs from the app. Reply mode starts Off; coding skills can be switched off individually.", style = MaterialTheme.typography.labelSmall)
+            Button(onClick = { save { container.settings.setCavemanInstalled(true) } }, enabled = !busy) { Text(stringResource(R.string.settings_caveman_install)) }
+            Text(stringResource(R.string.settings_caveman_install_desc), style = MaterialTheme.typography.labelSmall)
         }
         if (busy) AppLinearProgressIndicator(Modifier.fillMaxWidth())
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
@@ -65,23 +67,24 @@ internal fun CavemanSection(container: AppContainer, settings: AppSettings) {
                 }
             }
             Text(settings.cavemanIntensity.description, style = MaterialTheme.typography.bodyMedium)
-            Text("Automatically applied from the next model request, across chats. Off removes style instructions; skills stay independent.",
+            Text(stringResource(R.string.settings_caveman_mode_desc),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             HorizontalDivider()
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Classical Chinese", style = MaterialTheme.typography.bodyMedium)
-                    Text("Wenyan variant of the selected intensity", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.settings_caveman_classical_chinese), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.settings_caveman_classical_chinese_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                val classicalChineseCd = stringResource(R.string.settings_caveman_classical_chinese)
                 Switch(checked = settings.cavemanWenyan,
                     onCheckedChange = { save { container.settings.setCavemanWenyan(it) } },
                     enabled = !busy && settings.cavemanIntensity != CavemanIntensity.OFF,
-                    modifier = Modifier.semantics { contentDescription = "Classical Chinese" })
+                    modifier = Modifier.semantics { contentDescription = classicalChineseCd })
             }
-            Text("Code, paths and exact errors stay intact. Warnings and unclear instructions use full sentences.", style = MaterialTheme.typography.labelSmall)
+            Text(stringResource(R.string.settings_caveman_classical_chinese_note), style = MaterialTheme.typography.labelSmall)
         }
         CavemanPanel("Coding skills") {
-            Text("Loaded only when relevant. Available in the Skills picker after installation.", style = MaterialTheme.typography.bodySmall,
+            Text(stringResource(R.string.settings_caveman_skills_desc), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             val labels = listOf("Commit messages", "Code reviews", "Investigate first", "Targeted patches", "Verify and stop")
             CavemanPolicy.skills.keys.forEachIndexed { index, name ->
@@ -98,31 +101,31 @@ internal fun CavemanSection(container: AppContainer, settings: AppSettings) {
             }
         }
         CavemanPanel("Token reports") {
-            Text("Token savings from Caveman only. No total usage or unrelated context reductions.",
+            Text(stringResource(R.string.settings_caveman_savings_desc),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             FilledTonalButton(onClick = { showReports = !showReports }) { Text(if (showReports) "Hide report" else "Show report") }
             if (showReports) {
-                Text("Tokens saved: Not measured", style = MaterialTheme.typography.titleSmall)
-                Text("Reply modes guide your model; they do not produce a normal reply to compare against. A matched run with Caveman off is needed to measure savings. No extra model requests are made for this report.",
+                Text(stringResource(R.string.settings_caveman_tokens_saved_unmeasured), style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.settings_caveman_savings_note),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("Shorter replies do not guarantee lower total cost. Style instructions also use input tokens.", style = MaterialTheme.typography.labelSmall)
+                Text(stringResource(R.string.settings_caveman_cost_note), style = MaterialTheme.typography.labelSmall)
             }
         }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        TextButton(onClick = { uri.openUri("https://github.com/JuliusBrussee/caveman") }) { Text("Source") }
-        TextButton(onClick = { showLicense = true }) { Text("MIT license") }
+        TextButton(onClick = { uri.openUri("https://github.com/JuliusBrussee/caveman") }) { Text(stringResource(R.string.settings_caveman_source)) }
+        TextButton(onClick = { showLicense = true }) { Text(stringResource(R.string.settings_caveman_license)) }
     }
     if (confirmRemove) AlertDialog(
-        onDismissRequest = { confirmRemove = false }, title = { Text("Uninstall Caveman?") },
-        text = { Text("Removes the optional skill pack and turns reply mode off. Chats and your own skill copies are kept. Instructions already loaded into a chat remain in its history.") },
-        confirmButton = { TextButton(onClick = { confirmRemove = false; save { container.settings.setCavemanInstalled(false) } }) { Text("Uninstall") } },
-        dismissButton = { TextButton(onClick = { confirmRemove = false }) { Text("Cancel") } },
+        onDismissRequest = { confirmRemove = false }, title = { Text(stringResource(R.string.settings_caveman_uninstall_title)) },
+        text = { Text(stringResource(R.string.settings_caveman_uninstall_message)) },
+        confirmButton = { TextButton(onClick = { confirmRemove = false; save { container.settings.setCavemanInstalled(false) } }) { Text(stringResource(R.string.settings_action_uninstall)) } },
+        dismissButton = { TextButton(onClick = { confirmRemove = false }) { Text(stringResource(R.string.settings_action_cancel)) } },
     )
-    if (showLicense) AlertDialog(onDismissRequest = { showLicense = false }, title = { Text("Caveman skills") },
-        text = { Text("Adapted from Julius Brussee's MIT-licensed Caveman skills. Copyright (c) 2026 Julius Brussee. This integration does not include the BSL compression engine or proxy.") },
-        confirmButton = { TextButton(onClick = { uri.openUri("https://github.com/JuliusBrussee/caveman/blob/main/LICENSE") }) { Text("Full license") } },
-        dismissButton = { TextButton(onClick = { showLicense = false }) { Text("Close") } })
+    if (showLicense) AlertDialog(onDismissRequest = { showLicense = false }, title = { Text(stringResource(R.string.settings_caveman_skills_title)) },
+        text = { Text(stringResource(R.string.settings_caveman_attribution)) },
+        confirmButton = { TextButton(onClick = { uri.openUri("https://github.com/JuliusBrussee/caveman/blob/main/LICENSE") }) { Text(stringResource(R.string.settings_caveman_full_license)) } },
+        dismissButton = { TextButton(onClick = { showLicense = false }) { Text(stringResource(R.string.settings_action_close)) } })
 }
 
 @Composable

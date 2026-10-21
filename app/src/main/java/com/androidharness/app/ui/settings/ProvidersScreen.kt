@@ -18,9 +18,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.androidharness.app.AppContainer
+import com.androidharness.app.R
 import com.androidharness.app.data.AppSettings
 import com.androidharness.app.llm.ProviderConfig
 import com.androidharness.app.llm.effectiveApiKey
@@ -56,8 +58,8 @@ fun ProvidersScreen(
         containerColor = scheme.surface,
         topBar = {
             AppHeader(
-                title = "Providers",
-                subtitle = "Connect models and choose what powers your chats",
+                title = stringResource(R.string.settings_providers_title),
+                subtitle = stringResource(R.string.settings_providers_intro),
                 onBack = onBack,
             )
         },
@@ -92,18 +94,18 @@ fun ProvidersScreen(
                     ) {
                         Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Add provider")
+                        Text(stringResource(R.string.settings_providers_add))
                     }
                 }
                 item {
                     OutlinedTextField(value = query, onValueChange = { query = it },
-                        label = { Text("Search providers or models") }, singleLine = true,
+                        label = { Text(stringResource(R.string.settings_providers_search_placeholder)) }, singleLine = true,
                         modifier = Modifier.fillMaxWidth())
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(selected = showDisabled, onClick = { showDisabled = !showDisabled }, label = { Text("Show disabled") })
-                        TextButton(onClick = { showAllModels = true }) { Text("Search all models") }
+                        FilterChip(selected = showDisabled, onClick = { showDisabled = !showDisabled }, label = { Text(stringResource(R.string.settings_providers_show_disabled)) })
+                        TextButton(onClick = { showAllModels = true }) { Text(stringResource(R.string.settings_providers_search_all_models)) }
                     }
-                    Text("Disabled providers stay searchable. Existing chats keep their model.",
+                    Text(stringResource(R.string.settings_providers_disabled_note),
                         style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                 }
                 items(visibleProviders, key = { it.id }) { provider ->

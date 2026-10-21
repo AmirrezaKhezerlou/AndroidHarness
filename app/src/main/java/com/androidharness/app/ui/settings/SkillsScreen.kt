@@ -33,9 +33,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androidharness.app.AppContainer
+import com.androidharness.app.R
 import com.androidharness.app.data.AppSettings
 import com.androidharness.app.skills.SkillMeta
 import com.androidharness.app.skills.SkillParseException
@@ -66,14 +68,14 @@ fun SkillsScreen(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             AppHeader(
-                title = "Skills",
-                subtitle = "$enabledCount enabled · ${bundled.size} bundled",
+                title = stringResource(R.string.settings_page_skills_title),
+                subtitle = stringResource(R.string.settings_skills_enabled_count, enabledCount.toString(), bundled.size.toString()),
                 onBack = onBack,
             )
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { showAdd = true }) {
-                Icon(Icons.Outlined.Add, contentDescription = "Add skill")
+                Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.settings_skills_add))
             }
         },
     ) { padding ->
@@ -103,7 +105,7 @@ fun SkillsScreen(
 
     if (showAdd) {
         SkillEditorDialog(
-            title = "Add skill",
+            title = stringResource(R.string.settings_skills_add),
             initial = skillTemplate(),
             onDismiss = { showAdd = false },
             onSave = { content ->
@@ -115,7 +117,7 @@ fun SkillsScreen(
     editing?.let { skill ->
         val current = container.skills.view(skill.name).getOrNull()?.content ?: skillTemplate(skill.name, skill.description)
         SkillEditorDialog(
-            title = "Edit ${skill.name}",
+            title = stringResource(R.string.settings_skills_edit_title, skill.name),
             initial = current,
             onDismiss = { editing = null },
             onSave = { content ->
@@ -158,10 +160,10 @@ private fun SkillGroup(
                     }
                     if (onEdit != null) {
                         IconButton(onClick = { onEdit(skill) }) {
-                            Text("Edit", style = MaterialTheme.typography.labelSmall)
+                            Text(stringResource(R.string.settings_action_edit), style = MaterialTheme.typography.labelSmall)
                         }
                         IconButton(onClick = { container.skills.deleteUser(skill.name) }) {
-                            Icon(Icons.Outlined.Delete, contentDescription = "Delete", modifier = Modifier.padding(0.dp))
+                            Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.settings_action_delete), modifier = Modifier.padding(0.dp))
                         }
                     }
                     Switch(
@@ -206,7 +208,7 @@ private fun SkillEditorDialog(
                         .fillMaxWidth()
                         .heightIn(min = 260.dp, max = 420.dp),
                     textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = HarnessMono),
-                    label = { Text("SKILL.md") },
+                    label = { Text(stringResource(R.string.settings_skills_file)) },
                 )
                 Text(
                     "Catalog line: ${parsed?.name ?: "?"} · ${parsed?.catalogDescription ?: "fix frontmatter"}",
@@ -229,8 +231,8 @@ private fun SkillEditorDialog(
                     }
                 },
                 enabled = error == null,
-            ) { Text("Save") }
+            ) { Text(stringResource(R.string.settings_action_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_action_cancel)) } },
     )
 }

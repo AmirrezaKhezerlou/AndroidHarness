@@ -8,8 +8,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import com.androidharness.app.R
 import com.androidharness.app.data.AppSettings
 
 @Composable
@@ -18,7 +20,7 @@ internal fun SubagentSettingsSection(
     onSubagentTools: (Boolean) -> Unit,
 ) {
     SettingsPanel(Modifier.fillMaxWidth()) {
-        SettingsAnchor("Subagent action tools") {
+        SettingsAnchor(R.string.settings_anchor_subagent_tools) {
             Row(
                 Modifier.fillMaxWidth()
                     .toggleable(settings.subagentFullAccess, role = Role.Switch, onValueChange = onSubagentTools)
@@ -27,7 +29,7 @@ internal fun SubagentSettingsSection(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Subagent action tools", style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(R.string.settings_anchor_subagent_tools), style = MaterialTheme.typography.titleSmall)
                     Text(
                         "Let subagents edit and run commands in Act mode. They follow your permissions; Plan stays read-only.",
                         style = MaterialTheme.typography.bodySmall,

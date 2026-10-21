@@ -1,51 +1,191 @@
 package com.androidharness.app.ui.settings
 
+import android.content.Context
+import androidx.annotation.StringRes
+import com.androidharness.app.R
+
+/**
+ * A settings page, described entirely by string resources.
+ *
+ * Titles, descriptions and groups are resource ids rather than literals because
+ * the same title is shown in the sidebar, matched by the settings search and used
+ * as the scroll target of a deep link. Keeping one id per label means the three
+ * can never disagree once the app runs in a language other than English.
+ *
+ * [keywords] stays in English on purpose: it is search vocabulary, not UI copy,
+ * so a user who knows the English term keeps finding the setting in any locale.
+ */
 internal enum class SettingsPage(
-    val title: String,
-    val description: String,
-    val group: String,
+    @StringRes val title: Int,
+    @StringRes val description: Int,
+    @StringRes val group: Int,
     val keywords: String,
 ) {
-    GITHUB("GitHub", "Sign in, import repositories and publish changes", "GitHub integration", "oauth login git pat token scopes import commit push preset automation"),
-    CONNECTED_ACCOUNTS("Connected accounts", "Use your ChatGPT plan for coding and tools", "Special providers", "chatgpt codex subscription sign in login account plan oauth"),
-    MODELS("Models & providers", "Connections, models and fallback routing", "Your assistant", "api key token provider openai anthropic gemini thinking planning execution fallback retries quota privacy routing"),
-    SUBAGENT("Sub-Agent settings", "Choose subagent models and action tools", "Your assistant", "subagent sub-agent sub agent model provider action tools permissions edit commands"),
-    LOCAL_MODELS("Local models", "Choose and manage models that run on your phone", "Your assistant", "offline hugging face gguf safetensors llama ram memory storage cpu download uninstall context input output vision images threads"),
-    AGENT("Agent behavior", "Permissions, context limits and project instructions", "Your assistant", "approval full access iterations tools agents.md memory"),
-    CHAT("Chat & commands", "Startup behavior, code indexing and slash commands", "Your assistant", "resume last chat launch repo map shortcuts"),
-    CODE_INTELLIGENCE("CodeGraph", "Install CodeGraph and manage project indexes", "Integrations", "codegraph graph symbols callers callees impact affected index semantic code intelligence"),
-    CAVEMAN("Caveman", "Shorter replies, optional coding skills and token reports", "Integrations", "caveman install intensity off lite full ultra wenyan compression tokens"),
-    VOICE("Voice input", "Speech recognition and voice provider preferences", "Your assistant", "microphone groq whisper transcription speech"),
-    SKILLS("Skills", "Manage the playbooks your assistant can use", "Your assistant", "catalog instructions add skills"),
-    APPEARANCE("Appearance", "Workspace layout, theme and colors", "Personalize", "dark light amoled system wallpaper dynamic color landscape desktop tablet layout split panes progress flat squiggly wavy animation"),
-    PRIVACY("Privacy & security", "App lock, biometrics and screenshot access", "Personalize", "fingerprint pin authentication screenshots"),
-    SEARCH("Web search", "Search provider and API credentials", "Connections", "brave tavily keyless internet"),
-    MCP("Connected tools", "Add and configure MCP servers", "Connections", "mcp integrations servers transport"),
-    TELEGRAM("Telegram", "Continue chats and edit projects from your paired bot", "Connections", "telegram bot remote control pairing notifications gateway"),
-    WORKSPACE("Workspaces", "Choose, add and manage your project folders", "Workspace & device", "storage files saf folder project remembered permissions grants revoke always"),
-    STORAGE("Storage", "Shared tools, file usage and safe cleanup", "Workspace & device", "storage cleanup disk space cache packages downloads build outputs"),
-    ENVIRONMENT("Terminal & device", "Linux tools, storage permissions and background access", "Workspace & device", "shizuku shell packages environment battery optimization keep alive"),
-    TROUBLESHOOTING("Troubleshooting", "Check connections, permissions and device tools", "Workspace & device", "diagnostics help doctor repair errors storage linux shizuku ssh mcp notifications provider report"),
-    BACKUP("Backups", "Encrypted settings and chat backups", "App & data", "restore history archive transfer password providers keys encryption"),
-    USAGE("Usage", "Token usage, costs and activity over time", "App & data", "stats statistics cache tokens"),
-    UPDATES("Updates", "Check GitHub Releases for a newer build", "App & data", "version release download"),
-    SETUP("Setup guide", "Revisit the app setup steps", "App & data", "onboarding notifications permissions"),
-    ABOUT("About", "Version, license, credits and links", "App & data", "about license mit copyright credits author sanuu github repository open source thanks"),
+    GITHUB(
+        R.string.settings_page_github_title,
+        R.string.settings_page_github_desc,
+        R.string.settings_group_github,
+        "oauth login git pat token scopes import commit push preset automation",
+    ),
+    CONNECTED_ACCOUNTS(
+        R.string.settings_page_accounts_title,
+        R.string.settings_page_accounts_desc,
+        R.string.settings_group_special_providers,
+        "chatgpt codex subscription sign in login account plan oauth",
+    ),
+    MODELS(
+        R.string.settings_page_models_title,
+        R.string.settings_page_models_desc,
+        R.string.settings_group_your_assistant,
+        "api key token provider openai anthropic gemini thinking planning execution fallback retries quota privacy routing",
+    ),
+    SUBAGENT(
+        R.string.settings_page_subagent_title,
+        R.string.settings_page_subagent_desc,
+        R.string.settings_group_your_assistant,
+        "subagent sub-agent sub agent model provider action tools permissions edit commands",
+    ),
+    LOCAL_MODELS(
+        R.string.settings_page_local_models_title,
+        R.string.settings_page_local_models_desc,
+        R.string.settings_group_your_assistant,
+        "offline hugging face gguf safetensors llama ram memory storage cpu download uninstall context input output vision images threads",
+    ),
+    AGENT(
+        R.string.settings_page_agent_title,
+        R.string.settings_page_agent_desc,
+        R.string.settings_group_your_assistant,
+        "approval full access iterations tools agents.md memory",
+    ),
+    CHAT(
+        R.string.settings_page_chat_title,
+        R.string.settings_page_chat_desc,
+        R.string.settings_group_your_assistant,
+        "resume last chat launch repo map shortcuts",
+    ),
+    CODE_INTELLIGENCE(
+        R.string.settings_page_codegraph_title,
+        R.string.settings_page_codegraph_desc,
+        R.string.settings_group_integrations,
+        "codegraph graph symbols callers callees impact affected index semantic code intelligence",
+    ),
+    CAVEMAN(
+        R.string.settings_page_caveman_title,
+        R.string.settings_page_caveman_desc,
+        R.string.settings_group_integrations,
+        "caveman install intensity off lite full ultra wenyan compression tokens",
+    ),
+    VOICE(
+        R.string.settings_page_voice_title,
+        R.string.settings_page_voice_desc,
+        R.string.settings_group_your_assistant,
+        "microphone groq whisper transcription speech",
+    ),
+    SKILLS(
+        R.string.settings_page_skills_title,
+        R.string.settings_page_skills_desc,
+        R.string.settings_group_your_assistant,
+        "catalog instructions add skills",
+    ),
+    APPEARANCE(
+        R.string.settings_page_appearance_title,
+        R.string.settings_page_appearance_desc,
+        R.string.settings_group_personalize,
+        "dark light amoled system wallpaper dynamic color landscape desktop tablet layout split panes progress flat squiggly wavy animation",
+    ),
+    PRIVACY(
+        R.string.settings_page_privacy_title,
+        R.string.settings_page_privacy_desc,
+        R.string.settings_group_personalize,
+        "fingerprint pin authentication screenshots",
+    ),
+    SEARCH(
+        R.string.settings_page_search_title,
+        R.string.settings_page_search_desc,
+        R.string.settings_group_connections,
+        "brave tavily keyless internet",
+    ),
+    MCP(
+        R.string.settings_page_mcp_title,
+        R.string.settings_page_mcp_desc,
+        R.string.settings_group_connections,
+        "mcp integrations servers transport",
+    ),
+    TELEGRAM(
+        R.string.settings_page_telegram_title,
+        R.string.settings_page_telegram_desc,
+        R.string.settings_group_connections,
+        "telegram bot remote control pairing notifications gateway",
+    ),
+    WORKSPACE(
+        R.string.settings_page_workspace_title,
+        R.string.settings_page_workspace_desc,
+        R.string.settings_group_workspace_device,
+        "storage files saf folder project remembered permissions grants revoke always",
+    ),
+    STORAGE(
+        R.string.settings_page_storage_title,
+        R.string.settings_page_storage_desc,
+        R.string.settings_group_workspace_device,
+        "storage cleanup disk space cache packages downloads build outputs",
+    ),
+    ENVIRONMENT(
+        R.string.settings_page_environment_title,
+        R.string.settings_page_environment_desc,
+        R.string.settings_group_workspace_device,
+        "shizuku shell packages environment battery optimization keep alive",
+    ),
+    TROUBLESHOOTING(
+        R.string.settings_page_troubleshooting_title,
+        R.string.settings_page_troubleshooting_desc,
+        R.string.settings_group_workspace_device,
+        "diagnostics help doctor repair errors storage linux shizuku ssh mcp notifications provider report",
+    ),
+    BACKUP(
+        R.string.settings_page_backup_title,
+        R.string.settings_page_backup_desc,
+        R.string.settings_group_app_data,
+        "restore history archive transfer password providers keys encryption",
+    ),
+    USAGE(
+        R.string.settings_page_usage_title,
+        R.string.settings_page_usage_desc,
+        R.string.settings_group_app_data,
+        "stats statistics cache tokens",
+    ),
+    UPDATES(
+        R.string.settings_page_updates_title,
+        R.string.settings_page_updates_desc,
+        R.string.settings_group_app_data,
+        "version release download",
+    ),
+    SETUP(
+        R.string.settings_page_setup_title,
+        R.string.settings_page_setup_desc,
+        R.string.settings_group_app_data,
+        "onboarding notifications permissions",
+    ),
+    ABOUT(
+        R.string.settings_page_about_title,
+        R.string.settings_page_about_desc,
+        R.string.settings_group_app_data,
+        "about license mit copyright credits author sanuu github repository open source thanks",
+    ),
 }
 
 internal data class SettingsSearchEntry(
-    val title: String,
-    val description: String,
+    @StringRes val title: Int,
+    @StringRes val description: Int,
     val page: SettingsPage,
     val keywords: String = "",
     val primary: Boolean = false,
     /**
      * Visible label of the single control this entry points at, when it describes
      * a setting rather than a whole page. Opening the entry scrolls that control
-     * into view and tints it (see SettingsAnchor); the label must match what the
-     * control renders, since that is also what the user searched for.
+     * into view and tints it (see SettingsAnchor); the id must be the one the
+     * control itself renders, so the pair can never drift apart.
      */
-    val anchor: String? = null,
+    @StringRes val anchor: Int? = null,
 )
 
 private val primarySettingsEntries = SettingsPage.entries.map { page ->
@@ -53,61 +193,305 @@ private val primarySettingsEntries = SettingsPage.entries.map { page ->
 }
 
 private val subSettingsEntries = listOf(
-    SettingsSearchEntry("Progress bar style", "Appearance · Flat or squiggly, with live previews", SettingsPage.APPEARANCE,
-        "progress loading indicator animation expressive flat squiggly wavy", anchor = "Progress bar style"),
-    SettingsSearchEntry("Fallbacks", "Models & providers · Ordered backup models and routing privacy", SettingsPage.MODELS, "fallback failover retry retries quota ZDR privacy chain", anchor = "Fallbacks"),
-    SettingsSearchEntry("Continue with ChatGPT", "Connected accounts · Use your ChatGPT plan", SettingsPage.CONNECTED_ACCOUNTS, "sign in codex subscription", anchor = "Continue with ChatGPT"),
-    SettingsSearchEntry("Manage providers", "Models & providers · Add connections, API keys and choose models", SettingsPage.MODELS, "provider api key openai anthropic gemini login model", anchor = "Manage providers"),
-    SettingsSearchEntry("Dual planning models", "Models & providers · Configure separate plan and execute models", SettingsPage.MODELS, "planning plan model execute execution model", anchor = "Dual planning models"),
-    SettingsSearchEntry("Plan model", "Models & providers · Choose the model used for planning", SettingsPage.MODELS, "planning dual", anchor = "Dual planning models"),
-    SettingsSearchEntry("Execute model", "Models & providers · Choose the model used for execution", SettingsPage.MODELS, "execution dual", anchor = "Dual planning models"),
-    SettingsSearchEntry("Default permission mode", "Agent behavior · Choose approval or full-access behavior", SettingsPage.AGENT, "permissions approval full access", anchor = "Default permission mode"),
-    SettingsSearchEntry("Subagent action tools", "Sub-Agent settings · Let subagents edit files and run commands in Act mode", SettingsPage.SUBAGENT, "subagent sub-agent permissions tools commands read only plan", anchor = "Subagent action tools"),
-    SettingsSearchEntry("Subagent model", "Sub-Agent settings · Choose a separate provider and model for subagents", SettingsPage.SUBAGENT, "subagent sub-agent model provider execution different separate", anchor = "Subagent model"),
-    SettingsSearchEntry("Max context window", "Agent behavior · Set the maximum model context size", SettingsPage.AGENT, "context tokens limit", anchor = "Max context window"),
-    SettingsSearchEntry("Tool-call iteration limit", "Agent behavior · Limit agent tool iterations", SettingsPage.AGENT, "iterations tools max limit", anchor = "Tool-call iteration limit"),
-    SettingsSearchEntry("Project instructions (AGENTS.md)", "Agent behavior · Edit workspace instructions injected into every run", SettingsPage.AGENT, "agents instructions memory workspace prompt", anchor = "Project instructions (AGENTS.md)"),
-    SettingsSearchEntry("Resume last chat on launch", "Chat & commands · Open your most recent chat when the app starts", SettingsPage.CHAT, "startup launch chat resume", anchor = "Resume last chat on launch"),
-    SettingsSearchEntry("Show live code", "Chat & commands · Preview code generation and line changes", SettingsPage.CHAT, "writing streaming diff added removed tokens", anchor = "Show live code"),
-    SettingsSearchEntry("Workspace code index (Repo map)", "Chat & commands · Index project symbols for agent context", SettingsPage.CHAT, "repo map code index symbols", anchor = "Workspace code index (Repo map)"),
-    SettingsSearchEntry("CodeGraph", "Code intelligence · Install CodeGraph and enable semantic indexes per workspace", SettingsPage.CODE_INTELLIGENCE, "codegraph explore node impact affected sync semantic graph"),
-    SettingsSearchEntry("CodeGraph workspace index", "Code intelligence · Enable, sync or rebuild the active project index", SettingsPage.CODE_INTELLIGENCE, "project workspace initialize reindex graph"),
-    SettingsSearchEntry("Slash commands", "Chat & commands · Manage custom slash commands", SettingsPage.CHAT, "shortcut snippets custom command", anchor = "Slash commands"),
-    SettingsSearchEntry("Speech-to-text engine", "Voice input · Choose inbuilt recognition or Groq Whisper", SettingsPage.VOICE, "voice microphone groq whisper speech transcription", anchor = "Speech-to-text engine"),
-    SettingsSearchEntry("Whisper model", "Voice input · Choose the Groq Whisper transcription model", SettingsPage.VOICE, "groq voice transcription", anchor = "Whisper Model"),
-    SettingsSearchEntry("Theme", "Appearance · Choose System, Light, Dark or AMOLED", SettingsPage.APPEARANCE, "dark light amoled color", anchor = "Theme"),
-    SettingsSearchEntry("Workspace layout", "Appearance · Auto, Phone or Desktop layout", SettingsPage.APPEARANCE, "landscape tablet split panes wide desktop", anchor = "Workspace layout"),
-    SettingsSearchEntry("Dynamic color", "Appearance · Match app colors to your wallpaper", SettingsPage.APPEARANCE, "material you wallpaper colors", anchor = "Dynamic color"),
-    SettingsSearchEntry("Biometric app lock", "Privacy & security · Require fingerprint, face or device PIN", SettingsPage.PRIVACY, "fingerprint face pin authentication lock"),
-    SettingsSearchEntry("Auto-lock timeout", "Privacy & security · Choose when the app locks again", SettingsPage.PRIVACY, "biometric timeout security"),
-    SettingsSearchEntry("Allow screenshots", "Privacy & security · Control screenshot access", SettingsPage.PRIVACY, "screen capture screenshot privacy"),
-    SettingsSearchEntry("GitHub sign in", "GitHub · Connect account access for repositories", SettingsPage.GITHUB, "oauth token pat repositories login"),
-    SettingsSearchEntry("Web search backend", "Web search · Choose Keyless, Brave or Tavily", SettingsPage.SEARCH, "internet brave tavily api key keyless"),
-    SettingsSearchEntry("MCP servers", "Connected tools · Add and configure MCP integrations", SettingsPage.MCP, "tools integrations server transport"),
-    SettingsSearchEntry("Add workspace", "Workspaces · Add another project folder", SettingsPage.WORKSPACE, "folder storage project saf"),
-    SettingsSearchEntry("Shared storage", "Terminal & device · Grant read/write access to device folders", SettingsPage.ENVIRONMENT, "files storage permission all files", anchor = "Shared storage"),
-    SettingsSearchEntry("Shizuku (ADB privileges)", "Terminal & device · Configure elevated shell access", SettingsPage.ENVIRONMENT, "adb shell system paths permission", anchor = "System paths & any folder"),
-    SettingsSearchEntry("Linux environment", "Terminal & device · Configure the Linux toolchain", SettingsPage.ENVIRONMENT, "terminal packages shell environment", anchor = "App workspace shell"),
-    SettingsSearchEntry("Battery optimization", "Terminal & device · Keep background agent work alive", SettingsPage.ENVIRONMENT, "background keep alive battery"),
-    SettingsSearchEntry("Export chats", "Chat backups · Save conversations to a backup file", SettingsPage.BACKUP, "backup export history archive"),
-    SettingsSearchEntry("Import chats", "Chat backups · Restore conversations from a backup file", SettingsPage.BACKUP, "backup import restore history"),
-    SettingsSearchEntry("Check for updates", "Updates · Check GitHub Releases for a newer build", SettingsPage.UPDATES, "version update release download"),
-    SettingsSearchEntry("License", "About · The MIT license and what it means for forks", SettingsPage.ABOUT, "mit copyright permissive open source"),
-    SettingsSearchEntry("Credits", "About · Open source projects behind AndroidHarness", SettingsPage.ABOUT, "thanks acknowledgements inspirations projects"),
-    SettingsSearchEntry("Author", "About · Who builds AndroidHarness and where to find it", SettingsPage.ABOUT, "sanuu github repository maintainer source code"),
+    SettingsSearchEntry(
+        R.string.settings_search_progress_bar_title,
+        R.string.settings_search_progress_bar_desc,
+        SettingsPage.APPEARANCE,
+        "progress loading indicator animation expressive flat squiggly wavy",
+        anchor = R.string.settings_anchor_progress_bar_style,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_fallbacks_title,
+        R.string.settings_search_fallbacks_desc,
+        SettingsPage.MODELS,
+        "fallback failover retry retries quota ZDR privacy chain",
+        anchor = R.string.settings_anchor_fallbacks,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_continue_chatgpt_title,
+        R.string.settings_search_continue_chatgpt_desc,
+        SettingsPage.CONNECTED_ACCOUNTS,
+        "sign in codex subscription",
+        anchor = R.string.settings_anchor_continue_chatgpt,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_manage_providers_title,
+        R.string.settings_search_manage_providers_desc,
+        SettingsPage.MODELS,
+        "provider api key openai anthropic gemini login model",
+        anchor = R.string.settings_anchor_manage_providers,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_dual_planning_title,
+        R.string.settings_search_dual_planning_desc,
+        SettingsPage.MODELS,
+        "planning plan model execute execution model",
+        anchor = R.string.settings_anchor_dual_planning,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_plan_model_title,
+        R.string.settings_search_plan_model_desc,
+        SettingsPage.MODELS,
+        "planning dual",
+        anchor = R.string.settings_anchor_dual_planning,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_execute_model_title,
+        R.string.settings_search_execute_model_desc,
+        SettingsPage.MODELS,
+        "execution dual",
+        anchor = R.string.settings_anchor_dual_planning,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_permission_mode_title,
+        R.string.settings_search_permission_mode_desc,
+        SettingsPage.AGENT,
+        "permissions approval full access",
+        anchor = R.string.settings_anchor_default_permission,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_subagent_tools_title,
+        R.string.settings_search_subagent_tools_desc,
+        SettingsPage.SUBAGENT,
+        "subagent sub-agent permissions tools commands read only plan",
+        anchor = R.string.settings_anchor_subagent_tools,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_subagent_model_title,
+        R.string.settings_search_subagent_model_desc,
+        SettingsPage.SUBAGENT,
+        "subagent sub-agent model provider execution different separate",
+        anchor = R.string.settings_anchor_subagent_model,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_max_context_title,
+        R.string.settings_search_max_context_desc,
+        SettingsPage.AGENT,
+        "context tokens limit",
+        anchor = R.string.settings_anchor_max_context,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_tool_iterations_title,
+        R.string.settings_search_tool_iterations_desc,
+        SettingsPage.AGENT,
+        "iterations tools max limit",
+        anchor = R.string.settings_anchor_tool_iterations,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_project_instructions_title,
+        R.string.settings_search_project_instructions_desc,
+        SettingsPage.AGENT,
+        "agents instructions memory workspace prompt",
+        anchor = R.string.settings_anchor_project_instructions,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_resume_last_chat_title,
+        R.string.settings_search_resume_last_chat_desc,
+        SettingsPage.CHAT,
+        "startup launch chat resume",
+        anchor = R.string.settings_anchor_resume_last_chat,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_show_live_code_title,
+        R.string.settings_search_show_live_code_desc,
+        SettingsPage.CHAT,
+        "writing streaming diff added removed tokens",
+        anchor = R.string.settings_anchor_show_live_code,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_repo_map_title,
+        R.string.settings_search_repo_map_desc,
+        SettingsPage.CHAT,
+        "repo map code index symbols",
+        anchor = R.string.settings_anchor_repo_map,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_codegraph_title,
+        R.string.settings_search_codegraph_desc,
+        SettingsPage.CODE_INTELLIGENCE,
+        "codegraph explore node impact affected sync semantic graph",
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_codegraph_index_title,
+        R.string.settings_search_codegraph_index_desc,
+        SettingsPage.CODE_INTELLIGENCE,
+        "project workspace initialize reindex graph",
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_slash_commands_title,
+        R.string.settings_search_slash_commands_desc,
+        SettingsPage.CHAT,
+        "shortcut snippets custom command",
+        anchor = R.string.settings_anchor_slash_commands,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_stt_title,
+        R.string.settings_search_stt_desc,
+        SettingsPage.VOICE,
+        "voice microphone groq whisper speech transcription",
+        anchor = R.string.settings_anchor_stt,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_whisper_title,
+        R.string.settings_search_whisper_desc,
+        SettingsPage.VOICE,
+        "groq voice transcription",
+        anchor = R.string.settings_anchor_whisper,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_theme_title,
+        R.string.settings_search_theme_desc,
+        SettingsPage.APPEARANCE,
+        "dark light amoled color",
+        anchor = R.string.settings_anchor_theme,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_layout_title,
+        R.string.settings_search_layout_desc,
+        SettingsPage.APPEARANCE,
+        "landscape tablet split panes wide desktop",
+        anchor = R.string.settings_anchor_layout,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_dynamic_color_title,
+        R.string.settings_search_dynamic_color_desc,
+        SettingsPage.APPEARANCE,
+        "material you wallpaper colors",
+        anchor = R.string.settings_anchor_dynamic_color,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_app_lock_title,
+        R.string.settings_search_app_lock_desc,
+        SettingsPage.PRIVACY,
+        "fingerprint face pin authentication lock",
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_autolock_title,
+        R.string.settings_search_autolock_desc,
+        SettingsPage.PRIVACY,
+        "biometric timeout security",
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_screenshots_title,
+        R.string.settings_search_screenshots_desc,
+        SettingsPage.PRIVACY,
+        "screen capture screenshot privacy",
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_github_title,
+        R.string.settings_search_github_desc,
+        SettingsPage.GITHUB,
+        "oauth token pat repositories login",
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_web_title,
+        R.string.settings_search_web_desc,
+        SettingsPage.SEARCH,
+        "internet brave tavily api key keyless",
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_mcp_title,
+        R.string.settings_search_mcp_desc,
+        SettingsPage.MCP,
+        "tools integrations server transport",
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_add_workspace_title,
+        R.string.settings_search_add_workspace_desc,
+        SettingsPage.WORKSPACE,
+        "folder storage project saf",
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_shared_storage_title,
+        R.string.settings_search_shared_storage_desc,
+        SettingsPage.ENVIRONMENT,
+        "files storage permission all files",
+        anchor = R.string.settings_anchor_shared_storage,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_shizuku_title,
+        R.string.settings_search_shizuku_desc,
+        SettingsPage.ENVIRONMENT,
+        "adb shell system paths permission",
+        anchor = R.string.settings_anchor_system_paths,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_linux_title,
+        R.string.settings_search_linux_desc,
+        SettingsPage.ENVIRONMENT,
+        "terminal packages shell environment",
+        anchor = R.string.settings_anchor_app_shell,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_battery_title,
+        R.string.settings_search_battery_desc,
+        SettingsPage.ENVIRONMENT,
+        "background keep alive battery",
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_export_title,
+        R.string.settings_search_export_desc,
+        SettingsPage.BACKUP,
+        "backup export history archive",
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_import_title,
+        R.string.settings_search_import_desc,
+        SettingsPage.BACKUP,
+        "backup import restore history",
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_updates_title,
+        R.string.settings_search_updates_desc,
+        SettingsPage.UPDATES,
+        "version update release download",
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_license_title,
+        R.string.settings_search_license_desc,
+        SettingsPage.ABOUT,
+        "mit copyright permissive open source",
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_credits_title,
+        R.string.settings_search_credits_desc,
+        SettingsPage.ABOUT,
+        "thanks acknowledgements inspirations projects",
+    ),
+    SettingsSearchEntry(
+        R.string.settings_search_author_title,
+        R.string.settings_search_author_desc,
+        SettingsPage.ABOUT,
+        "sanuu github repository maintainer source code",
+    ),
 )
 
-internal fun matchingSettingsEntries(query: String): List<SettingsSearchEntry> {
+/**
+ * Entries matching every whitespace-separated term of [query]. Titles and
+ * descriptions are resolved through [context] so a search works in whichever
+ * language the app is currently running in, while [SettingsSearchEntry.keywords]
+ * stay in English so the original vocabulary keeps working everywhere.
+ */
+internal fun matchingSettingsEntries(query: String, context: Context): List<SettingsSearchEntry> {
     val terms = query.trim().lowercase().split(Regex("""\s+""")).filter { it.isNotBlank() }
     if (terms.isEmpty()) return primarySettingsEntries
-    return (primarySettingsEntries + subSettingsEntries).filter { entry ->
-        val text = "${entry.title} ${entry.description} ${entry.page.title} ${entry.page.group} ${entry.keywords}".lowercase()
-        terms.all { it in text }
-    }.sortedWith(compareBy<SettingsSearchEntry> { it.primary }.thenBy { it.title })
+    fun haystack(entry: SettingsSearchEntry): String = buildString {
+        append(context.getString(entry.title)).append(' ')
+        append(context.getString(entry.description)).append(' ')
+        append(context.getString(entry.page.title)).append(' ')
+        append(context.getString(entry.page.group)).append(' ')
+        append(entry.keywords)
+    }.lowercase()
+    return (primarySettingsEntries + subSettingsEntries)
+        .filter { entry -> terms.all { it in haystack(entry) } }
+        .sortedWith(
+            compareBy<SettingsSearchEntry> { it.primary }
+                .thenBy { context.getString(it.title) },
+        )
 }
 
-internal fun matchingSettingsPages(query: String): List<SettingsPage> =
-    matchingSettingsEntries(query).map { it.page }.distinct()
+internal fun matchingSettingsPages(query: String, context: Context): List<SettingsPage> =
+    matchingSettingsEntries(query, context).map { it.page }.distinct()
 
 internal fun settingsDeepLink(target: String): SettingsPage? = when (target) {
     "troubleshooting" -> SettingsPage.TROUBLESHOOTING
@@ -122,12 +506,16 @@ internal fun settingsDeepLink(target: String): SettingsPage? = when (target) {
 }
 
 /** The control a deep link should scroll to and tint, if it names a specific one. */
-internal fun settingsDeepLinkAnchor(target: String): String? = when (target) {
-    "planning" -> "Dual planning models"
-    "voice" -> "Speech-to-text engine"
+@StringRes
+internal fun settingsDeepLinkAnchor(target: String): Int? = when (target) {
+    "planning" -> R.string.settings_anchor_dual_planning
+    "voice" -> R.string.settings_anchor_stt
     else -> null
 }
 
 /** The control a search result should scroll to, or null when it opens a whole page. */
-internal fun settingsAnchorFor(title: String): String? =
-    subSettingsEntries.firstOrNull { it.title == title }?.anchor
+@StringRes
+internal fun settingsAnchorFor(title: String, context: Context): Int? =
+    subSettingsEntries.firstOrNull { entry ->
+        entry.anchor != null && context.getString(entry.title) == title
+    }?.anchor

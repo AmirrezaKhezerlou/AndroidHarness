@@ -19,10 +19,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
+import com.androidharness.app.R
 import com.androidharness.app.data.ProgressBarStyle
 import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import com.androidharness.app.ui.theme.LocalProgressBarStyle
@@ -30,8 +32,8 @@ import com.androidharness.app.ui.theme.LocalProgressBarStyle
 @Composable
 internal fun ProgressBarStyleSection(selectedStyle: ProgressBarStyle, onSelect: (ProgressBarStyle) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Progress bar style", style = MaterialTheme.typography.bodyLarge)
-        Text("Choose how progress bars look. Applies immediately.",
+        Text(stringResource(R.string.settings_anchor_progress_bar_style), style = MaterialTheme.typography.bodyLarge)
+        Text(stringResource(R.string.settings_progress_bar_subtitle),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         BoxWithConstraints(Modifier.fillMaxWidth().selectableGroup()) {
             if (maxWidth >= 300.dp * LocalDensity.current.fontScale) {

@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
@@ -20,6 +21,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.androidharness.app.R
 import com.androidharness.app.data.ModelVisibility
 import com.androidharness.app.llm.*
 import com.androidharness.app.ui.common.ModelReasoningIcon
@@ -62,20 +64,20 @@ fun ModelVisibilitySheet(
             LazyColumn(Modifier.weight(1f).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 item {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Manage models", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                        Text(stringResource(R.string.settings_provider_manage_models), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                         IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, "Close model management") }
                     }
-                    Text("Choose what appears in your chat picker.", style = MaterialTheme.typography.bodySmall,
+                    Text(stringResource(R.string.settings_models_visibility_subtitle), style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(providers, key = { it.id }) { p ->
                             FilterChip(selected = p.id == provider?.id, onClick = { providerId = p.id; query = "" }, label = { Text(p.name) })
                         }
                     }
-                    OutlinedTextField(query, { query = it }, singleLine = true, label = { Text("Search this provider") },
+                    OutlinedTextField(query, { query = it }, singleLine = true, label = { Text(stringResource(R.string.settings_models_visibility_search)) },
                         leadingIcon = { Icon(Icons.Outlined.Search, null) }, modifier = Modifier.fillMaxWidth())
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("${available.count { it.id in selected }}/${available.size} selected", style = MaterialTheme.typography.labelMedium,
+                        Text(stringResource(R.string.settings_models_visibility_selected, available.count { it.id in selected }.toString(), available.size.toString()), style = MaterialTheme.typography.labelMedium,
                             modifier = Modifier.weight(1f))
                         val checked = results.isNotEmpty() && results.all { it.id in selected }
                         TextButton(enabled = results.isNotEmpty(), onClick = {
@@ -95,10 +97,11 @@ fun ModelVisibilitySheet(
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
                 items(results, key = { "${provider?.id}:${it.id}" }) { entry ->
+                    val showCd = stringResource(R.string.settings_models_visibility_show_cd, entry.displayName ?: entry.id)
                     Row(Modifier.fillMaxWidth().heightIn(min = 64.dp)
                         .toggleable(entry.id in selected, role = Role.Checkbox, onValueChange = { checked ->
                             update(if (checked) selected + entry.id else selected - entry.id)
-                        }).semantics { contentDescription = "Show ${entry.displayName ?: entry.id} in quick selection" }
+                        }).semantics { contentDescription = showCd }
                         .padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(entry.id in selected, onCheckedChange = null)
                         Spacer(Modifier.width(12.dp))
@@ -111,10 +114,10 @@ fun ModelVisibilitySheet(
                         ModelReasoningIcon(entry, provider?.type)
                     }
                 }
-                if (results.isEmpty()) item { Text("No matching models", modifier = Modifier.padding(vertical = 24.dp)) }
+                if (results.isEmpty()) item { Text(stringResource(R.string.settings_models_visibility_empty), modifier = Modifier.padding(vertical = 24.dp)) }
             }
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Existing chats keep their model. New catalog entries stay hidden after you customize a list.",
+                Text(stringResource(R.string.settings_models_visibility_note),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Button(onClick = {
                     provider?.takeIf { it.id !in draftIds }?.let { visibility.save(it.id, selected) }
@@ -122,7 +125,7 @@ fun ModelVisibilitySheet(
                         if (providers.any { it.id == id }) visibility.save(id, draftValues[i].toSet())
                     }
                     onDismiss()
-                }, modifier = Modifier.fillMaxWidth()) { Text("Save selection") }
+                }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.settings_models_visibility_save)) }
             }
         }
     }

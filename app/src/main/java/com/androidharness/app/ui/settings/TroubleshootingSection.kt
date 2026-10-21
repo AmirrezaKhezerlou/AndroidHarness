@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -22,6 +23,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androidharness.app.AppContainer
 import com.androidharness.app.BuildConfig
+import com.androidharness.app.R
 import com.androidharness.app.data.AppSettings
 import com.androidharness.app.data.env.EnvState
 import com.androidharness.app.data.env.ShizukuState
@@ -125,19 +127,19 @@ internal fun TroubleshootingSection(container: AppContainer, onOpen: (SettingsPa
         DiagnosticArea.NOTIFICATIONS to if (notifications) DiagnosticState.READY else DiagnosticState.OFF)
     val report = diagnosticReport(BuildConfig.VERSION_NAME, Build.VERSION.SDK_INT, states, providers.size, enabledServers.size)
     LaunchedEffect(report) { copied = false }
-    Text("Checks for your default provider and workspace. Optional features can stay off.",
+    Text(stringResource(R.string.settings_troubleshooting_intro),
         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = ::refresh) { Icon(Icons.Outlined.Refresh, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Refresh status") }
+        OutlinedButton(onClick = ::refresh) { Icon(Icons.Outlined.Refresh, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.settings_env_refresh_status)) }
         OutlinedButton(onClick = {
             (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Troubleshooting", report))
             copied = true
         }) { Text(if (copied) "Copied" else "Copy report") }
         TextButton(onClick = { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"; putExtra(Intent.EXTRA_TEXT, report)
-        }, "Share troubleshooting report")) }) { Text("Share report") }
+        }, "Share troubleshooting report")) }) { Text(stringResource(R.string.settings_troubleshooting_share)) }
     }
-    Text("Reports exclude credentials, addresses, file paths and chats.", style = MaterialTheme.typography.labelSmall,
+    Text(stringResource(R.string.settings_troubleshooting_share_note), style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant)
     DiagnosticCard(DiagnosticArea.PROVIDER.label, providerState,
         if (provider == null) "Choose a provider to use the assistant." else "${provider.name}\n${catalog.detail}") {
@@ -157,12 +159,12 @@ internal fun TroubleshootingSection(container: AppContainer, onOpen: (SettingsPa
                 catch (e: kotlinx.coroutines.CancellationException) { catalog = CatalogCheck.NOT_CHECKED; throw e }
                 catch (_: Exception) { catalog = CatalogCheck.FAILED }
             }
-        }) { Text("Check models") }
-        TextButton(onClick = { onOpen(if (local) SettingsPage.LOCAL_MODELS else SettingsPage.MODELS) }) { Text("Manage provider") }
+        }) { Text(stringResource(R.string.settings_troubleshooting_check_models)) }
+        TextButton(onClick = { onOpen(if (local) SettingsPage.LOCAL_MODELS else SettingsPage.MODELS) }) { Text(stringResource(R.string.settings_troubleshooting_manage_provider)) }
     }
     DiagnosticCard("Storage access · required", states.getValue(DiagnosticArea.STORAGE),
         if (storage.granted) "The app has storage permission." else "Grant storage access to complete setup and use device folders.") {
-        if (!storage.granted) TextButton(onClick = storage.request) { Text("Grant access") }
+        if (!storage.granted) TextButton(onClick = storage.request) { Text(stringResource(R.string.settings_troubleshooting_grant)) }
     }
     DiagnosticCard(DiagnosticArea.WORKSPACE.label, folder, (project?.name?.let { "$it\n" } ?: "") + when (folder) {
         DiagnosticState.READY -> "The folder can be read. Write access has not been tested."
@@ -172,15 +174,15 @@ internal fun TroubleshootingSection(container: AppContainer, onOpen: (SettingsPa
     }) {
         if (project?.kind == WorkspaceManager.KIND_SSH) TextButton(enabled = folder != DiagnosticState.CHECKING, onClick = {
             scope.launch { folder = DiagnosticState.CHECKING; folder = checkFolder() }
-        }) { Text("Check folder") }
-        TextButton(onClick = { onOpen(SettingsPage.WORKSPACE) }) { Text("Open workspaces") }
+        }) { Text(stringResource(R.string.settings_troubleshooting_check_folder)) }
+        TextButton(onClick = { onOpen(SettingsPage.WORKSPACE) }) { Text(stringResource(R.string.settings_troubleshooting_open_workspaces)) }
     }
     DiagnosticCard("Linux tools · optional", linuxState, when (linuxState) {
         DiagnosticState.INSTALLED -> "Toolchain installed. Individual commands have not been tested here."
         DiagnosticState.ISSUE -> "Installation needs attention. Open terminal settings to repair or retry."
         DiagnosticState.CHECKING -> "Installation is in progress."
         else -> "Install Linux tools to run local commands."
-    }) { TextButton(onClick = { onOpen(SettingsPage.ENVIRONMENT) }) { Text("Open terminal settings") } }
+    }) { TextButton(onClick = { onOpen(SettingsPage.ENVIRONMENT) }) { Text(stringResource(R.string.settings_troubleshooting_open_terminal)) } }
     DiagnosticCard("Shizuku · optional", shizukuState, when {
         service == UserServiceState.COMPAT_READY -> "Permission granted. Commands are ready in compatibility mode."
         shizukuState == DiagnosticState.READY -> "Permission granted and command service ready."
@@ -191,24 +193,24 @@ internal fun TroubleshootingSection(container: AppContainer, onOpen: (SettingsPa
         else -> "Start Shizuku to use commands with system access."
     }, extraDetails = { ShizukuFailureDetails(connectionFailure, container.shizuku::connectionReport,
         container.shizuku::startupReport, recovered = service == UserServiceState.COMPAT_READY) }) {
-        TextButton(onClick = { onOpen(SettingsPage.ENVIRONMENT) }) { Text("Open Shizuku settings") }
+        TextButton(onClick = { onOpen(SettingsPage.ENVIRONMENT) }) { Text(stringResource(R.string.settings_troubleshooting_open_shizuku)) }
     }
     DiagnosticCard("SSH workspaces · optional", sshState, when (sshState) {
         DiagnosticState.READY -> "${ssh.values.count { it.connected }} connection(s) active. Check a folder separately to confirm access."
         DiagnosticState.ISSUE -> "A connection needs attention. Review it in Workspaces."
         else -> "No active SSH connections. Connect through Workspaces when needed."
-    }) { TextButton(onClick = { onOpen(SettingsPage.WORKSPACE) }) { Text("Manage connections") } }
+    }) { TextButton(onClick = { onOpen(SettingsPage.WORKSPACE) }) { Text(stringResource(R.string.settings_troubleshooting_manage_connections)) } }
     DiagnosticCard("Connected tools · optional", mcpState, when (mcpState) {
         DiagnosticState.READY -> "All ${enabledServers.size} enabled servers are connected. Tool execution has not been tested here."
         DiagnosticState.ISSUE -> if (tampered) "Server configuration failed its integrity check. Review and save it in Connected tools." else "A server needs sign-in, reconnection or configuration review."
         DiagnosticState.OFF -> "No enabled MCP servers."
         DiagnosticState.CHECKING -> "A server is connecting…"
         else -> "Some enabled servers have not connected yet."
-    }) { TextButton(onClick = { onOpen(SettingsPage.MCP) }) { Text("Manage tools") } }
+    }) { TextButton(onClick = { onOpen(SettingsPage.MCP) }) { Text(stringResource(R.string.settings_troubleshooting_manage_tools)) } }
     DiagnosticCard("Notifications · optional", states.getValue(DiagnosticArea.NOTIFICATIONS),
         if (notifications) "Notifications are allowed by Android." else "You can use the app with notifications off.") {
         TextButton(onClick = { context.startActivity(Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-            .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)) }) { Text("Notification settings") }
+            .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)) }) { Text(stringResource(R.string.settings_troubleshooting_notifications)) }
     }
 }
 

@@ -92,6 +92,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.androidharness.app.AppContainer
@@ -160,7 +161,7 @@ fun SettingsScreen(
         ?: if (desktop) SettingsPage.APPEARANCE else null
     // Label of the control a search result or deep link asked for, cleared once
     // the user has had a moment to see where they landed.
-    var highlight by rememberSaveable { mutableStateOf<String?>(null) }
+    var highlight by rememberSaveable { mutableStateOf<Int?>(null) }
     LaunchedEffect(highlight) {
         if (highlight != null) {
             kotlinx.coroutines.delay(2600)
@@ -185,7 +186,7 @@ fun SettingsScreen(
             container.pendingSettingsScroll.value = null
         }
     }
-    fun openPage(destination: SettingsPage, anchor: String? = null) {
+    fun openPage(destination: SettingsPage, anchor: Int? = null) {
         highlight = anchor
         when (destination) {
             SettingsPage.SKILLS -> onOpenSkills()
@@ -205,7 +206,8 @@ fun SettingsScreen(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             AppHeader(
-                title = if (desktop) "Settings" else page?.title ?: "Settings",
+                title = if (desktop) stringResource(R.string.settings_page_title) else page?.let { stringResource(it.title) }
+                    ?: stringResource(R.string.settings_page_title),
                 onBack = { goBack() },
             )
         },
@@ -237,17 +239,17 @@ fun SettingsScreen(
                         SettingsPage.CONNECTED_ACCOUNTS -> ConnectedAccountsSection(container)
                         SettingsPage.MODELS -> {
                             SettingsPanel(Modifier.fillMaxWidth()) {
-                                SettingsAnchor("Manage providers") {
+                                SettingsAnchor(R.string.settings_anchor_manage_providers) {
                                     SettingRow(
                                         icon = Icons.Outlined.Key,
-                                        title = "Manage providers",
-                                        subtitle = "Add connections, sign in and choose models",
+                                        title = stringResource(R.string.settings_anchor_manage_providers),
+                                        subtitle = stringResource(R.string.settings_models_manage_subtitle),
                                         onClick = onOpenProviders,
                                         trailing = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) },
                                     )
                                 }
                             }
-                            SettingsAnchor("Dual planning models") {
+                            SettingsAnchor(R.string.settings_anchor_dual_planning) {
                                 PlanningModelSection(container, settings, scope, onOpenProviders)
                             }
                             CurrentSetupCard(settings, providers)
@@ -320,10 +322,10 @@ fun SettingsScreen(
         var deleteError by remember(project.id) { mutableStateOf<String?>(null) }
         AlertDialog(
             onDismissRequest = { if (!deleting) pendingDelete = null },
-            title = { Text("Delete workspace?") },
+            title = { Text(stringResource(R.string.settings_workspace_delete_title)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Remove \"${project.name}\" from the list? Files on disk are not deleted.")
+                    Text(stringResource(R.string.settings_workspace_delete_message, project.name))
                     deleteError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             },
@@ -346,7 +348,7 @@ fun SettingsScreen(
                 }) { Text(if (deleting) "Deleting…" else "Delete", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(enabled = !deleting, onClick = { pendingDelete = null }) { Text("Cancel") }
+                TextButton(enabled = !deleting, onClick = { pendingDelete = null }) { Text(stringResource(R.string.settings_action_cancel)) }
             },
         )
     }
@@ -390,7 +392,7 @@ private fun WorkspaceSection(
                 )
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Active workspace", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+                    Text(stringResource(R.string.settings_workspace_active), style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
                     Text(current.name, style = MaterialTheme.typography.titleMedium)
                     Text(
                         workspacePath ?: desc.kindLabel,
@@ -400,7 +402,7 @@ private fun WorkspaceSection(
                 }
                 Icon(
                     Icons.Outlined.CheckCircle,
-                    contentDescription = "Active",
+                    contentDescription = stringResource(R.string.settings_workspace_active_badge),
                     tint = scheme.primary,
                 )
             }
@@ -420,10 +422,10 @@ private fun WorkspaceSection(
                     divider = index != projects.lastIndex,
                     trailing = {
                         if (isActive) {
-                            Icon(Icons.Outlined.CheckCircle, contentDescription = "Active workspace", tint = MaterialTheme.colorScheme.primary)
+                            Icon(Icons.Outlined.CheckCircle, contentDescription = stringResource(R.string.settings_workspace_active), tint = MaterialTheme.colorScheme.primary)
                         } else if (project.kind != "APP") {
                             IconButton(onClick = { onDeleteWorkspace(project) }) {
-                                Icon(Icons.Outlined.Delete, contentDescription = "Delete ${project.name}", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
+                                Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.settings_workspace_delete_cd, project.name), tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
                             }
                         }
                     },
@@ -436,7 +438,7 @@ private fun WorkspaceSection(
         ) {
             Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
-            Text("Add workspace")
+            Text(stringResource(R.string.settings_workspace_add))
         }
     }
 }
@@ -478,35 +480,35 @@ private fun TerminalSection(
 
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(vertical = 4.dp)) {
-            SettingsAnchor("App workspace shell") {
+            SettingsAnchor(R.string.settings_anchor_app_shell) {
                 SettingRow(
                     icon = Icons.Outlined.Terminal,
-                    title = "App workspace shell",
-                    subtitle = "Full Linux toolchain in the private workspace",
+                    title = stringResource(R.string.settings_anchor_app_shell),
+                    subtitle = stringResource(R.string.settings_env_app_shell_subtitle),
                     divider = true,
                     trailing = { StatusText(if (appShellOk) "Ready" else "toybox", ok = appShellOk) },
                 )
             }
-            SettingsAnchor("Shared storage") {
+            SettingsAnchor(R.string.settings_anchor_shared_storage) {
                 SettingRow(
                     icon = Icons.Outlined.SdStorage,
-                    title = "Shared storage",
-                    subtitle = "Read and write project files in shared storage",
+                    title = stringResource(R.string.settings_anchor_shared_storage),
+                    subtitle = stringResource(R.string.settings_env_shared_storage_subtitle),
                     onClick = storageAccess.request,
                     divider = true,
                     trailing = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             StatusText(storageText, ok = allFiles)
-                            if (!allFiles) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Open storage settings", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (!allFiles) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.settings_env_open_storage_settings), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     },
                 )
             }
-            SettingsAnchor("System paths & any folder") {
+            SettingsAnchor(R.string.settings_anchor_system_paths) {
                 SettingRow(
                     icon = Icons.Outlined.Shield,
-                    title = "System paths & any folder",
-                    subtitle = "ADB-shell privileges via Shizuku",
+                    title = stringResource(R.string.settings_anchor_system_paths),
+                    subtitle = stringResource(R.string.settings_env_shizuku_subtitle),
                     divider = false,
                     trailing = { StatusText(systemText, ok = shizukuState == ShizukuState.GRANTED && serviceState.isReady) },
                 )
@@ -564,7 +566,7 @@ private fun CodeIntelligenceSection(
                 )
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("CodeGraph", style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(R.string.settings_search_codegraph_title), style = MaterialTheme.typography.titleSmall)
                     Text(
                         "Local semantic code graph for symbols, callers, impact and affected tests",
                         style = MaterialTheme.typography.bodySmall,
@@ -607,7 +609,7 @@ private fun CodeIntelligenceSection(
                     Button(
                         enabled = !codeGraphState.busy,
                         onClick = { scope.launch { container.codeGraph.installOrUpdate() } },
-                    ) { Text("Install CodeGraph") }
+                    ) { Text(stringResource(R.string.settings_codegraph_install)) }
                 } else {
                     // Only offer an update when a newer release actually exists;
                     // otherwise the tap is a check that answers "already latest".
@@ -615,17 +617,17 @@ private fun CodeIntelligenceSection(
                         Button(
                             enabled = !codeGraphState.busy,
                             onClick = { scope.launch { container.codeGraph.installOrUpdate() } },
-                        ) { Text("Update to v${codeGraphState.latest}") }
+                        ) { Text(stringResource(R.string.settings_codegraph_update_to, codeGraphState.latest.orEmpty())) }
                     } else {
                         OutlinedButton(
                             enabled = !codeGraphState.busy,
                             onClick = { scope.launch { container.codeGraph.checkForUpdates() } },
-                        ) { Text("Check for updates") }
+                        ) { Text(stringResource(R.string.settings_search_updates_title)) }
                     }
                     OutlinedButton(
                         enabled = !codeGraphState.busy,
                         onClick = { scope.launch { container.codeGraph.uninstall() } },
-                    ) { Text("Uninstall") }
+                    ) { Text(stringResource(R.string.settings_action_uninstall)) }
                 }
             }
 
@@ -722,7 +724,7 @@ private fun CodeIntelligenceSection(
                             indexRevision++
                         }
                     },
-                ) { Text("Enable for this workspace") }
+                ) { Text(stringResource(R.string.settings_codegraph_enable)) }
                 else -> FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -736,7 +738,7 @@ private fun CodeIntelligenceSection(
                                 indexRevision++
                             }
                         },
-                    ) { Text("Sync") }
+                    ) { Text(stringResource(R.string.settings_action_sync)) }
                     OutlinedButton(
                         enabled = !workspaceBusy,
                         onClick = {
@@ -746,7 +748,7 @@ private fun CodeIntelligenceSection(
                                 indexRevision++
                             }
                         },
-                    ) { Text("Re-index") }
+                    ) { Text(stringResource(R.string.settings_codegraph_reindex)) }
                     TextButton(
                         enabled = !workspaceBusy,
                         onClick = {
@@ -756,7 +758,7 @@ private fun CodeIntelligenceSection(
                                 indexRevision++
                             }
                         },
-                    ) { Text("Disable") }
+                    ) { Text(stringResource(R.string.settings_action_disable)) }
                 }
             }
         }
@@ -764,7 +766,7 @@ private fun CodeIntelligenceSection(
 
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Agent integration", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.settings_codegraph_agent_integration), style = MaterialTheme.typography.titleSmall)
             Text(
                 "When this workspace is indexed, Harness exposes CodeGraph explore, node, impact, affected-tests and sync tools to the coding agent. Queries sync changed files before reading the graph.",
                 style = MaterialTheme.typography.bodySmall,
@@ -812,7 +814,7 @@ private fun WebSearchSection(container: AppContainer) {
                 )
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("web_search backend", style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(R.string.settings_search_web_backend_label), style = MaterialTheme.typography.titleSmall)
                     Text(
                         when {
                             provider == "keyless" -> "Public search engines, no setup"
@@ -884,7 +886,7 @@ private fun WebSearchSection(container: AppContainer) {
                             modifier = Modifier.size(16.dp),
                         )
                         Spacer(Modifier.width(6.dp))
-                        Text("Get API key")
+                        Text(stringResource(R.string.settings_provider_get_api_key))
                     }
                     OutlinedTextField(
                         value = keyDraft,
@@ -920,7 +922,7 @@ private fun WebSearchSection(container: AppContainer) {
                             expanded = false
                             keyDraft = ""
                             status = null
-                        }) { Text("Cancel") }
+                        }) { Text(stringResource(R.string.settings_action_cancel)) }
                     }
                     status?.let {
                         Text(
@@ -936,13 +938,13 @@ private fun WebSearchSection(container: AppContainer) {
                         expanded = true
                         keyDraft = ""
                         status = null
-                    }) { Text("Replace key") }
+                    }) { Text(stringResource(R.string.settings_provider_replace_key)) }
                     OutlinedButton(onClick = {
                         scope.launch {
                             withContext(Dispatchers.IO) { container.keys.removeSearchApiKey(provider) }
                             keyEpoch++
                         }
-                    }) { Text("Remove", color = MaterialTheme.colorScheme.error) }
+                    }) { Text(stringResource(R.string.settings_action_remove), color = MaterialTheme.colorScheme.error) }
                 }
 
                 else -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -950,12 +952,12 @@ private fun WebSearchSection(container: AppContainer) {
                         runCatching {
                             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(keyUrl)))
                         }
-                    }) { Text("Get API key") }
+                    }) { Text(stringResource(R.string.settings_provider_get_api_key)) }
                     OutlinedButton(onClick = {
                         expanded = true
                         keyDraft = ""
                         status = null
-                    }) { Text("I have a key") }
+                    }) { Text(stringResource(R.string.settings_provider_have_key)) }
                 }
             }
         }
@@ -1043,8 +1045,8 @@ private fun VoiceSpeechSection(
                 )
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    SettingsAnchor("Speech-to-text engine") {
-                        Text("Speech-to-text engine", style = MaterialTheme.typography.titleSmall)
+                    SettingsAnchor(R.string.settings_anchor_stt) {
+                        Text(stringResource(R.string.settings_anchor_stt), style = MaterialTheme.typography.titleSmall)
                     }
                     Text(
                         when {
@@ -1093,9 +1095,9 @@ private fun VoiceSpeechSection(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                SettingsAnchor("Whisper Model") {
+                SettingsAnchor(R.string.settings_anchor_whisper) {
                     Text(
-                        "Whisper Model",
+                        stringResource(R.string.settings_anchor_whisper),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1140,7 +1142,7 @@ private fun VoiceSpeechSection(
                                 modifier = Modifier.size(16.dp),
                             )
                             Spacer(Modifier.width(6.dp))
-                            Text("Get Groq API key")
+                            Text(stringResource(R.string.settings_voice_get_groq_key))
                         }
                         OutlinedTextField(
                             value = keyDraft,
@@ -1176,7 +1178,7 @@ private fun VoiceSpeechSection(
                                 expanded = false
                                 keyDraft = ""
                                 status = null
-                            }) { Text("Cancel") }
+                            }) { Text(stringResource(R.string.settings_action_cancel)) }
                         }
                         status?.let {
                             Text(
@@ -1192,13 +1194,13 @@ private fun VoiceSpeechSection(
                             expanded = true
                             keyDraft = ""
                             status = null
-                        }) { Text("Replace key") }
+                        }) { Text(stringResource(R.string.settings_provider_replace_key)) }
                         OutlinedButton(onClick = {
                             scope.launch {
                                 withContext(Dispatchers.IO) { container.keys.removeGroqApiKey() }
                                 keyEpoch++
                             }
-                        }) { Text("Remove", color = MaterialTheme.colorScheme.error) }
+                        }) { Text(stringResource(R.string.settings_action_remove), color = MaterialTheme.colorScheme.error) }
                     }
 
                     else -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1206,12 +1208,12 @@ private fun VoiceSpeechSection(
                             runCatching {
                                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(groqKeyUrl)))
                             }
-                        }) { Text("Get API key") }
+                        }) { Text(stringResource(R.string.settings_provider_get_api_key)) }
                         OutlinedButton(onClick = {
                             expanded = true
                             keyDraft = ""
                             status = null
-                        }) { Text("I have a key") }
+                        }) { Text(stringResource(R.string.settings_provider_have_key)) }
                     }
                 }
             }
@@ -1255,7 +1257,7 @@ private fun McpSection(container: AppContainer) {
                 )
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("MCP servers", style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(R.string.settings_search_mcp_title), style = MaterialTheme.typography.titleSmall)
                     Text(
                         "Extra tools the agent can use in any chat",
                         style = MaterialTheme.typography.bodySmall,
@@ -1328,7 +1330,7 @@ private fun McpSection(container: AppContainer) {
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(),
-                        ) { Text("Authenticate") }
+                        ) { Text(stringResource(R.string.settings_action_authenticate)) }
                         authError?.let {
                             Text(
                                 it,
@@ -1340,11 +1342,11 @@ private fun McpSection(container: AppContainer) {
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         TextButton(onClick = {
                             scope.launch { withContext(Dispatchers.IO) { container.mcp.testConnection(server) } }
-                        }) { Text("Test") }
-                        TextButton(onClick = { editing = server }) { Text("Edit") }
+                        }) { Text(stringResource(R.string.settings_action_test)) }
+                        TextButton(onClick = { editing = server }) { Text(stringResource(R.string.settings_action_edit)) }
                         TextButton(onClick = {
                             scope.launch { container.mcp.removeServer(server.name) }
-                        }) { Text("Remove") }
+                        }) { Text(stringResource(R.string.settings_action_remove)) }
                     }
                 }
             }
@@ -1352,7 +1354,7 @@ private fun McpSection(container: AppContainer) {
             OutlinedButton(onClick = { showAdd = true }, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Add server")
+                Text(stringResource(R.string.settings_action_add_server))
             }
         }
     }
@@ -1390,7 +1392,7 @@ private fun McpAddDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add MCP server") },
+        title = { Text(stringResource(R.string.settings_mcp_add_title)) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -1399,7 +1401,7 @@ private fun McpAddDialog(
                 OutlinedTextField(
                     value = paste,
                     onValueChange = { paste = it },
-                    label = { Text("Paste config") },
+                    label = { Text(stringResource(R.string.settings_mcp_paste_config)) },
                     placeholder = {
                         Text(
                             "{\"mcpServers\": {\"supabase\": {\"type\": \"http\", \"url\": \"…\"}}}\n" +
@@ -1464,8 +1466,8 @@ private fun McpAddDialog(
         },
         dismissButton = {
             Row {
-                TextButton(onClick = onManual) { Text("Manual editor") }
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onManual) { Text(stringResource(R.string.settings_mcp_manual_editor)) }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_action_cancel)) }
             }
         },
     )
@@ -1509,10 +1511,10 @@ private fun McpServerDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") },
-                    placeholder = { Text("e.g. filesystem, supabase") },
+                    label = { Text(stringResource(R.string.settings_mcp_name)) },
+                    placeholder = { Text(stringResource(R.string.settings_mcp_name_hint)) },
                     singleLine = true,
-                    supportingText = { if (duplicate) Text("A server with this name already exists.") },
+                    supportingText = { if (duplicate) Text(stringResource(R.string.settings_mcp_name_taken)) },
                     isError = duplicate,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -1530,15 +1532,15 @@ private fun McpServerDialog(
                     OutlinedTextField(
                         value = command,
                         onValueChange = { command = it },
-                        label = { Text("Command") },
-                        placeholder = { Text("e.g. npx, python3, /full/path/server") },
+                        label = { Text(stringResource(R.string.settings_mcp_command)) },
+                        placeholder = { Text(stringResource(R.string.settings_mcp_command_hint)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     OutlinedTextField(
                         value = argsText,
                         onValueChange = { argsText = it },
-                        label = { Text("Arguments (one per line)") },
+                        label = { Text(stringResource(R.string.settings_mcp_arguments)) },
                         placeholder = { Text("-y\n@modelcontextprotocol/server-filesystem /path") },
                         minLines = 2,
                         modifier = Modifier.fillMaxWidth(),
@@ -1546,7 +1548,7 @@ private fun McpServerDialog(
                     OutlinedTextField(
                         value = envText,
                         onValueChange = { envText = it },
-                        label = { Text("Environment variables (KEY=value per line)") },
+                        label = { Text(stringResource(R.string.settings_mcp_env_vars)) },
                         minLines = 1,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -1561,7 +1563,7 @@ private fun McpServerDialog(
                     OutlinedTextField(
                         value = url,
                         onValueChange = { url = it },
-                        label = { Text("Server URL") },
+                        label = { Text(stringResource(R.string.settings_mcp_server_url)) },
                         placeholder = { Text("https://mcp.example.com/mcp") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
@@ -1569,18 +1571,16 @@ private fun McpServerDialog(
                     OutlinedTextField(
                         value = headersText,
                         onValueChange = { headersText = it },
-                        label = { Text("Headers (Key: value per line, optional)") },
+                        label = { Text(stringResource(R.string.settings_mcp_headers)) },
                         placeholder = { Text("Authorization: Bearer …") },
                         minLines = 1,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Text(
-                        if (type == "http") {
-                            "Streamable HTTP transport. If the server requires sign-in, save first; " +
-                                "the Authenticate button appears after the server demands it."
-                        } else {
-                            "Legacy HTTP+SSE transport for older remote servers."
-                        },
+                        stringResource(
+                            if (type == "http") R.string.settings_mcp_transport_http
+                            else R.string.settings_mcp_transport_sse,
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1612,10 +1612,10 @@ private fun McpServerDialog(
                         onDismiss()
                     }
                 },
-            ) { Text("Save") }
+            ) { Text(stringResource(R.string.settings_action_save)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_action_cancel)) }
         },
     )
 }
@@ -1628,16 +1628,16 @@ private fun StorageAccessCard(allFiles: Boolean, onGrant: () -> Unit) {
                 Icon(Icons.Outlined.SdStorage, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Storage access", style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(R.string.settings_env_storage_access), style = MaterialTheme.typography.titleSmall)
                     Text(
-                        if (allFiles) "Granted: the shell and file tools can use shared storage."
-                        else "Optional: use the app workspace, or grant access for device folders.",
+                        if (allFiles) stringResource(R.string.settings_env_storage_granted)
+                        else stringResource(R.string.settings_env_storage_optional),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 if (!allFiles) {
-                    Button(onClick = onGrant) { Text("Grant") }
+                    Button(onClick = onGrant) { Text(stringResource(R.string.settings_action_grant)) }
                 }
             }
         }
@@ -1660,7 +1660,7 @@ internal fun ShizukuCard(
                 Icon(Icons.Outlined.Shield, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Shizuku (ADB privileges)", style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(R.string.settings_search_shizuku_title), style = MaterialTheme.typography.titleSmall)
                     Text(
                         when (state) {
                             ShizukuState.NOT_INSTALLED -> "Not installed: optional."
@@ -1694,9 +1694,9 @@ internal fun ShizukuCard(
                         Text(if (serviceState.isReady) "Re-check status" else "Retry connection")
                     }
                 }
-                ShizukuState.RUNNING_NO_PERMISSION -> Button(onClick = onGrant) { Text("Grant Shizuku access") }
-                ShizukuState.NOT_RUNNING -> OutlinedButton(onClick = onRefresh) { Text("Refresh status") }
-                ShizukuState.NOT_INSTALLED -> OutlinedButton(onClick = onRefresh) { Text("Check again") }
+                ShizukuState.RUNNING_NO_PERMISSION -> Button(onClick = onGrant) { Text(stringResource(R.string.settings_env_grant_shizuku)) }
+                ShizukuState.NOT_RUNNING -> OutlinedButton(onClick = onRefresh) { Text(stringResource(R.string.settings_env_refresh_status)) }
+                ShizukuState.NOT_INSTALLED -> OutlinedButton(onClick = onRefresh) { Text(stringResource(R.string.settings_env_check_again)) }
             }
         }
     }
@@ -1719,7 +1719,7 @@ private fun LinuxEnvironmentCard(
                 Icon(Icons.Outlined.Terminal, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Linux environment", style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(R.string.settings_search_linux_title), style = MaterialTheme.typography.titleSmall)
                     Text("bash, git, gh, python, pip, node, npm", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 StatusText(
@@ -1763,7 +1763,7 @@ private fun LinuxEnvironmentCard(
                         FilledTonalButton(onClick = { showPackagesSheet = true }) {
                             Icon(Icons.Outlined.Inventory2, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text("Packages")
+                            Text(stringResource(R.string.settings_env_packages))
                         }
                         OutlinedButton(
                             enabled = !checking,
@@ -1782,11 +1782,11 @@ private fun LinuxEnvironmentCard(
                                 checkResult = null
                                 scope.launch { container.linuxEnv.updateEnvironment() }
                             }) {
-                                Text("Update")
+                                Text(stringResource(R.string.settings_action_update))
                             }
                         }
                         OutlinedButton(onClick = { confirmUninstall = true }) {
-                            Text("Uninstall")
+                            Text(stringResource(R.string.settings_action_uninstall))
                         }
                     }
                 }
@@ -1821,8 +1821,8 @@ private fun LinuxEnvironmentCard(
     if (confirmUninstall) {
         AlertDialog(
             onDismissRequest = { confirmUninstall = false },
-            title = { Text("Uninstall Linux environment?") },
-            text = { Text("This removes the shared toolchain for every local workspace (bash, git, python, node, npm and all downloaded packages). The agent falls back to toybox sh until it is installed again.") },
+            title = { Text(stringResource(R.string.settings_env_uninstall_title)) },
+            text = { Text(stringResource(R.string.settings_env_uninstall_message)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmUninstall = false
@@ -1832,10 +1832,10 @@ private fun LinuxEnvironmentCard(
                         catch (e: kotlinx.coroutines.CancellationException) { throw e }
                         catch (e: Exception) { checkResult = e.message }
                     }
-                }) { Text("Uninstall", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.settings_action_uninstall), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmUninstall = false }) { Text("Cancel") }
+                TextButton(onClick = { confirmUninstall = false }) { Text(stringResource(R.string.settings_action_cancel)) }
             },
         )
     }
@@ -1868,7 +1868,7 @@ private fun CurrentSetupCard(
             Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text("Current configuration", style = MaterialTheme.typography.titleSmallEmphasized)
+            Text(stringResource(R.string.settings_models_current_config), style = MaterialTheme.typography.titleSmallEmphasized)
             SetupLine(
                 "Model",
                 if (active == null) "No provider connected"
@@ -1965,7 +1965,7 @@ private fun AgentsInstructionsDialog(container: AppContainer, onDismiss: () -> U
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Project instructions (AGENTS.md)") },
+        title = { Text(stringResource(R.string.settings_anchor_project_instructions)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (!existed) {
@@ -1989,7 +1989,7 @@ private fun AgentsInstructionsDialog(container: AppContainer, onDismiss: () -> U
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 280.dp, max = 420.dp),
-                    label = { Text("AGENTS.md content") },
+                    label = { Text(stringResource(R.string.settings_agent_instructions_content)) },
                     textStyle = MaterialTheme.typography.bodySmall.copy(
                         fontFamily = HarnessMono,
                     ),
@@ -2020,7 +2020,7 @@ private fun AgentsInstructionsDialog(container: AppContainer, onDismiss: () -> U
                 enabled = text != null,
             ) { Text(if (existed) "Save" else "Create") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_action_cancel)) } },
     )
 }
 
@@ -2030,9 +2030,9 @@ private fun AppearanceSection(container: AppContainer, settings: AppSettings, sc
     WorkspaceLayoutSection(settings.workspaceLayout) { scope.launch { container.settings.setWorkspaceLayout(it) } }
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            SettingsAnchor("Theme") {
+            SettingsAnchor(R.string.settings_anchor_theme) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Theme", style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.settings_anchor_theme), style = MaterialTheme.typography.titleSmall)
                 ThemeMode.entries.chunked(2).forEach { modes ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         modes.forEach { mode ->
@@ -2048,10 +2048,10 @@ private fun AppearanceSection(container: AppContainer, settings: AppSettings, sc
             }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-            SettingsAnchor("Dynamic color") {
+            SettingsAnchor(R.string.settings_anchor_dynamic_color) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.weight(1f)) {
-                        Text("Dynamic color", style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(R.string.settings_anchor_dynamic_color), style = MaterialTheme.typography.bodyLarge)
                         Text(
                             "Match your wallpaper (Android 12+)",
                             style = MaterialTheme.typography.bodySmall,
@@ -2065,7 +2065,7 @@ private fun AppearanceSection(container: AppContainer, settings: AppSettings, sc
                 }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-            SettingsAnchor("Progress bar style") {
+            SettingsAnchor(R.string.settings_anchor_progress_bar_style) {
                 ProgressBarStyleSection(settings.progressBarStyle) {
                     scope.launch { container.settings.setProgressBarStyle(it) }
                 }
@@ -2079,12 +2079,12 @@ private fun ChatBehaviorSection(container: AppContainer, settings: AppSettings, 
     SettingsHeader("Chat behavior")
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            SettingsAnchor("Show live code") {
+            SettingsAnchor(R.string.settings_anchor_show_live_code) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()
                     .clickable { scope.launch { container.settings.setShowLiveCode(!settings.showLiveCode) } }) {
                     Column(Modifier.weight(1f)) {
-                        Text("Show live code", style = MaterialTheme.typography.bodyLarge)
-                        Text("Preview files, line changes and estimated tokens while the agent generates code.",
+                        Text(stringResource(R.string.settings_anchor_show_live_code), style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(R.string.settings_chat_show_live_code_subtitle),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Switch(checked = settings.showLiveCode,
@@ -2092,10 +2092,10 @@ private fun ChatBehaviorSection(container: AppContainer, settings: AppSettings, 
                 }
             }
             HorizontalDivider()
-            SettingsAnchor("Resume last chat on launch") {
+            SettingsAnchor(R.string.settings_anchor_resume_last_chat) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.weight(1f)) {
-                        Text("Resume last chat on launch", style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(R.string.settings_anchor_resume_last_chat), style = MaterialTheme.typography.bodyLarge)
                         Text(
                             if (settings.resumeLastChat) {
                                 "On: opens your most recent chat when launching the app."
@@ -2113,10 +2113,10 @@ private fun ChatBehaviorSection(container: AppContainer, settings: AppSettings, 
                 }
             }
             HorizontalDivider()
-            SettingsAnchor("Workspace code index (Repo map)") {
+            SettingsAnchor(R.string.settings_anchor_repo_map) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.weight(1f)) {
-                        Text("Workspace code index (Repo map)", style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(R.string.settings_anchor_repo_map), style = MaterialTheme.typography.bodyLarge)
                         Text(
                             if (settings.repoMapEnabled) {
                                 "On: injects a compact project symbol map (classes, functions, types) into context so the agent understands codebase structure without extra searches."
@@ -2145,7 +2145,7 @@ private fun PrivacySection(container: AppContainer, settings: AppSettings, scope
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.weight(1f)) {
-                    Text("Biometric app lock", style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.settings_search_app_lock_title), style = MaterialTheme.typography.bodyLarge)
                     Text(
                         if (settings.biometricLockEnabled) {
                             "On: requires fingerprint, face or device PIN to open the app."
@@ -2156,6 +2156,10 @@ private fun PrivacySection(container: AppContainer, settings: AppSettings, scope
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                val biometricTitle = if (settings.biometricLockEnabled)
+                    stringResource(R.string.settings_privacy_lock_disable_title)
+                else stringResource(R.string.settings_privacy_lock_enable_title)
+                val biometricPrompt = stringResource(R.string.settings_privacy_biometric_prompt)
                 Switch(
                     checked = settings.biometricLockEnabled,
                     onCheckedChange = { targetState ->
@@ -2163,8 +2167,8 @@ private fun PrivacySection(container: AppContainer, settings: AppSettings, scope
                         if (activity != null) {
                             BiometricAuth.prompt(
                                 activity = activity,
-                                title = if (targetState) "Enable Biometric Lock" else "Disable Biometric Lock",
-                                subtitle = "Scan fingerprint, face, or PIN to confirm",
+                                title = biometricTitle,
+                                subtitle = biometricPrompt,
                                 onSuccess = {
                                     scope.launch { container.settings.setBiometricLockEnabled(targetState) }
                                 },
@@ -2177,7 +2181,7 @@ private fun PrivacySection(container: AppContainer, settings: AppSettings, scope
             }
             if (settings.biometricLockEnabled) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Auto-lock timeout", style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(R.string.settings_search_autolock_title), style = MaterialTheme.typography.labelLarge)
                     val timeouts = listOf(0 to "Instant", 1 to "1m", 5 to "5m", 15 to "15m")
                     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                         timeouts.forEachIndexed { index, (mins, label) ->
@@ -2195,7 +2199,7 @@ private fun PrivacySection(container: AppContainer, settings: AppSettings, scope
             HorizontalDivider()
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.weight(1f)) {
-                    Text("Allow screenshots", style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.settings_search_screenshots_title), style = MaterialTheme.typography.bodyLarge)
                     Text(
                         if (settings.allowScreenshots) {
                             "On: screenshots work everywhere except while a key or token is on screen."
@@ -2236,7 +2240,7 @@ private fun PlanningModelSection(
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(Modifier.fillMaxWidth()) {
-                Text("Separate plan and execute models", style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(R.string.settings_models_dual_subtitle), style = MaterialTheme.typography.bodyLarge)
                 Text(
                     "Configure models for dual planning. When activated from chat, " +
                         "planning runs with the plan model and execution runs with the execute model.",
@@ -2245,12 +2249,12 @@ private fun PlanningModelSection(
                 )
             }
             ModelRoleRow(
-                label = "Plan model",
+                label = stringResource(R.string.settings_search_plan_model_title),
                 model = settings.planningModel
                     ?: providers.firstOrNull { it.id == (settings.planningProviderId ?: fallbackProviderId) }?.model,
             ) { pickingRole = "plan" }
             ModelRoleRow(
-                label = "Execute model",
+                label = stringResource(R.string.settings_search_execute_model_title),
                 model = settings.executionModel
                     ?: providers.firstOrNull { it.id == (settings.executionProviderId ?: fallbackProviderId) }?.model,
             ) { pickingRole = "exec" }
@@ -2363,7 +2367,7 @@ private fun ModelRoleRow(label: String, model: String?, onClick: () -> Unit) {
         }
         Icon(
             Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = "Choose $label model",
+            contentDescription = stringResource(R.string.settings_models_choose_model, label),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
@@ -2372,7 +2376,7 @@ private fun ModelRoleRow(label: String, model: String?, onClick: () -> Unit) {
 @Composable
 private fun SlashCommandsSection(container: AppContainer) {
     val scope = rememberCoroutineScope()
-    SettingsAnchor("Slash commands") {
+    SettingsAnchor(R.string.settings_anchor_slash_commands) {
         SettingsHeader("Slash commands")
     }
     SettingsPanel(Modifier.fillMaxWidth()) {
@@ -2387,11 +2391,11 @@ private fun SlashCommandsSection(container: AppContainer) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = snippetName, onValueChange = { snippetName = it },
-                        label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.settings_mcp_name)) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
                     OutlinedTextField(
                         value = snippetBody, onValueChange = { snippetBody = it },
-                        label = { Text("Prompt (\$ARG for argument)") }, maxLines = 3, modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.settings_slash_prompt)) }, maxLines = 3, modifier = Modifier.fillMaxWidth(),
                     )
                     Button(onClick = {
                         val n = snippetName.trim(); val b = snippetBody.trim()
@@ -2399,7 +2403,7 @@ private fun SlashCommandsSection(container: AppContainer) {
                             scope.launch { container.snippets.add(n, b) }
                             snippetName = ""; snippetBody = ""; showAdd = false
                         }
-                    }) { Text("Save") }
+                    }) { Text(stringResource(R.string.settings_action_save)) }
                 }
             }
             val snippets by container.snippets.snippets.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -2412,7 +2416,7 @@ private fun SlashCommandsSection(container: AppContainer) {
                         modifier = Modifier.weight(1f),
                     )
                     IconButton(onClick = { scope.launch { container.snippets.delete(snippet) } }) {
-                        Icon(Icons.Outlined.Delete, contentDescription = "Delete", modifier = Modifier.size(18.dp))
+                        Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.settings_action_delete), modifier = Modifier.size(18.dp))
                     }
                 }
             }
@@ -2433,7 +2437,7 @@ private fun BatteryCard(container: AppContainer) {
                 Icon(Icons.Outlined.Terminal, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Keep runs alive", style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(R.string.settings_env_keep_alive), style = MaterialTheme.typography.titleSmall)
                     Text(
                         "Hold the CPU while a run or terminal is active so the terminal will not die when the app is minimized.",
                         style = MaterialTheme.typography.bodySmall,
@@ -2447,7 +2451,7 @@ private fun BatteryCard(container: AppContainer) {
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Battery optimization", style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.settings_search_battery_title), style = MaterialTheme.typography.bodyLarge)
                     Text(
                         if (exempt) "Excluded: Android will not throttle background runs."
                         else "On: Samsung and other OEMs may kill background work. Exclude the app for reliable long runs.",
@@ -2459,7 +2463,7 @@ private fun BatteryCard(container: AppContainer) {
                     Button(onClick = {
                         requestBatteryExemption(context)
                         exempt = isIgnoringBatteryOptimizations(context)
-                    }) { Text("Fix") }
+                    }) { Text(stringResource(R.string.settings_action_fix)) }
                 }
             }
         }
@@ -2570,7 +2574,7 @@ private fun DropdownSetting(
                 )
                 Icon(
                     Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = "Change $label",
+                    contentDescription = stringResource(R.string.settings_models_change_model, label),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -2624,7 +2628,7 @@ private fun UpdatesCard(container: AppContainer) {
                     modifier = Modifier.size(20.dp),
                 )
                 Spacer(Modifier.width(10.dp))
-                Text("Updates", style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.settings_page_updates_title), style = MaterialTheme.typography.titleSmall)
             }
             Text(
                 "Current version $version. Checks GitHub Releases for newer builds.",
@@ -2656,7 +2660,7 @@ private fun UpdatesCard(container: AppContainer) {
                             modifier = Modifier.size(18.dp),
                         )
                         Spacer(Modifier.width(6.dp))
-                        Text("Up to date", style = MaterialTheme.typography.labelMedium)
+                        Text(stringResource(R.string.settings_updates_uptodate), style = MaterialTheme.typography.labelMedium)
                     }
                     is com.androidharness.app.data.update.UpdateManager.Step.Available -> {
                         Spacer(Modifier.width(12.dp))
@@ -2758,7 +2762,7 @@ private fun AboutSection(container: AppContainer) {
             leading = {
                 Icon(Icons.Outlined.Code, contentDescription = null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
             },
-            title = "Source code",
+            title = stringResource(R.string.settings_about_source),
             subtitle = "github.com/Sanuu7/AndroidHarness",
             onClick = { open(REPO_URL) },
             trailing = { ExternalLinkIcon() },
@@ -2771,7 +2775,7 @@ private fun AboutSection(container: AppContainer) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.Description, contentDescription = null, tint = scheme.primary, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(10.dp))
-                Text("MIT License", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.settings_about_license), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                 Surface(color = scheme.primaryContainer, shape = CircleShape) {
                     Text(
                         "Open source",
@@ -2791,7 +2795,7 @@ private fun AboutSection(container: AppContainer) {
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.clickable { open(LICENSE_URL) }.padding(vertical = 4.dp),
             ) {
-                Text("Read the full license", style = MaterialTheme.typography.labelLarge, color = scheme.primary)
+                Text(stringResource(R.string.settings_about_read_license), style = MaterialTheme.typography.labelLarge, color = scheme.primary)
                 Spacer(Modifier.width(6.dp))
                 Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null, tint = scheme.primary, modifier = Modifier.size(16.dp))
             }
@@ -2958,7 +2962,7 @@ private fun ChatsBackupSection(container: AppContainer) {
                 )
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Chat backup", style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(R.string.settings_backup_chat_backup), style = MaterialTheme.typography.titleSmall)
                     Text(
                         "Save all chats to a file, or restore them from one. " +
                             "Chats and messages only: no API keys, providers, or settings are in the file.",
@@ -2969,7 +2973,7 @@ private fun ChatsBackupSection(container: AppContainer) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { exportLauncher.launch(suggestedName) }, enabled = !busy) {
-                    Text("Export")
+                    Text(stringResource(R.string.settings_action_export))
                 }
                 OutlinedButton(
                     onClick = {
@@ -2977,7 +2981,7 @@ private fun ChatsBackupSection(container: AppContainer) {
                     },
                     enabled = !busy,
                 ) {
-                    Text("Import")
+                    Text(stringResource(R.string.settings_action_import))
                 }
             }
             if (busy) ThinLinearProgress(Modifier.fillMaxWidth())

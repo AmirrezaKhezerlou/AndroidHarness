@@ -8,9 +8,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androidharness.app.AppContainer
+import com.androidharness.app.R
 import com.androidharness.app.data.ChatBackupManager
 import com.androidharness.app.data.ChatImportPreview
 import kotlinx.coroutines.CancellationException
@@ -32,10 +34,16 @@ internal fun ChatRestoreDialog(container: AppContainer, preview: ChatImportPrevi
             catch (e: Exception) { error = e.message }
         }
     }
-    AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text("Reconnect restored chats") },
+    AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text(stringResource(R.string.settings_restore_reconnect_title)) },
         text = {
             Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Choose a workspace for ${if (preview.sessions.size == 1) "this restored chat" else "these ${preview.sessions.size} restored chats"}. Existing chats stay unchanged. Files and folder permissions are not included in the backup.")
+                Text(
+                    stringResource(
+                        R.string.settings_restore_choose_workspace,
+                        if (preview.sessions.size == 1) stringResource(R.string.settings_restore_one_chat)
+                        else stringResource(R.string.settings_restore_many_chats, preview.sessions.size.toString()),
+                    ),
+                )
                 preview.missingWorkspaces.forEach { source ->
                     var expanded by remember(source.id) { mutableStateOf(false) }
                     Text(source.name, style = MaterialTheme.typography.titleSmall)
@@ -50,8 +58,8 @@ internal fun ChatRestoreDialog(container: AppContainer, preview: ChatImportPrevi
                         }
                     }
                 }
-                TextButton(onClick = { adding = true }, enabled = !busy) { Text("Add workspace") }
-                Text("Read-only access stays read-only. Chats that used multiple workspaces need separate folders for each one.", style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = { adding = true }, enabled = !busy) { Text(stringResource(R.string.settings_workspace_add)) }
+                Text(stringResource(R.string.settings_restore_reconnect_note), style = MaterialTheme.typography.bodySmall)
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
         },
@@ -66,7 +74,7 @@ internal fun ChatRestoreDialog(container: AppContainer, preview: ChatImportPrevi
                 }
             }) { Text(if (busy) "Restoring…" else "Restore chats") }
         },
-        dismissButton = { TextButton(enabled = !busy, onClick = onDismiss) { Text("Cancel") } })
+        dismissButton = { TextButton(enabled = !busy, onClick = onDismiss) { Text(stringResource(R.string.settings_action_cancel)) } })
     if (adding) com.androidharness.app.ui.common.AddWorkspaceDialog(container, onDismiss = { adding = false },
         onSelected = { adding = false }, onPickSaf = { adding = false; picker.launch(null) }, activateWorkspace = false)
 }
