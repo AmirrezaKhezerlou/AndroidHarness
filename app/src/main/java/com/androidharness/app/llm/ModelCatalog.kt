@@ -59,7 +59,8 @@ fun reasoningCapable(modelId: String): Boolean {
 fun visionCapable(modelId: String): Boolean {
     val m = modelId.lowercase()
     if (m.contains("-vl") || m.contains("vision") || m.contains("omni") || m.contains("4o") ||
-        m.contains("gemini") || m.contains("claude") || m.contains("gpt-4-turbo")
+        m.contains("gemini") || m.contains("claude") || m.contains("gpt-4-turbo") ||
+        m.contains("deepseek-v4") || m.contains("deepseek-vl")
     ) {
         return true
     }
