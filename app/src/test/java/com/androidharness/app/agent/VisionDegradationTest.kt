@@ -22,6 +22,9 @@ class VisionDegradationTest {
         assertTrue(visionCapable("gemini-2.5-flash"))
         assertTrue(visionCapable("qwen/qwen-2.5-vl-72b-instruct"))
         assertTrue(visionCapable("meta-llama/llama-3.2-11b-vision-instruct"))
+        assertTrue(visionCapable("deepseek-v4.1-flash"))
+        assertTrue(visionCapable("deepseek-v4.1-flash-1017"))
+        assertTrue(visionCapable("deepseek-vl-7b-chat"))
 
         // Text-only models
         assertFalse(visionCapable("deepseek-chat"))
