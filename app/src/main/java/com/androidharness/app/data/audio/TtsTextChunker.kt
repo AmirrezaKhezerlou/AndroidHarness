@@ -15,7 +15,11 @@ object TtsTextChunker {
         val current = StringBuilder()
 
         fun flush() {
-            current.toString().trim().takeIf { it.isNotEmpty() }?.let(chunks::add)
+            // A line of table plumbing or list markers has nothing to say, and
+            // Groq rejects an input with no letters or digits.
+            current.toString().trim()
+                .takeIf { it.isNotEmpty() && it.any(Char::isLetterOrDigit) }
+                ?.let(chunks::add)
             current.setLength(0)
         }
 

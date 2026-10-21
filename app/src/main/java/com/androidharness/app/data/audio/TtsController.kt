@@ -113,7 +113,7 @@ class TtsController(
             val next = autoQueue.removeFirstOrNull() ?: return
             // Rich-only blocks can reduce to nothing to say; skip them so the
             // queue keeps moving.
-            if (RichResponse.plainText(next.second).isBlank()) continue
+            if (!SpeechText.isSpeakable(SpeechText.forSpeech(RichResponse.plainText(next.second)))) continue
             speak(next.first, next.second)
             return
         }
@@ -174,8 +174,8 @@ class TtsController(
     }
 
     private fun speak(messageId: String, text: String) {
-        val plain = RichResponse.plainText(text).trim()
-        if (plain.isBlank()) return
+        val plain = SpeechText.forSpeech(RichResponse.plainText(text))
+        if (!SpeechText.isSpeakable(plain)) return
         halt()
         _state.value = TtsState(messageId, TtsPhase.PREPARING)
         job = scope.launch {
@@ -198,7 +198,10 @@ class TtsController(
         applySystemVoice(tts, saved)
         val limit = TextToSpeech.getMaxSpeechInputLength().coerceAtMost(GroqTtsClient.MAX_INPUT_CHARS)
         val chunks = TtsTextChunker.chunk(text, limit)
-        if (chunks.isEmpty()) return false
+        if (chunks.isEmpty()) {
+            finish()
+            return false
+        }
 
         val generation = ++playbackGeneration
         pendingUtterances = chunks.size
@@ -227,7 +230,10 @@ class TtsController(
             GroqTtsClient.defaultVoiceFor(model) ?: AppSettings.DEFAULT_TTS_GROQ_VOICE
         }
         val chunks = TtsTextChunker.chunk(text, GroqTtsClient.maxInputChars(model))
-        if (chunks.isEmpty()) return@coroutineScope false
+        if (chunks.isEmpty()) {
+            finish()
+            return@coroutineScope false
+        }
         requestFocus()
         // Orpheus caps a request at ~200 characters, so a reply is several
         // clips. Keep two requests in flight: the next clip is generated while
@@ -242,13 +248,36 @@ class TtsController(
                 }
             }
         }
-        audio.forEachIndexed { index, deferred ->
-            val file = deferred.await().getOrElse { error -> return@coroutineScope reportError(error) }
-            if (index == 0) _state.value = TtsState(messageId, TtsPhase.SPEAKING)
+        var failure: Throwable? = null
+        var started = false
+        audio.forEachIndexed { _, deferred ->
+            val result = deferred.await()
+            val file = result.getOrElse { error ->
+                // A single clip Groq refuses must not mute the rest of the
+                // reply; credential and terms failures still stop at once.
+                if (error.stopsPlayback()) return@coroutineScope reportError(error)
+                if (failure == null) failure = error
+                return@forEachIndexed
+            }
+            if (!started) {
+                _state.value = TtsState(messageId, TtsPhase.SPEAKING)
+                started = true
+            }
             if (!play(file)) return@coroutineScope report(R.string.tts_error_playback)
+        }
+        if (!started) {
+            failure?.let { return@coroutineScope reportError(it) }
+            finish()
+            return@coroutineScope false
         }
         finish()
         true
+    }
+
+    /** Missing credentials or unaccepted terms make every clip fail. */
+    private fun Throwable.stopsPlayback(): Boolean {
+        val api = this as? GroqTtsClient.GroqApiException ?: return false
+        return api.code == "model_terms_required" || api.status == 401 || api.status == 403
     }
 
     private fun completeUtterance(generation: Int) {

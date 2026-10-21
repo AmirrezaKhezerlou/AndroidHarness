@@ -45,4 +45,9 @@ class TtsTextChunkerTest {
     fun blankInputProducesNothing() {
         assertTrue(TtsTextChunker.chunk("   \n\n  ", 300).isEmpty())
     }
+
+    @Test
+    fun symbolOnlyLinesAreSkipped() {
+        assertTrue(TtsTextChunker.chunk("|---|---|\n===\n***", 300).isEmpty())
+    }
 }

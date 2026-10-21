@@ -84,6 +84,7 @@ object GroqTtsClient {
         override val message: String,
         val code: String? = null,
         val actionUrl: String? = null,
+        val status: Int? = null,
     ) : IOException(message)
 
     internal fun apiError(body: String, status: Int): GroqApiException {
@@ -94,7 +95,7 @@ object GroqTtsClient {
             ?: "Groq request failed (HTTP $status)"
         val code = runCatching { error?.get("code")?.jsonPrimitive?.content }.getOrNull()
         val url = urlPattern.find(message)?.value?.trimEnd('.', ',', ')', ']')
-        return GroqApiException(message, code, url)
+        return GroqApiException(message, code, url, status)
     }
 
     /**
@@ -139,6 +140,11 @@ object GroqTtsClient {
             return Result.failure(IllegalStateException("Groq API key is missing"))
         }
         if (text.isBlank()) {
+            return Result.failure(IllegalArgumentException("Nothing to speak"))
+        }
+        // Groq rejects input without a letter or digit; table plumbing and
+        // marker-only lines are filtered earlier, this is the last guard.
+        if (text.none(Char::isLetterOrDigit)) {
             return Result.failure(IllegalArgumentException("Nothing to speak"))
         }
         val payload = buildJsonObject {
