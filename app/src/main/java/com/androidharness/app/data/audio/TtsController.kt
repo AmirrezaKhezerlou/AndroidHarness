@@ -22,7 +22,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -32,6 +34,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 
@@ -193,26 +197,35 @@ class TtsController(
         return true
     }
 
-    private suspend fun speakGroq(messageId: String, text: String, saved: AppSettings): Boolean {
-        val apiKey = keys.groqApiKey() ?: return report(R.string.tts_error_no_key)
+    private suspend fun speakGroq(messageId: String, text: String, saved: AppSettings): Boolean = coroutineScope {
+        val apiKey = keys.groqApiKey() ?: return@coroutineScope report(R.string.tts_error_no_key)
         val model = saved.ttsGroqModel.ifBlank { AppSettings.DEFAULT_TTS_GROQ_MODEL }
         val voice = saved.ttsGroqVoice.ifBlank {
             GroqTtsClient.defaultVoiceFor(model) ?: AppSettings.DEFAULT_TTS_GROQ_VOICE
         }
         val chunks = TtsTextChunker.chunk(text, GroqTtsClient.maxInputChars(model))
-        if (chunks.isEmpty()) return false
+        if (chunks.isEmpty()) return@coroutineScope false
         requestFocus()
-        chunks.forEachIndexed { index, chunk ->
-            val file = GroqTtsClient.synthesizeCached(
-                context.cacheDir, chunk, apiKey, model, voice, saved.ttsSpeed,
-            ).getOrElse { error ->
-                return reportError(error)
+        // Orpheus caps a request at ~200 characters, so a reply is several
+        // clips. Keep two requests in flight: the next clip is generated while
+        // the current one plays, instead of leaving a silent gap per sentence.
+        val permits = Semaphore(2)
+        val audio = chunks.map { chunk ->
+            async(Dispatchers.IO) {
+                permits.withPermit {
+                    GroqTtsClient.synthesizeCached(
+                        context.cacheDir, chunk, apiKey, model, voice, saved.ttsSpeed,
+                    )
+                }
             }
+        }
+        audio.forEachIndexed { index, deferred ->
+            val file = deferred.await().getOrElse { error -> return@coroutineScope reportError(error) }
             if (index == 0) _state.value = TtsState(messageId, TtsPhase.SPEAKING)
-            if (!play(file)) return report(R.string.tts_error_playback)
+            if (!play(file)) return@coroutineScope report(R.string.tts_error_playback)
         }
         finish()
-        return true
+        true
     }
 
     private fun completeUtterance(generation: Int) {
