@@ -110,7 +110,9 @@ object GroqTtsClient {
         speed: Float,
     ): Result<File> = withContext(Dispatchers.IO) {
         val dir = File(cacheDir, "tts").apply { mkdirs() }
-        val key = sha256("$model|$voice|$speed|$text")
+        // v2: older entries cached Groq's streaming WAV with 0xFFFFFFFF sizes,
+        // which MediaPlayer cannot open.
+        val key = sha256("v2|$model|$voice|$speed|$text")
         val file = File(dir, "$key.${responseFormat(model)}")
         if (file.exists() && file.length() > 0) return@withContext Result.success(file)
         synthesize(text, apiKey, model, voice, speed).mapCatching { bytes ->
@@ -160,7 +162,7 @@ object GroqTtsClient {
                     if (bytes == null || bytes.isEmpty()) {
                         Result.failure(IOException("Groq returned no audio"))
                     } else {
-                        Result.success(bytes)
+                        Result.success(if (responseFormat(model) == "wav") fixStreamingWav(bytes) else bytes)
                     }
                 }
             }
@@ -244,6 +246,46 @@ object GroqTtsClient {
                 else response.close()
             }
         })
+    }
+
+    /**
+     * Orpheus streams WAV and leaves the RIFF/data sizes at 0xFFFFFFFF. Android's
+     * parser trusts those fields and refuses the file, so stamp the real sizes.
+     * Other formats and already-valid headers pass through untouched.
+     */
+    internal fun fixStreamingWav(bytes: ByteArray): ByteArray {
+        if (bytes.size < 44) return bytes
+        fun tag(offset: Int) = String(bytes, offset, 4, Charsets.US_ASCII)
+        if (tag(0) != "RIFF" || tag(8) != "WAVE") return bytes
+        val out = bytes.copyOf()
+        fun readU32(offset: Int): Long =
+            (out[offset].toLong() and 0xFF) or
+                ((out[offset + 1].toLong() and 0xFF) shl 8) or
+                ((out[offset + 2].toLong() and 0xFF) shl 16) or
+                ((out[offset + 3].toLong() and 0xFF) shl 24)
+        fun writeU32(offset: Int, value: Long) {
+            for (i in 0 until 4) out[offset + i] = ((value shr (8 * i)) and 0xFF).toByte()
+        }
+        var offset = 12
+        var dataOffset = -1
+        while (offset + 8 <= out.size) {
+            val id = String(out, offset, 4, Charsets.US_ASCII)
+            val size = readU32(offset + 4)
+            if (id == "data") {
+                dataOffset = offset
+                break
+            }
+            if (size == 0xFFFFFFFFL) break
+            val next = offset + 8 + size
+            if (next <= offset || next > out.size) break
+            offset = next.toInt()
+        }
+        if (dataOffset < 0) return out
+        val riffSize = out.size - 8L
+        val dataSize = out.size - dataOffset - 8L
+        if (readU32(4) != riffSize) writeU32(4, riffSize)
+        if (readU32(dataOffset + 4) != dataSize) writeU32(dataOffset + 4, dataSize)
+        return out
     }
 
     private fun trimCache(dir: File) {

@@ -255,7 +255,8 @@ class TtsController(
                 runCatching { done.release() }
                 if (continuation.isActive) continuation.resume(true)
             }
-            mp.setOnErrorListener { _, _, _ ->
+            mp.setOnErrorListener { _, what, extra ->
+                android.util.Log.w("HarnessTts", "MediaPlayer error what=$what extra=$extra file=${file.name} bytes=${file.length()}")
                 if (player === mp) player = null
                 runCatching { mp.release() }
                 if (continuation.isActive) continuation.resume(false)
