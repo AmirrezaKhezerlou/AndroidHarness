@@ -256,6 +256,7 @@ class TtsController(
                 // A single clip Groq refuses must not mute the rest of the
                 // reply; credential and terms failures still stop at once.
                 if (error.stopsPlayback()) return@coroutineScope reportError(error)
+                android.util.Log.w("HarnessTts", "Skipping speech clip: ${error.message}")
                 if (failure == null) failure = error
                 return@forEachIndexed
             }
@@ -397,6 +398,8 @@ class TtsController(
         reportError(TtsError(context.getString(message)))
 
     private fun reportError(error: Throwable): Boolean {
+        // Keep the provider message in logcat; the toast truncates it.
+        android.util.Log.w("HarnessTts", "Speech failed: ${error.message}", error)
         val message = error.message ?: context.getString(R.string.tts_error_groq)
         val api = error as? GroqTtsClient.GroqApiException
         val terms = api != null && (
