@@ -15,7 +15,7 @@
 
 **An AI coding agent that lives on your Android phone.**
 
-AndroidHarness is a native Android app, written in Kotlin with Jetpack Compose, that works on real code projects directly from the device. It reads and edits files, runs shell commands in a real Linux toolchain with bash, git, python, and node, pushes to GitHub, drives a browser, and streams the whole process into a chat you can inspect. No PC required, and root stays optional.
+AndroidHarness is a native Android app, written in Kotlin with Jetpack Compose, that works on real code projects directly from the device. It reads and edits files, runs shell commands in a real Linux toolchain with bash, git, python, and node, pushes to GitHub, drives a browser, and streams the whole process into a chat you can inspect. No PC required, and No root.
 
 <!-- Screenshots: add two or three device captures to docs/images/ and uncomment this block.
 <p align="center">
