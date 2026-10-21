@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.R
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -25,6 +26,7 @@ import com.androidharness.app.ui.theme.LocalStatusColors
 @Composable
 internal fun BrowserToolCard(call: ToolCallData, result: ChatMessage?, running: Boolean,
     target: String?, awaitingApproval: Boolean = false, onWatch: ((String?) -> Unit)?) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val activity = remember(call, result, running, target, awaitingApproval) {
         BrowserToolActivity.from(call, result, running, target, awaitingApproval)
     }
@@ -41,7 +43,7 @@ internal fun BrowserToolCard(call: ToolCallData, result: ChatMessage?, running: 
         Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Outlined.Language, null, Modifier.size(18.dp), tint = scheme.onSurfaceVariant)
-                Text("Browser", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
+                Text(uiContext.getString(R.string.ui_browser), Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
                 Text(activity.status, Modifier.widthIn(max = 140.dp), style = MaterialTheme.typography.labelSmall, color = statusColor)
             }
             Text(activity.site, style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant,
@@ -50,8 +52,8 @@ internal fun BrowserToolCard(call: ToolCallData, result: ChatMessage?, running: 
                 Text(activity.action, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                 FilledTonalButton(onClick = { onWatch?.invoke(activity.target) }, enabled = onWatch != null,
                     shape = MaterialTheme.shapes.medium, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Watch browser" }) {
-                    Text("Watch", style = MaterialTheme.typography.labelMedium)
+                    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = uiContext.getString(R.string.ui_watch_browser) }) {
+                    Text(uiContext.getString(R.string.ui_watch), style = MaterialTheme.typography.labelMedium)
                     Spacer(Modifier.width(5.dp))
                     Icon(Icons.Outlined.OpenInFull, null, Modifier.size(16.dp))
                 }

@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat.rich
 
+import com.androidharness.app.R
 import com.androidharness.app.core.response.RichResponse
 
 import androidx.compose.foundation.BorderStroke
@@ -36,15 +37,17 @@ import com.androidharness.app.ui.chat.MarkdownText
 
 @Composable
 internal fun ResponseContextChip(title: String, onRemove: () -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     InputChip(selected = false, onClick = onRemove,
-        label = { Text("Response · $title", maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
-        trailingIcon = { Icon(Icons.Filled.Close, "Remove response context", Modifier.size(14.dp)) },
+        label = { Text(uiContext.getString(R.string.ui_response, (title).toString()), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
+        trailingIcon = { Icon(Icons.Filled.Close, uiContext.getString(R.string.ui_remove_response_context), Modifier.size(14.dp)) },
         modifier = Modifier.padding(horizontal = 10.dp).widthIn(max = 340.dp))
 }
 
 /** One assistant response can alternate prose and native/interactive content, in source order. */
 @Composable
 internal fun RichResponseContent(text: String, streaming: Boolean, onOpenUrl: ((String) -> Unit)?, onFollowUp: ((RichResponse.FollowUp) -> Unit)?) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val parts = remember(text, streaming) { RichResponse.parse(text, streaming) }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         parts.forEachIndexed { index, part -> key(index) {
@@ -54,12 +57,12 @@ internal fun RichResponseContent(text: String, streaming: Boolean, onOpenUrl: ((
                 is RichResponse.Part.Content -> ResponseNode(part.node, onOpenUrl, if (streaming) null else onFollowUp)
                 RichResponse.Part.Pending -> Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(10.dp)); Text("Preparing visual…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(10.dp)); Text(uiContext.getString(R.string.ui_preparing_visual), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 RichResponse.Part.Unavailable -> ResponsePanel {
-                    Text("This content couldn’t be displayed", style = MaterialTheme.typography.titleSmall)
-                    Text("You can ask for a simpler version or a text explanation.", style = MaterialTheme.typography.bodySmall)
-                    onFollowUp?.let { TextButton(onClick = { it(RichResponse.followUp("Please show this as a clear text explanation.", "Response content", "A rich content block couldn’t be displayed.")) }) { Text("Ask for a text version") } }
+                    Text(uiContext.getString(R.string.ui_this_content_couldn_t_be_displayed), style = MaterialTheme.typography.titleSmall)
+                    Text(uiContext.getString(R.string.ui_you_can_ask_for_a_simpler_version), style = MaterialTheme.typography.bodySmall)
+                    onFollowUp?.let { TextButton(onClick = { it(RichResponse.followUp("Please show this as a clear text explanation.", "Response content", "A rich content block couldn’t be displayed.")) }) { Text(uiContext.getString(R.string.ui_ask_for_a_text_version)) } }
                 }
             }
         } }
@@ -76,6 +79,7 @@ private fun ResponsePanel(modifier: Modifier = Modifier, content: @Composable Co
 
 @Composable
 private fun ResponseNode(node: RichResponse.Node, onOpenUrl: ((String) -> Unit)?, onFollowUp: ((RichResponse.FollowUp) -> Unit)?) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val colors = MaterialTheme.colorScheme
     when (node) {
         is RichResponse.Node.Text -> SelectionContainer { MarkdownText(node.text, onOpenUrl = onOpenUrl) }
@@ -126,7 +130,7 @@ private fun ResponseNode(node: RichResponse.Node, onOpenUrl: ((String) -> Unit)?
                     }
                 }
                 onFollowUp?.let { follow -> val option = node.options[selected.coerceIn(node.options.indices)]
-                    OutlinedButton(onClick = { follow(RichResponse.followUp(option.prompt.ifBlank { "Tell me more about ${option.label}." }, node.title, "Selected: ${option.label}\n${option.description}")) }, Modifier.fillMaxWidth()) { Text("Discuss selection") }
+                    OutlinedButton(onClick = { follow(RichResponse.followUp(option.prompt.ifBlank { "Tell me more about ${option.label}." }, node.title, "Selected: ${option.label}\n${option.description}")) }, Modifier.fillMaxWidth()) { Text(uiContext.getString(R.string.ui_discuss_selection)) }
                 }
             }
         }
@@ -146,9 +150,9 @@ private fun ResponseNode(node: RichResponse.Node, onOpenUrl: ((String) -> Unit)?
                     }
                 }
                 onFollowUp?.let { follow -> TextButton(onClick = {
-                    val state = node.items.mapIndexed { i, step -> "${if (checked[i]) "Done" else "Remaining"}: ${step.title}" }.joinToString("\n")
+                    val state = node.items.mapIndexed { i, step -> "${if (checked[i]) uiContext.getString(R.string.settings_action_done) else uiContext.getString(R.string.ui_remaining)}: ${step.title}" }.joinToString("\n")
                     follow(RichResponse.followUp("Help me with the next step.", node.title, state))
-                }) { Text("Continue from here") } }
+                }) { Text(uiContext.getString(R.string.ui_continue_from_here)) } }
             }
         }
         is RichResponse.Node.Details -> {
@@ -156,7 +160,7 @@ private fun ResponseNode(node: RichResponse.Node, onOpenUrl: ((String) -> Unit)?
             ResponsePanel {
                 Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).clickable { expanded = !expanded }, verticalAlignment = Alignment.CenterVertically) {
                     Text(node.title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-                    Icon(if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, if (expanded) "Collapse details" else "Expand details")
+                    Icon(if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, if (expanded) uiContext.getString(R.string.ui_collapse_details) else uiContext.getString(R.string.ui_expand_details))
                 }
                 if (expanded) SelectionContainer { MarkdownText(node.text, onOpenUrl = onOpenUrl) }
             }
@@ -168,7 +172,7 @@ private fun ResponseNode(node: RichResponse.Node, onOpenUrl: ((String) -> Unit)?
                     if (node.text.isNotBlank()) Text(node.text, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                     Text(java.net.URI(node.url).host, style = MaterialTheme.typography.labelSmall, color = colors.primary)
                 }
-                Icon(Icons.AutoMirrored.Outlined.OpenInNew, "Open link", Modifier.padding(start = 8.dp).size(18.dp))
+                Icon(Icons.AutoMirrored.Outlined.OpenInNew, uiContext.getString(R.string.ui_open_link), Modifier.padding(start = 8.dp).size(18.dp))
             }
         }
         is RichResponse.Node.Preview -> InlineResponsePreview(node, onFollowUp)
@@ -194,6 +198,7 @@ private fun AdaptiveItems(count: Int, item: @Composable (Int) -> Unit) {
 
 @Composable
 private fun ResponseChart(chart: RichResponse.Node.Chart) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val colors = MaterialTheme.colorScheme
     var selected by rememberSaveable(chart) { mutableIntStateOf(chart.points.lastIndex) }
     var data by rememberSaveable(chart) { mutableStateOf(false) }
@@ -204,7 +209,7 @@ private fun ResponseChart(chart: RichResponse.Node.Chart) {
     ResponsePanel {
         Text(chart.title, style = MaterialTheme.typography.titleSmall)
         Text("${point.label} · ${RichResponse.number(point.value)} ${chart.unit}".trim(), style = MaterialTheme.typography.bodyMedium, color = colors.primary)
-        Canvas(Modifier.fillMaxWidth().height(150.dp).semantics { contentDescription = "${chart.title}. ${chart.points.size} values. Use Show data for all values." }
+        Canvas(Modifier.fillMaxWidth().height(150.dp).semantics { contentDescription = uiContext.getString(R.string.ui_values_use_show_data_for_all_values, (chart.title).toString(), (chart.points.size).toString()) }
             .pointerInput(chart) { detectTapGestures { tap -> selected = ((tap.x / size.width.coerceAtLeast(1)) * chart.points.size).toInt().coerceIn(chart.points.indices) } }) {
             val cell = size.width / chart.points.size
             fun y(value: Double) = (size.height - 12.dp.toPx()) * (1 - ((value - low) / range).toFloat()) + 6.dp.toPx()
@@ -226,7 +231,7 @@ private fun ResponseChart(chart: RichResponse.Node.Chart) {
             if (chart.points.size > 1) Text(chart.points.last().label, style = MaterialTheme.typography.labelSmall)
         }
         if (chart.caption.isNotBlank()) Text(chart.caption, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-        TextButton(onClick = { data = !data }) { Text(if (data) "Hide data" else "Show data") }
+        TextButton(onClick = { data = !data }) { Text(if (data) uiContext.getString(R.string.ui_hide_data) else uiContext.getString(R.string.ui_show_data)) }
         if (data) chart.points.forEachIndexed { i, p ->
             Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).selectable(selected == i, role = Role.RadioButton, onClick = { selected = i }).padding(vertical = 6.dp)) {
                 Text(p.label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)

@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.R
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
@@ -38,6 +39,7 @@ internal fun QuestionCard(question: QuestionRequest, onAnswer: (String) -> Unit)
 
 @Composable
 private fun QuestionCardBody(question: QuestionRequest, onAnswer: (String) -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     var selected by rememberSaveable { mutableStateOf(listOf<Int>()) }
     var writtenAnswer by rememberSaveable { mutableStateOf("") }
@@ -58,13 +60,13 @@ private fun QuestionCardBody(question: QuestionRequest, onAnswer: (String) -> Un
                     Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.padding(8.dp).size(18.dp), tint = scheme.primary)
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("Question for you", style = MaterialTheme.typography.labelLarge, color = scheme.onSurface)
+                    Text(uiContext.getString(R.string.ui_question_for_you), style = MaterialTheme.typography.labelLarge, color = scheme.onSurface)
                     Text(
                         when {
-                            question.options.isEmpty() -> "Write your answer below"
-                            question.multiSelect && selected.isNotEmpty() -> "${selected.size} selected · Select all that apply"
-                            question.multiSelect -> "Select all that apply"
-                            else -> "Choose one or write your own"
+                            question.options.isEmpty() -> uiContext.getString(R.string.ui_write_your_answer_below)
+                            question.multiSelect && selected.isNotEmpty() -> uiContext.getString(R.string.ui_selected_select_all_that_apply, (selected.size).toString())
+                            question.multiSelect -> uiContext.getString(R.string.ui_select_all_that_apply)
+                            else -> uiContext.getString(R.string.ui_choose_one_or_write_your_own)
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = scheme.onSurfaceVariant,
@@ -117,19 +119,19 @@ private fun QuestionCardBody(question: QuestionRequest, onAnswer: (String) -> Un
             if (writing) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (selected.isEmpty()) "Your answer" else "Additional detail", Modifier.weight(1f),
+                        Text(if (selected.isEmpty()) uiContext.getString(R.string.ui_your_answer) else uiContext.getString(R.string.ui_additional_detail), Modifier.weight(1f),
                             style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
                         if (question.options.isNotEmpty()) IconButton(
                             onClick = { writtenAnswer = ""; writing = false }, enabled = !submitted,
                             modifier = Modifier.size(48.dp),
-                        ) { Icon(Icons.Filled.Close, "Remove written answer", Modifier.size(18.dp)) }
+                        ) { Icon(Icons.Filled.Close, uiContext.getString(R.string.ui_remove_written_answer), Modifier.size(18.dp)) }
                     }
                     OutlinedTextField(
                         value = writtenAnswer,
                         onValueChange = { writtenAnswer = it },
                         enabled = !submitted,
-                        modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Written answer" },
-                        placeholder = { Text(if (selected.isEmpty()) "Write your answer…" else "Add a little more context…") },
+                        modifier = Modifier.fillMaxWidth().semantics { contentDescription = uiContext.getString(R.string.ui_written_answer) },
+                        placeholder = { Text(if (selected.isEmpty()) uiContext.getString(R.string.ui_write_your_answer) else uiContext.getString(R.string.ui_add_a_little_more_context)) },
                         textStyle = MaterialTheme.typography.bodyMedium,
                         shape = RoundedCornerShape(12.dp),
                         minLines = 1,
@@ -142,7 +144,7 @@ private fun QuestionCardBody(question: QuestionRequest, onAnswer: (String) -> Un
                     contentPadding = PaddingValues(horizontal = 4.dp), modifier = Modifier.heightIn(min = 48.dp)) {
                     Icon(Icons.Outlined.Edit, null, Modifier.size(17.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(if (question.multiSelect && selected.isNotEmpty()) "Add a note" else "Write your own answer")
+                    Text(if (question.multiSelect && selected.isNotEmpty()) uiContext.getString(R.string.ui_add_a_note) else uiContext.getString(R.string.ui_write_your_own_answer))
                 }
             }
 
@@ -153,7 +155,7 @@ private fun QuestionCardBody(question: QuestionRequest, onAnswer: (String) -> Un
                 shape = RoundedCornerShape(12.dp),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
             ) {
-                Text(if (submitted) "Answer sent" else "Send answer")
+                Text(if (submitted) uiContext.getString(R.string.ui_answer_sent) else uiContext.getString(R.string.ui_send_answer))
                 Spacer(Modifier.width(8.dp))
                 Icon(Icons.AutoMirrored.Filled.ArrowForward, null, Modifier.size(18.dp))
             }

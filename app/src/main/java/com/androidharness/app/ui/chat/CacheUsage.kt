@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat
 
+import com.androidharness.app.R
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -89,6 +90,7 @@ private fun cacheMoney(cost: Double): String = when {
 /** One quiet footer line; request-level amounts stay behind a tap, inside chat. */
 @Composable
 internal fun CacheUsageFooter(rows: List<UsageEventEntity>, running: Boolean = false, speed: TurnSpeed? = null) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val speedLabel = turnPerformanceLabel(null, speed?.copy(firstTokenMs = null))
     if (rows.isEmpty() && speedLabel.isBlank()) return
     var expanded by remember { mutableStateOf(false) }
@@ -120,21 +122,21 @@ internal fun CacheUsageFooter(rows: List<UsageEventEntity>, running: Boolean = f
             if (indicator.rate != null) {
                 Icon(
                     if (indicator.cached > 0) Icons.Filled.CheckCircle else Icons.Filled.Close,
-                    contentDescription = if (indicator.cached > 0) "Cache hit" else "Cache missed",
+                    contentDescription = if (indicator.cached > 0) uiContext.getString(R.string.ui_cache_hit) else uiContext.getString(R.string.ui_cache_missed),
                     tint = if (indicator.cached > 0) successColor else errorColor,
                     modifier = Modifier.size(14.dp),
                 )
                 Spacer(Modifier.width(4.dp))
             }
             Text(
-                indicator.label + if (running) " · last completed" else "",
+                indicator.label + if (running) uiContext.getString(R.string.ui_last_completed) else "",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f, fill = false),
                 textAlign = TextAlign.End,
             )
             if (rows.isNotEmpty()) Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                if (expanded) "Hide cache details" else "Show cache details",
+                if (expanded) uiContext.getString(R.string.ui_hide_cache_details) else uiContext.getString(R.string.ui_show_cache_details),
                 Modifier.padding(start = 2.dp).size(16.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -142,17 +144,17 @@ internal fun CacheUsageFooter(rows: List<UsageEventEntity>, running: Boolean = f
         if (expanded) {
             Column(Modifier.fillMaxWidth().heightIn(max = 200.dp).verticalScroll(rememberScrollState()).padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (running) Text("Last completed request: ${indicator.label}",
+                if (running) Text(uiContext.getString(R.string.ui_last_completed_request, (indicator.label).toString()),
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                val costLabel = if (summary.cached > 0) "Cache-hit cost this turn" else "Input cost this turn"
+                val costLabel = if (summary.cached > 0) uiContext.getString(R.string.ui_cache_hit_cost_this_turn) else uiContext.getString(R.string.ui_input_cost_this_turn)
                 Text("$costLabel: ${total?.let { "est. ${cacheMoney(it)}" } ?: "unavailable"}",
                     style = MaterialTheme.typography.bodySmall)
-                Text("${summary.cached} of ${summary.input} input tokens served from cache",
+                Text(uiContext.getString(R.string.ui_of_input_tokens_served_from_cache, (summary.cached).toString(), (summary.input).toString()),
                     style = MaterialTheme.typography.bodySmall)
-                Text(if (summary.cached > 0) "Estimated cached reads only, excluding output and cache writes."
-                    else "Estimated uncached input and cache writes, excluding output.",
+                Text(if (summary.cached > 0) uiContext.getString(R.string.ui_estimated_cached_reads_only_excluding_output_and)
+                    else uiContext.getString(R.string.ui_estimated_uncached_input_and_cache_writes_excluding),
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (summary.unknown > 0) Text("${summary.unknown} requests did not report cache usage; excluded from the rate.",
+                if (summary.unknown > 0) Text(uiContext.getString(R.string.ui_requests_did_not_report_cache_usage_excluded, (summary.unknown).toString()),
                     style = MaterialTheme.typography.labelSmall)
                 if (rows.size > 1) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -166,16 +168,16 @@ internal fun CacheUsageFooter(rows: List<UsageEventEntity>, running: Boolean = f
                                 if (validCacheUsage(r)) {
                                     Icon(
                                         if (r.cachedTokens > 0) Icons.Filled.CheckCircle else Icons.Filled.Close,
-                                        contentDescription = if (r.cachedTokens > 0) "Cache hit" else "Cache miss",
+                                        contentDescription = if (r.cachedTokens > 0) uiContext.getString(R.string.ui_cache_hit) else uiContext.getString(R.string.ui_cache_miss),
                                         tint = if (r.cachedTokens > 0) successColor else errorColor,
                                         modifier = Modifier.size(12.dp),
                                     )
                                     Spacer(Modifier.width(4.dp))
                                 }
-                                Text("Request ${i + 1}", style = MaterialTheme.typography.labelSmall)
+                                Text(uiContext.getString(R.string.ui_request, (i + 1).toString()), style = MaterialTheme.typography.labelSmall)
                             }
                             Text(
-                                if (!validCacheUsage(r)) "Unavailable"
+                                if (!validCacheUsage(r)) uiContext.getString(R.string.ui_unavailable)
                                 else if (r.cachedTokens > 0) "${r.cachedTokens} cached"
                                 else "0 cached",
                                 style = MaterialTheme.typography.labelSmall,

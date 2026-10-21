@@ -1,5 +1,6 @@
 package com.androidharness.app.ui
 
+import com.androidharness.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.input.key.*
@@ -29,6 +30,7 @@ internal fun WorkspaceSplitLayout(
     chat: @Composable () -> Unit,
     panel: @Composable () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val density = LocalDensity.current
         val available = (maxWidth.value - 24f).coerceAtLeast(1f)
@@ -44,7 +46,7 @@ internal fun WorkspaceSplitLayout(
             if (wide && panelVisible) {
                 Box(Modifier.width(24.dp).fillMaxHeight()
                     .semantics {
-                        contentDescription = "Resize workspace panes"
+                        contentDescription = uiContext.getString(R.string.ui_resize_workspace_panes)
                         progressBarRangeInfo = ProgressBarRangeInfo(fraction, minimum..maximum)
                         setProgress { onResize(it.coerceIn(minimum, maximum)); true }
                     }

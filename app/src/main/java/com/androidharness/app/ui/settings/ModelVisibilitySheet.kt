@@ -36,6 +36,7 @@ fun ModelVisibilitySheet(
     onDismiss: () -> Unit, visibility: ModelVisibility = ModelVisibility.get(LocalContext.current),
     onRefreshCatalog: suspend (String) -> String? = { null },
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val saved by visibility.state.collectAsStateWithLifecycle()
     var providerId by rememberSaveable { mutableStateOf(initialProviderId) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -65,7 +66,7 @@ fun ModelVisibilitySheet(
                 item {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(stringResource(R.string.settings_provider_manage_models), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                        IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, "Close model management") }
+                        IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, uiContext.getString(R.string.ui_close_model_management)) }
                     }
                     Text(stringResource(R.string.settings_models_visibility_subtitle), style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -83,17 +84,17 @@ fun ModelVisibilitySheet(
                         TextButton(enabled = results.isNotEmpty(), onClick = {
                             val ids = results.map { it.id }.toSet()
                             update(if (checked) selected - ids else selected + ids)
-                        }) { Text("${if (checked) "Clear" else "Select"} results (${results.size})") }
+                        }) { Text(uiContext.getString(R.string.ui_results, (if (checked) uiContext.getString(R.string.ui_clear) else uiContext.getString(R.string.settings_provider_select)).toString(), (results.size).toString())) }
                     }
                     if (provider != null) TextButton(enabled = !refreshing, onClick = {
                         scope.launch {
                             refreshing = true
                             try { error = onRefreshCatalog(provider.id) }
                             catch (e: kotlinx.coroutines.CancellationException) { throw e }
-                            catch (_: Exception) { error = "Could not refresh models. Try again." }
+                            catch (_: Exception) { error = uiContext.getString(R.string.ui_could_not_refresh_models_try_again) }
                             finally { refreshing = false }
                         }
-                    }) { Text(if (refreshing) "Refreshing…" else "Refresh models") }
+                    }) { Text(if (refreshing) uiContext.getString(R.string.ui_refreshing) else uiContext.getString(R.string.settings_chatgpt_refresh_models)) }
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
                 items(results, key = { "${provider?.id}:${it.id}" }) { entry ->

@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.automation
 
+import com.androidharness.app.R
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -52,6 +53,7 @@ internal fun ScheduleMessageSheet(
     onCancel: (() -> Unit)? = null,
     defaultProjectId: String? = null,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val projects by container.workspace.projects.collectAsStateWithLifecycle(initialValue = emptyList())
     val sessions by container.sessions.sessions.collectAsStateWithLifecycle(initialValue = emptyList())
     val providers by container.providers.providers.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -113,7 +115,7 @@ internal fun ScheduleMessageSheet(
                 preferences.edit().putBoolean("unmetered", unmetered).apply()
                 onSaved(task)
                 onDismiss()
-            } catch (e: Exception) { error = e.message ?: "Could not save schedule" }
+            } catch (e: Exception) { error = e.message ?: uiContext.getString(R.string.ui_could_not_save_schedule) }
             finally { saving = false }
         }
     }
@@ -123,7 +125,7 @@ internal fun ScheduleMessageSheet(
             onSelect = { id, selected -> providerId = id; model = selected ?: providers.firstOrNull { it.id == id }?.model; page = SchedulePage.DETAILS },
             onRefreshCatalog = { id ->
                 val selected = providers.firstOrNull { it.id == id }
-                if (selected == null) "Provider unavailable" else {
+                if (selected == null) uiContext.getString(R.string.settings_fallback_provider_unavailable) else {
                     val key = if (id == com.androidharness.app.llm.HarnessProvider.ID) container.providers.harnessApiKey()
                         else selected.effectiveApiKey(container.providers.apiKey(id))
                     when (val result = com.androidharness.app.llm.ModelCatalog.listModels(selected, key)) {
@@ -140,19 +142,19 @@ internal fun ScheduleMessageSheet(
             Column(Modifier.fillMaxWidth().heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.88f).dp).imePadding()) {
                 Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (page != SchedulePage.DETAILS) IconButton(onClick = { page = SchedulePage.DETAILS }) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back to schedule")
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, uiContext.getString(R.string.ui_back_to_schedule))
                     }
                     Text(when (page) {
-                        SchedulePage.DETAILS -> if (existing) "Edit schedule" else "Schedule message"
-                        SchedulePage.CHAT -> "Choose chat"
-                        SchedulePage.WORKSPACE -> "Choose workspace"
-                        SchedulePage.PROVIDER -> "Choose provider"
-                        else -> "Choose model"
+                        SchedulePage.DETAILS -> if (existing) uiContext.getString(R.string.ui_edit_schedule) else uiContext.getString(R.string.ui_schedule_message)
+                        SchedulePage.CHAT -> uiContext.getString(R.string.ui_choose_chat)
+                        SchedulePage.WORKSPACE -> uiContext.getString(R.string.ui_choose_workspace)
+                        SchedulePage.PROVIDER -> uiContext.getString(R.string.ui_choose_provider)
+                        else -> uiContext.getString(R.string.settings_provider_choose_model_title)
                     }, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f).padding(start = 8.dp))
                     if (existing && page == SchedulePage.DETAILS) Box {
-                        IconButton(onClick = { showActions = true }) { Icon(Icons.Outlined.MoreVert, "Schedule actions") }
+                        IconButton(onClick = { showActions = true }) { Icon(Icons.Outlined.MoreVert, uiContext.getString(R.string.ui_schedule_actions)) }
                         DropdownMenu(showActions, { showActions = false }) {
-                            DropdownMenuItem(text = { Text(if (initial?.enabled == true) "Pause schedule" else "Resume schedule") },
+                            DropdownMenuItem(text = { Text(if (initial?.enabled == true) uiContext.getString(R.string.ui_pause_schedule) else uiContext.getString(R.string.ui_resume_schedule)) },
                                 onClick = {
                                     showActions = false
                                     scope.launch {
@@ -163,33 +165,33 @@ internal fun ScheduleMessageSheet(
                                         onDismiss()
                                     }
                                 })
-                            DropdownMenuItem(text = { Text("Cancel schedule") }, onClick = { showActions = false; confirmCancel = true })
+                            DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_cancel_schedule)) }, onClick = { showActions = false; confirmCancel = true })
                         }
                     }
-                    IconButton(onClick = { if (!saving) onDismiss() }, enabled = !saving) { Icon(Icons.Outlined.Close, "Close schedule") }
+                    IconButton(onClick = { if (!saving) onDismiss() }, enabled = !saving) { Icon(Icons.Outlined.Close, uiContext.getString(R.string.ui_close_schedule)) }
                 }
                 LazyColumn(Modifier.weight(1f, fill = false).fillMaxWidth(),
                     contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (page == SchedulePage.DETAILS) {
                         item {
-                            OutlinedTextField(prompt, { prompt = it }, label = { Text("Message") },
+                            OutlinedTextField(prompt, { prompt = it }, label = { Text(uiContext.getString(R.string.ui_message_1545)) },
                                 modifier = Modifier.fillMaxWidth(), minLines = 2, maxLines = 4,
                                 enabled = !saving, shape = MaterialTheme.shapes.medium)
                         }
                         item {
                             Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, shape = MaterialTheme.shapes.large) {
                                 Column {
-                                    if (schedule == AutomationSchedule.ONCE) ScheduleRow(Icons.Outlined.CalendarToday, "Date", DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(at))) {
+                                    if (schedule == AutomationSchedule.ONCE) ScheduleRow(Icons.Outlined.CalendarToday, uiContext.getString(R.string.ui_date), DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(at))) {
                                         focus.clearFocus(); keyboard?.hide(); showDatePicker = true
                                     }
                                     if (schedule == AutomationSchedule.ONCE || schedule == AutomationSchedule.DAILY)
-                                    ScheduleRow(Icons.Outlined.Schedule, "Time", DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(at))) {
+                                    ScheduleRow(Icons.Outlined.Schedule, uiContext.getString(R.string.ui_time), DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(at))) {
                                         focus.clearFocus(); keyboard?.hide(); showTimePicker = true
                                     }
                                     var expanded by remember { mutableStateOf(false) }
                                     Box {
-                                        ScheduleRow(Icons.Outlined.Repeat, "Repeat", schedule.scheduleLabel()) { expanded = true }
+                                        ScheduleRow(Icons.Outlined.Repeat, uiContext.getString(R.string.ui_repeat), schedule.scheduleLabel()) { expanded = true }
                                         DropdownMenu(expanded, { expanded = false }) {
                                             AutomationSchedule.entries.forEach { option ->
                                                 DropdownMenuItem(text = { Text(option.scheduleLabel()) }, onClick = { schedule = option; expanded = false })
@@ -200,37 +202,37 @@ internal fun ScheduleMessageSheet(
                             }
                         }
                         item {
-                            Text("Connection", style = MaterialTheme.typography.labelLarge)
-                            ConnectionChoice("Any internet", "Mobile data or Wi-Fi", !unmetered) { unmetered = false }
-                            ConnectionChoice("Unmetered only", "Wait for a connection without a data limit", unmetered) { unmetered = true }
+                            Text(uiContext.getString(R.string.ui_connection), style = MaterialTheme.typography.labelLarge)
+                            ConnectionChoice(uiContext.getString(R.string.ui_any_internet), uiContext.getString(R.string.ui_mobile_data_or_wi_fi), !unmetered) { unmetered = false }
+                            ConnectionChoice(uiContext.getString(R.string.ui_unmetered_only), uiContext.getString(R.string.ui_wait_for_a_connection_without_a_data), unmetered) { unmetered = true }
                         }
                         item {
                             Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, shape = MaterialTheme.shapes.large) {
                                 Column {
-                                    ScheduleRow(Icons.AutoMirrored.Outlined.Chat, "Chat", if (sessionId == null) "New chat" else session?.title ?: "Chat unavailable") { page = SchedulePage.CHAT }
-                                    ScheduleRow(Icons.Outlined.Folder, "Workspace", project?.name ?: "Choose workspace", enabled = sessionId == null) { page = SchedulePage.WORKSPACE }
-                                    ScheduleRow(Icons.Outlined.SmartToy, "Model", model ?: "Choose model") { page = SchedulePage.MODEL }
+                                    ScheduleRow(Icons.AutoMirrored.Outlined.Chat, uiContext.getString(R.string.ui_chat), if (sessionId == null) uiContext.getString(R.string.settings_telegram_new_chat) else session?.title ?: uiContext.getString(R.string.ui_chat_unavailable)) { page = SchedulePage.CHAT }
+                                    ScheduleRow(Icons.Outlined.Folder, uiContext.getString(R.string.ui_workspace), project?.name ?: uiContext.getString(R.string.ui_choose_workspace), enabled = sessionId == null) { page = SchedulePage.WORKSPACE }
+                                    ScheduleRow(Icons.Outlined.SmartToy, uiContext.getString(R.string.ui_model), model ?: uiContext.getString(R.string.settings_provider_choose_model_title)) { page = SchedulePage.MODEL }
                                 }
                             }
-                            if (sessionId != null) Text("Workspace follows the selected chat.", style = MaterialTheme.typography.labelSmall,
+                            if (sessionId != null) Text(uiContext.getString(R.string.ui_workspace_follows_the_selected_chat), style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
                         }
                         item {
-                            Text(if (schedule == AutomationSchedule.MANUAL) "Saved for you to run from Automations."
-                                else "Runs at or after this time when conditions allow.",
+                            Text(if (schedule == AutomationSchedule.MANUAL) uiContext.getString(R.string.ui_saved_for_you_to_run_from_automations)
+                                else uiContext.getString(R.string.ui_runs_at_or_after_this_time_when),
                                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         if (schedule == AutomationSchedule.ONCE && at <= System.currentTimeMillis()) item {
-                            Text("Choose a future date and time.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                            Text(uiContext.getString(R.string.ui_choose_a_future_date_and_time), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                         }
                         error?.let { item { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) } }
                     } else {
                         item {
-                            OutlinedTextField(query, { query = it }, placeholder = { Text("Search") }, leadingIcon = { Icon(Icons.Outlined.Search, null) },
+                            OutlinedTextField(query, { query = it }, placeholder = { Text(uiContext.getString(R.string.ui_search)) }, leadingIcon = { Icon(Icons.Outlined.Search, null) },
                                 modifier = Modifier.fillMaxWidth(), singleLine = true)
                         }
                         if (page == SchedulePage.CHAT) {
-                            item { ScheduleRow(Icons.Outlined.Add, "New chat", "Start a fresh conversation") { sessionId = null; page = SchedulePage.DETAILS } }
+                            item { ScheduleRow(Icons.Outlined.Add, uiContext.getString(R.string.settings_telegram_new_chat), uiContext.getString(R.string.ui_start_a_fresh_conversation)) { sessionId = null; page = SchedulePage.DETAILS } }
                             items(sessions.filter { it.title.contains(query, ignoreCase = true) }, key = { it.id }) { chat ->
                                 ScheduleRow(Icons.AutoMirrored.Outlined.Chat, chat.title, projects.firstOrNull { it.id == chat.projectId }?.name ?: "Workspace unavailable",
                                     enabled = projects.any { it.id == chat.projectId }) {
@@ -243,7 +245,7 @@ internal fun ScheduleMessageSheet(
                             }
                         } else {
                             items(providers.filter { (it.enabled || query.isNotBlank()) && it.name.contains(query, ignoreCase = true) }, key = { it.id }) { p ->
-                                ScheduleRow(Icons.Outlined.SmartToy, p.name, if (p.enabled) p.model else "Disabled · Enable & use") {
+                                ScheduleRow(Icons.Outlined.SmartToy, p.name, if (p.enabled) p.model else uiContext.getString(R.string.ui_disabled_enable_use)) {
                                     if (!p.enabled) scope.launch { container.providers.setEnabled(p.id, true) }
                                     providerId = p.id; model = p.model; page = SchedulePage.MODEL }
                             }
@@ -254,7 +256,7 @@ internal fun ScheduleMessageSheet(
                     Button(onClick = ::save, enabled = valid && !saving,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp).heightIn(min = 48.dp)) {
                         if (saving) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                        else Text(if (existing) "Save changes" else if (schedule == AutomationSchedule.MANUAL) "Save task" else "Schedule")
+                        else Text(if (existing) uiContext.getString(R.string.settings_root_browser_save_confirm) else if (schedule == AutomationSchedule.MANUAL) uiContext.getString(R.string.ui_save_task) else uiContext.getString(R.string.ui_schedule))
                     }
                 } else Spacer(Modifier.height(16.dp))
             }
@@ -274,31 +276,31 @@ internal fun ScheduleMessageSheet(
                         .atTime(date.toLocalTime()).atZone(zone).toInstant().toEpochMilli()
                 }
                 showDatePicker = false
-            }, enabled = picker.selectedDateMillis != null) { Text("Done") } },
-            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } }) {
+            }, enabled = picker.selectedDateMillis != null) { Text(uiContext.getString(R.string.settings_action_done)) } },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text(uiContext.getString(R.string.settings_action_cancel)) } }) {
             DatePicker(picker, showModeToggle = true,
                 modifier = Modifier.heightIn(max = (LocalConfiguration.current.screenHeightDp * .65f).dp).verticalScroll(rememberScrollState()))
         }
     }
     if (showTimePicker) {
         val picker = rememberTimePickerState(date.hour, date.minute, android.text.format.DateFormat.is24HourFormat(context))
-        AlertDialog(onDismissRequest = { showTimePicker = false }, title = { Text("Choose time") },
+        AlertDialog(onDismissRequest = { showTimePicker = false }, title = { Text(uiContext.getString(R.string.ui_choose_time)) },
             text = { TimeInput(picker) },
             confirmButton = { TextButton(onClick = {
                 at = date.withHour(picker.hour).withMinute(picker.minute).withSecond(0).withNano(0).toInstant().toEpochMilli()
                 showTimePicker = false
-            }) { Text("Done") } },
-            dismissButton = { TextButton(onClick = { showTimePicker = false }) { Text("Cancel") } })
+            }) { Text(uiContext.getString(R.string.settings_action_done)) } },
+            dismissButton = { TextButton(onClick = { showTimePicker = false }) { Text(uiContext.getString(R.string.settings_action_cancel)) } })
     }
-    if (confirmCancel) AlertDialog(onDismissRequest = { confirmCancel = false }, title = { Text("Cancel this schedule?") },
-        text = { Text("Future runs will stop. Chat history and completed work will stay available.") },
+    if (confirmCancel) AlertDialog(onDismissRequest = { confirmCancel = false }, title = { Text(uiContext.getString(R.string.ui_cancel_this_schedule)) },
+        text = { Text(uiContext.getString(R.string.ui_future_runs_will_stop_chat_history_and)) },
         confirmButton = { TextButton(onClick = {
             scope.launch {
                 withContext(Dispatchers.IO) { container.automation.cancel(requireNotNull(initial).id) }
                 onCancel?.invoke(); onDismiss()
             }
-        }) { Text("Cancel schedule") } },
-        dismissButton = { TextButton(onClick = { confirmCancel = false }) { Text("Keep schedule") } })
+        }) { Text(uiContext.getString(R.string.ui_cancel_schedule)) } },
+        dismissButton = { TextButton(onClick = { confirmCancel = false }) { Text(uiContext.getString(R.string.ui_keep_schedule)) } })
 }
 
 @Composable

@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.R
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -54,6 +55,7 @@ internal fun CustomReasoningSheet(
     onDetectLevels: (suspend () -> List<String>)? = null,
     startAdding: Boolean = false,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val defaults = remember(spec) {
         CustomReasoning.defaultLevels(spec)
     }
@@ -94,7 +96,7 @@ internal fun CustomReasoningSheet(
             val name = levels[previewLevel.coerceIn(levels.indices)]
             preview = withContext(Dispatchers.Default) {
                 runCatching { json.encodeToString(JsonObject.serializer(), ReasoningMapping.evaluate(effectiveMapping, name)) }
-                    .getOrElse { it.message ?: "Invalid mapping" }
+                    .getOrElse { it.message ?: uiContext.getString(R.string.ui_invalid_mapping) }
             }
         }
     }
@@ -104,25 +106,25 @@ internal fun CustomReasoningSheet(
         levels = ArrayList(levels.toMutableList().apply(change)); error = null
     }
     if (showLevelHelp) AlertDialog(onDismissRequest = { showLevelHelp = false },
-        title = { Text("About reasoning levels") }, text = { Text(CustomReasoning.LEVEL_HELP) },
-        confirmButton = { TextButton(onClick = { showLevelHelp = false }) { Text("Got it") } })
+        title = { Text(uiContext.getString(R.string.ui_about_reasoning_levels)) }, text = { Text(CustomReasoning.LEVEL_HELP) },
+        confirmButton = { TextButton(onClick = { showLevelHelp = false }) { Text(uiContext.getString(R.string.settings_action_got_it)) } })
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().imePadding().padding(horizontal = 20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Customize thinking", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-                IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, "Close thinking settings") }
+                Text(uiContext.getString(R.string.ui_customize_thinking), Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, uiContext.getString(R.string.ui_close_thinking_settings)) }
             }
             Text("${config.name} · ${config.model}", maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
-            Text("Changes apply to your next message.",
+            Text(uiContext.getString(R.string.ui_changes_apply_to_your_next_message),
                 Modifier.padding(top = 6.dp, bottom = 12.dp), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Reasoning levels", style = MaterialTheme.typography.titleSmall)
-                        Text("Lowest effort first", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                        Text(uiContext.getString(R.string.ui_reasoning_levels), style = MaterialTheme.typography.titleSmall)
+                        Text(uiContext.getString(R.string.ui_lowest_effort_first), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                     }
-                    IconButton(onClick = { showLevelHelp = true }) { Icon(Icons.Outlined.Info, "About reasoning levels", Modifier.size(20.dp)) }
+                    IconButton(onClick = { showLevelHelp = true }) { Icon(Icons.Outlined.Info, uiContext.getString(R.string.ui_about_reasoning_levels), Modifier.size(20.dp)) }
                 }
                 if (onDetectLevels != null && !localControl) {
                     TextButton(enabled = !validating && !detecting, onClick = {
@@ -134,23 +136,23 @@ internal fun CustomReasoningSheet(
                                 levelsEdited = true; levels = ArrayList(detected); editingLevel = null
                                 previewLevel = detected.indexOfFirst { CustomReasoning.wire(it) == selected }.coerceAtLeast(0)
                                 error = null
-                                detectionMessage = "Detected ${detected.size} levels. Save to apply."
+                                detectionMessage = uiContext.getString(R.string.ui_detected_levels_save_to_apply, (detected.size).toString())
                             } catch (e: kotlinx.coroutines.CancellationException) { throw e
                             } catch (e: Exception) {
                                 detectionFailed = true
-                                detectionMessage = e.message ?: "Could not detect levels. Try again."
+                                detectionMessage = e.message ?: uiContext.getString(R.string.ui_could_not_detect_levels_try_again)
                             } finally { detecting = false }
                         }
                     }) {
                         if (detecting) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                         else Icon(Icons.Outlined.Refresh, null, Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text(if (detecting) "Checking provider…" else "Auto-detect levels")
+                        Text(if (detecting) uiContext.getString(R.string.ui_checking_provider) else uiContext.getString(R.string.ui_auto_detect_levels))
                     }
                     detectionMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall,
                         color = if (detectionFailed) scheme.error else scheme.primary) }
                 }
-                if (saved == null && !levelsEdited && spec.reportedLevels != null) Text("Detected from provider",
+                if (saved == null && !levelsEdited && spec.reportedLevels != null) Text(uiContext.getString(R.string.ui_detected_from_provider),
                     style = MaterialTheme.typography.bodySmall, color = scheme.primary)
                 Surface(shape = MaterialTheme.shapes.large, color = scheme.surfaceContainerLow) {
                   Column {
@@ -163,26 +165,26 @@ internal fun CustomReasoningSheet(
                             if (editingLevel == index) {
                                 OutlinedTextField(name, { value -> editLevels { set(index, value.take(32)) } },
                                     modifier = Modifier.weight(1f).focusRequester(levelFocus)
-                                        .semantics { contentDescription = "Level ${index + 1} name" }, singleLine = true,
-                                    enabled = !validating && !detecting, label = { Text("Level name") })
-                                IconButton(onClick = { editingLevel = null }) { Icon(Icons.Outlined.Check, "Done editing level", Modifier.size(20.dp)) }
-                            } else Text(name.takeIf { it.isNotBlank() }?.let(CustomReasoning::label) ?: "New level",
+                                        .semantics { contentDescription = uiContext.getString(R.string.ui_level_name, (index + 1).toString()) }, singleLine = true,
+                                    enabled = !validating && !detecting, label = { Text(uiContext.getString(R.string.ui_level_name_416)) })
+                                IconButton(onClick = { editingLevel = null }) { Icon(Icons.Outlined.Check, uiContext.getString(R.string.ui_done_editing_level), Modifier.size(20.dp)) }
+                            } else Text(name.takeIf { it.isNotBlank() }?.let(CustomReasoning::label) ?: uiContext.getString(R.string.ui_new_level),
                                 Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                             Box {
                                 IconButton(onClick = { actions = true }, enabled = !validating && !detecting) {
-                                    Icon(Icons.Outlined.MoreVert, "Level ${index + 1} actions", Modifier.size(20.dp))
+                                    Icon(Icons.Outlined.MoreVert, uiContext.getString(R.string.ui_level_actions, (index + 1).toString()), Modifier.size(20.dp))
                                 }
                                 DropdownMenu(actions, { actions = false }) {
-                                    DropdownMenuItem(text = { Text("Rename") }, onClick = { actions = false; editingLevel = index })
-                                    DropdownMenuItem(text = { Text("Move up") }, enabled = index > 0,
+                                    DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_rename)) }, onClick = { actions = false; editingLevel = index })
+                                    DropdownMenuItem(text = { Text(uiContext.getString(R.string.settings_action_move_up)) }, enabled = index > 0,
                                         leadingIcon = { Icon(Icons.Outlined.ArrowUpward, null) }, onClick = {
                                             actions = false; editLevels { java.util.Collections.swap(this, index, index - 1) }; editingLevel = null
                                         })
-                                    DropdownMenuItem(text = { Text("Move down") }, enabled = index < levels.lastIndex,
+                                    DropdownMenuItem(text = { Text(uiContext.getString(R.string.settings_action_move_down)) }, enabled = index < levels.lastIndex,
                                         leadingIcon = { Icon(Icons.Outlined.ArrowDownward, null) }, onClick = {
                                             actions = false; editLevels { java.util.Collections.swap(this, index, index + 1) }; editingLevel = null
                                         })
-                                    DropdownMenuItem(text = { Text("Remove", color = scheme.error) },
+                                    DropdownMenuItem(text = { Text(uiContext.getString(R.string.settings_action_remove), color = scheme.error) },
                                         leadingIcon = { Icon(Icons.Outlined.DeleteOutline, null, tint = scheme.error) }, onClick = {
                                             actions = false; editLevels { removeAt(index) }; editingLevel = null
                                         })
@@ -194,23 +196,23 @@ internal fun CustomReasoningSheet(
                     TextButton(onClick = {
                         editLevels { add("") }; editingLevel = levels.lastIndex
                     }, enabled = !validating && !detecting && levels.size < 16) {
-                        Icon(Icons.Filled.Add, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Add level")
+                        Icon(Icons.Filled.Add, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text(uiContext.getString(R.string.ui_add_level))
                     }
                   }
                 }
-                Text("Tap a name to edit. Only add levels your model supports.",
+                Text(uiContext.getString(R.string.ui_tap_a_name_to_edit_only_add),
                     style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                 Surface(modifier = Modifier.semantics {
-                    contentDescription = "Advanced request mapping"
-                    stateDescription = if (advancedExpanded) "Expanded" else "Collapsed"
+                    contentDescription = uiContext.getString(R.string.ui_advanced_request_mapping)
+                    stateDescription = if (advancedExpanded) uiContext.getString(R.string.ui_expanded) else uiContext.getString(R.string.ui_collapsed)
                 }, shape = MaterialTheme.shapes.large, color = scheme.surfaceContainerLow,
                     onClick = { advancedExpanded = !advancedExpanded }) {
                     Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.Code, null, Modifier.size(20.dp), tint = scheme.onSurfaceVariant)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("Advanced request mapping", style = MaterialTheme.typography.titleSmall)
-                            Text(if (mapping.isBlank()) "Optional · provider defaults" else "Custom CEL mapping is active",
+                            Text(uiContext.getString(R.string.ui_advanced_request_mapping), style = MaterialTheme.typography.titleSmall)
+                            Text(if (mapping.isBlank()) uiContext.getString(R.string.ui_optional_provider_defaults) else uiContext.getString(R.string.ui_custom_cel_mapping_is_active),
                                 style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                         }
                         Icon(if (advancedExpanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
@@ -218,42 +220,42 @@ internal fun CustomReasoningSheet(
                     }
                 }
                 if (advancedExpanded) {
-                Text("Reasoning parameter mapping (optional)", style = MaterialTheme.typography.titleSmall)
-                Text("Leave blank to inherit this model/provider’s default mapping. Enter a CEL expression to override it. The JSON object it returns is merged into the outgoing request body.",
+                Text(uiContext.getString(R.string.ui_reasoning_parameter_mapping_optional), style = MaterialTheme.typography.titleSmall)
+                Text(uiContext.getString(R.string.ui_leave_blank_to_inherit_this_model_provider),
                     style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
-                Text("reasoningLevel is lowercase (for example: disabled, low, high, max, xhigh). Nested objects merge; null removes a field.",
+                Text(uiContext.getString(R.string.ui_reasoninglevel_is_lowercase_for_example_disabled_low),
                     style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                 OutlinedTextField(mapping, { mapping = it.take(8_192); error = null },
-                    Modifier.fillMaxWidth().semantics { contentDescription = "CEL expression (optional)" },
+                    Modifier.fillMaxWidth().semantics { contentDescription = uiContext.getString(R.string.ui_cel_expression_optional) },
                     minLines = 4, maxLines = 8, enabled = !validating && !localControl,
-                    placeholder = { Text(inheritedMapping ?: if (localControl) "Native on/off control" else "No inherited mapping. Enter a CEL expression.",
+                    placeholder = { Text(inheritedMapping ?: if (localControl) uiContext.getString(R.string.ui_native_on_off_control) else uiContext.getString(R.string.ui_no_inherited_mapping_enter_a_cel_expression),
                         maxLines = 6, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, fontFamily = FontFamily.Monospace) },
                     textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace))
                 Text(when {
-                    localControl -> "Uses native on/off control on this device."
-                    mapping.isNotBlank() -> "Using custom CEL mapping"
-                    inheritedMapping != null -> "Using inherited model/provider mapping"
-                    else -> "No inherited mapping is available. A custom CEL mapping is required."
+                    localControl -> uiContext.getString(R.string.ui_uses_native_on_off_control_on_this)
+                    mapping.isNotBlank() -> uiContext.getString(R.string.ui_using_custom_cel_mapping)
+                    inheritedMapping != null -> uiContext.getString(R.string.ui_using_inherited_model_provider_mapping)
+                    else -> uiContext.getString(R.string.ui_no_inherited_mapping_is_available_a_custom)
                 }, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                 if (inheritedMapping != null) TextButton(onClick = {
                     mapping = if (mapping.isBlank()) inheritedMapping else ""; error = null
                 }, enabled = !validating) {
-                    Text(if (mapping.isBlank()) "Edit inherited mapping" else "Use inherited mapping")
+                    Text(if (mapping.isBlank()) uiContext.getString(R.string.ui_edit_inherited_mapping) else uiContext.getString(R.string.ui_use_inherited_mapping))
                 }
                 if (effectiveMapping != null && levels.isNotEmpty()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Request fields preview", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                        Text(uiContext.getString(R.string.ui_request_fields_preview), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
                         var showLevels by remember { mutableStateOf(false) }
                         Box {
-                            TextButton(onClick = { showLevels = true }) { Text(levels[previewLevel.coerceIn(levels.indices)].ifBlank { "Unnamed" }) }
+                            TextButton(onClick = { showLevels = true }) { Text(levels[previewLevel.coerceIn(levels.indices)].ifBlank { uiContext.getString(R.string.ui_unnamed) }) }
                             DropdownMenu(showLevels, { showLevels = false }) {
-                                levels.forEachIndexed { i, label -> DropdownMenuItem(text = { Text(label.ifBlank { "Unnamed" }) },
+                                levels.forEachIndexed { i, label -> DropdownMenuItem(text = { Text(label.ifBlank { uiContext.getString(R.string.ui_unnamed) }) },
                                     onClick = { previewLevel = i; showLevels = false }) }
                             }
                         }
                     }
                     Surface(shape = MaterialTheme.shapes.medium, color = scheme.surfaceContainerHigh) {
-                        Text(preview ?: "Checking expression…", Modifier.fillMaxWidth().padding(12.dp),
+                        Text(preview ?: uiContext.getString(R.string.ui_checking_expression), Modifier.fillMaxWidth().padding(12.dp),
                             style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
                     }
                 }
@@ -271,19 +273,19 @@ internal fun CustomReasoningSheet(
                         val result = withContext(Dispatchers.Default) { runCatching { ReasoningMapping.validate(draft, requestConfig, spec) } }
                         validating = false
                         result.onSuccess(onSave).onFailure {
-                            error = it.message ?: "Check your reasoning settings."
+                            error = it.message ?: uiContext.getString(R.string.ui_check_your_reasoning_settings)
                             if (error.orEmpty().contains("mapping", ignoreCase = true) || error.orEmpty().contains("CEL")) advancedExpanded = true
                         }
                     }
                 }
                 Column {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        if (!stacked) TextButton(onClick = { onSave(null) }, enabled = !validating && !detecting) { Text("Use defaults") }
+                        if (!stacked) TextButton(onClick = { onSave(null) }, enabled = !validating && !detecting) { Text(uiContext.getString(R.string.ui_use_defaults)) }
                         Spacer(Modifier.weight(1f))
-                        TextButton(onClick = onDismiss, enabled = !validating) { Text("Cancel", maxLines = 1) }
-                        Button(enabled = !validating && !detecting, onClick = saveAction) { Text(if (validating) "Checking…" else "Save", maxLines = 1) }
+                        TextButton(onClick = onDismiss, enabled = !validating) { Text(uiContext.getString(R.string.settings_action_cancel), maxLines = 1) }
+                        Button(enabled = !validating && !detecting, onClick = saveAction) { Text(if (validating) uiContext.getString(R.string.ui_checking) else uiContext.getString(R.string.settings_action_save), maxLines = 1) }
                     }
-                    if (stacked) TextButton(onClick = { onSave(null) }, enabled = !validating && !detecting) { Text("Use defaults") }
+                    if (stacked) TextButton(onClick = { onSave(null) }, enabled = !validating && !detecting) { Text(uiContext.getString(R.string.ui_use_defaults)) }
                 }
             }
         }

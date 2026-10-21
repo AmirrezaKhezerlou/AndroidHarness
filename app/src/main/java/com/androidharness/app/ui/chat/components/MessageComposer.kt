@@ -159,6 +159,7 @@ internal fun MessageComposer(
     modifier: Modifier = Modifier,
     attachments: @Composable () -> Unit = {},
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val desktop = com.androidharness.app.ui.LocalDesktopLayout.current
     val desktopInput = com.androidharness.app.ui.LocalDesktopInput.current
     val inputFocus = com.androidharness.app.ui.LocalComposerFocus.current
@@ -261,7 +262,7 @@ internal fun MessageComposer(
                             color = MaterialTheme.colorScheme.primary,
                         )
                         Text(
-                            "Transcribing audio with Groq Whisper…",
+                            uiContext.getString(R.string.ui_transcribing_audio_with_groq_whisper),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.primary,
                             maxLines = 1,
@@ -313,7 +314,7 @@ internal fun MessageComposer(
                                 )
                                 Icon(
                                     Icons.Filled.Close,
-                                    contentDescription = "Remove skill",
+                                    contentDescription = uiContext.getString(R.string.ui_remove_skill),
                                     modifier = Modifier.size(14.dp),
                                 )
                             }
@@ -338,7 +339,7 @@ internal fun MessageComposer(
                             .weight(1f)
                             .heightIn(max = lineHeight * visibleLines + inputPadding * 2)
                             .then(inputFocus?.let { Modifier.focusRequester(it) } ?: Modifier)
-                            .semantics { contentDescription = "Message input" }
+                            .semantics { contentDescription = uiContext.getString(R.string.ui_message_input) }
                             .onFocusChanged { focused = it.isFocused }
                             .onPreviewKeyEvent { event ->
                                 if (desktopInput && !event.isCtrlPressed && event.key == Key.Tab) {
@@ -375,11 +376,11 @@ internal fun MessageComposer(
                             ) {
                                 if (value.text.isEmpty()) Text(
                                     text = when {
-                                        isInbuiltListening -> "Listening…"
-                                        !attachedSkill.isNullOrBlank() -> "Add a note, or send…"
-                                        busy -> "Queue message"
-                                        desktop -> "Describe a task…"
-                                        else -> "Message…"
+                                        isInbuiltListening -> uiContext.getString(R.string.ui_listening)
+                                        !attachedSkill.isNullOrBlank() -> uiContext.getString(R.string.ui_add_a_note_or_send)
+                                        busy -> uiContext.getString(R.string.ui_queue_message)
+                                        desktop -> uiContext.getString(R.string.ui_describe_a_task)
+                                        else -> uiContext.getString(R.string.ui_message)
                                     },
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
@@ -444,7 +445,7 @@ internal fun MessageComposer(
                 ExpressiveIconButton(
                     onClick = onToggleInbuiltVoice,
                     modifier = Modifier.size(actionSize)
-                        .semantics { contentDescription = if (isInbuiltListening) "Stop voice input" else "Voice input" },
+                        .semantics { contentDescription = if (isInbuiltListening) uiContext.getString(R.string.ui_stop_voice_input) else uiContext.getString(R.string.settings_page_voice_title) },
                     shape = RoundedCornerShape(corner),
                     colors = IconButtonDefaults.iconButtonColors(
                         containerColor = if (isInbuiltListening) MaterialTheme.colorScheme.primary else Color.Transparent,
@@ -466,7 +467,7 @@ internal fun MessageComposer(
                 ExpressiveIconButton(
                     onClick = { haptics.performHapticFeedback(HapticFeedbackType.Confirm); onSend() },
                     modifier = Modifier.size(actionSize)
-                        .semantics { contentDescription = "Queue message" },
+                        .semantics { contentDescription = uiContext.getString(R.string.ui_queue_message) },
                     shape = RoundedCornerShape(corner),
                     colors = IconButtonDefaults.iconButtonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
@@ -486,7 +487,7 @@ internal fun MessageComposer(
                             haptics.performHapticFeedback(HapticFeedbackType.Confirm)
                             onStopAndTranscribeGroq()
                         }
-                        .semantics { contentDescription = "Transcribe voice message" },
+                        .semantics { contentDescription = uiContext.getString(R.string.ui_transcribe_voice_message) },
                     contentAlignment = Alignment.Center,
                 ) {
                     Box(
@@ -505,7 +506,7 @@ internal fun MessageComposer(
                 ExpressiveIconButton(
                     onClick = { haptics.performHapticFeedback(HapticFeedbackType.Confirm); onStop() },
                     modifier = Modifier.size(actionSize)
-                        .semantics { contentDescription = "Stop" },
+                        .semantics { contentDescription = uiContext.getString(R.string.settings_action_stop) },
                     shape = RoundedCornerShape(corner),
                     colors = IconButtonDefaults.iconButtonColors(containerColor = buttonColor, contentColor = iconColor),
                 ) {
@@ -517,7 +518,7 @@ internal fun MessageComposer(
                 ExpressiveIconButton(
                     onClick = { haptics.performHapticFeedback(HapticFeedbackType.Confirm); onSend() },
                     modifier = Modifier.size(actionSize)
-                        .semantics { contentDescription = "Send message" },
+                        .semantics { contentDescription = uiContext.getString(R.string.ui_send_message) },
                     shape = RoundedCornerShape(corner),
                     colors = IconButtonDefaults.iconButtonColors(containerColor = buttonColor, contentColor = iconColor),
                 ) {
@@ -560,7 +561,7 @@ internal fun MessageComposer(
                 if (canSend || showStopOnly || isGroqLocked) trailing()
                 else IconButton(onClick = {}, enabled = false, modifier = Modifier.size(44.dp)) {
                     Surface(shape = CircleShape, color = scheme.primary.copy(alpha = 0.45f)) {
-                        Icon(painterResource(R.drawable.ic_chat_arrow_up), "Send message", Modifier.padding(9.dp).size(18.dp), tint = scheme.onPrimary)
+                        Icon(painterResource(R.drawable.ic_chat_arrow_up), uiContext.getString(R.string.ui_send_message), Modifier.padding(9.dp).size(18.dp), tint = scheme.onPrimary)
                     }
                 }
             }
@@ -664,6 +665,7 @@ private fun RecordingStrip(
     cancelProgress: Float,
     modifier: Modifier = Modifier,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val container by animateColorAsState(
         targetValue = when {
             cancelArmed -> MaterialTheme.colorScheme.errorContainer
@@ -731,7 +733,7 @@ private fun RecordingStrip(
                     ) {
                         TrashGlyph(color = onContainer, size = 18.dp)
                         Text(
-                            text = "Release to cancel",
+                            text = uiContext.getString(R.string.ui_release_to_cancel),
                             style = MaterialTheme.typography.labelMedium,
                             color = onContainer,
                         )
@@ -747,7 +749,7 @@ private fun RecordingStrip(
 
             if (locked) {
                 Text(
-                    text = "Hands free",
+                    text = uiContext.getString(R.string.ui_hands_free),
                     style = MaterialTheme.typography.labelSmall,
                     color = onContainer.copy(alpha = 0.8f),
                 )
@@ -765,7 +767,7 @@ private fun RecordingStrip(
                         size = 13.dp,
                     )
                     Text(
-                        text = "cancel",
+                        text = uiContext.getString(R.string.ui_cancel),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -888,6 +890,7 @@ private fun HuliaMicButton(
     onDrag: (Float, Float) -> Unit,
     size: Dp = 52.dp,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val haptics = LocalHapticFeedback.current
 
     val background by animateColorAsState(
@@ -1013,9 +1016,9 @@ Box(
                 }
                 .semantics {
                     contentDescription = if (recording) {
-                        "Recording. Release to send, slide left to cancel, slide up to lock"
+                        uiContext.getString(R.string.ui_recording_release_to_send_slide_left_to)
                     } else {
-                        "Tap to lock recording, hold to record a voice message"
+                        uiContext.getString(R.string.ui_tap_to_lock_recording_hold_to_record)
                     }
                 },
             contentAlignment = Alignment.Center,
@@ -1049,6 +1052,7 @@ private fun ComposerLeadingButton(
     scheduleUnavailableReason: String?,
     size: Dp = 52.dp,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val haptics = LocalHapticFeedback.current
     var expanded by remember { mutableStateOf(false) }
 
@@ -1056,7 +1060,7 @@ private fun ComposerLeadingButton(
         ExpressiveIconButton(
             onClick = { haptics.performHapticFeedback(HapticFeedbackType.Confirm); expanded = true },
             modifier = Modifier.size(size)
-                .semantics { contentDescription = "Message actions" },
+                .semantics { contentDescription = uiContext.getString(R.string.ui_message_actions) },
             shape = RoundedCornerShape(17.dp),
             colors = IconButtonDefaults.iconButtonColors(
                 containerColor = if (expanded) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
@@ -1071,7 +1075,7 @@ private fun ComposerLeadingButton(
             onDismissRequest = { expanded = false },
         ) {
             DropdownMenuItem(
-                text = { Text("Photo or image") },
+                text = { Text(uiContext.getString(R.string.ui_photo_or_image)) },
                 leadingIcon = { ImageGlyph(color = MaterialTheme.colorScheme.onSurfaceVariant, size = 18.dp) },
                 onClick = {
                     expanded = false
@@ -1079,7 +1083,7 @@ private fun ComposerLeadingButton(
                 },
             )
             DropdownMenuItem(
-                text = { Text("Any file") },
+                text = { Text(uiContext.getString(R.string.ui_any_file)) },
                 leadingIcon = { Icon(Icons.Outlined.Description, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp)) },
                 onClick = {
                     expanded = false
@@ -1091,7 +1095,7 @@ private fun ComposerLeadingButton(
                 DropdownMenuItem(
                     text = {
                         androidx.compose.foundation.layout.Column {
-                            Text("Schedule message")
+                            Text(uiContext.getString(R.string.ui_schedule_message))
                             scheduleUnavailableReason?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
                         }
                     },
@@ -1106,13 +1110,14 @@ private fun ComposerLeadingButton(
 
 @Composable
 private fun DiscardRecordingButton(onClick: () -> Unit, size: Dp = 52.dp) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     Box(
         modifier = Modifier
             .size(size)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.errorContainer)
             .clickable(onClick = onClick)
-            .semantics { contentDescription = "Discard recording" },
+            .semantics { contentDescription = uiContext.getString(R.string.ui_discard_recording) },
         contentAlignment = Alignment.Center,
     ) {
         TrashGlyph(color = MaterialTheme.colorScheme.onErrorContainer)

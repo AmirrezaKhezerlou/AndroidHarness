@@ -194,6 +194,7 @@ private fun ChatScreenContent(
     onNavigateToSession: (sessionId: String) -> Unit = {},
     searchMessageId: String? = null,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     // Lazy list content and its derived lookup maps must use the same snapshot.
     val state = viewModel.state.collectAsStateWithLifecycle().value
     val webPreviewAvailable by viewModel.webPreviewAvailable.collectAsStateWithLifecycle()
@@ -275,7 +276,7 @@ private fun ChatScreenContent(
     if (showScheduledList) androidx.compose.material3.ModalBottomSheet(
         onDismissRequest = { showScheduledList = false },
         sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Text("Scheduled messages", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+        Text(uiContext.getString(R.string.ui_scheduled_messages), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
         androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth().heightIn(max = 420.dp),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp)) {
             items(chatSchedules.size) { index ->
@@ -331,20 +332,20 @@ private fun ChatScreenContent(
     if (state.pendingWorkspaceMcp != null) {
         AlertDialog(
             onDismissRequest = { viewModel.denyWorkspaceMcp() },
-            title = { Text("Allow workspace MCP servers?") },
+            title = { Text(uiContext.getString(R.string.ui_allow_workspace_mcp_servers)) },
             text = {
                 val names = state.pendingWorkspaceMcp?.joinToString(", ").orEmpty()
                 Text(
-                    "This workspace ships a .harness/mcp.json that wants to connect: $names. " +
-                        "Its servers can run local commands and reach the network. " +
-                        "Only approve configs you trust.",
+                    uiContext.getString(R.string.ui_this_workspace_ships_a_harness_mcp_json, (names).toString()) +
+                        uiContext.getString(R.string.ui_its_servers_can_run_local_commands_and) +
+                        uiContext.getString(R.string.ui_only_approve_configs_you_trust),
                 )
             },
             confirmButton = {
-                Button(onClick = { viewModel.approveWorkspaceMcp() }) { Text("Approve") }
+                Button(onClick = { viewModel.approveWorkspaceMcp() }) { Text(uiContext.getString(R.string.ui_approve)) }
             },
             dismissButton = {
-                TextButton(onClick = { viewModel.denyWorkspaceMcp() }) { Text("Run without them") }
+                TextButton(onClick = { viewModel.denyWorkspaceMcp() }) { Text(uiContext.getString(R.string.ui_run_without_them)) }
             },
         )
     }
@@ -352,11 +353,11 @@ private fun ChatScreenContent(
     if (state.showPlanningPromo) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissPlanningPromo() },
-            title = { Text("Two models, one for planning, one for doing") },
+            title = { Text(uiContext.getString(R.string.ui_two_models_one_for_planning_one_for)) },
             text = {
                 Text(
-                    "You can now configure two models separately: one for planning mode, " +
-                        "and one that takes over once you approve the plan and execution starts.",
+                    uiContext.getString(R.string.ui_you_can_now_configure_two_models_separately) +
+                        uiContext.getString(R.string.ui_and_one_that_takes_over_once_you),
                 )
             },
             confirmButton = {
@@ -364,10 +365,10 @@ private fun ChatScreenContent(
                     viewModel.dismissPlanningPromo()
                     viewModel.container.pendingSettingsScroll.value = "planning"
                     onOpenSettings()
-                }) { Text("Configure") }
+                }) { Text(uiContext.getString(R.string.ui_configure)) }
             },
             dismissButton = {
-                TextButton(onClick = { viewModel.dismissPlanningPromo() }) { Text("Close") }
+                TextButton(onClick = { viewModel.dismissPlanningPromo() }) { Text(uiContext.getString(R.string.settings_action_close)) }
             },
         )
     }
@@ -375,20 +376,20 @@ private fun ChatScreenContent(
     if (state.showForkPromo) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissForkPromo() },
-            title = { Text("Fork conversation from here") },
+            title = { Text(uiContext.getString(R.string.ui_fork_conversation_from_here)) },
             text = {
                 Text(
-                    "Forking branches this chat into a new session starting with this prompt and response. " +
-                        "The active agent still retains all background context and project details so you can steer down a new direction cleanly.",
+                    uiContext.getString(R.string.ui_forking_branches_this_chat_into_a_new) +
+                        uiContext.getString(R.string.ui_the_active_agent_still_retains_all_background),
                 )
             },
             confirmButton = {
                 Button(onClick = {
                     viewModel.confirmForkFromPromo { newSid -> onNavigateToSession(newSid) }
-                }) { Text("Fork chat") }
+                }) { Text(uiContext.getString(R.string.ui_fork_chat)) }
             },
             dismissButton = {
-                TextButton(onClick = { viewModel.dismissForkPromo() }) { Text("Cancel") }
+                TextButton(onClick = { viewModel.dismissForkPromo() }) { Text(uiContext.getString(R.string.settings_action_cancel)) }
             },
         )
     }
@@ -396,11 +397,11 @@ private fun ChatScreenContent(
     if (state.showVoicePromo) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissVoicePromo() },
-            title = { Text("Voice & speech input") },
+            title = { Text(uiContext.getString(R.string.ui_voice_speech_input)) },
             text = {
                 Text(
-                    "You can transcribe speech with Groq Whisper (ultra fast and accurate cloud transcription with hold/swipe gestures) or use Android's inbuilt speech recognizer.\n\n" +
-                        "Configure Groq Whisper in Settings with your free Groq API key, or start using inbuilt speech immediately.",
+                    uiContext.getString(R.string.ui_you_can_transcribe_speech_with_groq_whisper) +
+                        uiContext.getString(R.string.ui_configure_groq_whisper_in_settings_with_your),
                 )
             },
             confirmButton = {
@@ -408,12 +409,12 @@ private fun ChatScreenContent(
                     viewModel.selectVoiceEngineFromPromo(AppSettings.VOICE_ENGINE_GROQ)
                     viewModel.container.pendingSettingsScroll.value = "voice"
                     onOpenSettings()
-                }) { Text("Configure Groq Whisper") }
+                }) { Text(uiContext.getString(R.string.ui_configure_groq_whisper)) }
             },
             dismissButton = {
                 TextButton(onClick = {
                     viewModel.selectVoiceEngineFromPromo(AppSettings.VOICE_ENGINE_INBUILT)
-                }) { Text("Use inbuilt speech") }
+                }) { Text(uiContext.getString(R.string.ui_use_inbuilt_speech)) }
             },
         )
     }
@@ -446,7 +447,7 @@ private fun ChatScreenContent(
         if (searchMessageId == null || state.isLoadingMessages) return@LaunchedEffect
         if (!viewModel.revealMessage(searchMessageId)) {
             pinnedToBottom = true
-            snackbar.showSnackbar("This message is no longer in the chat.")
+            snackbar.showSnackbar(uiContext.getString(R.string.ui_this_message_is_no_longer_in_the))
             return@LaunchedEffect
         }
         val index = snapshotFlow { searchItemIndex.value }.filterNotNull().first()
@@ -484,10 +485,10 @@ private fun ChatScreenContent(
             onModelScopeChange = viewModel::setSameModelAcrossChats,
             modelScopeEnabled = state.modelSelectionReady && !state.modelSelectionBusy,
             fallbackSummary = when (state.taskControl.fallbackMode) {
-                com.androidharness.app.llm.FallbackMode.OFF -> "Off for this chat"
-                com.androidharness.app.llm.FallbackMode.CUSTOM -> "Custom chain · ${state.taskControl.fallbackOverride?.targets?.size ?: 0} models"
+                com.androidharness.app.llm.FallbackMode.OFF -> uiContext.getString(R.string.ui_off_for_this_chat)
+                com.androidharness.app.llm.FallbackMode.CUSTOM -> uiContext.getString(R.string.ui_custom_chain_models, (state.taskControl.fallbackOverride?.targets?.size ?: 0).toString())
                 com.androidharness.app.llm.FallbackMode.DEFAULT -> if (state.fallbackDefaults.enabled)
-                    "Use default · ${state.fallbackDefaults.targets.size} models" else "Use default · No chain"
+                    uiContext.getString(R.string.ui_use_default_models, (state.fallbackDefaults.targets.size).toString()) else uiContext.getString(R.string.ui_use_default_no_chain)
             },
             onEditFallbacks = { fallbackProviderId = currentProviderId; activeModelPickerTarget = null; showFallbacks = true },
             fallbackEditEnabled = !state.busy,
@@ -579,7 +580,7 @@ private fun ChatScreenContent(
     actionsMessage?.let { msg ->
         AlertDialog(
             onDismissRequest = { actionsMessage = null },
-            title = { Text("Your message") },
+            title = { Text(uiContext.getString(R.string.ui_your_message)) },
             text = {
                 Text(
                     UserMessageContent.visibleText(msg.text).let { if (it.length > 200) it.take(200) + "…" else it },
@@ -593,18 +594,18 @@ private fun ChatScreenContent(
                     TextButton(onClick = {
                         clipboard.setText(AnnotatedString(UserMessageContent.visibleText(msg.text)))
                         actionsMessage = null
-                    }) { Text("Copy") }
+                    }) { Text(uiContext.getString(R.string.ui_copy)) }
                     TextButton(onClick = {
                         editingMessage = msg
                         actionsMessage = null
-                    }) { Text("Edit") }
+                    }) { Text(uiContext.getString(R.string.settings_action_edit)) }
                     TextButton(
                         onClick = {
                             actionsMessage = null
                             confirmingEdit = msg to msg.text
                         },
                         enabled = !state.busy,
-                    ) { Text("Retry") }
+                    ) { Text(uiContext.getString(R.string.ui_retry)) }
                 }
             },
             dismissButton = {
@@ -612,8 +613,8 @@ private fun ChatScreenContent(
                     if (msg.turnId in state.turnsWithCheckpoints) TextButton(onClick = {
                         actionsMessage = null
                         confirmRewindTurn = msg.turnId
-                    }) { Text("Undo file changes") }
-                    TextButton(onClick = { actionsMessage = null }) { Text("Close") }
+                    }) { Text(uiContext.getString(R.string.ui_undo_file_changes_165)) }
+                    TextButton(onClick = { actionsMessage = null }) { Text(uiContext.getString(R.string.settings_action_close)) }
                 }
             },
         )
@@ -624,7 +625,7 @@ private fun ChatScreenContent(
         var text by remember(msg) { mutableStateOf(UserMessageContent.visibleText(msg.text)) }
         AlertDialog(
             onDismissRequest = { editingMessage = null },
-            title = { Text("Edit message") },
+            title = { Text(uiContext.getString(R.string.ui_edit_message)) },
             text = {
                 OutlinedTextField(
                     value = text,
@@ -639,9 +640,9 @@ private fun ChatScreenContent(
                         confirmingEdit = msg to UserMessageContent.edit(text, msg.text)
                         editingMessage = null
                     }
-                }) { Text("Continue") }
+                }) { Text(uiContext.getString(R.string.settings_action_continue)) }
             },
-            dismissButton = { TextButton(onClick = { editingMessage = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { editingMessage = null }) { Text(uiContext.getString(R.string.settings_action_cancel)) } },
         )
     }
 
@@ -649,21 +650,21 @@ private fun ChatScreenContent(
     confirmingEdit?.let { (msg, newText) ->
         AlertDialog(
             onDismissRequest = { confirmingEdit = null },
-            title = { Text(if (newText == msg.text) "Retry this message?" else "Edit this message?") },
+            title = { Text(if (newText == msg.text) uiContext.getString(R.string.ui_retry_this_message) else uiContext.getString(R.string.ui_edit_this_message)) },
             text = {
                 Text(
-                    "Everything after this message will be deleted, and any file changes made " +
-                        "after it will be undone: files are restored to how they were at that " +
-                        "point. The message is then resent once. This cannot be undone.",
+                    uiContext.getString(R.string.ui_everything_after_this_message_will_be_deleted) +
+                        uiContext.getString(R.string.ui_after_it_will_be_undone_files_are) +
+                        uiContext.getString(R.string.ui_point_the_message_is_then_resent_once),
                 )
             },
             confirmButton = {
                 Button(onClick = {
                     viewModel.editAndResend(msg, newText)
                     confirmingEdit = null
-                }) { Text(if (newText == msg.text) "Retry" else "Edit & resend") }
+                }) { Text(if (newText == msg.text) uiContext.getString(R.string.ui_retry) else uiContext.getString(R.string.ui_edit_resend)) }
             },
-            dismissButton = { TextButton(onClick = { confirmingEdit = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { confirmingEdit = null }) { Text(uiContext.getString(R.string.settings_action_cancel)) } },
         )
     }
 
@@ -677,19 +678,19 @@ private fun ChatScreenContent(
         }
         AlertDialog(
             onDismissRequest = { showUndoDialog = false },
-            title = { Text("Undo file changes") },
+            title = { Text(uiContext.getString(R.string.ui_undo_file_changes_165)) },
             text = {
                 if (loadingTurns) {
-                    Text("Loading checkpoints…")
+                    Text(uiContext.getString(R.string.ui_loading_checkpoints))
                 } else if (turns.isEmpty()) {
-                    Text("No file changes to undo.")
+                    Text(uiContext.getString(R.string.ui_no_file_changes_to_undo))
                 } else {
                     Column(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.verticalScroll(rememberScrollState()),
                     ) {
                         Text(
-                            "Pick a checkpoint. Files return to their state before that turn, and the chat rolls back with them: the agent's messages from that point on are removed.",
+                            uiContext.getString(R.string.ui_pick_a_checkpoint_files_return_to_their),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -700,8 +701,8 @@ private fun ChatScreenContent(
                             ) {
                                 Column(Modifier.weight(1f)) {
                                     Text(
-                                        msg.text.lineSequence().firstOrNull()?.take(64)?.ifBlank { "(no text)" }
-                                            ?: "(no text)",
+                                        msg.text.lineSequence().firstOrNull()?.take(64)?.ifBlank { uiContext.getString(R.string.ui_no_text) }
+                                            ?: uiContext.getString(R.string.ui_no_text),
                                         style = MaterialTheme.typography.bodyMedium,
                                         maxLines = 2,
                                         overflow = TextOverflow.Ellipsis,
@@ -715,14 +716,14 @@ private fun ChatScreenContent(
                                 TextButton(onClick = {
                                     showUndoDialog = false
                                     confirmRewindTurn = tid
-                                }) { Text("Review…") }
+                                }) { Text(uiContext.getString(R.string.ui_review)) }
                             }
                         }
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showUndoDialog = false }) { Text("Close") }
+                TextButton(onClick = { showUndoDialog = false }) { Text(uiContext.getString(R.string.settings_action_close)) }
             },
         )
     }
@@ -734,7 +735,7 @@ private fun ChatScreenContent(
         }
         AlertDialog(
             onDismissRequest = { confirmRewindTurn = null },
-            title = { Text("Undo to this checkpoint?") },
+            title = { Text(uiContext.getString(R.string.ui_undo_to_this_checkpoint)) },
             text = {
                 when (val p = preview) {
                     null -> Row(
@@ -748,10 +749,10 @@ private fun ChatScreenContent(
                     ) {
                         Text(
                             buildString {
-                                append("${p.files.size} file(s) revert to their earlier state")
-                                if (p.turns > 1) append(" (this turn + ${p.turns - 1} later)")
+                                append(uiContext.getString(R.string.ui_file_s_revert_to_their_earlier_state, (p.files.size).toString()))
+                                if (p.turns > 1) append(uiContext.getString(R.string.ui_this_turn_later, (p.turns - 1).toString()))
                                 if (p.messagesDeleted > 0) {
-                                    append(" · ${p.messagesDeleted} message(s) roll back")
+                                    append(uiContext.getString(R.string.ui_message_s_roll_back, (p.messagesDeleted).toString()))
                                 }
                             },
                             style = MaterialTheme.typography.bodySmall,
@@ -760,7 +761,7 @@ private fun ChatScreenContent(
                         Spacer(Modifier.height(6.dp))
                         if (p.files.isEmpty()) {
                             Text(
-                                "No tracked file changes in this window.",
+                                uiContext.getString(R.string.ui_no_tracked_file_changes_in_this_window),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -773,9 +774,9 @@ private fun ChatScreenContent(
                                 else -> com.androidharness.app.ui.theme.LocalStatusColors.current.warning
                             }
                             val note = when {
-                                stat.willBeDeleted -> "created by the agent · will be deleted"
-                                !stat.existsNow -> "missing on disk · will be restored"
-                                else -> "reverts to its earlier state"
+                                stat.willBeDeleted -> uiContext.getString(R.string.ui_created_by_the_agent_will_be_deleted)
+                                !stat.existsNow -> uiContext.getString(R.string.ui_missing_on_disk_will_be_restored)
+                                else -> uiContext.getString(R.string.ui_reverts_to_its_earlier_state)
                             }
                             Column {
                                 Row(
@@ -824,7 +825,7 @@ private fun ChatScreenContent(
                         }
                         if (p.files.size > 12) {
                             Text(
-                                "+ ${p.files.size - 12} more file(s)",
+                                uiContext.getString(R.string.ui_more_file_s, (p.files.size - 12).toString()),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -844,10 +845,10 @@ private fun ChatScreenContent(
                             snackbar.showSnackbar(message)
                         }
                     },
-                ) { Text("Undo", color = MaterialTheme.colorScheme.error) }
+                ) { Text(uiContext.getString(R.string.ui_undo), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmRewindTurn = null }) { Text("Cancel") }
+                TextButton(onClick = { confirmRewindTurn = null }) { Text(uiContext.getString(R.string.settings_action_cancel)) }
             },
         )
     }
@@ -956,7 +957,7 @@ private fun ChatScreenContent(
             }?.turnId
             if (latestTurn != null) {
                 val res = snackbar.showSnackbar(
-                    "Files changed", actionLabel = "Undo", duration = SnackbarDuration.Short,
+                    uiContext.getString(R.string.ui_files_changed), actionLabel = uiContext.getString(R.string.ui_undo), duration = SnackbarDuration.Short,
                 )
                 if (res == SnackbarResult.ActionPerformed) confirmRewindTurn = latestTurn
             }
@@ -1030,16 +1031,16 @@ private fun ChatScreenContent(
                 workspaceName = currentProject?.name,
                 busy = state.busy,
                 pickerLabel = when {
-                    !state.modelSelectionReady -> "Loading model…"
-                    currentProvider == null && !state.sameModelAcrossChats -> "Choose a model for this chat"
-                    currentProvider == null -> "Add a provider to get started"
+                    !state.modelSelectionReady -> uiContext.getString(R.string.ui_loading_model)
+                    currentProvider == null && !state.sameModelAcrossChats -> uiContext.getString(R.string.ui_choose_a_model_for_this_chat)
+                    currentProvider == null -> uiContext.getString(R.string.ui_add_a_provider_to_get_started)
                     state.dualPlanning && state.mode == AgentMode.PLAN ->
                         "$currentModel (Plan)"
                     state.dualPlanning && state.mode == AgentMode.ACT ->
                         "$currentModel (Exec)"
                     else -> currentModel ?: currentProvider.name
                 },
-                modelScopeLabel = if (state.sameModelAcrossChats) null else "This chat",
+                modelScopeLabel = if (state.sameModelAcrossChats) null else uiContext.getString(R.string.ui_this_chat),
                 mode = state.mode,
                 dualPlanning = state.dualPlanning,
                 thinkingLevel = thinking?.level ?: state.thinkingLevel,
@@ -1209,7 +1210,7 @@ private fun ChatScreenContent(
                                         pinnedToBottom = false
                                         viewModel.loadOlderMessages()
                                     }, enabled = !state.isLoadingOlderMessages, modifier = Modifier.fillMaxWidth()) {
-                                        Text(if (state.isLoadingOlderMessages) "Loading older messages…" else "Load older messages")
+                                        Text(if (state.isLoadingOlderMessages) uiContext.getString(R.string.ui_loading_older_messages) else uiContext.getString(R.string.ui_load_older_messages))
                                     }
                                 }
                             }
@@ -1237,7 +1238,7 @@ private fun ChatScreenContent(
                                     modifier = Modifier.fillMaxWidth(),
                                 ) {
                                     Column(Modifier.padding(12.dp)) {
-                                        Text("Search result", style = MaterialTheme.typography.labelMedium)
+                                        Text(uiContext.getString(R.string.ui_search_result), style = MaterialTheme.typography.labelMedium)
                                         if (message.role == Role.TOOL || message.role == Role.SYSTEM) {
                                             Spacer(Modifier.height(8.dp))
                                             MarkdownText(message.text)
@@ -1272,8 +1273,8 @@ private fun ChatScreenContent(
                                         slashInvokedSkillName(UserMessageContent.visibleText(message.text))?.let { skillName ->
                                             SkillUsedBadge(skillName)
                                         }
-                                        ArtifactAttachment.fromPrompt(message.text)?.let { SkillUsedBadge("Concept · ${it.title}") }
-                                        ResponseAttachment.fromPrompt(message.text)?.let { SkillUsedBadge("Response · ${it.title}") }
+                                        ArtifactAttachment.fromPrompt(message.text)?.let { SkillUsedBadge(uiContext.getString(R.string.ui_concept, (it.title).toString())) }
+                                        ResponseAttachment.fromPrompt(message.text)?.let { SkillUsedBadge(uiContext.getString(R.string.ui_response, (it.title).toString())) }
                                         UserBubble(
                                             visibleText,
                                             message.images,
@@ -1771,11 +1772,11 @@ private fun ChatScreenContent(
                         }
                     },
                     scheduleUnavailableReason = when {
-                        composerText.isBlank() -> "Write a message first"
-                        attachedConcept != null -> "Remove the concept attachment to schedule a message"
-                        attachedResponse != null -> "Remove the response context to schedule a message"
-                        attachedSkill != null || state.attachments.isNotEmpty() || state.fileAttachments.isNotEmpty() -> "Schedule a text message without attachments"
-                        currentProject == null -> "Choose a workspace first"
+                        composerText.isBlank() -> uiContext.getString(R.string.ui_write_a_message_first)
+                        attachedConcept != null -> uiContext.getString(R.string.ui_remove_the_concept_attachment_to_schedule_a)
+                        attachedResponse != null -> uiContext.getString(R.string.ui_remove_the_response_context_to_schedule_a)
+                        attachedSkill != null || state.attachments.isNotEmpty() || state.fileAttachments.isNotEmpty() -> uiContext.getString(R.string.ui_schedule_a_text_message_without_attachments)
+                        currentProject == null -> uiContext.getString(R.string.ui_choose_a_workspace_first)
                         else -> null
                     },
                     onStop = viewModel::stop,
@@ -1848,6 +1849,7 @@ private fun ChatScreenContent(
 /** Small copy icon with a brief check confirmation, ChatGPT-style action rows. */
 @Composable
 internal fun CopyIconButton(text: String) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var copied by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
     // No size override: IconButton's own 48dp touch target is what makes these
@@ -1858,7 +1860,7 @@ internal fun CopyIconButton(text: String) {
     }) {
         Icon(
             painterResource(if (copied) R.drawable.ic_chat_check_check else R.drawable.ic_chat_copy),
-            contentDescription = "Copy",
+            contentDescription = uiContext.getString(R.string.ui_copy),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(17.dp),
         )
@@ -1873,16 +1875,17 @@ internal fun CopyIconButton(text: String) {
 
 @Composable
 internal fun ResponseActions(onFork: () -> Unit, onUndo: (() -> Unit)?, details: @Composable () -> Unit = {}) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { expanded = true }) {
-            Icon(painterResource(R.drawable.ic_chat_ellipsis), "More response actions", Modifier.size(18.dp),
+            Icon(painterResource(R.drawable.ic_chat_ellipsis), uiContext.getString(R.string.ui_more_response_actions), Modifier.size(18.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         androidx.compose.material3.DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            androidx.compose.material3.DropdownMenuItem(text = { Text("Fork from this message") },
+            androidx.compose.material3.DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_fork_from_this_message)) },
                 onClick = { expanded = false; onFork() })
-            if (onUndo != null) androidx.compose.material3.DropdownMenuItem(text = { Text("Undo file changes from this turn") },
+            if (onUndo != null) androidx.compose.material3.DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_undo_file_changes_from_this_turn)) },
                 onClick = { expanded = false; onUndo() })
             HorizontalDivider()
             details()
@@ -1902,6 +1905,7 @@ private fun FileEditsCard(
     onReviewFile: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val merged = remember(edits) {
         edits.groupBy { it.relPath }.map { (path, group) ->
@@ -1932,7 +1936,7 @@ private fun FileEditsCard(
             ) {
                 Icon(painterResource(R.drawable.ic_chat_file_code_2), null, Modifier.size(18.dp), tint = scheme.onSurfaceVariant)
                 Text(
-                    if (merged.size == 1) merged.first().first.substringAfterLast('/') else "${merged.size} edited files",
+                    if (merged.size == 1) merged.first().first.substringAfterLast('/') else uiContext.getString(R.string.ui_edited_files, (merged.size).toString()),
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.labelMedium,
                     modifier = Modifier.weight(1f),
@@ -1940,7 +1944,7 @@ private fun FileEditsCard(
                 DiffStatText(merged.sumOf { it.second.first }, merged.sumOf { it.second.second })
                 Icon(
                     Icons.Filled.KeyboardArrowDown,
-                    contentDescription = if (expanded) "Collapse edited files" else "Expand edited files",
+                    contentDescription = if (expanded) uiContext.getString(R.string.ui_collapse_edited_files) else uiContext.getString(R.string.ui_expand_edited_files),
                     tint = scheme.onSurfaceVariant,
                     modifier = Modifier
                         .size(20.dp)
@@ -1986,7 +1990,7 @@ private fun FileEditsCard(
                                 }
                             }
                             DiffStatText(added, removed)
-                            TextButton(onClick = { onOpenFile(path, null) }) { Text("Open") }
+                            TextButton(onClick = { onOpenFile(path, null) }) { Text(uiContext.getString(R.string.ui_open)) }
                         }
                     }
                 }
@@ -2042,6 +2046,7 @@ private fun ScrollToBottomFab(
     onJump: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(fastEffectsSpec()) + scaleIn(initialScale = 0.85f, animationSpec = fastEffectsSpec()),
@@ -2078,7 +2083,7 @@ private fun ScrollToBottomFab(
             ) {
                 Icon(
                     Icons.Filled.KeyboardArrowDown,
-                    contentDescription = "Scroll to latest",
+                    contentDescription = uiContext.getString(R.string.ui_scroll_to_latest),
                     tint = if (unread) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(22.dp),
@@ -2096,6 +2101,7 @@ private fun CostDialog(
     state: ChatUiState,
     onDismiss: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val model = state.effectiveModel
     val providerKey = state.activeProvider?.let { com.androidharness.app.llm.ModelsDev.providerKeyFor(it.baseUrl) }
     val cost: Double? = if (state.sessionModelUsage.isNotEmpty()) {
@@ -2128,34 +2134,34 @@ private fun CostDialog(
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
-        title = { Text("Session cost") },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(uiContext.getString(R.string.settings_action_close)) } },
+        title = { Text(uiContext.getString(R.string.ui_session_cost)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Input: ${formatTokenCount(state.usage.totalInput)}")
-                Text("Output: ${formatTokenCount(state.usage.totalOutput)}")
+                Text(uiContext.getString(R.string.ui_input, (formatTokenCount(state.usage.totalInput)).toString()))
+                Text(uiContext.getString(R.string.ui_output, (formatTokenCount(state.usage.totalOutput)).toString()))
                 val hitRateStr = when {
-                    state.usage.requests == 0L && state.busy -> "Calculating…"
+                    state.usage.requests == 0L && state.busy -> uiContext.getString(R.string.ui_calculating)
                     state.usage.totalInput > 0 -> "${"%.1f".format(state.usage.avgCacheHitRate * 100)}%"
                     else -> "0.0%"
                 }
-                Text("Overall cache hit rate: $hitRateStr")
+                Text(uiContext.getString(R.string.ui_overall_cache_hit_rate_640, (hitRateStr).toString()))
                 Text(
-                    "Hit rate updates after each completed turn",
+                    uiContext.getString(R.string.ui_hit_rate_updates_after_each_completed_turn),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                 )
                 if (state.usage.totalCacheWrite > 0) {
                     Text(
-                        "Cache writes: ${formatTokenCount(state.usage.totalCacheWrite)}",
+                        uiContext.getString(R.string.ui_cache_writes, (formatTokenCount(state.usage.totalCacheWrite)).toString()),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
                 if (cost != null) {
-                    Text("Estimated cost: \$${"%.4f".format(cost)}")
+                    Text(uiContext.getString(R.string.ui_estimated_cost_extra72, ("%.4f".format(cost)).toString()))
                 } else {
-                    Text("Cost estimate unknown for this model", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(uiContext.getString(R.string.ui_cost_estimate_unknown_for_this_model), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         },
@@ -2171,6 +2177,7 @@ private const val PIN_TOLERANCE_PX = 96
 
 @Composable
 private fun ChatLoadingSkeleton(modifier: Modifier = Modifier) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val transition = rememberInfiniteTransition(label = "skeletonShimmer")
     val translateAnim = transition.animateFloat(
         initialValue = -300f,
@@ -2219,7 +2226,7 @@ private fun ChatLoadingSkeleton(modifier: Modifier = Modifier) {
                         color = scheme.primary,
                     )
                     Text(
-                        "Loading chat…",
+                        uiContext.getString(R.string.ui_loading_chat),
                         style = MaterialTheme.typography.labelMedium,
                         color = scheme.onSurface,
                     )

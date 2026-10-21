@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.settings
 
+import com.androidharness.app.ui.common.localizedOption
 import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -21,6 +22,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 internal fun CavemanSection(container: AppContainer, settings: AppSettings) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val uri = LocalUriHandler.current
     var busy by remember { mutableStateOf(false) }
@@ -33,14 +35,14 @@ internal fun CavemanSection(container: AppContainer, settings: AppSettings) {
             busy = true
             error = null
             try { action() } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { error = e.message ?: "Could not save Caveman settings." }
+            catch (e: Exception) { error = e.message ?: uiContext.getString(R.string.ui_could_not_save_caveman_settings) }
             finally { busy = false }
         }
     }
     CavemanPanel("Caveman") {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.settings_caveman_native_pack), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-            Text(if (settings.cavemanInstalled) "Installed" else "Not installed",
+            Text(if (settings.cavemanInstalled) uiContext.getString(R.string.ui_installed) else uiContext.getString(R.string.ui_not_installed),
                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         }
         Text(stringResource(R.string.settings_caveman_native_pack_desc),
@@ -55,7 +57,7 @@ internal fun CavemanSection(container: AppContainer, settings: AppSettings) {
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
     }
     if (settings.cavemanInstalled) {
-        CavemanPanel("Reply intensity") {
+        CavemanPanel(uiContext.getString(R.string.ui_reply_intensity)) {
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 CavemanIntensity.entries.forEachIndexed { index, intensity ->
                     SegmentedButton(
@@ -63,10 +65,10 @@ internal fun CavemanSection(container: AppContainer, settings: AppSettings) {
                         onClick = { save { container.settings.setCavemanIntensity(intensity) } },
                         enabled = !busy,
                         shape = SegmentedButtonDefaults.itemShape(index, CavemanIntensity.entries.size),
-                    ) { Text(intensity.label, maxLines = 1) }
+                    ) { Text(localizedOption(intensity.label), maxLines = 1) }
                 }
             }
-            Text(settings.cavemanIntensity.description, style = MaterialTheme.typography.bodyMedium)
+            Text(localizedOption(settings.cavemanIntensity.description), style = MaterialTheme.typography.bodyMedium)
             Text(stringResource(R.string.settings_caveman_mode_desc),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             HorizontalDivider()
@@ -83,10 +85,10 @@ internal fun CavemanSection(container: AppContainer, settings: AppSettings) {
             }
             Text(stringResource(R.string.settings_caveman_classical_chinese_note), style = MaterialTheme.typography.labelSmall)
         }
-        CavemanPanel("Coding skills") {
+        CavemanPanel(uiContext.getString(R.string.ui_coding_skills)) {
             Text(stringResource(R.string.settings_caveman_skills_desc), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-            val labels = listOf("Commit messages", "Code reviews", "Investigate first", "Targeted patches", "Verify and stop")
+            val labels = listOf(uiContext.getString(R.string.ui_commit_messages), uiContext.getString(R.string.ui_code_reviews), uiContext.getString(R.string.ui_investigate_first), uiContext.getString(R.string.ui_targeted_patches), uiContext.getString(R.string.ui_verify_and_stop))
             CavemanPolicy.skills.keys.forEachIndexed { index, name ->
                 if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -100,10 +102,10 @@ internal fun CavemanSection(container: AppContainer, settings: AppSettings) {
                 }
             }
         }
-        CavemanPanel("Token reports") {
+        CavemanPanel(uiContext.getString(R.string.ui_token_reports)) {
             Text(stringResource(R.string.settings_caveman_savings_desc),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            FilledTonalButton(onClick = { showReports = !showReports }) { Text(if (showReports) "Hide report" else "Show report") }
+            FilledTonalButton(onClick = { showReports = !showReports }) { Text(if (showReports) uiContext.getString(R.string.ui_hide_report) else uiContext.getString(R.string.ui_show_report)) }
             if (showReports) {
                 Text(stringResource(R.string.settings_caveman_tokens_saved_unmeasured), style = MaterialTheme.typography.titleSmall)
                 Text(stringResource(R.string.settings_caveman_savings_note),

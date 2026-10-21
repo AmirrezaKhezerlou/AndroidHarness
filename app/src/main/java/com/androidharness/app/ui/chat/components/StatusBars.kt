@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.R
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -120,6 +121,7 @@ private fun StatusDot() {
 /** Live milestone progress. Completion comes only from explicit agent updates. */
 @Composable
 internal fun TodoCard(todos: List<TodoItem>) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     if (todos.isEmpty()) return
     var expanded by rememberSaveable { mutableStateOf(false) }
     val done = todos.count { it.status == TodoItem.Status.COMPLETED }
@@ -138,7 +140,7 @@ internal fun TodoCard(todos: List<TodoItem>) {
     ) {
         Column {
             Row(Modifier.fillMaxWidth().clickable(
-                onClickLabel = if (expanded) "Collapse task list" else "Expand task list",
+                onClickLabel = if (expanded) uiContext.getString(R.string.ui_collapse_task_list) else uiContext.getString(R.string.ui_expand_task_list),
                 onClick = { expanded = !expanded },
             ).semantics {
                 stateDescription = "$done completed, ${todos.count { it.status == TodoItem.Status.IN_PROGRESS }} in progress, ${todos.count { it.status == TodoItem.Status.PENDING }} pending"
@@ -151,13 +153,13 @@ internal fun TodoCard(todos: List<TodoItem>) {
                 )
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Task list", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                    Text("$done of ${todos.size} completed", style = MaterialTheme.typography.labelSmall,
+                    Text(uiContext.getString(R.string.ui_task_list), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                    Text(uiContext.getString(R.string.ui_of_completed, (done).toString(), (todos.size).toString()), style = MaterialTheme.typography.labelSmall,
                         color = scheme.onSurfaceVariant)
                 }
                 Icon(
                     if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                    contentDescription = if (expanded) "Collapse task list" else "Expand task list",
+                    contentDescription = if (expanded) uiContext.getString(R.string.ui_collapse_task_list) else uiContext.getString(R.string.ui_expand_task_list),
                     modifier = Modifier.size(20.dp),
                     tint = scheme.onSurfaceVariant,
                 )
@@ -168,7 +170,7 @@ internal fun TodoCard(todos: List<TodoItem>) {
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).height(4.dp))
             if (!expanded) {
                 Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                    Text(when { active != null -> "In progress"; next != null -> "Next"; else -> "All tasks completed" },
+                    Text(when { active != null -> uiContext.getString(R.string.ui_in_progress); next != null -> uiContext.getString(R.string.ui_next); else -> uiContext.getString(R.string.ui_all_tasks_completed) },
                         style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium,
                         color = if (done == todos.size) success else scheme.primary)
                     (active ?: next)?.let { Text(it.content, style = MaterialTheme.typography.bodySmall,
@@ -180,9 +182,9 @@ internal fun TodoCard(todos: List<TodoItem>) {
                     .verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     todos.forEach { todo ->
                         val status = when (todo.status) {
-                            TodoItem.Status.COMPLETED -> "Completed"
-                            TodoItem.Status.IN_PROGRESS -> "In progress"
-                            TodoItem.Status.PENDING -> "Pending"
+                            TodoItem.Status.COMPLETED -> uiContext.getString(R.string.ui_completed)
+                            TodoItem.Status.IN_PROGRESS -> uiContext.getString(R.string.ui_in_progress)
+                            TodoItem.Status.PENDING -> uiContext.getString(R.string.ui_pending)
                         }
                         Row(
                             verticalAlignment = Alignment.Top,
@@ -228,6 +230,7 @@ internal fun QueuedMessageChip(
     onCancel: () -> Unit,
     onSteer: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     Surface(
         color = scheme.surface,
@@ -254,19 +257,19 @@ internal fun QueuedMessageChip(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    "Sends after this turn",
+                    uiContext.getString(R.string.ui_sends_after_this_turn),
                     style = MaterialTheme.typography.labelSmall,
                     color = scheme.onSurfaceVariant,
                     maxLines = 1,
                 )
             }
             TextButton(onClick = onSteer) {
-                Text("Steer")
+                Text(uiContext.getString(R.string.ui_steer))
             }
             // 40dp not 28: this sits next to a destructive action, so it needs to
             // be reliably hittable without growing the chip to full toolbar height.
             IconButton(onClick = onCancel, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Filled.Close, contentDescription = "Cancel queue", modifier = Modifier.size(16.dp))
+                Icon(Icons.Filled.Close, contentDescription = uiContext.getString(R.string.ui_cancel_queue), modifier = Modifier.size(16.dp))
             }
         }
     }
@@ -278,6 +281,7 @@ internal fun AttachmentChips(
     attachments: List<String>,
     onRemove: (Int) -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     Row(
         modifier = Modifier
@@ -298,7 +302,7 @@ internal fun AttachmentChips(
                 ) {
                     Text(name.take(20), style = MaterialTheme.typography.labelSmall)
                     Spacer(Modifier.width(4.dp))
-                    Icon(Icons.Filled.Close, contentDescription = "Remove", modifier = Modifier.size(13.dp))
+                    Icon(Icons.Filled.Close, contentDescription = uiContext.getString(R.string.settings_action_remove), modifier = Modifier.size(13.dp))
                 }
             }
         }
@@ -321,6 +325,7 @@ internal fun SlashSuggestions(
     onPick: (command: String, kind: SlashCommands.Kind) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val typed = remember(query) { query.removePrefix("/").trim().lowercase() }
     val entries = remember(state.skills, state.snippets) {
@@ -375,7 +380,7 @@ internal fun SlashSuggestions(
             ) {
                 if (filtered.isEmpty()) {
                     Text(
-                        "No matches for /$typed",
+                        uiContext.getString(R.string.ui_no_matches_for, (typed).toString()),
                         style = MaterialTheme.typography.bodySmall,
                         color = scheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
@@ -487,6 +492,7 @@ internal fun MentionSuggestions(
 /** Transient "compacting" banner shown in the transcript while compaction runs. */
 @Composable
 internal fun CompactionBanner(note: String, modifier: Modifier = Modifier) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     Surface(
         color = scheme.surfaceContainerLow,
@@ -501,7 +507,7 @@ internal fun CompactionBanner(note: String, modifier: Modifier = Modifier) {
             DotLoading()
             Spacer(Modifier.width(10.dp))
             Column {
-                Text("Compacting conversation", style = MaterialTheme.typography.bodyMedium)
+                Text(uiContext.getString(R.string.ui_compacting_conversation), style = MaterialTheme.typography.bodyMedium)
                 if (note.isNotBlank() && note != "Compacting conversation…") {
                     Text(
                         note,
@@ -517,8 +523,9 @@ internal fun CompactionBanner(note: String, modifier: Modifier = Modifier) {
 /** The persistent one-liner the transcript keeps after a compaction finished. */
 @Composable
 internal fun CompactionNoticeLine(modifier: Modifier = Modifier) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     Text(
-        "Context compacted, older messages summarized",
+        uiContext.getString(R.string.ui_context_compacted_older_messages_summarized),
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier
@@ -531,6 +538,7 @@ internal fun CompactionNoticeLine(modifier: Modifier = Modifier) {
 /** A saved failure remains readable after the transient snackbar disappears. */
 @Composable
 internal fun CompactionResultCard(message: String, showRetry: Boolean, busy: Boolean, onRetry: () -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var expanded by remember { mutableStateOf(false) }
     val stopped = message.startsWith("Compaction stopped.")
     val saved = message.startsWith("Chat compacted, but")
@@ -542,19 +550,19 @@ internal fun CompactionResultCard(message: String, showRetry: Boolean, busy: Boo
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
-            Text(if (stopped) "Compaction stopped" else if (saved) "Summary saved" else "Compaction failed",
+            Text(if (stopped) uiContext.getString(R.string.ui_compaction_stopped) else if (saved) uiContext.getString(R.string.ui_summary_saved) else uiContext.getString(R.string.ui_compaction_failed),
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (stopped || saved) scheme.onSurface else scheme.error)
-            Text(if (saved) "Your summary is saved. Some task information could not refresh."
-                else "Your messages are still here. Try again or choose another model.",
+            Text(if (saved) uiContext.getString(R.string.ui_your_summary_is_saved_some_task_information)
+                else uiContext.getString(R.string.ui_your_messages_are_still_here_try_again),
                 style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             if (expanded) androidx.compose.foundation.text.selection.SelectionContainer {
                 Text(message, style = MaterialTheme.typography.bodySmall,
                     color = scheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
             }
             androidx.compose.foundation.layout.FlowRow {
-                if (showRetry && !saved) TextButton(onClick = onRetry, enabled = !busy) { Text("Retry") }
-                TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Hide details" else "Details") }
+                if (showRetry && !saved) TextButton(onClick = onRetry, enabled = !busy) { Text(uiContext.getString(R.string.ui_retry)) }
+                TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) uiContext.getString(R.string.settings_shizuku_hide_details) else uiContext.getString(R.string.ui_details)) }
             }
         }
     }
@@ -566,6 +574,7 @@ internal fun FileAttachmentChips(
     files: List<com.androidharness.app.ui.chat.FileAttachment>,
     onRemove: (Int) -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     Row(
         modifier = Modifier
@@ -599,7 +608,7 @@ internal fun FileAttachmentChips(
                         color = scheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.width(4.dp))
-                    Icon(Icons.Filled.Close, contentDescription = "Remove", modifier = Modifier.size(13.dp))
+                    Icon(Icons.Filled.Close, contentDescription = uiContext.getString(R.string.settings_action_remove), modifier = Modifier.size(13.dp))
                 }
             }
         }

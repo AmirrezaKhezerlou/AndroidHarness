@@ -92,6 +92,7 @@ internal fun ToolCallCard(
     onWatchBrowser: ((String?) -> Unit)? = null,
     browserTarget: String? = null,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     if (com.androidharness.app.browser.BrowserToolActivity.isBrowserTool(call.name)) {
         BrowserToolCard(call, result, running, browserTarget, awaitingApproval, onWatchBrowser)
         return
@@ -207,13 +208,13 @@ internal fun ToolCallCard(
                     when (key) {
                         1 -> Icon(
                             Icons.Filled.CheckCircle,
-                            contentDescription = "Done",
+                            contentDescription = uiContext.getString(R.string.settings_action_done),
                             tint = success,
                             modifier = Modifier.size(18.dp),
                         )
                         2 -> Icon(
                             Icons.Filled.Close,
-                            contentDescription = "Failed",
+                            contentDescription = uiContext.getString(R.string.ui_failed_64),
                             tint = scheme.error,
                             modifier = Modifier.size(18.dp),
                         )
@@ -222,7 +223,7 @@ internal fun ToolCallCard(
                 }
                 Icon(
                     Icons.Filled.KeyboardArrowDown,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    contentDescription = if (expanded) uiContext.getString(R.string.ui_collapse) else uiContext.getString(R.string.ui_expand),
                     tint = scheme.onSurfaceVariant,
                     modifier = Modifier
                         .padding(start = 2.dp)
@@ -303,6 +304,7 @@ internal fun ToolGroupCard(
     onWatchBrowser: ((String?) -> Unit)? = null,
     browserTargets: Map<String, String> = emptyMap(),
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var expanded by rememberSaveable(calls.joinToString(",") { it.id }) { mutableStateOf(false) }
     val rotation = animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
@@ -347,10 +349,10 @@ internal fun ToolGroupCard(
                     Text(
                         when {
                             allSubagents && anyRunning ->
-                                "Running ${activeIds.size} of ${calls.size} subagents…"
-                            allSubagents -> "Spawned ${calls.size} subagents"
-                            anyRunning -> "Running tools…"
-                            else -> "Ran ${calls.size} tools"
+                                uiContext.getString(R.string.ui_running_of_subagents, (activeIds.size).toString(), (calls.size).toString())
+                            allSubagents -> uiContext.getString(R.string.ui_spawned_subagents, (calls.size).toString())
+                            anyRunning -> uiContext.getString(R.string.ui_running_tools)
+                            else -> uiContext.getString(R.string.ui_ran_tools, (calls.size).toString())
                         },
                         style = MaterialTheme.typography.labelLarge,
                     )
@@ -383,13 +385,13 @@ internal fun ToolGroupCard(
                         running -> Spacer(Modifier.size(18.dp))
                         failedCount > 0 -> Icon(
                             Icons.Filled.Close,
-                            contentDescription = "Failed",
+                            contentDescription = uiContext.getString(R.string.ui_failed_64),
                             tint = scheme.error,
                             modifier = Modifier.size(18.dp),
                         )
                         else -> Icon(
                             Icons.Filled.CheckCircle,
-                            contentDescription = "Done",
+                            contentDescription = uiContext.getString(R.string.settings_action_done),
                             tint = success,
                             modifier = Modifier.size(18.dp),
                         )
@@ -397,7 +399,7 @@ internal fun ToolGroupCard(
                 }
                 Icon(
                     Icons.Filled.KeyboardArrowDown,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    contentDescription = if (expanded) uiContext.getString(R.string.ui_collapse) else uiContext.getString(R.string.ui_expand),
                     tint = scheme.onSurfaceVariant,
                     modifier = Modifier
                         .padding(start = 2.dp)
@@ -472,6 +474,7 @@ internal fun TurnActivityCard(
     onWatchBrowser: ((String?) -> Unit)? = null,
     browserTargets: Map<String, String> = emptyMap(),
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     if (activity.isEmpty()) return
     val rows = remember(activity) {
         buildList {
@@ -511,7 +514,7 @@ internal fun TurnActivityCard(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    if (failedCount > 0) "Work summary · $failedCount failed" else "Work summary",
+                    if (failedCount > 0) uiContext.getString(R.string.ui_work_summary_failed, (failedCount).toString()) else uiContext.getString(R.string.ui_work_summary),
                     style = MaterialTheme.typography.labelMedium,
                     color = if (failedCount > 0) scheme.error else scheme.onSurface,
                     modifier = Modifier.weight(1f),
@@ -520,7 +523,7 @@ internal fun TurnActivityCard(
                     style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
                 Icon(
                     painterResource(R.drawable.ic_chat_chevron_right),
-                    contentDescription = if (expanded) "Collapse activity" else "Expand activity",
+                    contentDescription = if (expanded) uiContext.getString(R.string.ui_collapse_activity) else uiContext.getString(R.string.ui_expand_activity),
                     tint = scheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 8.dp).size(18.dp).graphicsLayer { rotationZ = rotation.value / 2 },
                 )
@@ -534,7 +537,7 @@ internal fun TurnActivityCard(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
                 ) {
-                    if (workedLabel.isNotBlank()) Text("Worked for $workedLabel", style = MaterialTheme.typography.labelSmall,
+                    if (workedLabel.isNotBlank()) Text(uiContext.getString(R.string.ui_worked_for, (workedLabel).toString()), style = MaterialTheme.typography.labelSmall,
                         color = scheme.onSurfaceVariant)
                     CardHistory(rows, key = { it.key }) { row ->
                         when (row) {

@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun ChatRestoreDialog(container: AppContainer, preview: ChatImportPreview, onDismiss: () -> Unit,
     onImported: (ChatBackupManager.ImportResult) -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val projects by container.workspace.projects.collectAsStateWithLifecycle(initialValue = emptyList())
     var mapping by remember(preview) { mutableStateOf(emptyMap<String, String>()) }
     var busy by remember { mutableStateOf(false) }
@@ -49,7 +50,7 @@ internal fun ChatRestoreDialog(container: AppContainer, preview: ChatImportPrevi
                     Text(source.name, style = MaterialTheme.typography.titleSmall)
                     Box {
                         OutlinedButton(onClick = { expanded = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                            Text(projects.firstOrNull { it.id == mapping[source.id] }?.name ?: "Choose workspace")
+                            Text(projects.firstOrNull { it.id == mapping[source.id] }?.name ?: uiContext.getString(R.string.ui_choose_workspace))
                         }
                         DropdownMenu(expanded, { expanded = false }) {
                             projects.forEach { project -> DropdownMenuItem(text = { Text(project.name) }, onClick = {
@@ -69,10 +70,10 @@ internal fun ChatRestoreDialog(container: AppContainer, preview: ChatImportPrevi
                 scope.launch {
                     try { onImported(container.chatBackup.importPrepared(preview, mapping)) }
                     catch (e: CancellationException) { throw e }
-                    catch (e: Exception) { error = e.message ?: "Could not restore chats." }
+                    catch (e: Exception) { error = e.message ?: uiContext.getString(R.string.ui_could_not_restore_chats) }
                     finally { busy = false }
                 }
-            }) { Text(if (busy) "Restoring…" else "Restore chats") }
+            }) { Text(if (busy) uiContext.getString(R.string.ui_restoring) else uiContext.getString(R.string.ui_restore_chats)) }
         },
         dismissButton = { TextButton(enabled = !busy, onClick = onDismiss) { Text(stringResource(R.string.settings_action_cancel)) } })
     if (adding) com.androidharness.app.ui.common.AddWorkspaceDialog(container, onDismiss = { adding = false },

@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.buildtest
 
+import com.androidharness.app.R
 import android.content.Context
 import android.os.SystemClock
 import androidx.compose.foundation.BorderStroke
@@ -136,6 +137,7 @@ fun BuildTestScreen(
     sessionId: String? = null,
     projectId: String? = null,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val terminal = container.terminal
     val terminalState by terminal.state.collectAsStateWithLifecycle()
     val workspace by remember(sessionId, projectId) { container.workspace.forTools(sessionId, projectId) }.collectAsStateWithLifecycle(initialValue = null)
@@ -191,7 +193,7 @@ fun BuildTestScreen(
         if (url != null && remote == null) { previewTarget = url; launchPending = false }
         else if (!terminalState.busy) {
             launchPending = false
-            launchError = "Project stopped before reporting a preview URL. Check the output below."
+            launchError = uiContext.getString(R.string.ui_project_stopped_before_reporting_a_preview_url)
         }
     }
     previewTarget?.let { target ->
@@ -253,12 +255,12 @@ fun BuildTestScreen(
         containerColor = scheme.surface,
         topBar = {
             AppHeader(
-                title = "Build & Test",
-                subtitle = project?.name ?: "Project checks",
+                title = uiContext.getString(R.string.ui_build_test),
+                subtitle = project?.name ?: uiContext.getString(R.string.ui_project_checks),
                 onBack = onBack,
                 actions = {
                     IconButton(onClick = onOpenTerminal) {
-                        Icon(Icons.Outlined.Terminal, contentDescription = "Open terminal")
+                        Icon(Icons.Outlined.Terminal, contentDescription = uiContext.getString(R.string.ui_open_terminal))
                     }
                 },
             )
@@ -294,18 +296,18 @@ fun BuildTestScreen(
                     colors = CardDefaults.cardColors(containerColor = scheme.surfaceContainerLow),
                     border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.55f))) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Run & preview", style = MaterialTheme.typography.titleSmall)
+                        Text(uiContext.getString(R.string.ui_run_preview), style = MaterialTheme.typography.titleSmall)
                         Text(when {
-                            !launchReady -> "Checking project files…"
-                            launchedHere && terminalState.busy -> "Development server is running in Terminal."
-                            remote != null -> "Run scripts on the SSH host. Remote previews need a reachable URL."
-                            launchScripts.isNotEmpty() -> "Runs your project script, then opens the URL reported by the server."
-                            staticPage != null -> "Open this HTML project without installing a runtime."
-                            else -> "No dev, start, or preview script found. Add a project command below."
+                            !launchReady -> uiContext.getString(R.string.ui_checking_project_files)
+                            launchedHere && terminalState.busy -> uiContext.getString(R.string.ui_development_server_is_running_in_terminal)
+                            remote != null -> uiContext.getString(R.string.ui_run_scripts_on_the_ssh_host_remote)
+                            launchScripts.isNotEmpty() -> uiContext.getString(R.string.ui_runs_your_project_script_then_opens_the)
+                            staticPage != null -> uiContext.getString(R.string.ui_open_this_html_project_without_installing_a)
+                            else -> uiContext.getString(R.string.ui_no_dev_start_or_preview_script_found)
                         }, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                         if (launchScripts.isNotEmpty()) Box {
                             OutlinedButton(onClick = { launchMenu = true }, enabled = !terminalState.busy) {
-                                Text("Script: $launchScript", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(uiContext.getString(R.string.ui_script, (launchScript).toString()), maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             DropdownMenu(expanded = launchMenu, onDismissRequest = { launchMenu = false }) {
                                 launchScripts.forEach { script -> DropdownMenuItem(text = { Text(script) }, onClick = {
@@ -334,15 +336,15 @@ fun BuildTestScreen(
                                     launchPending = remote == null
                                     terminal.send(command, workspace)
                                 }
-                            }) { Text(if (launchScripts.isEmpty()) "Open preview" else "Run project") }
+                            }) { Text(if (launchScripts.isEmpty()) uiContext.getString(R.string.ui_open_preview) else uiContext.getString(R.string.ui_run_project)) }
                             if (launchedHere && terminalState.busy) {
-                                TextButton(onClick = { launchPending = false; terminal.stopTerminal(); serverCommand = null }) { Text("Stop") }
+                                TextButton(onClick = { launchPending = false; terminal.stopTerminal(); serverCommand = null }) { Text(uiContext.getString(R.string.settings_action_stop)) }
                             }
                         }
                         if (launchedHere && terminalState.busy && remote == null) {
                             val url = com.androidharness.app.core.ProjectLaunch.previewUrl(terminalState.lines.joinToString("\n"))
-                            if (url != null) TextButton(onClick = { previewTarget = url }) { Text("Open preview") }
-                            else Text("Waiting for a localhost URL in server output. Open Terminal if the server needs input.",
+                            if (url != null) TextButton(onClick = { previewTarget = url }) { Text(uiContext.getString(R.string.ui_open_preview)) }
+                            else Text(uiContext.getString(R.string.ui_waiting_for_a_localhost_url_in_server),
                                 style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                         }
                         launchError?.let { Text(it, color = scheme.error, style = MaterialTheme.typography.bodySmall) }
@@ -355,14 +357,14 @@ fun BuildTestScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("Saved commands", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text(uiContext.getString(R.string.ui_saved_commands), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Text(
-                            "One tap checks for this workspace",
+                            uiContext.getString(R.string.ui_one_tap_checks_for_this_workspace),
                             style = MaterialTheme.typography.bodySmall,
                             color = scheme.onSurfaceVariant,
                         )
                     }
-                    TextButton(onClick = { adding = true }) { Text("Add") }
+                    TextButton(onClick = { adding = true }) { Text(uiContext.getString(R.string.ui_add)) }
                 }
             }
 
@@ -374,7 +376,7 @@ fun BuildTestScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(
-                            "No saved checks yet. Add the command you use to test or build this project.",
+                            uiContext.getString(R.string.ui_no_saved_checks_yet_add_the_command),
                             modifier = Modifier.padding(14.dp),
                             style = MaterialTheme.typography.bodyMedium,
                             color = scheme.onSurfaceVariant,
@@ -403,7 +405,7 @@ fun BuildTestScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(
-                            "This workspace does not expose a shell path, so build commands cannot run here.",
+                            uiContext.getString(R.string.ui_this_workspace_does_not_expose_a_shell),
                             modifier = Modifier.padding(16.dp),
                             style = MaterialTheme.typography.bodySmall,
                         )
@@ -415,7 +417,7 @@ fun BuildTestScreen(
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
-                            "Errors",
+                            uiContext.getString(R.string.ui_errors),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                         )
@@ -446,9 +448,9 @@ fun BuildTestScreen(
                             modifier = Modifier.padding(14.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            Text("Let the agent fix this", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Text(uiContext.getString(R.string.ui_let_the_agent_fix_this), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                             Text(
-                                "The failed command and recent output will be sent into a fresh agent chat.",
+                                uiContext.getString(R.string.ui_the_failed_command_and_recent_output_will),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = scheme.onSurfaceVariant,
                             )
@@ -465,7 +467,7 @@ fun BuildTestScreen(
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
-                                Text("Fix with agent")
+                                Text(uiContext.getString(R.string.ui_fix_with_agent_1581))
                             }
                         }
                     }
@@ -509,6 +511,7 @@ private fun RunHeroCard(
     errorCount: Int,
     statusColor: Color,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -533,8 +536,8 @@ private fun RunHeroCard(
                 Column(Modifier.weight(1f)) {
                     Text(
                         when (status) {
-                            RunStatus.IDLE -> "Ready for a clean run"
-                            RunStatus.RUNNING -> "Running ${command?.name.orEmpty()}"
+                            RunStatus.IDLE -> uiContext.getString(R.string.ui_ready_for_a_clean_run)
+                            RunStatus.RUNNING -> uiContext.getString(R.string.ui_running_1583, (command?.name.orEmpty()).toString())
                             RunStatus.PASSED -> "${command?.name.orEmpty()} passed"
                             RunStatus.FAILED -> "${command?.name.orEmpty()} failed"
                         },
@@ -542,7 +545,7 @@ private fun RunHeroCard(
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        workspacePath.ifBlank { "Workspace loading" },
+                        workspacePath.ifBlank { uiContext.getString(R.string.ui_workspace_loading) },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodySmall,
@@ -553,15 +556,15 @@ private fun RunHeroCard(
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MetricPill("Commands", commandCount.toString(), Modifier.weight(1f))
-                MetricPill("Errors", errorCount.toString(), Modifier.weight(1f))
+                MetricPill(uiContext.getString(R.string.ui_commands), commandCount.toString(), Modifier.weight(1f))
+                MetricPill(uiContext.getString(R.string.ui_errors), errorCount.toString(), Modifier.weight(1f))
                 MetricPill(
-                    "Result",
+                    uiContext.getString(R.string.ui_result),
                     when (status) {
-                        RunStatus.IDLE -> "Ready"
+                        RunStatus.IDLE -> uiContext.getString(R.string.ui_ready)
                         RunStatus.RUNNING -> formatDuration(elapsedMs)
                         RunStatus.PASSED -> formatDuration(elapsedMs)
-                        RunStatus.FAILED -> exitCode?.let { "Exit $it" } ?: "Failed"
+                        RunStatus.FAILED -> exitCode?.let { uiContext.getString(R.string.ui_exit, (it).toString()) } ?: uiContext.getString(R.string.ui_failed_64)
                     },
                     Modifier.weight(1f),
                 )
@@ -600,6 +603,7 @@ private fun CommandCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     var menuOpen by remember(command.id) { mutableStateOf(false) }
     Card(
@@ -644,15 +648,15 @@ private fun CommandCard(
                 enabled = enabled,
                 modifier = Modifier.heightIn(min = 38.dp),
             ) {
-                Text(if (running) "Running" else "Run")
+                Text(if (running) uiContext.getString(R.string.ui_running_1587) else uiContext.getString(R.string.ui_run))
             }
             Box {
                 IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Outlined.MoreVert, contentDescription = "Command options", modifier = Modifier.size(19.dp))
+                    Icon(Icons.Outlined.MoreVert, contentDescription = uiContext.getString(R.string.ui_command_options), modifier = Modifier.size(19.dp))
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     DropdownMenuItem(
-                        text = { Text("Edit") },
+                        text = { Text(uiContext.getString(R.string.settings_action_edit)) },
                         leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null) },
                         onClick = {
                             menuOpen = false
@@ -660,7 +664,7 @@ private fun CommandCard(
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("Delete") },
+                        text = { Text(uiContext.getString(R.string.settings_action_delete)) },
                         leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
                         onClick = {
                             menuOpen = false
@@ -709,6 +713,7 @@ private fun LiveOutputCard(
     busy: Boolean,
     onClear: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     Card(
         shape = RoundedCornerShape(16.dp),
@@ -725,9 +730,9 @@ private fun LiveOutputCard(
                     Box(Modifier.size(8.dp))
                 }
                 Spacer(Modifier.width(9.dp))
-                Text("Live output", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text(uiContext.getString(R.string.ui_live_output), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.weight(1f))
-                TextButton(onClick = onClear) { Text("Clear") }
+                TextButton(onClick = onClear) { Text(uiContext.getString(R.string.ui_clear)) }
             }
             LazyColumn(
                 state = listState,
@@ -741,7 +746,7 @@ private fun LiveOutputCard(
                 if (lines.isEmpty()) {
                     item {
                         Text(
-                            "Run a saved command and its output will appear here.",
+                            uiContext.getString(R.string.ui_run_a_saved_command_and_its_output),
                             style = MaterialTheme.typography.bodySmall,
                             color = scheme.onSurfaceVariant,
                         )
@@ -773,25 +778,26 @@ private fun CommandDialog(
     onDismiss: () -> Unit,
     onSave: (String, String) -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var name by remember(existing?.id) { mutableStateOf(existing?.name.orEmpty()) }
     var command by remember(existing?.id) { mutableStateOf(existing?.command.orEmpty()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (existing == null) "Add command" else "Edit command") },
+        title = { Text(if (existing == null) uiContext.getString(R.string.ui_add_command) else uiContext.getString(R.string.ui_edit_command)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") },
-                    placeholder = { Text("Unit tests") },
+                    label = { Text(uiContext.getString(R.string.settings_mcp_name)) },
+                    placeholder = { Text(uiContext.getString(R.string.ui_unit_tests)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = command,
                     onValueChange = { command = it },
-                    label = { Text("Command") },
+                    label = { Text(uiContext.getString(R.string.settings_mcp_command)) },
                     placeholder = { Text("./gradlew test") },
                     minLines = 2,
                     maxLines = 4,
@@ -804,9 +810,9 @@ private fun CommandDialog(
             Button(
                 onClick = { onSave(name.trim(), command.trim()) },
                 enabled = name.isNotBlank() && command.isNotBlank(),
-            ) { Text("Save") }
+            ) { Text(uiContext.getString(R.string.settings_action_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(uiContext.getString(R.string.settings_action_cancel)) } },
     )
 }
 

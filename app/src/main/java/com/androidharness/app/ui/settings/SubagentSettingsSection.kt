@@ -19,6 +19,7 @@ internal fun SubagentSettingsSection(
     settings: AppSettings,
     onSubagentTools: (Boolean) -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     SettingsPanel(Modifier.fillMaxWidth()) {
         SettingsAnchor(R.string.settings_anchor_subagent_tools) {
             Row(
@@ -31,7 +32,7 @@ internal fun SubagentSettingsSection(
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(stringResource(R.string.settings_anchor_subagent_tools), style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "Let subagents edit and run commands in Act mode. They follow your permissions; Plan stays read-only.",
+                        uiContext.getString(R.string.ui_let_subagents_edit_and_run_commands_in),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

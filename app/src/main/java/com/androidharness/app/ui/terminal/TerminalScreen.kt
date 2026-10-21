@@ -1,5 +1,7 @@
 package com.androidharness.app.ui.terminal
 
+import com.androidharness.app.ui.common.localizedOptionLabel
+import com.androidharness.app.R
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
@@ -66,6 +68,7 @@ fun TerminalScreen(
     sessionId: String? = null,
     projectId: String? = null,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val terminal = container.terminal
     val workspace by remember(sessionId, projectId) { container.workspace.forTools(sessionId, projectId) }.collectAsStateWithLifecycle(initialValue = null)
     val remote = workspace as? com.androidharness.app.workspace.SshFs
@@ -113,35 +116,35 @@ fun TerminalScreen(
 
     if (showAccess) androidx.compose.material3.AlertDialog(
         onDismissRequest = { showAccess = false },
-        title = { Text("Access mode") },
+        title = { Text(uiContext.getString(R.string.settings_root_access_mode)) },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             com.androidharness.app.ui.settings.AccessModeChoices(accessPrefs.mode) { mode ->
                 accessScope.launch { container.deviceAccess.store.setMode(mode) }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Auto fallback", Modifier.weight(1f))
+                Text(uiContext.getString(R.string.settings_root_auto_fallback), Modifier.weight(1f))
                 Switch(accessPrefs.mode == com.androidharness.app.data.env.AccessMode.AUTO || accessPrefs.autoFallback, enabled = accessPrefs.mode != com.androidharness.app.data.env.AccessMode.AUTO, onCheckedChange = { enabled -> accessScope.launch { container.deviceAccess.store.setFallback(enabled) } })
             }
-            Text("Auto: Root → Shizuku → Normal. Both: Shizuku for ordinary commands, root for root requests. Root access, temporary mode and project permissions are managed in Settings → Terminal & device.", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+            Text(uiContext.getString(R.string.ui_auto_root_shizuku_normal_both_shizuku_for), style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
         } },
-        confirmButton = { androidx.compose.material3.TextButton(onClick = { showAccess = false }) { Text("Done") } },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { showAccess = false }) { Text(uiContext.getString(R.string.settings_action_done)) } },
     )
 
     Scaffold(
         containerColor = scheme.surface,
         topBar = {
             AppHeader(
-                title = "Terminal",
-                subtitle = if (remote != null) "SSH workspace" else "${state.backendLabel} · ${accessPrefs.mode.label} preferred",
+                title = uiContext.getString(R.string.ui_terminal),
+                subtitle = if (remote != null) uiContext.getString(R.string.ui_ssh_workspace) else uiContext.getString(R.string.ui_preferred, state.backendLabel, uiContext.localizedOptionLabel(accessPrefs.mode.label)),
                 onBack = onBack,
                 actions = {
                     IconButton(onClick = { showAccess = true }, enabled = remote == null) {
-                        Icon(Icons.Outlined.Shield, contentDescription = "Access mode", tint = scheme.primary)
+                        Icon(Icons.Outlined.Shield, contentDescription = uiContext.getString(R.string.settings_root_access_mode), tint = scheme.primary)
                     }
                     IconButton(onClick = { terminal.clear() }) {
                         Icon(
                             Icons.Outlined.Delete,
-                            contentDescription = "Clear output",
+                            contentDescription = uiContext.getString(R.string.ui_clear_output),
                             tint = scheme.onSurfaceVariant,
                         )
                     }
@@ -236,7 +239,7 @@ fun TerminalScreen(
                             Box(contentAlignment = Alignment.CenterStart) {
                                 if (input.isEmpty()) {
                                     Text(
-                                        "command…",
+                                        uiContext.getString(R.string.ui_command),
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontFamily = HarnessMono,
                                         color = scheme.onSurfaceVariant,
@@ -261,7 +264,7 @@ fun TerminalScreen(
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "Run",
+                            contentDescription = uiContext.getString(R.string.ui_run),
                             modifier = Modifier.size(18.dp),
                             tint = if (input.isNotBlank() && !state.busy) scheme.primary
                             else scheme.onSurfaceVariant,

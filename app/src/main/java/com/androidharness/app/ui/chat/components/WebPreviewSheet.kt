@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.R
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
@@ -317,6 +318,7 @@ private fun SourceHubView(
     onRescanPorts: () -> Unit,
     onClose: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     var customUrlInput by remember { mutableStateOf("") }
 
@@ -340,18 +342,18 @@ private fun SourceHubView(
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    "Web & HTML Preview",
+                    uiContext.getString(R.string.ui_web_html_preview),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    if (isScanning) "Scanning workspace & live ports…" else "Select a source to inspect",
+                    if (isScanning) uiContext.getString(R.string.ui_scanning_workspace_live_ports) else uiContext.getString(R.string.ui_select_a_source_to_inspect),
                     style = MaterialTheme.typography.labelSmall,
                     color = scheme.onSurfaceVariant,
                 )
             }
             IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "Close", tint = scheme.onSurfaceVariant)
+                Icon(Icons.Default.Close, contentDescription = uiContext.getString(R.string.settings_action_close), tint = scheme.onSurfaceVariant)
             }
         }
 
@@ -370,7 +372,7 @@ private fun SourceHubView(
             // 1. Workspace HTML files (only if present)
             if (workspaceHtmlFiles.isNotEmpty()) {
                 CollapsibleSection(
-                    title = "Workspace Files",
+                    title = uiContext.getString(R.string.ui_workspace_files_260),
                     count = workspaceHtmlFiles.size,
                     icon = Icons.Outlined.Folder,
                     defaultExpanded = true,
@@ -379,7 +381,7 @@ private fun SourceHubView(
                         SourceRowItem(
                             icon = Icons.Outlined.Description,
                             title = file.substringAfterLast('/'),
-                            subtitle = file.substringBeforeLast('/', "workspace root"),
+                            subtitle = file.substringBeforeLast('/', uiContext.getString(R.string.ui_workspace_root)),
                             badgeText = "HTML",
                             onClick = { onSelectTarget(file) },
                         )
@@ -390,7 +392,7 @@ private fun SourceHubView(
             // 2. Chat Links (only if present in conversation)
             if (chatLinks.isNotEmpty()) {
                 CollapsibleSection(
-                    title = "Links in Chat",
+                    title = uiContext.getString(R.string.ui_links_in_chat),
                     count = chatLinks.size,
                     icon = Icons.Outlined.Link,
                     defaultExpanded = true,
@@ -399,7 +401,7 @@ private fun SourceHubView(
                         SourceRowItem(
                             icon = Icons.Outlined.Language,
                             title = link,
-                            subtitle = if (LocalPortProbe.isLocalhostUrl(link)) "Local server" else "Web URL",
+                            subtitle = if (LocalPortProbe.isLocalhostUrl(link)) uiContext.getString(R.string.ui_local_server) else uiContext.getString(R.string.ui_web_url),
                             badgeText = "OPEN",
                             onClick = { onSelectTarget(link) },
                         )
@@ -410,7 +412,7 @@ private fun SourceHubView(
             // 3. Localhost servers (only show LIVE servers)
             if (activePorts.isNotEmpty()) {
                 CollapsibleSection(
-                    title = "Live Local Servers",
+                    title = uiContext.getString(R.string.ui_live_local_servers),
                     count = activePorts.size,
                     icon = Icons.Outlined.Sensors,
                     defaultExpanded = true,
@@ -418,7 +420,7 @@ private fun SourceHubView(
                         IconButton(onClick = onRescanPorts, modifier = Modifier.size(40.dp)) {
                             Icon(
                                 Icons.Default.Refresh,
-                                contentDescription = "Rescan ports",
+                                contentDescription = uiContext.getString(R.string.ui_rescan_ports),
                                 tint = scheme.primary,
                                 modifier = Modifier.size(16.dp),
                             )
@@ -429,7 +431,7 @@ private fun SourceHubView(
                         SourceRowItem(
                             icon = Icons.Outlined.Sensors,
                             title = "http://localhost:$port",
-                            subtitle = "Active listening server on port $port",
+                            subtitle = uiContext.getString(R.string.ui_active_listening_server_on_port, (port).toString()),
                             badgeText = "LIVE",
                             isLive = true,
                             onClick = { onSelectTarget("http://localhost:$port") },
@@ -458,13 +460,13 @@ private fun SourceHubView(
                         )
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "No active web sources detected",
+                            uiContext.getString(R.string.ui_no_active_web_sources_detected),
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            "Start a dev server in Terminal (e.g. `python3 -m http.server 8000` or `npm run dev`), or enter an address below.",
+                            uiContext.getString(R.string.ui_start_a_dev_server_in_terminal_e),
                             style = MaterialTheme.typography.bodySmall,
                             color = scheme.onSurfaceVariant,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -482,7 +484,7 @@ private fun SourceHubView(
             ) {
                 Column(Modifier.padding(12.dp)) {
                     Text(
-                        "Enter Custom Address or Port",
+                        uiContext.getString(R.string.ui_enter_custom_address_or_port),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -512,7 +514,7 @@ private fun SourceHubView(
                             },
                         ) {
                             Text(
-                                "Open",
+                                uiContext.getString(R.string.ui_open),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = if (customUrlInput.isNotBlank()) scheme.onPrimary else scheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
@@ -700,6 +702,7 @@ private fun WebPageView(
     agentRunning: Boolean = false,
     onStopAgent: (() -> Unit)? = null,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val statusColors = LocalStatusColors.current
     val context = LocalContext.current
@@ -722,15 +725,15 @@ private fun WebPageView(
     selectedElement?.let { selection ->
         AlertDialog(
             onDismissRequest = { selectedElement = null },
-            title = { Text("Fix selected element") },
+            title = { Text(uiContext.getString(R.string.ui_fix_selected_element)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(selection.selector, maxLines = 2, overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.labelMedium, fontFamily = HarnessMono)
                     OutlinedTextField(value = elementRequest, onValueChange = { elementRequest = it },
-                        label = { Text("What should change?") }, minLines = 2, maxLines = 5,
+                        label = { Text(uiContext.getString(R.string.ui_what_should_change)) }, minLines = 2, maxLines = 5,
                         modifier = Modifier.fillMaxWidth())
-                    Text(if (capturingSelection) "Capturing page context…" else "Includes element details, styles, and available page context.",
+                    Text(if (capturingSelection) uiContext.getString(R.string.ui_capturing_page_context) else uiContext.getString(R.string.ui_includes_element_details_styles_and_available_page),
                         style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                 }
             },
@@ -740,9 +743,9 @@ private fun WebPageView(
                         .take(5).joinToString("\n") { "${it.message} (${it.source}:${it.lineNumber})" }
                     selectedElement = null
                     onFixBug(selection.prompt(currentUrl, elementRequest, errors, selectionScreenshot))
-                }) { Text("Send to agent") }
+                }) { Text(uiContext.getString(R.string.ui_send_to_agent)) }
             },
-            dismissButton = { TextButton(onClick = { selectedElement = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { selectedElement = null }) { Text(uiContext.getString(R.string.settings_action_cancel)) } },
         )
     }
 
@@ -832,7 +835,7 @@ private fun WebPageView(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onBackToHub) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "All Sources", tint = scheme.onSurface)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = uiContext.getString(R.string.ui_all_sources), tint = scheme.onSurface)
                     }
 
                     IconButton(
@@ -841,7 +844,7 @@ private fun WebPageView(
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "History Back",
+                            contentDescription = uiContext.getString(R.string.ui_history_back),
                             tint = if (canGoBack) scheme.onSurface else scheme.onSurfaceVariant.copy(alpha = 0.3f),
                         )
                     }
@@ -852,13 +855,13 @@ private fun WebPageView(
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "History Forward",
+                            contentDescription = uiContext.getString(R.string.ui_history_forward),
                             tint = if (canGoForward) scheme.onSurface else scheme.onSurfaceVariant.copy(alpha = 0.3f),
                         )
                     }
 
                     IconButton(onClick = reload) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Reload", tint = scheme.onSurfaceVariant)
+                        Icon(Icons.Default.Refresh, contentDescription = uiContext.getString(R.string.ui_reload), tint = scheme.onSurfaceVariant)
                     }
                 }
 
@@ -869,7 +872,7 @@ private fun WebPageView(
                         Box {
                             Icon(
                                 Icons.Outlined.BugReport,
-                                contentDescription = "Console",
+                                contentDescription = uiContext.getString(R.string.ui_console),
                                 tint = if (consoleLogs.any { it.level == ConsoleMessage.MessageLevel.ERROR }) {
                                     scheme.error
                                 } else if (showConsole) {
@@ -891,14 +894,14 @@ private fun WebPageView(
 
                     Box {
                         IconButton(onClick = { browserToolbarMenu = true }) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "More browser actions", tint = scheme.onSurfaceVariant)
+                            Icon(Icons.Filled.MoreVert, contentDescription = uiContext.getString(R.string.ui_more_browser_actions), tint = scheme.onSurfaceVariant)
                         }
                         DropdownMenu(
                             expanded = browserToolbarMenu,
                             onDismissRequest = { browserToolbarMenu = false },
                         ) {
                             DropdownMenuItem(
-                                text = { Text(if (pickingElement) "Cancel element selection" else "Select element to fix") },
+                                text = { Text(if (pickingElement) uiContext.getString(R.string.ui_cancel_element_selection) else uiContext.getString(R.string.ui_select_element_to_fix)) },
                                 leadingIcon = { Icon(Icons.Filled.AutoFixHigh, contentDescription = null) },
                                 enabled = !isLoading && errorMessage == null && !agentControlling,
                                 onClick = {
@@ -908,7 +911,7 @@ private fun WebPageView(
                                 },
                             )
                             DropdownMenuItem(
-                                text = { Text("DevTools") },
+                                text = { Text(uiContext.getString(R.string.ui_devtools)) },
                                 leadingIcon = { Icon(Icons.Outlined.DeveloperMode, contentDescription = null, tint = scheme.primary) },
                                 onClick = {
                                     browserToolbarMenu = false
@@ -916,7 +919,7 @@ private fun WebPageView(
                                 },
                             )
                             DropdownMenuItem(
-                                text = { Text("Open in external browser") },
+                                text = { Text(uiContext.getString(R.string.ui_open_in_external_browser)) },
                                 leadingIcon = { Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null) },
                                 enabled = !isWorkspaceHtml(currentUrl),
                                 onClick = {
@@ -930,7 +933,7 @@ private fun WebPageView(
                                 },
                             )
                             DropdownMenuItem(
-                                text = { Text(if (isFullscreen) "Exit fullscreen" else "Fullscreen") },
+                                text = { Text(if (isFullscreen) uiContext.getString(R.string.ui_exit_fullscreen) else uiContext.getString(R.string.ui_fullscreen)) },
                                 leadingIcon = {
                                     Icon(
                                         if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
@@ -943,7 +946,7 @@ private fun WebPageView(
                                 },
                             )
                             DropdownMenuItem(
-                                text = { Text("Close") },
+                                text = { Text(uiContext.getString(R.string.settings_action_close)) },
                                 leadingIcon = { Icon(Icons.Default.Close, contentDescription = null) },
                                 onClick = {
                                     browserToolbarMenu = false
@@ -959,10 +962,10 @@ private fun WebPageView(
         if (pickingElement) {
             Surface(color = scheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 12.dp)) {
-                    Text("Tap the element you want to change", modifier = Modifier.weight(1f),
+                    Text(uiContext.getString(R.string.ui_tap_the_element_you_want_to_change), modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.bodySmall, color = scheme.onPrimaryContainer)
                     IconButton(onClick = { pickingElement = false }) {
-                        Icon(Icons.Default.Close, contentDescription = "Cancel element selection")
+                        Icon(Icons.Default.Close, contentDescription = uiContext.getString(R.string.ui_cancel_element_selection))
                     }
                 }
             }
@@ -992,14 +995,14 @@ private fun WebPageView(
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                 ) {
-                    if (agentActivity?.status in listOf("In progress", "Waiting") || agentActivity == null) {
+                    if (agentActivity?.status in listOf(uiContext.getString(R.string.ui_in_progress), uiContext.getString(R.string.ui_waiting)) || agentActivity == null) {
                         AgentPulsingDot(tint = scheme.onPrimaryContainer)
                     } else {
                         Icon(Icons.Outlined.Language, null, Modifier.size(16.dp), tint = scheme.onPrimaryContainer)
                     }
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        agentActivity?.let { "${it.status} · ${it.action}" } ?: "Agent is controlling the browser",
+                        agentActivity?.let { "${it.status} · ${it.action}" } ?: uiContext.getString(R.string.ui_agent_is_controlling_the_browser),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = scheme.onPrimaryContainer,
@@ -1008,10 +1011,10 @@ private fun WebPageView(
                         modifier = Modifier.weight(1f),
                     )
                     if (onStopAgent != null) TextButton(onClick = onStopAgent, enabled = agentRunning,
-                        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = scheme.error)) { Text("Stop agent") }
+                        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = scheme.error)) { Text(uiContext.getString(R.string.ui_stop_agent)) }
                     Icon(
                         if (showAgentTrack) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp,
-                        contentDescription = if (showAgentTrack) "Hide agent activity" else "Show agent activity",
+                        contentDescription = if (showAgentTrack) uiContext.getString(R.string.ui_hide_agent_activity) else uiContext.getString(R.string.ui_show_agent_activity),
                         tint = scheme.onPrimaryContainer,
                         modifier = Modifier.size(16.dp),
                     )
@@ -1098,7 +1101,7 @@ private fun WebPageView(
                             ): Boolean {
                                 browserController?.unbindActiveWebView(view ?: return true)
                                 isLoading = false
-                                errorMessage = "Browser render process terminated (infinite loop or crash). Reload to resume."
+                                errorMessage = uiContext.getString(R.string.ui_browser_render_process_terminated_infinite_loop_or)
                                 return true
                             }
 
@@ -1133,7 +1136,7 @@ private fun WebPageView(
                             ) {
                                 if (request?.isForMainFrame == true) {
                                     isLoading = false
-                                    errorMessage = error?.description?.toString() ?: "Failed to connect to $target"
+                                    errorMessage = error?.description?.toString() ?: uiContext.getString(R.string.ui_failed_to_connect_to, (target).toString())
                                     browserController?.notePageError(errorMessage)
                                 }
                             }
@@ -1234,7 +1237,7 @@ private fun WebPageView(
                         CircularProgressIndicator(modifier = Modifier.size(36.dp), strokeWidth = 3.dp)
                         Spacer(Modifier.height(14.dp))
                         Text(
-                            "Loading preview…",
+                            uiContext.getString(R.string.ui_loading_preview),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium,
                         )
@@ -1269,7 +1272,7 @@ private fun WebPageView(
                         )
                         Spacer(Modifier.height(12.dp))
                         Text(
-                            "Cannot load page",
+                            uiContext.getString(R.string.ui_cannot_load_page),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                         )
@@ -1288,7 +1291,7 @@ private fun WebPageView(
                                 modifier = Modifier.clickable { onBackToHub() },
                             ) {
                                 Text(
-                                    "Pick source",
+                                    uiContext.getString(R.string.ui_pick_source),
                                     style = MaterialTheme.typography.labelMedium,
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                 )
@@ -1306,7 +1309,7 @@ private fun WebPageView(
                                 ) {
                                     Icon(Icons.Filled.AutoFixHigh, contentDescription = null, tint = scheme.onErrorContainer, modifier = Modifier.size(15.dp))
                                     Spacer(Modifier.width(4.dp))
-                                    Text("Fix with Agent", color = scheme.onErrorContainer, style = MaterialTheme.typography.labelMedium)
+                                    Text(uiContext.getString(R.string.ui_fix_with_agent), color = scheme.onErrorContainer, style = MaterialTheme.typography.labelMedium)
                                 }
                             }
                             Surface(
@@ -1315,7 +1318,7 @@ private fun WebPageView(
                                 modifier = Modifier.clickable { reload() },
                             ) {
                                 Text(
-                                    "Retry",
+                                    uiContext.getString(R.string.ui_retry),
                                     color = scheme.onPrimary,
                                     style = MaterialTheme.typography.labelMedium,
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -1352,7 +1355,7 @@ private fun WebPageView(
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
                         ) {
                             Text(
-                                "JS CONSOLE (${consoleLogs.size})",
+                                uiContext.getString(R.string.ui_js_console, (consoleLogs.size).toString()),
                                 style = MaterialTheme.typography.labelSmall,
                                 fontFamily = HarnessMono,
                                 fontWeight = FontWeight.Bold,
@@ -1385,7 +1388,7 @@ private fun WebPageView(
                                         )
                                         Spacer(Modifier.width(4.dp))
                                         Text(
-                                            "Fix bug in chat",
+                                            uiContext.getString(R.string.ui_fix_bug_in_chat),
                                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
                                             color = scheme.onErrorContainer,
                                         )
@@ -1394,11 +1397,11 @@ private fun WebPageView(
                             }
 
                             IconButton(onClick = { consoleLogs.clear() }, modifier = Modifier.size(40.dp)) {
-                                Icon(Icons.Outlined.Delete, contentDescription = "Clear logs", modifier = Modifier.size(16.dp), tint = scheme.onSurfaceVariant)
+                                Icon(Icons.Outlined.Delete, contentDescription = uiContext.getString(R.string.ui_clear_logs), modifier = Modifier.size(16.dp), tint = scheme.onSurfaceVariant)
                             }
                             Spacer(Modifier.width(2.dp))
                             IconButton(onClick = onToggleConsole, modifier = Modifier.size(40.dp)) {
-                                Icon(Icons.Default.Close, contentDescription = "Close Console", modifier = Modifier.size(16.dp), tint = scheme.onSurfaceVariant)
+                                Icon(Icons.Default.Close, contentDescription = uiContext.getString(R.string.ui_close_console), modifier = Modifier.size(16.dp), tint = scheme.onSurfaceVariant)
                             }
                         }
                         HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.4f))
@@ -1411,7 +1414,7 @@ private fun WebPageView(
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(
-                                    "No console messages logged",
+                                    uiContext.getString(R.string.ui_no_console_messages_logged),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = scheme.onSurfaceVariant,
                                     fontFamily = HarnessMono,
@@ -1480,7 +1483,7 @@ private fun WebPageView(
                                                 },
                                             ) {
                                                 Text(
-                                                    "Fix",
+                                                    uiContext.getString(R.string.settings_action_fix),
                                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
                                                     color = scheme.onErrorContainer,
                                                     modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
@@ -1519,7 +1522,7 @@ private fun WebPageView(
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
                         ) {
                             Text(
-                                "AGENT ACTIVITY (${agentTracks.size})",
+                                uiContext.getString(R.string.ui_agent_activity, (agentTracks.size).toString()),
                                 style = MaterialTheme.typography.labelSmall,
                                 fontFamily = HarnessMono,
                                 fontWeight = FontWeight.Bold,
@@ -1529,11 +1532,11 @@ private fun WebPageView(
                                 onClick = { browserController?.clearTrack() },
                                 modifier = Modifier.size(40.dp),
                             ) {
-                                Icon(Icons.Outlined.Delete, contentDescription = "Clear trail", modifier = Modifier.size(16.dp), tint = scheme.onSurfaceVariant)
+                                Icon(Icons.Outlined.Delete, contentDescription = uiContext.getString(R.string.ui_clear_trail), modifier = Modifier.size(16.dp), tint = scheme.onSurfaceVariant)
                             }
                             Spacer(Modifier.width(2.dp))
                             IconButton(onClick = { showAgentTrack = false }, modifier = Modifier.size(40.dp)) {
-                                Icon(Icons.Default.Close, contentDescription = "Close activity", modifier = Modifier.size(16.dp), tint = scheme.onSurfaceVariant)
+                                Icon(Icons.Default.Close, contentDescription = uiContext.getString(R.string.ui_close_activity), modifier = Modifier.size(16.dp), tint = scheme.onSurfaceVariant)
                             }
                         }
                         HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.4f))
@@ -1546,7 +1549,7 @@ private fun WebPageView(
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(
-                                    "The agent has not touched this browser yet",
+                                    uiContext.getString(R.string.ui_the_agent_has_not_touched_this_browser),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = scheme.onSurfaceVariant,
                                     fontFamily = HarnessMono,

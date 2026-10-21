@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.R
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -71,6 +72,7 @@ internal fun SubagentPagerCard(
     subagentSteps: Map<String, List<String>>,
     onOpen: (toolCallId: String) -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val success = LocalStatusColors.current.success
     val scope = rememberCoroutineScope()
@@ -112,8 +114,8 @@ internal fun SubagentPagerCard(
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        if (anyRunning) "Running $runningCount of ${calls.size} subagents…"
-                        else "Spawned ${calls.size} subagents",
+                        if (anyRunning) uiContext.getString(R.string.ui_running_of_subagents, (runningCount).toString(), (calls.size).toString())
+                        else uiContext.getString(R.string.ui_spawned_subagents, (calls.size).toString()),
                         style = MaterialTheme.typography.labelLarge,
                     )
                     val summary = buildString {
@@ -145,13 +147,13 @@ internal fun SubagentPagerCard(
                         running -> DotLoading(Modifier.size(width = 20.dp, height = 12.dp))
                         failedCount > 0 -> Icon(
                             Icons.Filled.Close,
-                            contentDescription = "Failed",
+                            contentDescription = uiContext.getString(R.string.ui_failed_64),
                             tint = scheme.error,
                             modifier = Modifier.size(18.dp),
                         )
                         else -> Icon(
                             Icons.Filled.CheckCircle,
-                            contentDescription = "Done",
+                            contentDescription = uiContext.getString(R.string.settings_action_done),
                             tint = success,
                             modifier = Modifier.size(18.dp),
                         )

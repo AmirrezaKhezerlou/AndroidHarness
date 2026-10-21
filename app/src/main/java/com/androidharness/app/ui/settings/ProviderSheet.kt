@@ -139,6 +139,7 @@ internal fun ProviderSheetContent(
     onDismiss: () -> Unit,
     onSave: (name: String, type: ProviderType, baseUrl: String, model: String, apiKey: String, headers: List<com.androidharness.app.llm.ProviderHeader>) -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     SecureDialogEffect()
     val scope = rememberCoroutineScope()
 
@@ -202,7 +203,7 @@ internal fun ProviderSheetContent(
         else -> brand?.baseUrl ?: baseUrl
     }
     val requiresKey = if (devChoice != null) true else brand?.needsKey ?: true
-    val selectedLabel = brand?.label ?: devChoice?.name ?: "Custom endpoint"
+    val selectedLabel = brand?.label ?: devChoice?.name ?: uiContext.getString(R.string.settings_provider_custom_endpoint)
 
     // Offline model list from the catalog: shown instantly on step 3 when the
     // live fetch hasn't produced a list (or failed).
@@ -277,7 +278,7 @@ internal fun ProviderSheetContent(
                             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                         ) {
                             Text(
-                                "Refreshing provider catalog…",
+                                uiContext.getString(R.string.ui_refreshing_provider_catalog),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -401,7 +402,7 @@ internal fun ProviderSheetContent(
                             modifier = Modifier.fillMaxWidth(),
                         )
                         Text(
-                            "Stored securely on this device and used only for this provider.",
+                            uiContext.getString(R.string.ui_stored_securely_on_this_device_and_used),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 4.dp),
@@ -439,7 +440,7 @@ internal fun ProviderSheetContent(
                             enabled = !fetching && headersValid &&
                                 (!requiresKey || apiKey.isNotBlank()) &&
                                 (!isCustom || baseUrl.isNotBlank()),
-                        ) { Text(if (fetching) "Connecting…" else "Continue") }
+                        ) { Text(if (fetching) uiContext.getString(R.string.ui_connecting) else uiContext.getString(R.string.settings_action_continue)) }
                     },
                     secondary = if (fetchError != null && headersValid) {
                         { TextButton(onClick = { step = AddStep.MODEL }) { Text(stringResource(R.string.settings_action_continue_anyway)) } }
@@ -507,7 +508,7 @@ internal fun ProviderSheetContent(
                         if (displayModels == null && q.isBlank()) {
                             item {
                                 Text(
-                                    "No catalog available yet. Type a model ID above.",
+                                    uiContext.getString(R.string.ui_no_catalog_available_yet_type_a_model),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(vertical = 18.dp),
@@ -553,6 +554,7 @@ private fun ProviderFlowHeader(
     onBack: () -> Unit,
     onClose: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -600,9 +602,9 @@ private fun ProviderFlowHeader(
             }
             Text(
                 when (step) {
-                    AddStep.PROVIDER -> "Pick a service or connect your own endpoint"
-                    AddStep.KEY -> "Add the credentials needed to reach this provider"
-                    AddStep.MODEL -> "Search the catalog or enter a model ID"
+                    AddStep.PROVIDER -> uiContext.getString(R.string.ui_pick_a_service_or_connect_your_own)
+                    AddStep.KEY -> uiContext.getString(R.string.ui_add_the_credentials_needed_to_reach_this)
+                    AddStep.MODEL -> uiContext.getString(R.string.ui_search_the_catalog_or_enter_a_model)
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = scheme.onSurfaceVariant,
@@ -742,6 +744,7 @@ private fun ColumnScope.ProviderDirectory(
     onSelectDev: (ModelsDev.ProviderInfo) -> Unit,
     onSelectCustom: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val q = remember(query) { query.trim().lowercase() }
     val curated = remember(q) {
         ProviderBrands.filterNotNull()
@@ -772,12 +775,12 @@ private fun ColumnScope.ProviderDirectory(
         }
         if (curated.isNotEmpty()) {
             item(key = "popular-label") {
-                DirectoryLabel(if (q.isBlank()) "Popular" else "Providers")
+                DirectoryLabel(if (q.isBlank()) uiContext.getString(R.string.ui_popular) else uiContext.getString(R.string.settings_providers_title))
             }
             items(curated, key = { "brand-${it.label}" }) { b ->
                 ProviderRow(
                     title = b.label,
-                    subtitle = if (b.needsKey) "API key required" else "Runs locally without a key",
+                    subtitle = if (b.needsKey) uiContext.getString(R.string.ui_api_key_required) else uiContext.getString(R.string.ui_runs_locally_without_a_key),
                     selected = b.label == selectedBrand?.label,
                     onClick = { onSelectBrand(b) },
                 )

@@ -17,6 +17,7 @@ import com.androidharness.app.llm.ProviderType
 
 @Composable
 fun ModelReasoningIcon(entry: ModelEntry, providerType: ProviderType? = null, directory: Boolean = false) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val status = ModelReasoning.of(entry, providerType)
     if (status == ModelReasoning.UNKNOWN || status == ModelReasoning.UNSUPPORTED) return
     var details by remember { mutableStateOf(false) }
@@ -32,9 +33,9 @@ fun ModelReasoningIcon(entry: ModelEntry, providerType: ProviderType? = null, di
     }
     if (details) AlertDialog(onDismissRequest = { details = false }, title = { Text(description) },
         text = { Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) { Text(when (status) {
-            ModelReasoning.REPORTED -> if (directory) "The model directory lists reasoning support. This connection has not confirmed it. Visible thinking text depends on the provider."
-                else "This connection's catalog reports reasoning support. It does not guarantee that the provider exposes thinking text."
-            ModelReasoning.CUSTOM -> "You marked this custom model as a reasoning model. Its provider has not confirmed this setting."
-            else -> "This model family may support reasoning, but this connection has not confirmed it. Thinking controls and visible thinking depend on the provider."
-        }) } }, confirmButton = { TextButton(onClick = { details = false }) { Text("Got it") } })
+            ModelReasoning.REPORTED -> if (directory) uiContext.getString(R.string.ui_the_model_directory_lists_reasoning_support_this)
+                else uiContext.getString(R.string.ui_this_connection_s_catalog_reports_reasoning_support)
+            ModelReasoning.CUSTOM -> uiContext.getString(R.string.ui_you_marked_this_custom_model_as_a)
+            else -> uiContext.getString(R.string.ui_this_model_family_may_support_reasoning_but)
+        }) } }, confirmButton = { TextButton(onClick = { details = false }) { Text(uiContext.getString(R.string.settings_action_got_it)) } })
 }

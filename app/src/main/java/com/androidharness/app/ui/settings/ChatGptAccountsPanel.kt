@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -27,6 +28,7 @@ internal fun ChatGptAccountsPanel(
     onRefresh: (ChatGptAccount) -> Unit, onCheckModels: (ChatGptAccount) -> Unit,
     onReconnect: (ChatGptAccount) -> Unit, onSignOut: (ChatGptAccount) -> Unit, onUsage: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val colors = MaterialTheme.colorScheme
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column {
@@ -38,7 +40,7 @@ internal fun ChatGptAccountsPanel(
                     Button(onClick = onAdd, enabled = !state.signingIn) {
                         Icon(Icons.Outlined.Add, null, Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text(if (state.accounts.isEmpty()) "Continue with ChatGPT" else "Add account")
+                        Text(if (state.accounts.isEmpty()) uiContext.getString(R.string.settings_search_continue_chatgpt_title) else uiContext.getString(R.string.ui_add_account))
                     }
                 }
                 if (state.signingIn) {
@@ -50,8 +52,8 @@ internal fun ChatGptAccountsPanel(
             }
             if (state.accounts.isNotEmpty()) {
                 HorizontalDivider(color = colors.outlineVariant)
-                AccountSwitchRow("Auto-switch at usage limit",
-                    "Continue with another account. Keep the same model when available, otherwise use its fallback.", state.autoSwitch, onAutoSwitch)
+                AccountSwitchRow(uiContext.getString(R.string.ui_auto_switch_at_usage_limit),
+                    uiContext.getString(R.string.ui_continue_with_another_account_keep_the_same), state.autoSwitch, onAutoSwitch)
                 if (state.autoSwitch && state.accounts.count { it.connected && it.useForAutoSwitch } < 2) {
                     Text(stringResource(R.string.settings_chatgpt_add_account_hint), style = MaterialTheme.typography.bodySmall,
                         color = colors.onSurfaceVariant, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp))
@@ -68,7 +70,7 @@ internal fun ChatGptAccountsPanel(
                         account.usageLimited -> if (selected) stringResource(R.string.settings_chatgpt_usage_limit_chat)
                             else stringResource(R.string.settings_chatgpt_usage_limit)
                         selected -> account.models.firstOrNull { it.id == selectedModel }?.displayName ?: selectedModel.orEmpty()
-                        else -> stringResource(R.string.settings_accounts_models_available, account.models.size.toString())
+                        else -> pluralStringResource(R.plurals.settings_accounts_models_available, account.models.size, account.models.size)
                     }
                     Surface(onClick = { if (account.connected) onSelect(account) else onReconnect(account) },
                         enabled = selecting == null && !state.signingIn, color = colors.surface,
@@ -96,7 +98,7 @@ internal fun ChatGptAccountsPanel(
                                         DropdownMenuItem(text = { Text(stringResource(R.string.settings_chatgpt_check_new_models)) }, enabled = state.checkingModelsFor == null,
                                             onClick = { menu = false; onCheckModels(account) })
                                     }
-                                    DropdownMenuItem(text = { Text(if (account.connected) "Reconnect" else "Sign in again") },
+                                    DropdownMenuItem(text = { Text(if (account.connected) uiContext.getString(R.string.ui_reconnect) else uiContext.getString(R.string.ui_sign_in_again)) },
                                         enabled = !state.signingIn, onClick = { menu = false; onReconnect(account) })
                                     if (account.connected) DropdownMenuItem(text = { Text(stringResource(R.string.settings_chatgpt_sign_out), color = colors.error) },
                                         onClick = { menu = false; onSignOut(account) })
@@ -105,7 +107,7 @@ internal fun ChatGptAccountsPanel(
                         }
                     }
                     if (state.autoSwitch && account.connected) {
-                        AccountSwitchRow("Include in auto-switch", null, account.useForAutoSwitch,
+                        AccountSwitchRow(uiContext.getString(R.string.ui_include_in_auto_switch), null, account.useForAutoSwitch,
                             { onFallback(account, it, account.fallbackModel) }, inset = true)
                         if (account.useForAutoSwitch) FallbackModelRow(account) { onFallback(account, true, it) }
                     }
@@ -144,6 +146,7 @@ private fun AccountSwitchRow(title: String, description: String?, checked: Boole
 
 @Composable
 private fun FallbackModelRow(account: ChatGptAccount, onSelect: (String?) -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var expanded by remember { mutableStateOf(false) }
     val choice = account.models.firstOrNull { it.id == account.fallbackModel }
     val fallbackCd = stringResource(R.string.settings_accounts_fallback_cd, account.label)
@@ -155,7 +158,7 @@ private fun FallbackModelRow(account: ChatGptAccount, onSelect: (String?) -> Uni
             Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp).heightIn(min = 36.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(stringResource(R.string.settings_chatgpt_fallback_model), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(choice?.displayName ?: choice?.id ?: "Automatic", style = MaterialTheme.typography.bodyMedium)
+                    Text(choice?.displayName ?: choice?.id ?: uiContext.getString(R.string.settings_chatgpt_fallback_auto), style = MaterialTheme.typography.bodyMedium)
                 }
                 Icon(Icons.Outlined.ExpandMore, null, Modifier.size(20.dp))
             }

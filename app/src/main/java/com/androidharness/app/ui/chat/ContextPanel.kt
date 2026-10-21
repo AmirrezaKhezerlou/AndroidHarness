@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat
 
+import com.androidharness.app.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -36,6 +37,7 @@ fun ContextUsageDialog(
     onDismiss: () -> Unit,
     onContextLimits: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val used = state.contextUsed.toLong().coerceAtLeast(0)
     val max = state.maxContextTokens.toLong()
     val fraction = (used.toFloat() / max.toFloat()).coerceIn(0f, 1f)
@@ -84,11 +86,11 @@ fun ContextUsageDialog(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                TextButton(onClick = onContextLimits) { Text("Context/limits") }
-                TextButton(onClick = onDismiss) { Text("Close") }
+                TextButton(onClick = onContextLimits) { Text(uiContext.getString(R.string.ui_context_limits_extra71)) }
+                TextButton(onClick = onDismiss) { Text(uiContext.getString(R.string.settings_action_close)) }
             }
         },
-        title = { Text("Context and Usage") },
+        title = { Text(uiContext.getString(R.string.ui_context_and_usage)) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -96,7 +98,7 @@ fun ContextUsageDialog(
             ) {
                 Column {
                     Text(
-                        "Context Window",
+                        uiContext.getString(R.string.ui_context_window),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -114,41 +116,41 @@ fun ContextUsageDialog(
                 }
 
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    BreakdownRow("Messages", estimate?.messagesTokens, estimateTotal)
-                    BreakdownRow("Tools and Skills", estimate?.toolsTokens, estimateTotal)
-                    BreakdownRow("System Prompt", estimate?.systemTokens, estimateTotal)
-                    BreakdownRow("Meta Context", estimate?.metaTokens, estimateTotal)
+                    BreakdownRow(uiContext.getString(R.string.ui_messages), estimate?.messagesTokens, estimateTotal)
+                    BreakdownRow(uiContext.getString(R.string.ui_tools_and_skills), estimate?.toolsTokens, estimateTotal)
+                    BreakdownRow(uiContext.getString(R.string.ui_system_prompt), estimate?.systemTokens, estimateTotal)
+                    BreakdownRow(uiContext.getString(R.string.ui_meta_context), estimate?.metaTokens, estimateTotal)
                 }
 
                 HorizontalDivider()
 
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        "Session Tokens",
+                        uiContext.getString(R.string.ui_session_tokens),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(2.dp))
-                    TokenRow("Fresh input tokens", formatTokenCount(freshInput))
-                    TokenRow("Cached tokens (hits)", formatTokenCount(state.usage.totalCached))
+                    TokenRow(uiContext.getString(R.string.ui_fresh_input_tokens), formatTokenCount(freshInput))
+                    TokenRow(uiContext.getString(R.string.ui_cached_tokens_hits), formatTokenCount(state.usage.totalCached))
                     if (state.usage.totalCacheWrite > 0) {
-                        TokenRow("Cache writes (created)", formatTokenCount(state.usage.totalCacheWrite))
+                        TokenRow(uiContext.getString(R.string.ui_cache_writes_created), formatTokenCount(state.usage.totalCacheWrite))
                     }
-                    TokenRow("Output tokens", formatTokenCount(state.usage.totalOutput))
-                    TokenRow("Total requests", state.usage.requests.toString())
+                    TokenRow(uiContext.getString(R.string.ui_output_tokens), formatTokenCount(state.usage.totalOutput))
+                    TokenRow(uiContext.getString(R.string.ui_total_requests), state.usage.requests.toString())
                 }
 
                 HorizontalDivider()
 
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     val hitRateText = when {
-                        state.usage.requests == 0L && state.busy -> "Calculating…"
+                        state.usage.requests == 0L && state.busy -> uiContext.getString(R.string.ui_calculating)
                         state.usage.totalInput > 0 -> "%.1f%%".format(state.usage.avgCacheHitRate * 100)
                         else -> "0.0%"
                     }
-                    TokenRow("Overall cache hit rate", hitRateText)
+                    TokenRow(uiContext.getString(R.string.ui_overall_cache_hit_rate), hitRateText)
                     Text(
-                        "Hit rate updates after each completed turn",
+                        uiContext.getString(R.string.ui_hit_rate_updates_after_each_completed_turn),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     )
@@ -157,7 +159,7 @@ fun ContextUsageDialog(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Estimated cost", style = MaterialTheme.typography.bodyMedium)
+                        Text(uiContext.getString(R.string.ui_estimated_cost), style = MaterialTheme.typography.bodyMedium)
                         Text(
                             if (usesChatGptPlan) "ChatGPT plan" else "$%.4f".format(estimatedCost ?: 0.0),
                             style = MaterialTheme.typography.titleMedium,
@@ -166,11 +168,11 @@ fun ContextUsageDialog(
                         )
                     }
                     val subText = if (usesChatGptPlan) {
-                        "Review plan usage and credits in ChatGPT settings"
+                        uiContext.getString(R.string.ui_review_plan_usage_and_credits_in_chatgpt)
                     } else if (state.sessionModelUsage.size > 1) {
-                        "Sum across ${state.sessionModelUsage.size} models used in this session"
+                        uiContext.getString(R.string.ui_sum_across_models_used_in_this_session, (state.sessionModelUsage.size).toString())
                     } else {
-                        "Calculated from ${model ?: "current model"} rates"
+                        uiContext.getString(R.string.ui_calculated_from_rates, (model ?: "current model").toString())
                     }
                     Text(
                         subText,
@@ -183,9 +185,9 @@ fun ContextUsageDialog(
                     val context = androidx.compose.ui.platform.LocalContext.current
                     TextButton(onClick = {
                         com.androidharness.app.ui.common.openOAuthBrowser(context, android.net.Uri.parse(com.androidharness.app.chatgpt.ChatGptProtocol.USAGE_URL))
-                    }) { Text("Manage usage") }
+                    }) { Text(uiContext.getString(R.string.ui_manage_usage)) }
                 } else Text(
-                    "Reasoning and thinking tokens are billed as output and are not re-sent as input.",
+                    uiContext.getString(R.string.ui_reasoning_and_thinking_tokens_are_billed_as),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 )

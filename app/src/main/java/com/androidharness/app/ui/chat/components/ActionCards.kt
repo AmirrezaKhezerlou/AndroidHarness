@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.R
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -108,18 +109,19 @@ internal fun ApprovalCard(
     onApprove: (Boolean) -> Unit,
     onDeny: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val isPkg = approval.call.name == "pkg_install"
     val scheme = MaterialTheme.colorScheme
     ActionCard(
-        title = if (isPkg) "Install Linux package?" else "Approve this action?",
+        title = if (isPkg) uiContext.getString(R.string.ui_install_linux_package) else uiContext.getString(R.string.ui_approve_this_action),
         icon = if (isPkg) Icons.Outlined.Inventory2 else Icons.Outlined.Shield,
         iconTint = if (isPkg) scheme.tertiary else scheme.primary,
         actions = {
-            TextButton(onClick = onDeny) { Text(if (isPkg) "Decline" else "Deny") }
+            TextButton(onClick = onDeny) { Text(if (isPkg) uiContext.getString(R.string.ui_decline) else uiContext.getString(R.string.ui_deny)) }
             if (!isPkg) {
-                FilledTonalButton(onClick = { onApprove(true) }) { Text("Always") }
+                FilledTonalButton(onClick = { onApprove(true) }) { Text(uiContext.getString(R.string.ui_always)) }
             }
-            Button(onClick = { onApprove(false) }) { Text("Allow") }
+            Button(onClick = { onApprove(false) }) { Text(uiContext.getString(R.string.ui_allow)) }
         },
     ) {
         if (isPkg) {
@@ -143,7 +145,7 @@ internal fun ApprovalCard(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "Warning: The agent is about to download and install packages on your device. Confirm before proceeding.",
+                        uiContext.getString(R.string.ui_warning_the_agent_is_about_to_download),
                         style = MaterialTheme.typography.labelSmall,
                         color = scheme.onErrorContainer,
                     )
@@ -177,12 +179,13 @@ internal fun PlanApprovalCard(
     onApprove: () -> Unit,
     onDiscard: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var expanded by remember(plan) { mutableStateOf(false) }
     val longPlan = plan.length > 2_000
     ActionCard(
-        title = "Plan ready to run",
+        title = uiContext.getString(R.string.ui_plan_ready_to_run),
         actions = {
-            TextButton(onClick = onDiscard) { Text("Discard") }
+            TextButton(onClick = onDiscard) { Text(uiContext.getString(R.string.settings_action_discard)) }
             Button(onClick = onApprove) {
                 Icon(
                     Icons.AutoMirrored.Filled.Send,
@@ -190,7 +193,7 @@ internal fun PlanApprovalCard(
                     modifier = Modifier.size(16.dp),
                 )
                 Spacer(Modifier.width(6.dp))
-                Text("Approve & execute")
+                Text(uiContext.getString(R.string.ui_approve_execute))
             }
         },
     ) {
@@ -206,7 +209,7 @@ internal fun PlanApprovalCard(
             }
         }
         if (longPlan) TextButton(onClick = { expanded = !expanded }) {
-            Text(if (expanded) "Show less" else "Show full plan")
+            Text(if (expanded) uiContext.getString(R.string.ui_show_less) else uiContext.getString(R.string.ui_show_full_plan))
         }
     }
 }
@@ -219,55 +222,56 @@ internal fun EnvironmentInstallCard(
     onSkip: () -> Unit,
     installStarted: Boolean = false,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val repair = request.repair
     val installing = installStarted || envState.packageProgress() != null
     val progressState = if (installStarted && envState.packageProgress() == null && envState !is EnvState.Failed) EnvState.Preparing else envState
     ActionCard(
         title = if (installing) {
-            if (repair) "Repairing Linux environment" else "Installing Linux environment"
+            if (repair) uiContext.getString(R.string.ui_repairing_linux_environment) else uiContext.getString(R.string.ui_installing_linux_environment)
         } else if (repair) {
-            "Linux environment needs repair"
+            uiContext.getString(R.string.ui_linux_environment_needs_repair)
         } else {
-            "Linux environment needed"
+            uiContext.getString(R.string.ui_linux_environment_needed)
         },
         icon = Icons.Outlined.Terminal,
         actions = {
             if (!installing) {
-                TextButton(onClick = onSkip) { Text("Skip") }
-                Button(onClick = onInstall) { Text(if (repair) "Repair" else "Install now") }
+                TextButton(onClick = onSkip) { Text(uiContext.getString(R.string.ui_skip)) }
+                Button(onClick = onInstall) { Text(if (repair) uiContext.getString(R.string.ui_repair) else uiContext.getString(R.string.ui_install_now)) }
             }
         },
     ) {
         if (repair) {
             Text(
-                "\"${request.missingTool}\" is missing from the installed Linux environment " +
-                    "(the command failed with \"not found\").",
+                uiContext.getString(R.string.ui_is_missing_from_the_installed_linux_environment, (request.missingTool).toString()) +
+                    uiContext.getString(R.string.ui_the_command_failed_with_not_found),
                 style = MaterialTheme.typography.bodySmall,
                 color = scheme.onSurfaceVariant,
             )
             Text(
-                "Wanted to run: ${request.command.take(80)}",
+                uiContext.getString(R.string.ui_wanted_to_run, (request.command.take(80)).toString()),
                 style = MaterialTheme.typography.bodySmall,
                 color = scheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                "Repair reinstalls the toolchain, then the agent re-runs the command.",
+                uiContext.getString(R.string.ui_repair_reinstalls_the_toolchain_then_the_agent),
                 style = MaterialTheme.typography.labelMedium,
                 color = scheme.primary,
             )
         } else {
             Text(
-                "The agent wants to run: ${request.command.take(80)}",
+                uiContext.getString(R.string.ui_the_agent_wants_to_run, (request.command.take(80)).toString()),
                 style = MaterialTheme.typography.bodySmall,
                 color = scheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                "Required: ${request.hints.joinToString(" · ")}",
+                uiContext.getString(R.string.ui_required, (request.hints.joinToString(" · ")).toString()),
                 style = MaterialTheme.typography.labelMedium,
                 color = scheme.primary,
             )
@@ -280,7 +284,7 @@ internal fun EnvironmentInstallCard(
             is EnvState.Failed -> {
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "Install failed: ${progressState.message}",
+                    uiContext.getString(R.string.ui_install_failed, (progressState.message).toString()),
                     style = MaterialTheme.typography.labelMedium,
                     color = scheme.error,
                 )

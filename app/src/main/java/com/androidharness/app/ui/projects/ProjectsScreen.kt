@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.projects
 
+import com.androidharness.app.R
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.rememberScrollState
@@ -40,6 +41,7 @@ import kotlinx.coroutines.isActive
 @Composable
 fun ProjectsScreen(container: AppContainer, onBack: () -> Unit, onOpenProject: (String) -> Unit,
     onProjectDeleted: () -> Unit = {}) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val projects by container.workspace.projects.collectAsStateWithLifecycle(initialValue = emptyList())
     val sessions by container.sessions.sessions.collectAsStateWithLifecycle(initialValue = emptyList())
     val settings by container.settings.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
@@ -62,7 +64,7 @@ fun ProjectsScreen(container: AppContainer, onBack: () -> Unit, onOpenProject: (
         }
     }
 
-    Scaffold(topBar = { AppHeader("Projects", onBack = onBack) }) { padding ->
+    Scaffold(topBar = { AppHeader(uiContext.getString(R.string.ui_projects), onBack = onBack) }) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding), state = rememberLazyListState(),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
             items(projects, key = { it.id }) { project ->
@@ -75,9 +77,9 @@ fun ProjectsScreen(container: AppContainer, onBack: () -> Unit, onOpenProject: (
                     if (project.kind != com.androidharness.app.workspace.WorkspaceManager.KIND_APP) {
                         var menu by remember { mutableStateOf(false) }
                         Box {
-                            IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreHoriz, "Actions for project ${project.name}") }
+                            IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreHoriz, uiContext.getString(R.string.ui_actions_for_project, (project.name).toString())) }
                             DropdownMenu(menu, { menu = false }) {
-                                DropdownMenuItem(text = { Text("Delete project", color = MaterialTheme.colorScheme.error) },
+                                DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_delete_project), color = MaterialTheme.colorScheme.error) },
                                     leadingIcon = { Icon(Icons.Outlined.DeleteOutline, null) },
                                     onClick = { menu = false; deleting = project })
                             }
@@ -87,7 +89,7 @@ fun ProjectsScreen(container: AppContainer, onBack: () -> Unit, onOpenProject: (
             }
             item {
                 HorizontalDivider(Modifier.padding(vertical = 12.dp))
-                ProjectRow("Add project", icon = Icons.Outlined.Add, onClick = {
+                ProjectRow(uiContext.getString(R.string.ui_add_project), icon = Icons.Outlined.Add, onClick = {
                     scope.launch {
                         container.workspace.currentProjectOnce()
                         adding = true
@@ -120,6 +122,7 @@ fun ProjectScreen(
     onSendPrompt: (String) -> Unit,
     onProjectDeleted: () -> Unit = onBack,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val projects by container.workspace.projects.collectAsStateWithLifecycle(initialValue = emptyList())
     val sessions by container.sessions.sessions.collectAsStateWithLifecycle(initialValue = emptyList())
     val settings by container.settings.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
@@ -209,56 +212,56 @@ fun ProjectScreen(
     val ssh = remember(project) { project?.let { runCatching { container.workspace.fsFor(it) }.getOrNull() as? com.androidharness.app.workspace.SshFs } }
     Scaffold(topBar = {
         Column {
-            AppHeader(project?.name ?: "Project", subtitle = project?.let { container.workspace.describe(it).kindLabel }, onBack = onBack,
-                actions = { IconButton(onClick = { refresh++ }) { Icon(Icons.Outlined.Refresh, "Refresh project") } })
+            AppHeader(project?.name ?: uiContext.getString(R.string.ui_project), subtitle = project?.let { container.workspace.describe(it).kindLabel }, onBack = onBack,
+                actions = { IconButton(onClick = { refresh++ }) { Icon(Icons.Outlined.Refresh, uiContext.getString(R.string.ui_refresh_project)) } })
             com.androidharness.app.ui.common.SshWorkspaceBar(container, ssh, includeStatusBarPadding = false)
         }
     }) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding), state = rememberLazyListState(),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
             if (project == null) {
-                item { Text("This project is unavailable. Your chats are still in All chats.", modifier = Modifier.padding(12.dp)) }
+                item { Text(uiContext.getString(R.string.ui_this_project_is_unavailable_your_chats_are), modifier = Modifier.padding(12.dp)) }
             } else {
                 item {
-                    ProjectRow("Repository", repository ?: "Connect or manage repository", Icons.Outlined.AccountTree,
+                    ProjectRow(uiContext.getString(R.string.ui_repository), repository ?: uiContext.getString(R.string.ui_connect_or_manage_repository), Icons.Outlined.AccountTree,
                         onClick = { showRepository = true })
                     Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(git?.branch?.let { "Branch · $it" } ?: git?.note ?: "Checking repository…",
+                        Text(git?.branch?.let { uiContext.getString(R.string.ui_branch_1649, (it).toString()) } ?: git?.note ?: uiContext.getString(R.string.ui_checking_repository),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        git?.changedFiles?.let { count -> Text(if (count == 0) "Working tree clean" else "$count changed ${if (count == 1) "file" else "files"}",
+                        git?.changedFiles?.let { count -> Text(if (count == 0) uiContext.getString(R.string.ui_working_tree_clean) else "$count changed ${if (count == 1) "file" else "files"}",
                             style = MaterialTheme.typography.bodySmall) }
                         if (git?.branch != null && git?.note != null) Text(git!!.note!!, style = MaterialTheme.typography.bodySmall)
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = onOpenFiles, modifier = Modifier.weight(1f)) {
-                            Icon(Icons.Outlined.FolderOpen, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Files")
+                            Icon(Icons.Outlined.FolderOpen, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(uiContext.getString(R.string.ui_files))
                         }
                         OutlinedButton(onClick = onOpenTerminal, modifier = Modifier.weight(1f)) {
-                            Icon(Icons.Outlined.Terminal, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Terminal")
+                            Icon(Icons.Outlined.Terminal, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(uiContext.getString(R.string.ui_terminal))
                         }
                     }
                     val check = checks[projectId]
-                    ProjectRow("Build & Test", check?.let {
+                    ProjectRow(uiContext.getString(R.string.ui_build_test), check?.let {
                         val status = when (it.status) {
-                            com.androidharness.app.data.ProjectCheckStatus.RUNNING -> "Running"
-                            com.androidharness.app.data.ProjectCheckStatus.PASSED -> "Passed"
-                            com.androidharness.app.data.ProjectCheckStatus.FAILED -> "Failed"
-                            com.androidharness.app.data.ProjectCheckStatus.INTERRUPTED -> "Interrupted"
+                            com.androidharness.app.data.ProjectCheckStatus.RUNNING -> uiContext.getString(R.string.ui_running_1587)
+                            com.androidharness.app.data.ProjectCheckStatus.PASSED -> uiContext.getString(R.string.ui_passed)
+                            com.androidharness.app.data.ProjectCheckStatus.FAILED -> uiContext.getString(R.string.ui_failed_64)
+                            com.androidharness.app.data.ProjectCheckStatus.INTERRUPTED -> uiContext.getString(R.string.ui_interrupted)
                         }
-                        "Last check · ${it.name} · $status · ${formatRelativeTime(it.updatedAt)}"
-                    } ?: "No checks run yet", Icons.Outlined.Build, onClick = onOpenBuildTest)
-                    ProjectRow("Preview", when {
-                        serverPreview != null || backgroundPreview != null -> "Running · $preview"
-                        serverRunning -> "Server running · Open Build & Test"
-                        staticPreview != null -> "Open $staticPreview"
-                        else -> "Run your project from Build & Test"
+                        uiContext.getString(R.string.ui_last_check, (it.name).toString(), (status).toString(), (formatRelativeTime(it.updatedAt)).toString())
+                    } ?: uiContext.getString(R.string.ui_no_checks_run_yet), Icons.Outlined.Build, onClick = onOpenBuildTest)
+                    ProjectRow(uiContext.getString(R.string.ui_preview), when {
+                        serverPreview != null || backgroundPreview != null -> uiContext.getString(R.string.ui_running_1654, (preview).toString())
+                        serverRunning -> uiContext.getString(R.string.ui_server_running_open_build_test)
+                        staticPreview != null -> uiContext.getString(R.string.ui_open_1656, (staticPreview).toString())
+                        else -> uiContext.getString(R.string.ui_run_your_project_from_build_test)
                     }, Icons.Outlined.Language, onClick = { if (preview != null) openPreview = preview else onOpenBuildTest() })
                     Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(tab == 0, { tab = 0 }, label = {
-                            Text("Chats", style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                            Text(uiContext.getString(R.string.ui_chats), style = MaterialTheme.typography.labelLarge, maxLines = 1)
                         }, modifier = Modifier.weight(0.4f))
                         FilterChip(tab == 1, { tab = 1 }, label = {
-                            Text("Automations", style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                            Text(uiContext.getString(R.string.ui_automations), style = MaterialTheme.typography.labelLarge, maxLines = 1)
                         }, modifier = Modifier.weight(0.6f))
                     }
                 }
@@ -267,27 +270,27 @@ fun ProjectScreen(
                         Button(onClick = { onNewChat(projectId) }, enabled = !creatingChat,
                             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                             Icon(Icons.Outlined.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
-                            Text(if (creatingChat) "Creating…" else "New chat")
+                            Text(if (creatingChat) uiContext.getString(R.string.ui_creating) else uiContext.getString(R.string.settings_telegram_new_chat))
                         }
                     }
-                    if (chats.isEmpty()) item { Text("No chats yet. Start one in this project.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(12.dp)) }
+                    if (chats.isEmpty()) item { Text(uiContext.getString(R.string.ui_no_chats_yet_start_one_in_this), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(12.dp)) }
                     items(chats, key = { it.id }) { session ->
-                        ProjectRow(session.title, if (session.id in running) "Running" else formatRelativeTime(session.updatedAt),
+                        ProjectRow(session.title, if (session.id in running) uiContext.getString(R.string.ui_running_1587) else formatRelativeTime(session.updatedAt),
                             Icons.Outlined.ChatBubbleOutline, onClick = { onOpenChat(session.id) })
                     }
                 } else {
-                    if (projectTasks.isEmpty()) item { Text("No automations yet.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(12.dp)) }
+                    if (projectTasks.isEmpty()) item { Text(uiContext.getString(R.string.ui_no_automations_yet), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(12.dp)) }
                     items(projectTasks, key = { it.id }) { task ->
                         ProjectRow(task.title, task.projectStatus(), Icons.Outlined.Schedule,
                             onClick = { onAutomation(task.id, false) })
                     }
-                    item { ProjectRow("Add automation", icon = Icons.Outlined.Add, onClick = { onAutomation(null, true) }) }
-                    if (projectTasks.isNotEmpty()) item { ProjectRow("Manage automations", icon = Icons.Outlined.AutoMode, onClick = { onAutomation(null, false) }) }
+                    item { ProjectRow(uiContext.getString(R.string.ui_add_automation), icon = Icons.Outlined.Add, onClick = { onAutomation(null, true) }) }
+                    if (projectTasks.isNotEmpty()) item { ProjectRow(uiContext.getString(R.string.ui_manage_automations), icon = Icons.Outlined.AutoMode, onClick = { onAutomation(null, false) }) }
                 }
                 item {
                     HorizontalDivider(Modifier.padding(vertical = 12.dp))
-                    ProjectRow("Project memory", icon = Icons.Outlined.Description, onClick = onMemory)
-                    ProjectRow("Project details", icon = Icons.Outlined.FolderOpen, onClick = { showDetails = true })
+                    ProjectRow(uiContext.getString(R.string.ui_project_memory), icon = Icons.Outlined.Description, onClick = onMemory)
+                    ProjectRow(uiContext.getString(R.string.ui_project_details), icon = Icons.Outlined.FolderOpen, onClick = { showDetails = true })
                 }
             }
         }
@@ -323,24 +326,25 @@ internal fun ProjectRow(title: String, subtitle: String? = null, icon: ImageVect
 
 @Composable
 private fun ProjectDetailsDialog(container: AppContainer, project: ProjectEntity, onDismiss: () -> Unit, onDelete: () -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var name by rememberSaveable(project.id) { mutableStateOf(project.name) }
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    AlertDialog(onDismissRequest = { if (!saving) onDismiss() }, title = { Text("Project details") }, text = {
+    AlertDialog(onDismissRequest = { if (!saving) onDismiss() }, title = { Text(uiContext.getString(R.string.ui_project_details)) }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedTextField(name, { if (it.length <= 100) name = it }, label = { Text("Project name") },
+            OutlinedTextField(name, { if (it.length <= 100) name = it }, label = { Text(uiContext.getString(R.string.ui_project_name)) },
                 enabled = !saving, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Text("Workspace", style = MaterialTheme.typography.labelMedium)
-            SelectionContainer { Text(runCatching { container.workspace.fsFor(project).displayPath }.getOrDefault("Unavailable"),
+            Text(uiContext.getString(R.string.ui_workspace), style = MaterialTheme.typography.labelMedium)
+            SelectionContainer { Text(runCatching { container.workspace.fsFor(project).displayPath }.getOrDefault(uiContext.getString(R.string.ui_unavailable)),
                 style = MaterialTheme.typography.bodySmall) }
             if (project.kind != com.androidharness.app.workspace.WorkspaceManager.KIND_APP) {
                 HorizontalDivider()
                 TextButton(onClick = onDelete, enabled = !saving,
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
-                    Icon(Icons.Outlined.DeleteOutline, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Delete project")
+                    Icon(Icons.Outlined.DeleteOutline, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(uiContext.getString(R.string.ui_delete_project))
                 }
-            } else Text("The app workspace cannot be deleted.", style = MaterialTheme.typography.bodySmall)
+            } else Text(uiContext.getString(R.string.ui_the_app_workspace_cannot_be_deleted), style = MaterialTheme.typography.bodySmall)
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
     }, confirmButton = {
@@ -352,6 +356,6 @@ private fun ProjectDetailsDialog(container: AppContainer, project: ProjectEntity
                 catch (e: Exception) { error = e.message }
                 finally { saving = false }
             }
-        }) { Text(if (saving) "Saving…" else "Save") }
-    }, dismissButton = { TextButton(enabled = !saving, onClick = onDismiss) { Text("Cancel") } })
+        }) { Text(if (saving) uiContext.getString(R.string.ui_saving) else uiContext.getString(R.string.settings_action_save)) }
+    }, dismissButton = { TextButton(enabled = !saving, onClick = onDismiss) { Text(uiContext.getString(R.string.settings_action_cancel)) } })
 }

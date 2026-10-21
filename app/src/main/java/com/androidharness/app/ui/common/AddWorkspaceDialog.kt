@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.common
 
+import com.androidharness.app.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -39,6 +40,7 @@ fun AddWorkspaceDialog(
     onSelected: (String) -> Unit = {},
     activateWorkspace: Boolean = true,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     ShizukuWorkspaceWarningEffect(container.shizuku)
     var destination by remember { mutableStateOf<String?>(null) }
     if (destination == "github") {
@@ -51,13 +53,13 @@ fun AddWorkspaceDialog(
         return
     }
     if (destination == null) {
-        AlertDialog(onDismissRequest = onDismiss, title = { Text("Add workspace") }, text = {
+        AlertDialog(onDismissRequest = onDismiss, title = { Text(uiContext.getString(R.string.settings_search_add_workspace_title)) }, text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(onClick = { destination = "github" }, modifier = Modifier.fillMaxWidth()) { Text("Import from GitHub") }
-                Button(onClick = { destination = "local" }, modifier = Modifier.fillMaxWidth()) { Text("On this device") }
-                OutlinedButton(onClick = { destination = "ssh" }, modifier = Modifier.fillMaxWidth()) { Text("Connect through SSH") }
+                Button(onClick = { destination = "github" }, modifier = Modifier.fillMaxWidth()) { Text(uiContext.getString(R.string.settings_github_import)) }
+                Button(onClick = { destination = "local" }, modifier = Modifier.fillMaxWidth()) { Text(uiContext.getString(R.string.ui_on_this_device)) }
+                OutlinedButton(onClick = { destination = "ssh" }, modifier = Modifier.fillMaxWidth()) { Text(uiContext.getString(R.string.ui_connect_through_ssh)) }
             }
-        }, confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
+        }, confirmButton = { TextButton(onClick = onDismiss) { Text(uiContext.getString(R.string.settings_action_cancel)) } })
         return
     }
     val scope = rememberCoroutineScope()
@@ -71,9 +73,9 @@ fun AddWorkspaceDialog(
         val assessment = container.workspace.assessPath(trimmed)
         when {
             !assessment.directoryExists ->
-                error = "That folder could not be read. Try another one."
+                error = uiContext.getString(R.string.ui_that_folder_could_not_be_read_try)
             assessment.region == PathClassifier.Region.APP_DATA ->
-                error = "That is the app's own private storage. Use the app workspace instead."
+                error = uiContext.getString(R.string.ui_that_is_the_app_s_own_private)
             else -> scope.launch {
                 onSelected(container.workspace.addShellProject(trimmed, activateWorkspace).id)
                 onDismiss()
@@ -94,18 +96,18 @@ fun AddWorkspaceDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add a workspace") },
+        title = { Text(uiContext.getString(R.string.ui_add_a_workspace)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    "The workspace is where the agent reads and writes files.",
+                    uiContext.getString(R.string.ui_the_workspace_is_where_the_agent_reads),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
-                Text("App workspace", style = MaterialTheme.typography.titleSmall)
+                Text(uiContext.getString(R.string.ui_app_workspace), style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "Private folder only this app can see. Shell always works here.",
+                    uiContext.getString(R.string.ui_private_folder_only_this_app_can_see),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -118,34 +120,34 @@ fun AddWorkspaceDialog(
                         } else onDismiss()
                     },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Use app workspace") }
+                ) { Text(uiContext.getString(R.string.ui_use_app_workspace)) }
 
                 HorizontalDivider()
 
-                Text("Device folder", style = MaterialTheme.typography.titleSmall)
+                Text(uiContext.getString(R.string.ui_device_folder), style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "Any folder on this phone or SD card. Pick it in the built-in " +
-                        "browser, no typing needed. Full shell.",
+                    uiContext.getString(R.string.ui_any_folder_on_this_phone_or_sd) +
+                        uiContext.getString(R.string.ui_browser_no_typing_needed_full_shell),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 OutlinedButton(
                     onClick = { showFolderBrowser = true },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Browse device folders") }
+                ) { Text(uiContext.getString(R.string.ui_browse_device_folders)) }
 
                 HorizontalDivider()
 
-                Text("System picker", style = MaterialTheme.typography.titleSmall)
+                Text(uiContext.getString(R.string.ui_system_picker), style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "Choose a folder without granting broad storage access. File tools " +
-                        "work in the selected folder. Shell commands need direct storage " +
-                        "access, or use the app workspace.",
+                    uiContext.getString(R.string.ui_choose_a_folder_without_granting_broad_storage) +
+                        uiContext.getString(R.string.ui_work_in_the_selected_folder_shell_commands) +
+                        uiContext.getString(R.string.ui_access_or_use_the_app_workspace),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 OutlinedButton(onClick = onPickSaf, modifier = Modifier.fillMaxWidth()) {
-                    Text("Open system picker")
+                    Text(uiContext.getString(R.string.ui_open_system_picker))
                 }
 
                 error?.let { msg ->
@@ -158,7 +160,7 @@ fun AddWorkspaceDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
+            TextButton(onClick = onDismiss) { Text(uiContext.getString(R.string.settings_action_close)) }
         },
     )
 }

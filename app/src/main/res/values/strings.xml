@@ -705,4 +705,8 @@
     <string name="settings_env_storage_optional">Optional: use the app workspace, or grant access for device folders.</string>
     <string name="settings_privacy_lock_enable_title">Enable Biometric Lock</string>
     <string name="settings_privacy_lock_disable_title">Disable Biometric Lock</string>
+    <plurals name="settings_accounts_models_available">
+        <item quantity="one">%1$d available model</item>
+        <item quantity="other">%1$d available models</item>
+    </plurals>
 </resources>

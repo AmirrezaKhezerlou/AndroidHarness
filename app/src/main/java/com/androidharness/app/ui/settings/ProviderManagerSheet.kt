@@ -61,6 +61,7 @@ fun ProviderManagerSheet(
     onRefreshCatalog: suspend (String) -> String? = { "Open model selection to refresh this provider." },
     addProviderInitially: Boolean = false,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf<ProviderConfig?>(null) }
@@ -95,7 +96,7 @@ fun ProviderManagerSheet(
                                 Text(stringResource(R.string.settings_providers_title), style = MaterialTheme.typography.titleMediumEmphasized, modifier = Modifier.weight(1f))
                                 TextButton(enabled = !selection.busy, onClick = {
                                     if (selection.selecting) selection.done() else selection.selecting = true
-                                }) { Text(if (selection.selecting) "Done" else "Select providers") }
+                                }) { Text(if (selection.selecting) uiContext.getString(R.string.settings_action_done) else uiContext.getString(R.string.ui_select_providers)) }
                                 IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.settings_action_close)) }
                             }
                             Text(stringResource(R.string.settings_providers_disabled_note),
@@ -142,10 +143,10 @@ fun ProviderManagerSheet(
                                         catalogBusy = true
                                         try {
                                             catalogStatus = ModelsDev.refresh(context, force = true)
-                                                ?: "Catalog updated"
+                                                ?: uiContext.getString(R.string.ui_catalog_updated)
                                         } finally { catalogBusy = false }
                                     }
-                                }, enabled = !catalogBusy) { Text(if (catalogBusy) "Updating catalog…" else "Update model catalog") }
+                                }, enabled = !catalogBusy) { Text(if (catalogBusy) uiContext.getString(R.string.ui_updating_catalog) else uiContext.getString(R.string.ui_update_model_catalog)) }
                                 catalogStatus?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
                             }
                         }

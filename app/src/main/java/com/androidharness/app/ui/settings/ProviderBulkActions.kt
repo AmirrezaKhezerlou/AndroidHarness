@@ -46,18 +46,19 @@ internal fun ProviderBulkActions(
     onEnabledChange: suspend (String, Boolean) -> Unit,
     onDelete: suspend (String) -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val selected = providers.filter { it.id in state.ids }
     if (state.selecting) {
         Text(stringResource(R.string.settings_bulk_selected_count, selected.size.toString()), style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(true to "Enable", false to "Disable").forEach { (enabled, label) ->
+            listOf(true to uiContext.getString(R.string.ui_enable_1042), false to uiContext.getString(R.string.settings_action_disable)).forEach { (enabled, label) ->
                 OutlinedButton(enabled = selected.isNotEmpty() && !state.busy, onClick = {
                     scope.launch {
                         state.busy = true; state.error = null
                         try { selected.forEach { onEnabledChange(it.id, enabled) } }
                         catch (e: CancellationException) { throw e }
-                        catch (_: Exception) { state.error = "Some providers could not be updated. Review the list and retry." }
+                        catch (_: Exception) { state.error = uiContext.getString(R.string.ui_some_providers_could_not_be_updated_review) }
                         finally { state.busy = false }
                     }
                 }) { Text(label) }
@@ -111,12 +112,12 @@ internal fun ProviderBulkActions(
                             state.deleting = null
                             state.selecting = true
                             state.ids = state.ids + remaining
-                            state.error = "Some providers could not be deleted. Remaining providers stay selected; review them and retry."
+                            state.error = uiContext.getString(R.string.ui_some_providers_could_not_be_deleted_remaining)
                         } finally { state.busy = false }
                     }
-                }) { Text(if (state.busy) "Deleting…" else if (multiple && !state.reviewing) "Continue" else if (multiple) "Delete all" else "Delete provider") }
+                }) { Text(if (state.busy) uiContext.getString(R.string.ui_deleting) else if (multiple && !state.reviewing) uiContext.getString(R.string.settings_action_continue) else if (multiple) uiContext.getString(R.string.ui_delete_all) else uiContext.getString(R.string.ui_delete_provider)) }
             }, dismissButton = { TextButton(enabled = !state.busy, onClick = { state.deleting = null }) {
-                Text(if (state.reviewing) "Edit selection" else "Cancel")
+                Text(if (state.reviewing) uiContext.getString(R.string.ui_edit_selection) else uiContext.getString(R.string.settings_action_cancel))
             } })
     }
 }

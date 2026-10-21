@@ -1,5 +1,7 @@
 package com.androidharness.app.ui.settings
 
+import com.androidharness.app.ui.common.localizedOption
+import com.androidharness.app.ui.common.localizedThinkingOption
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -138,6 +140,7 @@ fun SettingsScreen(
     onOpenSkills: () -> Unit = {},
     onOpenProviders: () -> Unit = {},
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val settings by container.settings.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
     val providers by container.providers.providers.collectAsStateWithLifecycle(initialValue = emptyList())
     val workspace by container.workspace.current.collectAsStateWithLifecycle(initialValue = null)
@@ -340,12 +343,12 @@ fun SettingsScreen(
                         } catch (e: kotlinx.coroutines.CancellationException) {
                             throw e
                         } catch (e: Exception) {
-                            deleteError = e.message?.takeIf { it.isNotBlank() } ?: "Could not remove workspace. Try again."
+                            deleteError = e.message?.takeIf { it.isNotBlank() } ?: uiContext.getString(R.string.ui_could_not_remove_workspace_try_again)
                         } finally {
                             deleting = false
                         }
                     }
-                }) { Text(if (deleting) "Deleting…" else "Delete", color = MaterialTheme.colorScheme.error) }
+                }) { Text(if (deleting) uiContext.getString(R.string.ui_deleting) else uiContext.getString(R.string.settings_action_delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(enabled = !deleting, onClick = { pendingDelete = null }) { Text(stringResource(R.string.settings_action_cancel)) }
@@ -369,8 +372,9 @@ private fun WorkspaceSection(
     onDeleteWorkspace: (ProjectEntity) -> Unit,
     onSelectWorkspace: (String) -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     com.androidharness.app.ui.common.ShizukuWorkspaceWarningEffect(container.shizuku)
-    SettingsHeader("Workspace")
+    SettingsHeader(uiContext.getString(R.string.ui_workspace))
 
     currentProject?.let { current ->
         val desc = container.workspace.describe(current)
@@ -417,7 +421,7 @@ private fun WorkspaceSection(
                 SettingRow(
                     icon = if (project.kind == "APP") Icons.Outlined.Folder else Icons.Outlined.FolderOpen,
                     title = project.name,
-                    subtitle = desc.kindLabel + " · " + if (desc.shellCapable) "full shell" else "file tools only",
+                    subtitle = desc.kindLabel + " · " + if (desc.shellCapable) uiContext.getString(R.string.ui_full_shell_1091) else uiContext.getString(R.string.ui_file_tools_only_1092),
                     onClick = { onSelectWorkspace(project.id) }.takeIf { !isActive },
                     divider = index != projects.lastIndex,
                     trailing = {
@@ -454,28 +458,29 @@ private fun TerminalSection(
     shizukuState: ShizukuState,
     serviceState: UserServiceState,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val storageAccess = rememberStorageAccess()
     val allFiles = storageAccess.granted
     val connectionFailure by container.shizuku.connectionFailure.collectAsStateWithLifecycle()
 
-    SettingsHeader("Terminal & environment")
+    SettingsHeader(uiContext.getString(R.string.ui_terminal_environment))
 
     LinuxEnvironmentCard(container = container, envState = envState)
 
     // What the shell can reach right now.
     val appShellOk = envState is com.androidharness.app.data.env.EnvState.Ready
-    val storageText = if (allFiles) "Granted ✓" else "Needs grant"
+    val storageText = if (allFiles) uiContext.getString(R.string.ui_granted) else uiContext.getString(R.string.ui_needs_grant)
     val systemText = when (shizukuState) {
         ShizukuState.GRANTED -> when (serviceState) {
-            UserServiceState.BOUND_READY -> "Shizuku ✓"
-            UserServiceState.COMPAT_READY -> "Compatibility ✓"
-            UserServiceState.BINDING -> "Connecting…"
-            UserServiceState.BIND_FAILED -> "Connection failed"
-            UserServiceState.NOT_BOUND -> "Not connected"
+            UserServiceState.BOUND_READY -> uiContext.getString(R.string.ui_shizuku)
+            UserServiceState.COMPAT_READY -> uiContext.getString(R.string.ui_compatibility)
+            UserServiceState.BINDING -> uiContext.getString(R.string.ui_connecting)
+            UserServiceState.BIND_FAILED -> uiContext.getString(R.string.ui_connection_failed)
+            UserServiceState.NOT_BOUND -> uiContext.getString(R.string.ui_not_connected)
         }
-        ShizukuState.RUNNING_NO_PERMISSION -> "Needs grant"
-        ShizukuState.NOT_RUNNING -> "Start Shizuku"
-        ShizukuState.NOT_INSTALLED -> "Not installed"
+        ShizukuState.RUNNING_NO_PERMISSION -> uiContext.getString(R.string.ui_needs_grant)
+        ShizukuState.NOT_RUNNING -> uiContext.getString(R.string.ui_start_shizuku)
+        ShizukuState.NOT_INSTALLED -> uiContext.getString(R.string.ui_not_installed)
     }
 
     SettingsPanel(Modifier.fillMaxWidth()) {
@@ -486,7 +491,7 @@ private fun TerminalSection(
                     title = stringResource(R.string.settings_anchor_app_shell),
                     subtitle = stringResource(R.string.settings_env_app_shell_subtitle),
                     divider = true,
-                    trailing = { StatusText(if (appShellOk) "Ready" else "toybox", ok = appShellOk) },
+                    trailing = { StatusText(if (appShellOk) uiContext.getString(R.string.ui_ready) else "toybox", ok = appShellOk) },
                 )
             }
             SettingsAnchor(R.string.settings_anchor_shared_storage) {
@@ -540,6 +545,7 @@ private fun CodeIntelligenceSection(
     workspace: com.androidharness.app.workspace.WorkspaceFs?,
     currentProject: ProjectEntity?,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val codeGraphState by container.codeGraph.state.collectAsStateWithLifecycle()
     val workspaceRun by container.codeGraph.workspaceState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
@@ -568,14 +574,14 @@ private fun CodeIntelligenceSection(
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(R.string.settings_search_codegraph_title), style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "Local semantic code graph for symbols, callers, impact and affected tests",
+                        uiContext.getString(R.string.ui_local_semantic_code_graph_for_symbols_callers),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 StatusText(
                     when {
-                        codeGraphState.version == null -> "Not installed"
+                        codeGraphState.version == null -> uiContext.getString(R.string.ui_not_installed)
                         codeGraphState.updateAvailable -> "v${codeGraphState.version} → v${codeGraphState.latest}"
                         codeGraphState.latest != null -> "v${codeGraphState.version} · latest"
                         else -> "v${codeGraphState.version}"
@@ -587,7 +593,7 @@ private fun CodeIntelligenceSection(
             if (codeGraphState.busy) {
                 ThinLinearProgress(modifier = Modifier.fillMaxWidth())
                 Text(
-                    codeGraphState.action ?: "Working…",
+                    codeGraphState.action ?: uiContext.getString(R.string.ui_working),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -632,29 +638,29 @@ private fun CodeIntelligenceSection(
             }
 
             Text(
-                "Harness installs CodeGraph into its private Linux environment, about 170 MB with the Node runtime it needs. No Termux app, no Shizuku and no separate CodeGraph setup for your agents.",
+                uiContext.getString(R.string.ui_harness_installs_codegraph_into_its_private_linux),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
 
-    SettingsHeader("Active workspace")
+    SettingsHeader(uiContext.getString(R.string.settings_workspace_active))
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(currentProject?.name ?: "No workspace", style = MaterialTheme.typography.titleSmall)
+                    Text(currentProject?.name ?: uiContext.getString(R.string.ui_no_workspace), style = MaterialTheme.typography.titleSmall)
                     Text(
-                        rootPath ?: "This workspace does not expose a real filesystem path",
+                        rootPath ?: uiContext.getString(R.string.ui_this_workspace_does_not_expose_a_real),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 if (rootPath != null) {
-                    StatusText(if (indexed) "Indexed" else "Not indexed", ok = indexed)
+                    StatusText(if (indexed) uiContext.getString(R.string.ui_indexed) else uiContext.getString(R.string.ui_not_indexed), ok = indexed)
                 }
             }
 
@@ -671,7 +677,7 @@ private fun CodeIntelligenceSection(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        workspaceAction ?: "Working…",
+                        workspaceAction ?: uiContext.getString(R.string.ui_working),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -706,12 +712,12 @@ private fun CodeIntelligenceSection(
 
             when {
                 rootPath == null -> Text(
-                    "CodeGraph needs a shell-capable workspace with a real device path.",
+                    uiContext.getString(R.string.ui_codegraph_needs_a_shell_capable_workspace_with),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 codeGraphState.version == null -> Text(
-                    "Install CodeGraph first, then enable it for this workspace.",
+                    uiContext.getString(R.string.ui_install_codegraph_first_then_enable_it_for),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -768,7 +774,7 @@ private fun CodeIntelligenceSection(
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(stringResource(R.string.settings_codegraph_agent_integration), style = MaterialTheme.typography.titleSmall)
             Text(
-                "When this workspace is indexed, Harness exposes CodeGraph explore, node, impact, affected-tests and sync tools to the coding agent. Queries sync changed files before reading the graph.",
+                uiContext.getString(R.string.ui_when_this_workspace_is_indexed_harness_exposes),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -782,6 +788,7 @@ private fun CodeIntelligenceSection(
 
 @Composable
 private fun WebSearchSection(container: AppContainer) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val settings by container.settings.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
@@ -789,7 +796,7 @@ private fun WebSearchSection(container: AppContainer) {
     val providerName = when (provider) {
         "brave" -> "Brave Search API"
         "tavily" -> "Tavily API"
-        else -> "Keyless"
+        else -> uiContext.getString(R.string.ui_keyless)
     }
     var keyDraft by remember { mutableStateOf("") }
     var keyEpoch by remember { mutableStateOf(0) }
@@ -802,7 +809,7 @@ private fun WebSearchSection(container: AppContainer) {
     // The pasted key is only on screen while the entry form is open.
     SecureScreenEffect(container, expanded)
 
-    SettingsHeader("Web search")
+    SettingsHeader(uiContext.getString(R.string.settings_page_search_title))
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -817,9 +824,9 @@ private fun WebSearchSection(container: AppContainer) {
                     Text(stringResource(R.string.settings_search_web_backend_label), style = MaterialTheme.typography.titleSmall)
                     Text(
                         when {
-                            provider == "keyless" -> "Public search engines, no setup"
-                            hasKey -> "$providerName · key saved"
-                            else -> "$providerName · no key yet (keyless fallback)"
+                            provider == "keyless" -> uiContext.getString(R.string.ui_public_search_engines_no_setup)
+                            hasKey -> uiContext.getString(R.string.ui_key_saved, (providerName).toString())
+                            else -> uiContext.getString(R.string.ui_no_key_yet_keyless_fallback, (providerName).toString())
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -827,16 +834,16 @@ private fun WebSearchSection(container: AppContainer) {
                 }
                 StatusText(
                     when {
-                        provider == "keyless" -> "Keyless"
-                        hasKey -> "On"
-                        else -> "No key"
+                        provider == "keyless" -> uiContext.getString(R.string.ui_keyless)
+                        hasKey -> uiContext.getString(R.string.ui_on)
+                        else -> uiContext.getString(R.string.ui_no_key)
                     },
                     ok = provider == "keyless" || hasKey,
                 )
             }
 
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                listOf("keyless" to "Keyless", "brave" to "Brave", "tavily" to "Tavily")
+                listOf("keyless" to uiContext.getString(R.string.ui_keyless), "brave" to "Brave", "tavily" to "Tavily")
                     .forEachIndexed { index, (value, label) ->
                         SegmentedButton(
                             selected = provider == value,
@@ -855,8 +862,8 @@ private fun WebSearchSection(container: AppContainer) {
 
             when {
                 provider == "keyless" -> Text(
-                    "The agent searches public engines with zero setup; Brave or Tavily " +
-                        "give cleaner, higher-quality results.",
+                    uiContext.getString(R.string.ui_the_agent_searches_public_engines_with_zero) +
+                        uiContext.getString(R.string.ui_give_cleaner_higher_quality_results),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -864,11 +871,11 @@ private fun WebSearchSection(container: AppContainer) {
                 expanded -> {
                     Text(
                         (if (provider == "brave") {
-                            "Free key at brave.com/search/api (Free plan: 1 query/second). "
+                            uiContext.getString(R.string.ui_free_key_at_brave_com_search_api)
                         } else {
-                            "Free key at app.tavily.com (1,000 requests/month). "
+                            uiContext.getString(R.string.ui_free_key_at_app_tavily_com_1)
                         }) + "The key is checked with the provider before it is saved, and it " +
-                            "lives only in the app's encrypted storage.",
+                            uiContext.getString(R.string.ui_lives_only_in_the_app_s_encrypted),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -891,7 +898,7 @@ private fun WebSearchSection(container: AppContainer) {
                     OutlinedTextField(
                         value = keyDraft,
                         onValueChange = { keyDraft = it },
-                        label = { Text(if (hasKey) "Replace API key" else "Paste API key") },
+                        label = { Text(if (hasKey) uiContext.getString(R.string.ui_replace_api_key) else uiContext.getString(R.string.ui_paste_api_key)) },
                         placeholder = { Text(if (provider == "brave") "BSA…" else "tvly-…") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
@@ -901,7 +908,7 @@ private fun WebSearchSection(container: AppContainer) {
                             enabled = keyDraft.isNotBlank() && !checking,
                             onClick = {
                                 checking = true
-                                status = "Checking that key with $providerName…"
+                                status = uiContext.getString(R.string.ui_checking_that_key_with, (providerName).toString())
                                 scope.launch {
                                     val key = keyDraft.trim()
                                     val error = withContext(Dispatchers.IO) { checkSearchKey(provider, key) }
@@ -909,7 +916,7 @@ private fun WebSearchSection(container: AppContainer) {
                                         withContext(Dispatchers.IO) { container.keys.putSearchApiKey(provider, key) }
                                         keyDraft = ""
                                         expanded = false
-                                        status = "Key verified and saved"
+                                        status = uiContext.getString(R.string.ui_key_verified_and_saved)
                                         keyEpoch++
                                     } else {
                                         status = error
@@ -917,7 +924,7 @@ private fun WebSearchSection(container: AppContainer) {
                                     checking = false
                                 }
                             },
-                        ) { Text(if (checking) "Checking…" else "Save and check") }
+                        ) { Text(if (checking) uiContext.getString(R.string.ui_checking) else uiContext.getString(R.string.ui_save_and_check)) }
                         TextButton(onClick = {
                             expanded = false
                             keyDraft = ""
@@ -1017,6 +1024,7 @@ private fun VoiceSpeechSection(
     settings: AppSettings,
     scope: kotlinx.coroutines.CoroutineScope,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val context = LocalContext.current
     val voiceEngine = settings.voiceEngine
     val groqModel = settings.groqWhisperModel
@@ -1033,7 +1041,7 @@ private fun VoiceSpeechSection(
     // The pasted key is only on screen while the entry form is open.
     SecureScreenEffect(container, expanded)
 
-    SettingsHeader("Voice & speech")
+    SettingsHeader(uiContext.getString(R.string.ui_voice_speech))
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1050,9 +1058,9 @@ private fun VoiceSpeechSection(
                     }
                     Text(
                         when {
-                            !isGroq -> "Inbuilt Android recognizer"
-                            hasGroqKey -> "Groq Whisper ($groqModel) · key saved"
-                            else -> "Groq Whisper · no key yet"
+                            !isGroq -> uiContext.getString(R.string.ui_inbuilt_android_recognizer)
+                            hasGroqKey -> uiContext.getString(R.string.ui_groq_whisper_key_saved, (groqModel).toString())
+                            else -> uiContext.getString(R.string.ui_groq_whisper_no_key_yet)
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1060,9 +1068,9 @@ private fun VoiceSpeechSection(
                 }
                 StatusText(
                     when {
-                        !isGroq -> "Inbuilt"
-                        hasGroqKey -> "On"
-                        else -> "No key"
+                        !isGroq -> uiContext.getString(R.string.ui_inbuilt)
+                        hasGroqKey -> uiContext.getString(R.string.ui_on)
+                        else -> uiContext.getString(R.string.ui_no_key)
                     },
                     ok = !isGroq || hasGroqKey,
                 )
@@ -1070,7 +1078,7 @@ private fun VoiceSpeechSection(
 
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 listOf(
-                    AppSettings.VOICE_ENGINE_INBUILT to "Inbuilt",
+                    AppSettings.VOICE_ENGINE_INBUILT to uiContext.getString(R.string.ui_inbuilt),
                     AppSettings.VOICE_ENGINE_GROQ to "Groq",
                 ).forEachIndexed { index, (value, label) ->
                     SegmentedButton(
@@ -1090,7 +1098,7 @@ private fun VoiceSpeechSection(
 
             if (!isGroq) {
                 Text(
-                    "Uses the on-device or system speech recognizer without sending audio to external APIs.",
+                    uiContext.getString(R.string.ui_uses_the_on_device_or_system_speech),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1123,8 +1131,8 @@ private fun VoiceSpeechSection(
                 when {
                     expanded -> {
                         Text(
-                            "Get a free API key at console.groq.com/keys. The key is checked with " +
-                                "Groq before it is saved, and it lives only in the app's encrypted storage.",
+                            uiContext.getString(R.string.ui_get_a_free_api_key_at_console) +
+                                uiContext.getString(R.string.ui_groq_before_it_is_saved_and_it),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -1147,7 +1155,7 @@ private fun VoiceSpeechSection(
                         OutlinedTextField(
                             value = keyDraft,
                             onValueChange = { keyDraft = it },
-                            label = { Text(if (hasGroqKey) "Replace Groq API key" else "Paste Groq API key") },
+                            label = { Text(if (hasGroqKey) uiContext.getString(R.string.ui_replace_groq_api_key) else uiContext.getString(R.string.ui_paste_groq_api_key)) },
                             placeholder = { Text("gsk_…") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
@@ -1157,7 +1165,7 @@ private fun VoiceSpeechSection(
                                 enabled = keyDraft.isNotBlank() && !checking,
                                 onClick = {
                                     checking = true
-                                    status = "Checking that key with Groq…"
+                                    status = uiContext.getString(R.string.ui_checking_that_key_with_groq)
                                     scope.launch {
                                         val key = keyDraft.trim()
                                         val res = com.androidharness.app.data.audio.GroqWhisperClient.validateApiKey(key)
@@ -1165,15 +1173,15 @@ private fun VoiceSpeechSection(
                                             withContext(Dispatchers.IO) { container.keys.putGroqApiKey(key) }
                                             keyDraft = ""
                                             expanded = false
-                                            status = "Key verified and saved"
+                                            status = uiContext.getString(R.string.ui_key_verified_and_saved)
                                             keyEpoch++
                                         } else {
-                                            status = res.error ?: "Verification failed"
+                                            status = res.error ?: uiContext.getString(R.string.ui_verification_failed)
                                         }
                                         checking = false
                                     }
                                 },
-                            ) { Text(if (checking) "Checking…" else "Save and check") }
+                            ) { Text(if (checking) uiContext.getString(R.string.ui_checking) else uiContext.getString(R.string.ui_save_and_check)) }
                             TextButton(onClick = {
                                 expanded = false
                                 keyDraft = ""
@@ -1227,6 +1235,7 @@ private fun VoiceSpeechSection(
 
 @Composable
 private fun McpSection(container: AppContainer) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val servers by container.mcp.servers.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -1237,13 +1246,13 @@ private fun McpSection(container: AppContainer) {
     var authError by remember { mutableStateOf<String?>(null) }
     val anyConnected = servers.any { statuses[it.name]?.state == "connected" }
 
-    SettingsHeader("MCP servers")
+    SettingsHeader(uiContext.getString(R.string.settings_search_mcp_title))
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (configTampered) {
                 Text(
-                    "The MCP server list was modified outside the app and failed its integrity " +
-                        "check; its contents were ignored. Re-add your servers below to rebuild it.",
+                    uiContext.getString(R.string.ui_the_mcp_server_list_was_modified_outside) +
+                        uiContext.getString(R.string.ui_check_its_contents_were_ignored_re_add),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -1259,16 +1268,16 @@ private fun McpSection(container: AppContainer) {
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(R.string.settings_search_mcp_title), style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "Extra tools the agent can use in any chat",
+                        uiContext.getString(R.string.ui_extra_tools_the_agent_can_use_in),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 StatusText(
                     when {
-                        servers.isEmpty() -> "Off"
-                        anyConnected -> "On"
-                        else -> "Idle"
+                        servers.isEmpty() -> uiContext.getString(R.string.ui_off)
+                        anyConnected -> uiContext.getString(R.string.ui_on)
+                        else -> uiContext.getString(R.string.ui_idle)
                     },
                     ok = anyConnected,
                 )
@@ -1302,12 +1311,12 @@ private fun McpSection(container: AppContainer) {
                     }
                     Text(
                         when {
-                            !server.enabled -> "Off (enable to use its tools)"
-                            status == null -> "Not connected yet; tap Test, or it connects before a run"
-                            status.state == "connected" -> "Connected · ${status.toolCount} tools"
-                            status.state == "auth" -> "Sign in to use this server"
-                            status.state == "connecting" -> "Connecting…"
-                            else -> "Failed: ${status.error?.take(110) ?: "unknown error"}"
+                            !server.enabled -> uiContext.getString(R.string.ui_off_enable_to_use_its_tools)
+                            status == null -> uiContext.getString(R.string.ui_not_connected_yet_tap_test_or_it)
+                            status.state == "connected" -> uiContext.getString(R.string.ui_connected_tools, (status.toolCount).toString())
+                            status.state == "auth" -> uiContext.getString(R.string.ui_sign_in_to_use_this_server)
+                            status.state == "connecting" -> uiContext.getString(R.string.ui_connecting)
+                            else -> uiContext.getString(R.string.ui_failed, (status.error?.take(110) ?: "unknown error").toString())
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1381,6 +1390,7 @@ private fun McpAddDialog(
     onDismiss: () -> Unit,
     onManual: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     // Pasted config routinely carries auth headers; the dialog has its own
     // window, so it raises FLAG_SECURE itself.
     SecureDialogEffect()
@@ -1413,19 +1423,19 @@ private fun McpAddDialog(
                 )
                 when {
                     paste.isBlank() -> Text(
-                        "Works with any of: a full mcpServers JSON (Claude Desktop / Cursor format), " +
-                            "a single server JSON object, or a `claude mcp add` command.",
+                        uiContext.getString(R.string.ui_works_with_any_of_a_full_mcpservers) +
+                            uiContext.getString(R.string.ui_a_single_server_json_object_or_a),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     parsed.isEmpty() -> Text(
-                        "Could not parse that. Use the manual editor below.",
+                        uiContext.getString(R.string.ui_could_not_parse_that_use_the_manual),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
                     else -> Column {
                         Text(
-                            "Will add ${parsed.size} server(s):",
+                            uiContext.getString(R.string.ui_will_add_server_s, (parsed.size).toString()),
                             style = MaterialTheme.typography.labelMedium,
                         )
                         parsed.forEach { c ->
@@ -1437,7 +1447,7 @@ private fun McpAddDialog(
                         }
                         if (conflicts > 0) {
                             Text(
-                                "$conflicts name(s) already exist and will be replaced.",
+                                uiContext.getString(R.string.ui_name_s_already_exist_and_will_be, (conflicts).toString()),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = LocalStatusColors.current.warning,
                             )
@@ -1447,7 +1457,7 @@ private fun McpAddDialog(
                 Text(
                     "Tools appear in chats as mcp__server__tool and follow the normal " +
                         "permission rules. If a server needs sign-in, an Authenticate " +
-                        "button appears after Test.",
+                        uiContext.getString(R.string.ui_button_appears_after_test),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1462,7 +1472,7 @@ private fun McpAddDialog(
                         onDismiss()
                     }
                 },
-            ) { Text(if (parsed.size > 1) "Add all" else "Add") }
+            ) { Text(if (parsed.size > 1) uiContext.getString(R.string.ui_add_all) else uiContext.getString(R.string.ui_add)) }
         },
         dismissButton = {
             Row {
@@ -1479,6 +1489,7 @@ private fun McpServerDialog(
     initial: McpServerConfig?,
     onDismiss: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     // Header and env values are secrets; this dialog owns its own window.
     SecureDialogEffect()
     val scope = rememberCoroutineScope()
@@ -1502,7 +1513,7 @@ private fun McpServerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (initial?.name.isNullOrBlank()) "Add MCP server" else "Edit MCP server") },
+        title = { Text(if (initial?.name.isNullOrBlank()) uiContext.getString(R.string.settings_mcp_add_title) else uiContext.getString(R.string.ui_edit_mcp_server)) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -1519,7 +1530,7 @@ private fun McpServerDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    listOf("stdio" to "Local", "http" to "HTTP", "sse" to "SSE")
+                    listOf("stdio" to uiContext.getString(R.string.ui_local), "http" to "HTTP", "sse" to "SSE")
                         .forEachIndexed { index, (value, label) ->
                             SegmentedButton(
                                 selected = type == value,
@@ -1553,9 +1564,9 @@ private fun McpServerDialog(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Text(
-                        "Local process (stdio transport) running as the app user with the " +
-                            "Linux toolchain's PATH; it starts lazily before a run and dies with " +
-                            "the app. Needs node/python from the Linux environment.",
+                        uiContext.getString(R.string.ui_local_process_stdio_transport_running_as_the) +
+                            uiContext.getString(R.string.ui_linux_toolchain_s_path_it_starts_lazily) +
+                            uiContext.getString(R.string.ui_the_app_needs_node_python_from_the),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1654,6 +1665,7 @@ internal fun ShizukuCard(
     onRefresh: () -> Unit,
     onGrant: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1663,15 +1675,15 @@ internal fun ShizukuCard(
                     Text(stringResource(R.string.settings_search_shizuku_title), style = MaterialTheme.typography.titleSmall)
                     Text(
                         when (state) {
-                            ShizukuState.NOT_INSTALLED -> "Not installed: optional."
-                            ShizukuState.NOT_RUNNING -> "Installed, not running."
-                            ShizukuState.RUNNING_NO_PERMISSION -> "Running: grant AndroidHarness access."
+                            ShizukuState.NOT_INSTALLED -> uiContext.getString(R.string.ui_not_installed_optional)
+                            ShizukuState.NOT_RUNNING -> uiContext.getString(R.string.ui_installed_not_running)
+                            ShizukuState.RUNNING_NO_PERMISSION -> uiContext.getString(R.string.ui_running_grant_androidharness_access)
                             ShizukuState.GRANTED -> when (serviceState) {
-                                UserServiceState.BOUND_READY -> "Connected: shell privileges ready."
-                                UserServiceState.COMPAT_READY -> "Connected in compatibility mode: shell privileges ready."
-                                UserServiceState.BINDING -> "Access granted. Connecting to the shell runner…"
-                                UserServiceState.BIND_FAILED -> "Access granted, but the shell runner could not connect. Retry the connection."
-                                UserServiceState.NOT_BOUND -> "Access granted. Shell runner not connected."
+                                UserServiceState.BOUND_READY -> uiContext.getString(R.string.ui_connected_shell_privileges_ready)
+                                UserServiceState.COMPAT_READY -> uiContext.getString(R.string.ui_connected_in_compatibility_mode_shell_privileges_ready)
+                                UserServiceState.BINDING -> uiContext.getString(R.string.ui_access_granted_connecting_to_the_shell_runner)
+                                UserServiceState.BIND_FAILED -> uiContext.getString(R.string.ui_access_granted_but_the_shell_runner_could)
+                                UserServiceState.NOT_BOUND -> uiContext.getString(R.string.ui_access_granted_shell_runner_not_connected)
                             }
                         },
                         style = MaterialTheme.typography.bodySmall,
@@ -1685,13 +1697,13 @@ internal fun ShizukuCard(
                 ShizukuState.GRANTED -> {
                     if (serviceState.isReady) {
                         Text(
-                            if (serviceState == UserServiceState.COMPAT_READY) "Compatibility runner ready ✓" else "Privileged runner ready ✓",
+                            if (serviceState == UserServiceState.COMPAT_READY) uiContext.getString(R.string.ui_compatibility_runner_ready) else uiContext.getString(R.string.ui_privileged_runner_ready),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                         )
                     }
                     TextButton(onClick = onRefresh, enabled = serviceState != UserServiceState.BINDING) {
-                        Text(if (serviceState.isReady) "Re-check status" else "Retry connection")
+                        Text(if (serviceState.isReady) uiContext.getString(R.string.ui_re_check_status) else uiContext.getString(R.string.ui_retry_connection))
                     }
                 }
                 ShizukuState.RUNNING_NO_PERMISSION -> Button(onClick = onGrant) { Text(stringResource(R.string.settings_env_grant_shizuku)) }
@@ -1707,6 +1719,7 @@ private fun LinuxEnvironmentCard(
     container: AppContainer,
     envState: com.androidharness.app.data.env.EnvState,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     var checkResult by remember { mutableStateOf<String?>(null) }
     var checking by remember { mutableStateOf(false) }
@@ -1724,12 +1737,12 @@ private fun LinuxEnvironmentCard(
                 }
                 StatusText(
                     when (envState) {
-                        is com.androidharness.app.data.env.EnvState.Ready -> "Installed"
-                        is com.androidharness.app.data.env.EnvState.Downloading -> "Downloading…"
-                        is com.androidharness.app.data.env.EnvState.Installing -> "Installing…"
-                        is com.androidharness.app.data.env.EnvState.Preparing -> "Resolving…"
-                        is com.androidharness.app.data.env.EnvState.Failed -> "Failed"
-                        else -> "Not installed"
+                        is com.androidharness.app.data.env.EnvState.Ready -> uiContext.getString(R.string.ui_installed)
+                        is com.androidharness.app.data.env.EnvState.Downloading -> uiContext.getString(R.string.ui_downloading)
+                        is com.androidharness.app.data.env.EnvState.Installing -> uiContext.getString(R.string.settings_packages_installing)
+                        is com.androidharness.app.data.env.EnvState.Preparing -> uiContext.getString(R.string.ui_resolving)
+                        is com.androidharness.app.data.env.EnvState.Failed -> uiContext.getString(R.string.ui_failed_64)
+                        else -> uiContext.getString(R.string.ui_not_installed)
                     },
                     ok = envState is com.androidharness.app.data.env.EnvState.Ready,
                 )
@@ -1740,7 +1753,7 @@ private fun LinuxEnvironmentCard(
                     val installed = container.linuxEnv.installedPackages()
                     if (installed.isNotEmpty()) {
                         Text(
-                            "Packages (${installed.size}): ${installed.joinToString(", ")}",
+                            uiContext.getString(R.string.ui_packages, (installed.size).toString(), (installed.joinToString(", ")).toString()),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -1775,7 +1788,7 @@ private fun LinuxEnvironmentCard(
                                 }
                             },
                         ) {
-                            Text(if (checking) "Checking…" else "Check missing")
+                            Text(if (checking) uiContext.getString(R.string.ui_checking) else uiContext.getString(R.string.ui_check_missing))
                         }
                         if (checkResult != null && !checkResult!!.startsWith("All present")) {
                             Button(onClick = {
@@ -1794,19 +1807,19 @@ private fun LinuxEnvironmentCard(
                 is com.androidharness.app.data.env.EnvState.Failed -> {
                     if (envState is com.androidharness.app.data.env.EnvState.Failed) {
                         Text(
-                            "Install failed: ${envState.message}",
+                            uiContext.getString(R.string.ui_install_failed, (envState.message).toString()),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                         )
                     } else {
                         Text(
-                            "Installs bash, git, gh, python 3, pip, node.js and npm into private storage.",
+                            uiContext.getString(R.string.ui_installs_bash_git_gh_python_3_pip),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     Button(onClick = { scope.launch { container.linuxEnv.install(container.linuxEnv.fullPackages) } }) {
-                        Text(if (envState is com.androidharness.app.data.env.EnvState.Failed) "Retry install" else "Install full environment")
+                        Text(if (envState is com.androidharness.app.data.env.EnvState.Failed) uiContext.getString(R.string.ui_retry_install) else uiContext.getString(R.string.ui_install_full_environment))
                     }
                 }
                 is com.androidharness.app.data.env.EnvState.Downloading,
@@ -1862,6 +1875,7 @@ private fun CurrentSetupCard(
     settings: AppSettings,
     providers: List<com.androidharness.app.llm.ProviderConfig>,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val active = providers.firstOrNull { it.id == settings.activeProviderId }
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(
@@ -1870,15 +1884,15 @@ private fun CurrentSetupCard(
         ) {
             Text(stringResource(R.string.settings_models_current_config), style = MaterialTheme.typography.titleSmallEmphasized)
             SetupLine(
-                "Model",
-                if (active == null) "No provider connected"
+                uiContext.getString(R.string.ui_model),
+                if (active == null) uiContext.getString(R.string.ui_no_provider_connected)
                 else "${active.name} · ${settings.activeModel?.takeIf { it.isNotBlank() } ?: active.model}",
             )
-            SetupLine("Thinking", settings.thinkingLevel.label)
-            SetupLine("Context window", formatTokenCount(settings.maxContextTokens.toLong()))
-            SetupLine("Default permission", settings.permissionMode.label)
+            SetupLine(uiContext.getString(R.string.ui_thinking_2), localizedThinkingOption(settings.thinkingLevel.label))
+            SetupLine(uiContext.getString(R.string.ui_context_window_1183), formatTokenCount(settings.maxContextTokens.toLong()))
+            SetupLine(uiContext.getString(R.string.ui_default_permission), localizedOption(settings.permissionMode.label))
             Text(
-                "Model and thinking change from the chat header.",
+                uiContext.getString(R.string.ui_model_and_thinking_change_from_the_chat),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 2.dp),
@@ -1946,6 +1960,7 @@ private val AGENTS_MD_TEMPLATE = """# AGENTS.md
 
 @Composable
 private fun AgentsInstructionsDialog(container: AppContainer, onDismiss: () -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     var text by remember { mutableStateOf<String?>(null) } // null = loading
     var existed by remember { mutableStateOf(false) }
@@ -1970,8 +1985,8 @@ private fun AgentsInstructionsDialog(container: AppContainer, onDismiss: () -> U
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (!existed) {
                     Text(
-                        "No AGENTS.md found in this workspace. Start from the template below, " +
-                            "or type /init in chat to have the agent analyze the workspace and write one.",
+                        uiContext.getString(R.string.ui_no_agents_md_found_in_this_workspace) +
+                            uiContext.getString(R.string.ui_or_type_init_in_chat_to_have),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1981,7 +1996,7 @@ private fun AgentsInstructionsDialog(container: AppContainer, onDismiss: () -> U
                     onValueChange = {
                         text = it
                         if (it.length > AGENTS_MD_CAP) {
-                            error = "Only the first $AGENTS_MD_CAP characters are injected into the prompt."
+                            error = uiContext.getString(R.string.ui_only_the_first_characters_are_injected_into, (AGENTS_MD_CAP).toString())
                         } else if (error != null) {
                             error = null
                         }
@@ -2014,11 +2029,11 @@ private fun AgentsInstructionsDialog(container: AppContainer, onDismiss: () -> U
                         }.onSuccess {
                             existed = true
                             onDismiss()
-                        }.onFailure { e -> error = "Could not save: ${e.message}" }
+                        }.onFailure { e -> error = uiContext.getString(R.string.ui_could_not_save, (e.message).toString()) }
                     }
                 },
                 enabled = text != null,
-            ) { Text(if (existed) "Save" else "Create") }
+            ) { Text(if (existed) uiContext.getString(R.string.settings_action_save) else uiContext.getString(R.string.ui_create)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_action_cancel)) } },
     )
@@ -2026,7 +2041,8 @@ private fun AgentsInstructionsDialog(container: AppContainer, onDismiss: () -> U
 
 @Composable
 private fun AppearanceSection(container: AppContainer, settings: AppSettings, scope: kotlinx.coroutines.CoroutineScope) {
-    SettingsHeader("Appearance")
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
+    SettingsHeader(uiContext.getString(R.string.settings_page_appearance_title))
     WorkspaceLayoutSection(settings.workspaceLayout) { scope.launch { container.settings.setWorkspaceLayout(it) } }
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -2053,7 +2069,7 @@ private fun AppearanceSection(container: AppContainer, settings: AppSettings, sc
                     Column(Modifier.weight(1f)) {
                         Text(stringResource(R.string.settings_anchor_dynamic_color), style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            "Match your wallpaper (Android 12+)",
+                            uiContext.getString(R.string.ui_match_your_wallpaper_android_12),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -2076,7 +2092,8 @@ private fun AppearanceSection(container: AppContainer, settings: AppSettings, sc
 
 @Composable
 private fun ChatBehaviorSection(container: AppContainer, settings: AppSettings, scope: kotlinx.coroutines.CoroutineScope) {
-    SettingsHeader("Chat behavior")
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
+    SettingsHeader(uiContext.getString(R.string.ui_chat_behavior))
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             SettingsAnchor(R.string.settings_anchor_show_live_code) {
@@ -2098,9 +2115,9 @@ private fun ChatBehaviorSection(container: AppContainer, settings: AppSettings, 
                         Text(stringResource(R.string.settings_anchor_resume_last_chat), style = MaterialTheme.typography.bodyLarge)
                         Text(
                             if (settings.resumeLastChat) {
-                                "On: opens your most recent chat when launching the app."
+                                uiContext.getString(R.string.ui_on_opens_your_most_recent_chat_when)
                             } else {
-                                "Off: starts a new empty chat each time the app opens."
+                                uiContext.getString(R.string.ui_off_starts_a_new_empty_chat_each)
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -2119,9 +2136,9 @@ private fun ChatBehaviorSection(container: AppContainer, settings: AppSettings, 
                         Text(stringResource(R.string.settings_anchor_repo_map), style = MaterialTheme.typography.bodyLarge)
                         Text(
                             if (settings.repoMapEnabled) {
-                                "On: injects a compact project symbol map (classes, functions, types) into context so the agent understands codebase structure without extra searches."
+                                uiContext.getString(R.string.ui_on_injects_a_compact_project_symbol_map)
                             } else {
-                                "Off: agent explores files only using tool commands."
+                                uiContext.getString(R.string.ui_off_agent_explores_files_only_using_tool)
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -2139,8 +2156,9 @@ private fun ChatBehaviorSection(container: AppContainer, settings: AppSettings, 
 
 @Composable
 private fun PrivacySection(container: AppContainer, settings: AppSettings, scope: kotlinx.coroutines.CoroutineScope) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val context = LocalContext.current
-    SettingsHeader("Privacy")
+    SettingsHeader(uiContext.getString(R.string.ui_privacy))
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -2148,9 +2166,9 @@ private fun PrivacySection(container: AppContainer, settings: AppSettings, scope
                     Text(stringResource(R.string.settings_search_app_lock_title), style = MaterialTheme.typography.bodyLarge)
                     Text(
                         if (settings.biometricLockEnabled) {
-                            "On: requires fingerprint, face or device PIN to open the app."
+                            uiContext.getString(R.string.ui_on_requires_fingerprint_face_or_device_pin)
                         } else {
-                            "Off: the app opens immediately without authentication."
+                            uiContext.getString(R.string.ui_off_the_app_opens_immediately_without_authentication)
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -2182,7 +2200,7 @@ private fun PrivacySection(container: AppContainer, settings: AppSettings, scope
             if (settings.biometricLockEnabled) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(stringResource(R.string.settings_search_autolock_title), style = MaterialTheme.typography.labelLarge)
-                    val timeouts = listOf(0 to "Instant", 1 to "1m", 5 to "5m", 15 to "15m")
+                    val timeouts = listOf(0 to uiContext.getString(R.string.ui_instant), 1 to "1m", 5 to "5m", 15 to "15m")
                     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                         timeouts.forEachIndexed { index, (mins, label) ->
                             SegmentedButton(
@@ -2202,10 +2220,10 @@ private fun PrivacySection(container: AppContainer, settings: AppSettings, scope
                     Text(stringResource(R.string.settings_search_screenshots_title), style = MaterialTheme.typography.bodyLarge)
                     Text(
                         if (settings.allowScreenshots) {
-                            "On: screenshots work everywhere except while a key or token is on screen."
+                            uiContext.getString(R.string.ui_on_screenshots_work_everywhere_except_while_a)
                         } else {
-                            "Off: screenshots and the recents preview are blocked app wide. " +
-                                "Key screens stay blocked even when this is on."
+                            uiContext.getString(R.string.ui_off_screenshots_and_the_recents_preview_are) +
+                                uiContext.getString(R.string.ui_key_screens_stay_blocked_even_when_this)
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -2227,6 +2245,7 @@ private fun PlanningModelSection(
     scope: kotlinx.coroutines.CoroutineScope,
     onOpenProviders: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val providers by container.providers.providers.collectAsStateWithLifecycle(initialValue = emptyList())
     val catalogs by container.providers.catalogs.collectAsStateWithLifecycle(initialValue = emptyMap())
     var pickingRole by remember { mutableStateOf<String?>(null) }
@@ -2236,14 +2255,14 @@ private fun PlanningModelSection(
     // active one, so the list is never empty for a first pick.
     val fallbackProviderId = settings.activeProviderId ?: providers.firstOrNull()?.id
 
-    SettingsHeader("Dual planning models")
+    SettingsHeader(uiContext.getString(R.string.settings_search_dual_planning_title))
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.settings_models_dual_subtitle), style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    "Configure models for dual planning. When activated from chat, " +
-                        "planning runs with the plan model and execution runs with the execute model.",
+                    uiContext.getString(R.string.ui_configure_models_for_dual_planning_when_activated) +
+                        uiContext.getString(R.string.ui_planning_runs_with_the_plan_model_and),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -2281,10 +2300,10 @@ private fun PlanningModelSection(
                 val provider = providers.firstOrNull { it.id == providerId }
                 val key = container.providers.apiKey(providerId)
                 when {
-                    provider == null -> "Unknown provider"
+                    provider == null -> uiContext.getString(R.string.ui_unknown_provider)
                     else -> {
                         val usable = provider.effectiveApiKey(key)
-                        if (usable.isBlank()) "No API key for this provider"
+                        if (usable.isBlank()) uiContext.getString(R.string.ui_no_api_key_for_this_provider)
                         else when (val result = com.androidharness.app.llm.ModelCatalog.listModels(provider, usable)) {
                             is com.androidharness.app.llm.ModelCatalog.Result.Models -> {
                                 container.providers.saveCatalog(providerId, result.models)
@@ -2350,6 +2369,7 @@ private fun PlanningModelSection(
 
 @Composable
 private fun ModelRoleRow(label: String, model: String?, onClick: () -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -2359,7 +2379,7 @@ private fun ModelRoleRow(label: String, model: String?, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.bodyLarge)
             Text(
-                model ?: "Provider default",
+                model ?: uiContext.getString(R.string.ui_provider_default),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -2375,9 +2395,10 @@ private fun ModelRoleRow(label: String, model: String?, onClick: () -> Unit) {
 
 @Composable
 private fun SlashCommandsSection(container: AppContainer) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     SettingsAnchor(R.string.settings_anchor_slash_commands) {
-        SettingsHeader("Slash commands")
+        SettingsHeader(uiContext.getString(R.string.settings_search_slash_commands_title))
     }
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -2385,7 +2406,7 @@ private fun SlashCommandsSection(container: AppContainer) {
             var snippetBody by remember { mutableStateOf("") }
             var showAdd by remember { mutableStateOf(false) }
             TextButton(onClick = { showAdd = !showAdd }) {
-                Text(if (showAdd) "Cancel" else "Add custom command")
+                Text(if (showAdd) uiContext.getString(R.string.settings_action_cancel) else uiContext.getString(R.string.ui_add_custom_command))
             }
             AnimatedVisibility(showAdd) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -2426,6 +2447,7 @@ private fun SlashCommandsSection(container: AppContainer) {
 
 @Composable
 private fun BatteryCard(container: AppContainer) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val context = androidx.compose.ui.platform.LocalContext.current
     val settings by container.settings.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
     val scope = rememberCoroutineScope()
@@ -2439,7 +2461,7 @@ private fun BatteryCard(container: AppContainer) {
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(R.string.settings_env_keep_alive), style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "Hold the CPU while a run or terminal is active so the terminal will not die when the app is minimized.",
+                        uiContext.getString(R.string.ui_hold_the_cpu_while_a_run_or),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -2453,8 +2475,8 @@ private fun BatteryCard(container: AppContainer) {
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(R.string.settings_search_battery_title), style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        if (exempt) "Excluded: Android will not throttle background runs."
-                        else "On: Samsung and other OEMs may kill background work. Exclude the app for reliable long runs.",
+                        if (exempt) uiContext.getString(R.string.ui_excluded_android_will_not_throttle_background_runs)
+                        else uiContext.getString(R.string.ui_on_samsung_and_other_oems_may_kill),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -2615,6 +2637,7 @@ private fun DropdownSetting(
 
 @Composable
 private fun UpdatesCard(container: AppContainer) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val step by container.updates.step.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val version = remember(container) { appVersionLabel(container.appContext) }
@@ -2631,7 +2654,7 @@ private fun UpdatesCard(container: AppContainer) {
                 Text(stringResource(R.string.settings_page_updates_title), style = MaterialTheme.typography.titleSmall)
             }
             Text(
-                "Current version $version. Checks GitHub Releases for newer builds.",
+                uiContext.getString(R.string.ui_current_version_checks_github_releases_for_newer, (version).toString()),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -2648,7 +2671,7 @@ private fun UpdatesCard(container: AppContainer) {
                         )
                         Spacer(Modifier.width(8.dp))
                     }
-                    Text(if (step is com.androidharness.app.data.update.UpdateManager.Step.Checking) "Checking…" else "Check for updates")
+                    Text(if (step is com.androidharness.app.data.update.UpdateManager.Step.Checking) uiContext.getString(R.string.ui_checking) else uiContext.getString(R.string.settings_search_updates_title))
                 }
                 when (val s = step) {
                     is com.androidharness.app.data.update.UpdateManager.Step.UpToDate -> {
@@ -2665,7 +2688,7 @@ private fun UpdatesCard(container: AppContainer) {
                     is com.androidharness.app.data.update.UpdateManager.Step.Available -> {
                         Spacer(Modifier.width(12.dp))
                         Text(
-                            "${s.release.tag} available, see the dialog",
+                            uiContext.getString(R.string.ui_available_see_the_dialog, (s.release.tag).toString()),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                         )
@@ -2716,6 +2739,7 @@ private val INSPIRED_BY = listOf(
 
 @Composable
 private fun AboutSection(container: AppContainer) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val context = LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val version = remember(container) { appVersionLabel(container.appContext) }
@@ -2732,14 +2756,14 @@ private fun AboutSection(container: AppContainer) {
             HarnessMark(size = 58.dp)
             Text("AndroidHarness", style = MaterialTheme.typography.titleLarge)
             Text(
-                "A coding agent that lives on your phone.",
+                uiContext.getString(R.string.ui_a_coding_agent_that_lives_on_your),
                 style = MaterialTheme.typography.bodyMedium,
                 color = scheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
             Surface(color = scheme.surfaceContainerHigh, shape = CircleShape) {
                 Text(
-                    "Version $version",
+                    uiContext.getString(R.string.ui_version, (version).toString()),
                     style = MaterialTheme.typography.labelMedium,
                     color = scheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
@@ -2748,7 +2772,7 @@ private fun AboutSection(container: AppContainer) {
         }
     }
 
-    SettingsHeader("Made by")
+    SettingsHeader(uiContext.getString(R.string.ui_made_by))
     SettingsPanel(Modifier.fillMaxWidth()) {
         SettingsRow(
             leading = { GitHubMark() },
@@ -2769,7 +2793,7 @@ private fun AboutSection(container: AppContainer) {
         )
     }
 
-    SettingsHeader("License")
+    SettingsHeader(uiContext.getString(R.string.settings_search_license_title))
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2778,7 +2802,7 @@ private fun AboutSection(container: AppContainer) {
                 Text(stringResource(R.string.settings_about_license), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                 Surface(color = scheme.primaryContainer, shape = CircleShape) {
                     Text(
-                        "Open source",
+                        uiContext.getString(R.string.ui_open_source),
                         style = MaterialTheme.typography.labelSmall,
                         color = scheme.onPrimaryContainer,
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
@@ -2786,8 +2810,8 @@ private fun AboutSection(container: AppContainer) {
                 }
             }
             Text(
-                "Use it, change it, ship it, even inside a commercial app. The one condition is that the " +
-                    "copyright notice and the license text travel with the code. It comes with no warranty.",
+                uiContext.getString(R.string.ui_use_it_change_it_ship_it_even) +
+                    uiContext.getString(R.string.ui_copyright_notice_and_the_license_text_travel),
                 style = MaterialTheme.typography.bodySmall,
                 color = scheme.onSurfaceVariant,
             )
@@ -2802,21 +2826,21 @@ private fun AboutSection(container: AppContainer) {
         }
     }
 
-    SettingsHeader("Credits")
+    SettingsHeader(uiContext.getString(R.string.settings_search_credits_title))
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
             Text(
-                "AndroidHarness is built on open source work and borrows ideas from the agents that came before it.",
+                uiContext.getString(R.string.ui_androidharness_is_built_on_open_source_work),
                 style = MaterialTheme.typography.bodySmall,
                 color = scheme.onSurfaceVariant,
             )
         }
-        CreditsGroup("Built with", BUILT_WITH, open)
-        CreditsGroup("Inspired by", INSPIRED_BY, open)
+        CreditsGroup(uiContext.getString(R.string.ui_built_with), BUILT_WITH, open)
+        CreditsGroup(uiContext.getString(R.string.ui_inspired_by), INSPIRED_BY, open)
         HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.4f))
         Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
             Text(
-                "Every project keeps its own license. AndroidHarness is not affiliated with them.",
+                uiContext.getString(R.string.ui_every_project_keeps_its_own_license_androidharness),
                 style = MaterialTheme.typography.bodySmall,
                 color = scheme.onSurfaceVariant,
             )
@@ -2881,6 +2905,7 @@ private fun ExternalLinkIcon() {
 
 @Composable
 private fun ChatsBackupSection(container: AppContainer) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var statusText by remember { mutableStateOf<String?>(null) }
@@ -2907,11 +2932,11 @@ private fun ChatsBackupSection(container: AppContainer) {
             statusText = null
             try {
                 val r = container.chatBackup.exportTo(uri)
-                report("Exported ${r.sessions} chats (${r.messages} messages).")
+                report(uiContext.getString(R.string.ui_exported_chats_messages, (r.sessions).toString(), (r.messages).toString()))
             } catch (e: ChatBackupException) {
-                report(e.message ?: "Export failed.", error = true)
+                report(e.message ?: uiContext.getString(R.string.ui_export_failed), error = true)
             } catch (e: Exception) {
-                report("Export failed: ${e.message ?: "unknown error"}", error = true)
+                report(uiContext.getString(R.string.ui_export_failed_1230, (e.message ?: "unknown error").toString()), error = true)
             } finally {
                 busy = false
             }
@@ -2933,13 +2958,13 @@ private fun ChatsBackupSection(container: AppContainer) {
                 }
                 val r = container.chatBackup.importPrepared(preview, emptyMap())
                 report(
-                    "Imported ${r.sessions} chats (${r.messages} messages)" +
-                        if (r.skipped > 0) ", ${r.skipped} already present." else ".",
+                    uiContext.getString(R.string.ui_imported_chats_messages, (r.sessions).toString(), (r.messages).toString()) +
+                        if (r.skipped > 0) uiContext.getString(R.string.ui_already_present, (r.skipped).toString()) else ".",
                 )
             } catch (e: ChatBackupException) {
-                report(e.message ?: "Import failed.", error = true)
+                report(e.message ?: uiContext.getString(R.string.ui_import_failed), error = true)
             } catch (e: Exception) {
-                report("Import failed: ${e.message ?: "unknown error"}", error = true)
+                report(uiContext.getString(R.string.ui_import_failed_1234, (e.message ?: "unknown error").toString()), error = true)
             } finally {
                 busy = false
             }
@@ -2949,7 +2974,7 @@ private fun ChatsBackupSection(container: AppContainer) {
     restorePreview?.let { preview -> ChatRestoreDialog(container, preview,
         onDismiss = { restorePreview = null }, onImported = { result ->
             restorePreview = null
-            report("Imported ${result.sessions} chats (${result.messages} messages). ${result.skipped} already present.")
+            report(uiContext.getString(R.string.ui_imported_chats_messages_already_present, (result.sessions).toString(), (result.messages).toString(), (result.skipped).toString()))
         }) }
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -2964,8 +2989,8 @@ private fun ChatsBackupSection(container: AppContainer) {
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(R.string.settings_backup_chat_backup), style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "Save all chats to a file, or restore them from one. " +
-                            "Chats and messages only: no API keys, providers, or settings are in the file.",
+                        uiContext.getString(R.string.ui_save_all_chats_to_a_file_or) +
+                            uiContext.getString(R.string.ui_chats_and_messages_only_no_api_keys),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

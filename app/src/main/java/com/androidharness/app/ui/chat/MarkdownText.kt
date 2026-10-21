@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat
 
+import com.androidharness.app.R
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
@@ -440,6 +441,7 @@ private fun TableBlock(
     table: Block.Table,
     onOpenUrl: ((String) -> Unit)? = null,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val scrollState = rememberScrollState()
     val clipboard = LocalClipboardManager.current
@@ -466,7 +468,7 @@ private fun TableBlock(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "Table · ${table.rows.size} rows",
+                    uiContext.getString(R.string.ui_table_rows, (table.rows.size).toString()),
                     style = MaterialTheme.typography.labelMedium,
                     color = scheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f),
@@ -482,7 +484,7 @@ private fun TableBlock(
                         modifier = Modifier.size(14.dp),
                     )
                     Spacer(Modifier.width(6.dp))
-                    Text(if (copied) "Copied" else "Copy table")
+                    Text(if (copied) uiContext.getString(R.string.settings_shizuku_copied) else uiContext.getString(R.string.ui_copy_table))
                 }
             }
             HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.4f))
@@ -636,6 +638,7 @@ private fun highlightedCode(
 
 @Composable
 private fun CodeBlock(code: String, language: String) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     var copied by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
@@ -700,7 +703,7 @@ private fun CodeBlock(code: String, language: String) {
                 ) {
                     Icon(
                         if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy,
-                        contentDescription = "Copy code",
+                        contentDescription = uiContext.getString(R.string.settings_telegram_copy_code),
                         tint = if (copied) scheme.primary else scheme.onSurfaceVariant,
                         modifier = Modifier.size(16.dp),
                     )
@@ -722,7 +725,7 @@ private fun CodeBlock(code: String, language: String) {
                         .align(Alignment.End)
                         .padding(end = 8.dp, bottom = 6.dp),
                 ) {
-                    Text("+ $hiddenCount more lines")
+                    Text(uiContext.getString(R.string.ui_more_lines_512, (hiddenCount).toString()))
                 }
             }
         }

@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.common
 
+import com.androidharness.app.R
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
@@ -16,6 +17,7 @@ import kotlinx.coroutines.*
 /** One workspace-level control shared by chat, files, terminal and build screens. */
 @Composable
 fun SshWorkspaceBar(container: AppContainer, workspace: SshFs?, includeStatusBarPadding: Boolean = true) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     if (workspace == null) return
     val id = workspace.location.connectionId
     val statuses by container.sshConnections.statuses.collectAsStateWithLifecycle()
@@ -32,7 +34,7 @@ fun SshWorkspaceBar(container: AppContainer, workspace: SshFs?, includeStatusBar
             .then(if (includeStatusBarPadding) Modifier.statusBarsPadding() else Modifier)
             .padding(horizontal = 12.dp, vertical = 4.dp)) {
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Text(if (status.connected) "● SSH connected" else "○ SSH disconnected", modifier = Modifier.weight(1f),
+                Text(if (status.connected) uiContext.getString(R.string.ui_ssh_connected) else uiContext.getString(R.string.ui_ssh_disconnected), modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.labelMedium,
                     color = if (status.connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
                 if (!status.connected) TextButton(enabled = !checking, onClick = {
@@ -43,18 +45,18 @@ fun SshWorkspaceBar(container: AppContainer, workspace: SshFs?, includeStatusBar
                         catch (e: Exception) { result = e.message }
                         finally { checking = false }
                     }
-                }) { Text("Reconnect") }
+                }) { Text(uiContext.getString(R.string.ui_reconnect)) }
                 Box {
-                    IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Workspace connection") }
+                    IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, uiContext.getString(R.string.ui_workspace_connection)) }
                     DropdownMenu(menu, { menu = false }) {
-                        DropdownMenuItem(text = { Text("Connection settings") }, onClick = { menu = false; settings = true })
-                        DropdownMenuItem(text = { Text("Disconnect") }, onClick = { menu = false; container.sshConnections.disconnect(id) })
-                        DropdownMenuItem(text = { Text("Forget credentials") }, onClick = { menu = false; forget = true })
+                        DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_connection_settings)) }, onClick = { menu = false; settings = true })
+                        DropdownMenuItem(text = { Text(uiContext.getString(R.string.settings_action_disconnect)) }, onClick = { menu = false; container.sshConnections.disconnect(id) })
+                        DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_forget_credentials)) }, onClick = { menu = false; forget = true })
                     }
                 }
             }
             if (status.uncertain) {
-                Text("A command or file transfer was interrupted. Check its outcome before retrying.", style = MaterialTheme.typography.bodySmall)
+                Text(uiContext.getString(R.string.ui_a_command_or_file_transfer_was_interrupted), style = MaterialTheme.typography.bodySmall)
                 TextButton(enabled = !checking, onClick = {
                     checking = true
                     scope.launch {
@@ -63,16 +65,16 @@ fun SshWorkspaceBar(container: AppContainer, workspace: SshFs?, includeStatusBar
                             result = response.rawOutput + "\n" + response.rawStderr
                         } finally { checking = false }
                     }
-                }) { Text("Check command status") }
-                TextButton(onClick = { container.sshConnections.acknowledge(id) }) { Text("I checked the outcome") }
+                }) { Text(uiContext.getString(R.string.ui_check_command_status)) }
+                TextButton(onClick = { container.sshConnections.acknowledge(id) }) { Text(uiContext.getString(R.string.ui_i_checked_the_outcome)) }
             } else if (!status.connected) Text(status.message, style = MaterialTheme.typography.bodySmall, maxLines = 2)
         }
     }
-    result?.let { text -> AlertDialog(onDismissRequest = { result = null }, title = { Text("Connection status") },
+    result?.let { text -> AlertDialog(onDismissRequest = { result = null }, title = { Text(uiContext.getString(R.string.ui_connection_status)) },
         text = { androidx.compose.foundation.text.selection.SelectionContainer { Text(text.take(8_000)) } },
-        confirmButton = { TextButton(onClick = { result = null }) { Text("Close") } }) }
-    if (forget) AlertDialog(onDismissRequest = { forget = false }, title = { Text("Forget SSH credentials?") },
-        text = { Text("This disconnects the workspace and removes its saved credentials from this phone. Remote files are kept.") },
-        confirmButton = { TextButton(onClick = { container.sshConnections.forget(id); forget = false }) { Text("Forget") } },
-        dismissButton = { TextButton(onClick = { forget = false }) { Text("Cancel") } })
+        confirmButton = { TextButton(onClick = { result = null }) { Text(uiContext.getString(R.string.settings_action_close)) } }) }
+    if (forget) AlertDialog(onDismissRequest = { forget = false }, title = { Text(uiContext.getString(R.string.ui_forget_ssh_credentials)) },
+        text = { Text(uiContext.getString(R.string.ui_this_disconnects_the_workspace_and_removes_its)) },
+        confirmButton = { TextButton(onClick = { container.sshConnections.forget(id); forget = false }) { Text(uiContext.getString(R.string.ui_forget)) } },
+        dismissButton = { TextButton(onClick = { forget = false }) { Text(uiContext.getString(R.string.settings_action_cancel)) } })
 }

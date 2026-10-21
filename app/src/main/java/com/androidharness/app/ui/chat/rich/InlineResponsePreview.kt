@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat.rich
 
+import com.androidharness.app.R
 import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import com.androidharness.app.core.response.RichResponse
 
@@ -28,6 +29,7 @@ import com.androidharness.app.artifacts.ChatArtifact
 /** Content-sized conversation surface; artifact versioning/export controls remain in ArtifactCard. */
 @Composable
 internal fun InlineResponsePreview(node: RichResponse.Node.Preview, onFollowUp: ((RichResponse.FollowUp) -> Unit)?) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val context = LocalContext.current
     val dark = MaterialTheme.colorScheme.surface.luminance() < .5f
     val artifact = remember(node) { ChatArtifact.create(node.title, node.html) }
@@ -46,8 +48,8 @@ internal fun InlineResponsePreview(node: RichResponse.Node.Preview, onFollowUp: 
     LaunchedEffect(web) { error = null; unavailable = false; summary = ""; web.show(artifact, dark, responseLayout = true) }
     val content: @Composable (Modifier) -> Unit = { modifier -> Box(modifier) {
         if (unavailable) Column(Modifier.fillMaxWidth().padding(20.dp)) {
-            Text("Preview unavailable", style = MaterialTheme.typography.bodyMedium)
-            TextButton(onClick = { reload++ }) { Text("Reload preview") }
+            Text(uiContext.getString(R.string.ui_preview_unavailable), style = MaterialTheme.typography.bodyMedium)
+            TextButton(onClick = { reload++ }) { Text(uiContext.getString(R.string.ui_reload_preview)) }
         } else AndroidView(factory = { ctx -> FrameLayout(ctx).apply {
             (web.parent as? android.view.ViewGroup)?.removeView(web)
             if (!web.isReleased) addView(web, FrameLayout.LayoutParams(-1, -1))
@@ -63,16 +65,16 @@ internal fun InlineResponsePreview(node: RichResponse.Node.Preview, onFollowUp: 
         Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(node.title, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
             IconButton(onClick = { expanded = !fullscreen }) { Icon(if (fullscreen) Icons.Filled.Close else Icons.Outlined.Fullscreen,
-                if (fullscreen) "Close response preview" else "Expand response preview", Modifier.size(19.dp)) }
+                if (fullscreen) uiContext.getString(R.string.ui_close_response_preview) else uiContext.getString(R.string.ui_expand_response_preview), Modifier.size(19.dp)) }
         }
     }
     val footer: @Composable () -> Unit = {
         if (error != null) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Some preview content couldn’t load.", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-            IconButton(onClick = { reload++ }) { Icon(Icons.Outlined.Refresh, "Reload response preview", Modifier.size(18.dp)) }
+            Text(uiContext.getString(R.string.ui_some_preview_content_couldn_t_load), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            IconButton(onClick = { reload++ }) { Icon(Icons.Outlined.Refresh, uiContext.getString(R.string.ui_reload_response_preview), Modifier.size(18.dp)) }
         }
         onFollowUp?.let { follow ->
-            TextButton(onClick = { expanded = false; follow(RichResponse.followUp("Help me explore this further.", node.title, summary)) }, Modifier.padding(horizontal = 2.dp)) { Text("Ask about this") }
+            TextButton(onClick = { expanded = false; follow(RichResponse.followUp("Help me explore this further.", node.title, summary)) }, Modifier.padding(horizontal = 2.dp)) { Text(uiContext.getString(R.string.ui_ask_about_this)) }
         }
     }
     Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface,
@@ -80,7 +82,7 @@ internal fun InlineResponsePreview(node: RichResponse.Node.Preview, onFollowUp: 
         Column {
             controls(false)
             if (!expanded) { content(Modifier.fillMaxWidth().height(height.coerceIn(100, 900).dp)); footer() }
-            else Text("Preview expanded", Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall)
+            else Text(uiContext.getString(R.string.ui_preview_expanded), Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall)
         }
     }
     // A large sheet keeps the conversation/composer visible behind it. Follow-up returns to the same composer.

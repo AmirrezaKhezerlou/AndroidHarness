@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.files
 
+import com.androidharness.app.R
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -50,6 +51,7 @@ internal fun WorkspaceToolsSheet(
     onOpenFile: (String, Int?) -> Unit,
     commands: List<WorkspaceCommand> = emptyList(),
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val fs by remember(sessionId, projectId) { container.workspace.forTools(sessionId, projectId) }
@@ -88,7 +90,7 @@ internal fun WorkspaceToolsSheet(
         index = null
         if (currentFs == null) return@LaunchedEffect
         try { index = withContext(Dispatchers.IO) { WorkspaceSearch.index(currentFs) } }
-        catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; error = e.message ?: "Could not read workspace." }
+        catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; error = e.message ?: uiContext.getString(R.string.ui_could_not_read_workspace) }
     }
     LaunchedEffect(currentFs, index, options, mode, receipt) {
         result = null; resultOptions = null; error = null
@@ -100,7 +102,7 @@ internal fun WorkspaceToolsSheet(
             delay(250)
             result = withContext(Dispatchers.IO) { WorkspaceSearch.search(f, files, options) }
             resultOptions = options
-        } catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; error = e.message ?: "Search failed." }
+        } catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; error = e.message ?: uiContext.getString(R.string.ui_search_failed) }
         finally { busy = false }
     }
     val files = remember(index, query) {
@@ -144,8 +146,8 @@ internal fun WorkspaceToolsSheet(
                     Diff.unified(change.source.decoded.text, change.text, change.source.path), withContext(Dispatchers.IO) {
                         val f = currentFs
                         when {
-                            f is com.androidharness.app.workspace.ChatWorkspaceFs && !f.target(change.source.path).first.canEdit -> "Read-only workspace"
-                            hasDraft(change.source.path) -> "Unsaved draft · save or discard first"
+                            f is com.androidharness.app.workspace.ChatWorkspaceFs && !f.target(change.source.path).first.canEdit -> uiContext.getString(R.string.ui_read_only_workspace)
+                            hasDraft(change.source.path) -> uiContext.getString(R.string.ui_unsaved_draft_save_or_discard_first)
                             else -> null
                         }
                     }) }
@@ -153,20 +155,20 @@ internal fun WorkspaceToolsSheet(
                 previewFs = currentFs
                 selected = rows.filter { it.blocked == null }.map { it.change.source.path }.toSet()
                 expanded = rows.firstOrNull()?.let { setOf(it.change.source.path) }.orEmpty()
-            } catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; error = e.message ?: "Could not preview replacements." }
+            } catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; error = e.message ?: uiContext.getString(R.string.ui_could_not_preview_replacements) }
             finally { busy = false }
         }
     }
     fun apply() {
         val f = previewFs ?: return
-        if (currentFs?.displayPath != f.displayPath) { error = "Workspace changed. Reopen project search to review its files."; return }
+        if (currentFs?.displayPath != f.displayPath) { error = uiContext.getString(R.string.ui_workspace_changed_reopen_project_search_to_review); return }
         val chosen = preview.orEmpty().filter { it.change.source.path in selected }.map { it.change }
         if (chosen.isEmpty() || applying) return
         applying = true; error = null
         container.editorScope.launch {
             try {
                 val outcome = withContext(Dispatchers.IO) {
-                    container.runManager.withIdleWorkspace(f, "An agent is working in this workspace. Wait for it to finish, then review replacements again.") {
+                    container.runManager.withIdleWorkspace(f, uiContext.getString(R.string.ui_an_agent_is_working_in_this_workspace_879)) {
                         WorkspaceSearch.apply(f, chosen, ::hasDraft) { change ->
                             sessionId?.let { sid ->
                                 val counts = Diff.lineCounts(change.source.decoded.text, change.text)
@@ -178,7 +180,7 @@ internal fun WorkspaceToolsSheet(
                 }
                 container.editorTabs.invalidateSaved(f.displayPath, outcome.saved.toSet())
                 receipt = outcome; preview = null; result = null
-            } catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; error = e.message ?: "Replacement failed." }
+            } catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; error = e.message ?: uiContext.getString(R.string.ui_replacement_failed) }
             finally { applying = false }
         }
     }
@@ -193,15 +195,15 @@ internal fun WorkspaceToolsSheet(
             Column(Modifier.fillMaxWidth().fillMaxHeight(.94f).imePadding().padding(horizontal = 16.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(if (preview != null) "Review replacements" else when (mode) {
-                            WorkspaceToolMode.FILES -> "Quick Open"
-                            WorkspaceToolMode.SEARCH -> "Project search"
-                            WorkspaceToolMode.COMMANDS -> "Command palette"
+                        Text(if (preview != null) uiContext.getString(R.string.ui_review_replacements) else when (mode) {
+                            WorkspaceToolMode.FILES -> uiContext.getString(R.string.ui_quick_open)
+                            WorkspaceToolMode.SEARCH -> uiContext.getString(R.string.ui_project_search)
+                            WorkspaceToolMode.COMMANDS -> uiContext.getString(R.string.ui_command_palette)
                         }, style = MaterialTheme.typography.titleLargeEmphasized)
-                        Text(if (preview != null) "Choose which files to update" else "Current workspace", style = MaterialTheme.typography.bodySmall,
+                        Text(if (preview != null) uiContext.getString(R.string.ui_choose_which_files_to_update) else uiContext.getString(R.string.ui_current_workspace), style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    ExpressiveIconButton(onClick = { if (!applying) onDismiss() }, enabled = !applying) { Icon(Icons.Outlined.Close, "Close workspace tools") }
+                    ExpressiveIconButton(onClick = { if (!applying) onDismiss() }, enabled = !applying) { Icon(Icons.Outlined.Close, uiContext.getString(R.string.ui_close_workspace_tools)) }
                 }
                 Spacer(Modifier.height(12.dp))
                 val reviewed = preview
@@ -210,13 +212,13 @@ internal fun WorkspaceToolsSheet(
                     item(key = "workspace-controls") {
                         Column(Modifier.fillMaxWidth()) {
                             if(currentFs == null && mode != WorkspaceToolMode.COMMANDS) {
-                                Text("Open Files and choose a workspace to use project tools.", style = MaterialTheme.typography.bodyMedium,
+                                Text(uiContext.getString(R.string.ui_open_files_and_choose_a_workspace_to), style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 12.dp))
-                                commands.firstOrNull { it.title == "Open files" }?.let { command -> TextButton(onClick = command.action) { Text("Open Files") } }
+                                commands.firstOrNull { it.title == "Open files" }?.let { command -> TextButton(onClick = command.action) { Text(uiContext.getString(R.string.ui_open_files)) } }
                             }
                             if (preview == null && receipt == null) {
                                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    listOf(WorkspaceToolMode.FILES to "Files", WorkspaceToolMode.SEARCH to "Search", WorkspaceToolMode.COMMANDS to "Commands").forEach { (item, label) ->
+                                    listOf(WorkspaceToolMode.FILES to uiContext.getString(R.string.ui_files), WorkspaceToolMode.SEARCH to uiContext.getString(R.string.ui_search), WorkspaceToolMode.COMMANDS to uiContext.getString(R.string.ui_commands)).forEach { (item, label) ->
                                         FilterChip(selected = mode == item, onClick = { changeMode(item) }, enabled = !busy, label = { Text(label) })
                                     }
                                 }
@@ -230,34 +232,34 @@ internal fun WorkspaceToolsSheet(
                                                 else -> false
                                             }
                                         } else false
-                                    }.semanticsDescription(when(mode) { WorkspaceToolMode.FILES -> "File name or path"; WorkspaceToolMode.SEARCH -> "Find in project"; WorkspaceToolMode.COMMANDS -> "Search commands" }),
+                                    }.semanticsDescription(when(mode) { WorkspaceToolMode.FILES -> uiContext.getString(R.string.ui_file_name_or_path); WorkspaceToolMode.SEARCH -> uiContext.getString(R.string.ui_find_in_project); WorkspaceToolMode.COMMANDS -> uiContext.getString(R.string.ui_search_commands) }),
                                     enabled = !applying, singleLine = true, shape = RoundedCornerShape(24.dp),
-                                    label = { Text(when(mode) { WorkspaceToolMode.FILES -> "File name or path"; WorkspaceToolMode.SEARCH -> "Find in project"; WorkspaceToolMode.COMMANDS -> "Search commands" }) },
+                                    label = { Text(when(mode) { WorkspaceToolMode.FILES -> uiContext.getString(R.string.ui_file_name_or_path); WorkspaceToolMode.SEARCH -> uiContext.getString(R.string.ui_find_in_project); WorkspaceToolMode.COMMANDS -> uiContext.getString(R.string.ui_search_commands) }) },
                                     leadingIcon = { Icon(if (mode == WorkspaceToolMode.COMMANDS) Icons.Outlined.Terminal else Icons.Outlined.Search, null) },
-                                    trailingIcon = { if(query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Outlined.Close, "Clear query") } },
+                                    trailingIcon = { if(query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Outlined.Close, uiContext.getString(R.string.ui_clear_query)) } },
                                     keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, imeAction = ImeAction.Search),
                                     keyboardActions = KeyboardActions(onSearch = {
                                         activateHighlighted()
                                     }))
                                 if (mode == WorkspaceToolMode.SEARCH) {
                                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        FilterChip(matchCase, { matchCase = !matchCase }, label = { Text("Aa") }, modifier = Modifier.semanticsDescription("Match case"))
-                                        FilterChip(regex, { regex = !regex }, label = { Text(".*") }, modifier = Modifier.semanticsDescription("Regular expression"))
-                                        FilterChip(filtersOpen, { filtersOpen = !filtersOpen }, label = { Text("Filters") })
-                                        FilterChip(replaceOpen, { replaceOpen = !replaceOpen }, label = { Text("Replace") })
+                                        FilterChip(matchCase, { matchCase = !matchCase }, label = { Text(uiContext.getString(R.string.ui_aa)) }, modifier = Modifier.semanticsDescription(uiContext.getString(R.string.ui_match_case)))
+                                        FilterChip(regex, { regex = !regex }, label = { Text(".*") }, modifier = Modifier.semanticsDescription(uiContext.getString(R.string.ui_regular_expression)))
+                                        FilterChip(filtersOpen, { filtersOpen = !filtersOpen }, label = { Text(uiContext.getString(R.string.ui_filters)) })
+                                        FilterChip(replaceOpen, { replaceOpen = !replaceOpen }, label = { Text(uiContext.getString(R.string.ui_replace)) })
                                     }
                                     if (filtersOpen) {
-                                        OutlinedTextField(include, { include = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Include files") }, placeholder = { Text("**/*.kt, **/*.js") }, shape = RoundedCornerShape(16.dp))
+                                        OutlinedTextField(include, { include = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text(uiContext.getString(R.string.ui_include_files)) }, placeholder = { Text("**/*.kt, **/*.js") }, shape = RoundedCornerShape(16.dp))
                                         Spacer(Modifier.height(6.dp))
-                                        OutlinedTextField(exclude, { exclude = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Exclude files") }, placeholder = { Text("**/generated/**") }, shape = RoundedCornerShape(16.dp))
+                                        OutlinedTextField(exclude, { exclude = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text(uiContext.getString(R.string.ui_exclude_files)) }, placeholder = { Text("**/generated/**") }, shape = RoundedCornerShape(16.dp))
                                     }
                                     if (replaceOpen) {
                                         Spacer(Modifier.height(6.dp))
-                                        OutlinedTextField(replacement, { replacement = it }, Modifier.fillMaxWidth().semanticsDescription("Replace with"), singleLine = true, label = { Text("Replace with") },
-                                            keyboardOptions = KeyboardOptions(autoCorrectEnabled = false), supportingText = if(regex) {{ Text("Use \$1 for capture groups") }} else null, shape = RoundedCornerShape(20.dp))
+                                        OutlinedTextField(replacement, { replacement = it }, Modifier.fillMaxWidth().semanticsDescription(uiContext.getString(R.string.ui_replace_with)), singleLine = true, label = { Text(uiContext.getString(R.string.ui_replace_with)) },
+                                            keyboardOptions = KeyboardOptions(autoCorrectEnabled = false), supportingText = if(regex) {{ Text(uiContext.getString(R.string.ui_use_1_for_capture_groups)) }} else null, shape = RoundedCornerShape(20.dp))
                                         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
                                             Button(onClick = ::review, enabled = !busy && resultOptions == options && result?.files?.isNotEmpty() == true && result?.limited == false) {
-                                                Icon(Icons.Outlined.Difference, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Review changes")
+                                                Icon(Icons.Outlined.Difference, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(uiContext.getString(R.string.ui_review_changes))
                                             }
                                         }
                                     }
@@ -270,13 +272,13 @@ internal fun WorkspaceToolsSheet(
                     }
                     when {
                         completed != null -> {
-                            item { Text("Updated ${completed.saved.size} ${if(completed.saved.size == 1) "file" else "files"}", style = MaterialTheme.typography.titleMedium) }
+                            item { Text(uiContext.getString(R.string.ui_updated, (completed.saved.size).toString(), (if(completed.saved.size == 1) "file" else "files").toString()), style = MaterialTheme.typography.titleMedium) }
                             items(completed.saved, key = { "saved:$it" }) { path -> ListItem(headlineContent = { Text(path, maxLines = 2, overflow = TextOverflow.Ellipsis) }, leadingContent = { Icon(Icons.Outlined.CheckCircle, null) }) }
                             items(completed.failed.toList(), key = { "failed:${it.first}" }) { (path, failure) -> ListItem(headlineContent = { Text(path) }, supportingContent = { Text(failure, color = MaterialTheme.colorScheme.error) }) }
-                            item { TextButton(onClick = { receipt = null; query = ""; result = null }) { Text("New search") } }
+                            item { TextButton(onClick = { receipt = null; query = ""; result = null }) { Text(uiContext.getString(R.string.ui_new_search)) } }
                         }
                         reviewed != null -> {
-                            if (reviewed.isEmpty()) item { Text("No changes: the replacement produces the same text.") }
+                            if (reviewed.isEmpty()) item { Text(uiContext.getString(R.string.ui_no_changes_the_replacement_produces_the_same)) }
                             items(reviewed, key = { it.change.source.path }) { row ->
                                 val path = row.change.source.path
                                 Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
@@ -285,11 +287,11 @@ internal fun WorkspaceToolsSheet(
                                             Checkbox(path in selected, { checked -> selected = if(checked) selected + path else selected - path }, enabled = row.blocked == null && !applying)
                                             Column(Modifier.weight(1f)) {
                                                 Text(path.substringAfterLast('/'), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                                Text(path.substringBeforeLast('/', "Workspace root"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                                Text(path.substringBeforeLast('/', uiContext.getString(R.string.ui_workspace_root_732)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                                 Text(row.blocked ?: "${row.change.source.count} ${if(row.change.source.count == 1) "match" else "matches"}", style = MaterialTheme.typography.labelSmall,
                                                     color = if(row.blocked != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
-                                            IconButton(onClick = { expanded = if(path in expanded) expanded - path else expanded + path }, modifier = Modifier.semanticsDescription("Preview $path")) { Icon(if(path in expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null) }
+                                            IconButton(onClick = { expanded = if(path in expanded) expanded - path else expanded + path }, modifier = Modifier.semanticsDescription(uiContext.getString(R.string.ui_preview_903, (path).toString()))) { Icon(if(path in expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null) }
                                         }
                                         if(path in expanded) {
                                             HorizontalDivider()
@@ -310,7 +312,7 @@ internal fun WorkspaceToolsSheet(
                             }
                         }
                         mode == WorkspaceToolMode.COMMANDS -> {
-                            if(matchingCommands.isEmpty()) item { Text("No matching commands", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            if(matchingCommands.isEmpty()) item { Text(uiContext.getString(R.string.ui_no_matching_commands), color = MaterialTheme.colorScheme.onSurfaceVariant) }
                             items(matchingCommands, key = { it.title }) { command ->
                                 Surface(onClick = command.action, shape = RoundedCornerShape(20.dp), color = if(command == matchingCommands.getOrNull(highlighted)) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer) {
                                     ListItem(headlineContent = { Text(command.title, style = MaterialTheme.typography.titleSmall) }, supportingContent = { Text(command.detail) }, leadingContent = { Icon(command.icon, null) },
@@ -319,24 +321,24 @@ internal fun WorkspaceToolsSheet(
                             }
                         }
                         mode == WorkspaceToolMode.FILES -> {
-                            item { Text(if(query.isBlank()) "Project files" else "${files.size} matching ${if(files.size == 1) "file" else "files"}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                            if(files.isEmpty() && index != null) item { Text("No matching files", Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            item { Text(if(query.isBlank()) uiContext.getString(R.string.ui_project_files) else "${files.size} matching ${if(files.size == 1) "file" else "files"}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            if(files.isEmpty() && index != null) item { Text(uiContext.getString(R.string.ui_no_matching_files), Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
                             items(files, key = { it }) { path ->
-                                Surface(onClick = { open(path, line) }, modifier = Modifier.semanticsDescription("Open file $path"), shape = RoundedCornerShape(18.dp), color = if(path == files.getOrNull(highlighted)) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer) {
-                                    ListItem(headlineContent = { Text(path.substringAfterLast('/'), maxLines = 1, overflow = TextOverflow.Ellipsis) }, supportingContent = { Text(path.substringBeforeLast('/', "Workspace root"), maxLines = 2, overflow = TextOverflow.Ellipsis) },
+                                Surface(onClick = { open(path, line) }, modifier = Modifier.semanticsDescription(uiContext.getString(R.string.ui_open_file_907, (path).toString())), shape = RoundedCornerShape(18.dp), color = if(path == files.getOrNull(highlighted)) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer) {
+                                    ListItem(headlineContent = { Text(path.substringAfterLast('/'), maxLines = 1, overflow = TextOverflow.Ellipsis) }, supportingContent = { Text(path.substringBeforeLast('/', uiContext.getString(R.string.ui_workspace_root_732)), maxLines = 2, overflow = TextOverflow.Ellipsis) },
                                         leadingContent = { Icon(Icons.Outlined.Description, null) }, colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent))
                                 }
                             }
-                            if(index?.limited == true) item { Text("File list limited to 10,000 files.", style = MaterialTheme.typography.bodySmall) }
+                            if(index?.limited == true) item { Text(uiContext.getString(R.string.ui_file_list_limited_to_10_000_files), style = MaterialTheme.typography.bodySmall) }
                         }
                         mode == WorkspaceToolMode.SEARCH -> {
                             val found = result
                             item {
-                                Text(when { query.isEmpty() -> "Search file contents across this project"; busy -> "Searching…"; found == null -> ""; found.files.isEmpty() -> "No matches"; else -> "${found.count} ${if(found.count == 1) "match" else "matches"} in ${found.files.size} ${if(found.files.size == 1) "file" else "files"}" },
+                                Text(when { query.isEmpty() -> uiContext.getString(R.string.ui_search_file_contents_across_this_project); busy -> uiContext.getString(R.string.ui_searching); found == null -> ""; found.files.isEmpty() -> uiContext.getString(R.string.ui_no_matches); else -> "${found.count} ${if(found.count == 1) "match" else "matches"} in ${found.files.size} ${if(found.files.size == 1) "file" else "files"}" },
                                     style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            if(found?.limited == true) item { Text("Results are limited. Narrow your query or include filter to enable replacement.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-                            if(found != null && found.skipped > 0) item { Text("${found.skipped} binary, large or unreadable files skipped", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            if(found?.limited == true) item { Text(uiContext.getString(R.string.ui_results_are_limited_narrow_your_query_or), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                            if(found != null && found.skipped > 0) item { Text(uiContext.getString(R.string.ui_binary_large_or_unreadable_files_skipped, (found.skipped).toString()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                             found?.files?.forEach { file ->
                                 item(key = "file:${file.path}") {
                                     Row(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -360,8 +362,8 @@ internal fun WorkspaceToolsSheet(
                 if(reviewed != null) {
                     HorizontalDivider()
                     FlowRow(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = { preview = null; error = null }, enabled = !applying) { Text("Back to search") }
-                        Button(onClick = ::apply, enabled = selected.isNotEmpty() && !applying) { Text(if(applying) "Replacing…" else "Replace in ${selected.size} ${if(selected.size == 1) "file" else "files"}") }
+                        TextButton(onClick = { preview = null; error = null }, enabled = !applying) { Text(uiContext.getString(R.string.ui_back_to_search)) }
+                        Button(onClick = ::apply, enabled = selected.isNotEmpty() && !applying) { Text(if(applying) uiContext.getString(R.string.ui_replacing) else uiContext.getString(R.string.ui_replace_in, (selected.size).toString(), (if(selected.size == 1) "file" else "files").toString())) }
                     }
                 }
             }

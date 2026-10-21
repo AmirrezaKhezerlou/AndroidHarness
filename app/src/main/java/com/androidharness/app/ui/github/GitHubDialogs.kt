@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.github
 
+import com.androidharness.app.R
 import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -26,6 +27,7 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun GitHubDialog(title: String, busy: Boolean, onDismiss: () -> Unit,
     footer: @Composable ColumnScope.() -> Unit = {}, content: @Composable ColumnScope.() -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     Dialog(onDismissRequest = { if (!busy) onDismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth().padding(12.dp).fillMaxHeight(0.9f)) {
             Column(Modifier.padding(16.dp)) {
@@ -35,7 +37,7 @@ internal fun GitHubDialog(title: String, busy: Boolean, onDismiss: () -> Unit,
                     verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
                 footer()
                 if (busy) AppLinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp))
-                TextButton(onClick = onDismiss, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Close") }
+                TextButton(onClick = onDismiss, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(uiContext.getString(R.string.settings_action_close)) }
             }
         }
     }
@@ -44,6 +46,7 @@ internal fun GitHubDialog(title: String, busy: Boolean, onDismiss: () -> Unit,
 @Composable
 fun GitHubImportDialog(container: AppContainer, onDismiss: () -> Unit, onImported: () -> Unit = onDismiss,
     activateWorkspace: Boolean = true, onProjectImported: (String) -> Unit = {}) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     var input by remember { mutableStateOf("") }
     var repos by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -64,29 +67,29 @@ fun GitHubImportDialog(container: AppContainer, onDismiss: () -> Unit, onImporte
             finally { busy = false }
         }
     }
-    GitHubDialog("Import from GitHub", busy, onDismiss) {
-        Text("Clone a repository into its own private workspace. Public repositories can be imported without signing in.",
+    GitHubDialog(uiContext.getString(R.string.settings_github_import), busy, onDismiss) {
+        Text(uiContext.getString(R.string.ui_clone_a_repository_into_its_own_private),
             style = MaterialTheme.typography.bodySmall)
         if (!gitToolsReady) {
-            Text("Install Git tools once to import repositories on this device.", style = MaterialTheme.typography.bodySmall)
+            Text(uiContext.getString(R.string.ui_install_git_tools_once_to_import_repositories), style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = {
-                busy = true; message = "Installing Git tools…"
+                busy = true; message = uiContext.getString(R.string.ui_installing_git_tools)
                 scope.launch {
                     try {
                         container.linuxEnv.install(container.linuxEnv.corePackages).getOrThrow()
-                        check(container.linuxEnv.gitToolsReady) { (container.linuxEnv.state.value as? com.androidharness.app.data.env.EnvState.Failed)?.message ?: "Git tools could not be installed. Retry the installation." }
-                        message = "Git tools ready."
+                        check(container.linuxEnv.gitToolsReady) { (container.linuxEnv.state.value as? com.androidharness.app.data.env.EnvState.Failed)?.message ?: uiContext.getString(R.string.ui_git_tools_could_not_be_installed_retry) }
+                        message = uiContext.getString(R.string.ui_git_tools_ready)
                     }
                     catch (e: CancellationException) { throw e }
                     catch (e: Exception) { message = container.github.safeMessage(e) }
                     finally { busy = false }
                 }
-            }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Install Git tools") }
+            }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(uiContext.getString(R.string.ui_install_git_tools)) }
         }
-        OutlinedTextField(input, onValueChange = { input = it }, label = { Text("Repository URL or owner/repository") },
+        OutlinedTextField(input, onValueChange = { input = it }, label = { Text(uiContext.getString(R.string.ui_repository_url_or_owner_repository)) },
             enabled = !busy, modifier = Modifier.fillMaxWidth())
         Button(onClick = {
-            busy = true; message = "Importing repository…"
+            busy = true; message = uiContext.getString(R.string.ui_importing_repository)
             scope.launch {
                 try {
                     var projectId: String? = null
@@ -98,11 +101,11 @@ fun GitHubImportDialog(container: AppContainer, onDismiss: () -> Unit, onImporte
                 catch (e: Exception) { message = container.github.safeMessage(e) }
                 finally { busy = false }
             }
-        }, enabled = !busy && gitToolsReady && input.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Import repository") }
+        }, enabled = !busy && gitToolsReady && input.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(uiContext.getString(R.string.ui_import_repository)) }
         message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         HorizontalDivider()
         OutlinedButton(onClick = ::load, enabled = !busy && more, modifier = Modifier.fillMaxWidth()) {
-            Text(if (repos.isEmpty()) "Browse my repositories" else "Load more repositories")
+            Text(if (repos.isEmpty()) uiContext.getString(R.string.ui_browse_my_repositories) else uiContext.getString(R.string.ui_load_more_repositories))
         }
         repos.forEach { repo ->
             OutlinedButton(onClick = { input = repo }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(repo) }
@@ -114,16 +117,17 @@ fun GitHubImportDialog(container: AppContainer, onDismiss: () -> Unit, onImporte
 @Composable
 fun GitHubWorkspaceDialog(container: AppContainer, projectId: String, projectName: String,
     onOpenSettings: () -> Unit, onDismiss: () -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val connection by container.github.state.collectAsStateWithLifecycle()
     if (connection.login == null) {
         AlertDialog(
             onDismissRequest = onDismiss,
-            title = { Text("Sign in to GitHub") },
-            text = { Text("You haven't connected GitHub yet. Sign in with GitHub or add a personal access token in Settings to import private repositories and publish your work.") },
+            title = { Text(uiContext.getString(R.string.ui_sign_in_to_github)) },
+            text = { Text(uiContext.getString(R.string.ui_you_haven_t_connected_github_yet_sign)) },
             confirmButton = {
-                TextButton(onClick = { onDismiss(); onOpenSettings() }) { Text("Sign in") }
+                TextButton(onClick = { onDismiss(); onOpenSettings() }) { Text(uiContext.getString(R.string.ui_sign_in)) }
             },
-            dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+            dismissButton = { TextButton(onClick = onDismiss) { Text(uiContext.getString(R.string.settings_action_close)) } },
         )
     } else {
         GitHubPublishDialog(container, projectId, projectName, onDismiss)
@@ -132,6 +136,7 @@ fun GitHubWorkspaceDialog(container: AppContainer, projectId: String, projectNam
 
 @Composable
 fun GitHubPublishDialog(container: AppContainer, projectId: String, projectName: String, onDismiss: () -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val environment by container.linuxEnv.state.collectAsStateWithLifecycle()
     var fs by remember(projectId) { mutableStateOf<WorkspaceFs?>(null) }
@@ -155,7 +160,7 @@ fun GitHubPublishDialog(container: AppContainer, projectId: String, projectName:
         paths = emptySet()
         directory = ""
         val project = container.workspace.projects.first().firstOrNull { it.id == projectId }
-            ?: error("This workspace was removed.")
+            ?: error(uiContext.getString(R.string.ui_this_workspace_was_removed))
         val captured = container.workspace.fsFor(project)
         fs = captured
         if (!container.linuxEnv.gitToolsReady) return
@@ -203,7 +208,7 @@ fun GitHubPublishDialog(container: AppContainer, projectId: String, projectName:
         GitHubImportDialog(container, onDismiss = { importing = false }, onImported = onDismiss)
         return
     }
-    GitHubDialog("Commit & push", busy, onDismiss, footer = {
+    GitHubDialog(uiContext.getString(R.string.settings_github_commit_push), busy, onDismiss, footer = {
         state?.takeIf { it.changes.isNotEmpty() }?.let { snapshot ->
             GitHubCommitFooter(paths.size, snapshot.changes.size, commitMessage, { commitMessage = it }, !busy) {
                 act {
@@ -217,35 +222,35 @@ fun GitHubPublishDialog(container: AppContainer, projectId: String, projectName:
         if (environment !is com.androidharness.app.data.env.EnvState.Ready || !container.linuxEnv.gitToolsReady) {
             OutlinedButton(onClick = { act {
                 container.linuxEnv.install(container.linuxEnv.corePackages).getOrThrow()
-                check(container.linuxEnv.gitToolsReady) { (container.linuxEnv.state.value as? com.androidharness.app.data.env.EnvState.Failed)?.message ?: "Git tools could not be installed. Retry the installation." }
-                refresh(); message = "Git tools ready."
-            } }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Install or repair Git tools") }
+                check(container.linuxEnv.gitToolsReady) { (container.linuxEnv.state.value as? com.androidharness.app.data.env.EnvState.Failed)?.message ?: uiContext.getString(R.string.ui_git_tools_could_not_be_installed_retry) }
+                refresh(); message = uiContext.getString(R.string.ui_git_tools_ready)
+            } }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(uiContext.getString(R.string.ui_install_or_repair_git_tools)) }
         }
         state?.let { snapshot ->
             Text(snapshot.remoteUrl.removePrefix("https://github.com/").removeSuffix(".git"))
-            Text("Branch: ${snapshot.branch}", style = MaterialTheme.typography.bodySmall)
-            Text("${snapshot.changes.size} changed files · app history excluded", style = MaterialTheme.typography.bodySmall)
+            Text(uiContext.getString(R.string.ui_branch, (snapshot.branch).toString()), style = MaterialTheme.typography.bodySmall)
+            Text(uiContext.getString(R.string.ui_changed_files_app_history_excluded, (snapshot.changes.size).toString()), style = MaterialTheme.typography.bodySmall)
             if (snapshot.changes.isNotEmpty()) {
                 GitHubChangePicker(snapshot.changes, paths, directory, { directory = it }, { paths = it }, !busy)
-            } else Text("No uncommitted changes. You can push existing local commits.", style = MaterialTheme.typography.bodySmall)
+            } else Text(uiContext.getString(R.string.ui_no_uncommitted_changes_you_can_push_existing), style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = { act {
                 message = container.githubRepositories.publish(requireNotNull(fs), snapshot, emptySet(), "", false)
                 refresh()
-            } }, enabled = !busy && snapshot.head.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Push existing commits") }
-            OutlinedButton(onClick = { preset = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Save reusable push preset") }
+            } }, enabled = !busy && snapshot.head.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(uiContext.getString(R.string.ui_push_existing_commits)) }
+            OutlinedButton(onClick = { preset = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(uiContext.getString(R.string.ui_save_reusable_push_preset)) }
         }
         if (state == null && !busy) {
-            OutlinedButton(onClick = { importing = true }, modifier = Modifier.fillMaxWidth()) { Text("Import from GitHub") }
-            OutlinedTextField(repositoryInput, onValueChange = { repositoryInput = it }, label = { Text("Existing GitHub repository") },
+            OutlinedButton(onClick = { importing = true }, modifier = Modifier.fillMaxWidth()) { Text(uiContext.getString(R.string.settings_github_import)) }
+            OutlinedTextField(repositoryInput, onValueChange = { repositoryInput = it }, label = { Text(uiContext.getString(R.string.ui_existing_github_repository)) },
                 modifier = Modifier.fillMaxWidth())
             OutlinedButton(onClick = { act {
                 container.githubRepositories.connect(requireNotNull(fs), repositoryInput)
-                refresh(); message = "Repository connected."
+                refresh(); message = uiContext.getString(R.string.ui_repository_connected)
             } }, enabled = fs?.shellRoot != null && container.linuxEnv.gitToolsReady && repositoryInput.isNotBlank(),
-                modifier = Modifier.fillMaxWidth()) { Text("Connect repository") }
+                modifier = Modifier.fillMaxWidth()) { Text(uiContext.getString(R.string.ui_connect_repository)) }
         }
         OutlinedButton(onClick = { act { refresh(); message = null } }, enabled = !busy,
-            modifier = Modifier.fillMaxWidth()) { Text("Refresh repository") }
+            modifier = Modifier.fillMaxWidth()) { Text(uiContext.getString(R.string.ui_refresh_repository)) }
         message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
     }
     if (preset && state != null) GitHubPushPresetDialog(container, projectId, projectName,
@@ -257,9 +262,10 @@ fun GitHubPublishDialog(container: AppContainer, projectId: String, projectName:
 @Composable
 fun GitHubPushPresetDialog(container: AppContainer, projectId: String, projectName: String,
     onDismiss: () -> Unit, initial: GitHubPushPreset? = null, task: AutomationTask? = null) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     var snapshot by remember { mutableStateOf(initial ?: task?.githubPush) }
-    var title by remember { mutableStateOf(task?.title ?: "Push $projectName to GitHub") }
+    var title by remember { mutableStateOf(task?.title ?: uiContext.getString(R.string.ui_push_to_github, (projectName).toString())) }
     var commitMessage by remember { mutableStateOf(initial?.commitMessage ?: task?.githubPush?.commitMessage ?: "Update from AndroidHarness") }
     var schedule by remember { mutableStateOf(task?.schedule ?: AutomationSchedule.MANUAL) }
     var hour by remember { mutableStateOf((task?.hour ?: 8).toString()) }
@@ -276,30 +282,30 @@ fun GitHubPushPresetDialog(container: AppContainer, projectId: String, projectNa
             } catch (e: Exception) { message = container.github.safeMessage(e) } finally { busy = false }
         }
     }
-    GitHubDialog(if (task == null) "GitHub push preset" else "Edit GitHub push preset", busy, onDismiss) {
+    GitHubDialog(if (task == null) uiContext.getString(R.string.ui_github_push_preset) else uiContext.getString(R.string.ui_edit_github_push_preset), busy, onDismiss) {
         Text("$projectName · ${snapshot?.branch.orEmpty()}", style = MaterialTheme.typography.titleMedium)
         snapshot?.let { Text(it.remoteUrl, style = MaterialTheme.typography.bodySmall) }
-        Text("Reuse this repository and branch in Automation. The preset runs Git directly, checks the push, and stops if a task is working in this workspace. It uses your current GitHub connection.",
+        Text(uiContext.getString(R.string.ui_reuse_this_repository_and_branch_in_automation),
             style = MaterialTheme.typography.bodySmall)
-        OutlinedTextField(title, onValueChange = { title = it }, label = { Text("Preset name") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(commitMessage, onValueChange = { commitMessage = it }, label = { Text("Commit message") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(title, onValueChange = { title = it }, label = { Text(uiContext.getString(R.string.ui_preset_name)) }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(commitMessage, onValueChange = { commitMessage = it }, label = { Text(uiContext.getString(R.string.ui_commit_message)) }, modifier = Modifier.fillMaxWidth())
         Row(Modifier.fillMaxWidth().clickable { allChanges = !allChanges }, verticalAlignment = Alignment.CenterVertically) {
             Checkbox(allChanges, onCheckedChange = null)
-            Text("Include all future changes in this workspace", modifier = Modifier.weight(1f))
+            Text(uiContext.getString(R.string.ui_include_all_future_changes_in_this_workspace), modifier = Modifier.weight(1f))
         }
-        if (!allChanges) Text("Selected paths: ${snapshot?.paths?.joinToString(", ")?.ifBlank { "No paths selected. Enable future changes or select files in Commit & push." }}",
+        if (!allChanges) Text(uiContext.getString(R.string.ui_selected_paths, (snapshot?.paths?.joinToString(", ")?.ifBlank { "No paths selected. Enable future changes or select files in Commit & push." }).toString()),
             style = MaterialTheme.typography.bodySmall)
-        Text("Schedule", style = MaterialTheme.typography.titleSmall)
+        Text(uiContext.getString(R.string.ui_schedule), style = MaterialTheme.typography.titleSmall)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(AutomationSchedule.MANUAL, AutomationSchedule.HOURLY, AutomationSchedule.DAILY).forEach { choice ->
                 FilterChip(selected = schedule == choice, onClick = { schedule = choice }, label = { Text(choice.name.lowercase().replaceFirstChar { it.uppercase() }) })
             }
         }
         if (schedule == AutomationSchedule.DAILY) {
-            OutlinedTextField(hour, onValueChange = { hour = it.filter(Char::isDigit).take(2) }, label = { Text("Hour (0–23)") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(minute, onValueChange = { minute = it.filter(Char::isDigit).take(2) }, label = { Text("Minute (0–59)") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(hour, onValueChange = { hour = it.filter(Char::isDigit).take(2) }, label = { Text(uiContext.getString(R.string.ui_hour_0_23)) }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(minute, onValueChange = { minute = it.filter(Char::isDigit).take(2) }, label = { Text(uiContext.getString(R.string.ui_minute_0_59)) }, modifier = Modifier.fillMaxWidth())
         }
-        if (schedule != AutomationSchedule.MANUAL) Text("Android may delay scheduled work. Failed or blocked pushes stay visible in Automation history.", style = MaterialTheme.typography.bodySmall)
+        if (schedule != AutomationSchedule.MANUAL) Text(uiContext.getString(R.string.ui_android_may_delay_scheduled_work_failed_or), style = MaterialTheme.typography.bodySmall)
         Button(onClick = {
             busy = true
             scope.launch {
@@ -312,8 +318,8 @@ fun GitHubPushPresetDialog(container: AppContainer, projectId: String, projectNa
                 } catch (e: Exception) { message = container.github.safeMessage(e) } finally { busy = false }
             }
         }, enabled = !busy && snapshot != null && title.isNotBlank() && commitMessage.isNotBlank() &&
-            (allChanges || snapshot?.paths?.isNotEmpty() == true), modifier = Modifier.fillMaxWidth()) { Text("Save push preset") }
-        if (task != null) TextButton(onClick = { container.automation.delete(task.id); onDismiss() }, modifier = Modifier.fillMaxWidth()) { Text("Delete preset") }
+            (allChanges || snapshot?.paths?.isNotEmpty() == true), modifier = Modifier.fillMaxWidth()) { Text(uiContext.getString(R.string.ui_save_push_preset)) }
+        if (task != null) TextButton(onClick = { container.automation.delete(task.id); onDismiss() }, modifier = Modifier.fillMaxWidth()) { Text(uiContext.getString(R.string.ui_delete_preset)) }
         message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
     }
 }

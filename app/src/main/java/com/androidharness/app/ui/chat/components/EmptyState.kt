@@ -76,6 +76,7 @@ internal fun EmptyState(
     onSuggestion: (String) -> Unit,
     onAddProvider: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val desktop = com.androidharness.app.ui.LocalDesktopLayout.current
     val suggestions = listOf(
@@ -101,14 +102,14 @@ internal fun EmptyState(
         HarnessMark(size = if (desktop) 40.dp else 52.dp)
         Spacer(Modifier.height(20.dp))
         Text(
-            if (hasProvider) "What do you want to build?" else "Connect a provider",
+            if (hasProvider) uiContext.getString(R.string.ui_what_do_you_want_to_build) else uiContext.getString(R.string.ui_connect_a_provider),
             style = MaterialTheme.typography.headlineSmallEmphasized,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(10.dp))
         Text(
-            if (hasProvider) "Start with an idea or create a new project."
-            else "Add an API key for OpenAI, Anthropic or Gemini to get started.",
+            if (hasProvider) uiContext.getString(R.string.ui_start_with_an_idea_or_create_a)
+            else uiContext.getString(R.string.ui_add_an_api_key_for_openai_anthropic),
             style = MaterialTheme.typography.bodyMedium,
             color = scheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -185,7 +186,7 @@ internal fun EmptyState(
             Button(onClick = onAddProvider) {
                 Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Add provider")
+                Text(uiContext.getString(R.string.settings_providers_add))
             }
         }
     }
@@ -197,6 +198,7 @@ private const val DONATION_URL = "https://buymeacoffee.com/sanuj7"
 
 @Composable
 private fun DonationRow() {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val context = LocalContext.current
     val scheme = MaterialTheme.colorScheme
     Row(
@@ -204,13 +206,13 @@ private fun DonationRow() {
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .clickable(role = Role.Button, onClickLabel = "Open Buy Me a Coffee") {
+            .clickable(role = Role.Button, onClickLabel = uiContext.getString(R.string.ui_open_buy_me_a_coffee)) {
                 try {
                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(DONATION_URL)))
                 } catch (_: ActivityNotFoundException) {
                     Toast.makeText(
                         context,
-                        "No browser available. Visit buymeacoffee.com/sanuj7 to donate.",
+                        uiContext.getString(R.string.ui_no_browser_available_visit_buymeacoffee_com_sanuj7),
                         Toast.LENGTH_LONG,
                     ).show()
                 }
@@ -233,9 +235,9 @@ private fun DonationRow() {
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text("Donate", style = MaterialTheme.typography.bodyMedium)
+            Text(uiContext.getString(R.string.ui_donate), style = MaterialTheme.typography.bodyMedium)
             Text(
-                "Help us keep building",
+                uiContext.getString(R.string.ui_help_us_keep_building),
                 style = MaterialTheme.typography.bodySmall,
                 color = scheme.onSurfaceVariant,
             )

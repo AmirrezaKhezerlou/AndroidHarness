@@ -86,6 +86,7 @@ fun ModelPickerSheet(
     manageModelsInitially: Boolean = false,
     onAddProvider: (() -> Unit)? = null,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val compactHeight = LocalConfiguration.current.screenHeightDp < 600 * LocalDensity.current.fontScale
     val scope = rememberCoroutineScope()
@@ -130,9 +131,9 @@ fun ModelPickerSheet(
         it.providerId in shortcutProviderIds && (showAll || visible.includes(it.providerId, it.modelId))
     }
     val collections = buildList {
-        add("All" to "All models")
-        if (hasShortcuts(saved.recent)) add("Recent" to "Recent")
-        if (hasShortcuts(saved.favourites)) add("Favourites" to "Favourites")
+        add("All" to uiContext.getString(R.string.ui_all_models))
+        if (hasShortcuts(saved.recent)) add("Recent" to uiContext.getString(R.string.ui_recent))
+        if (hasShortcuts(saved.favourites)) add("Favourites" to uiContext.getString(R.string.ui_favourites))
     }
     val activeCollection = collection.takeIf { key -> collections.any { it.first == key } } ?: "All"
     LaunchedEffect(activeCollection) { collection = activeCollection }
@@ -163,11 +164,11 @@ fun ModelPickerSheet(
                 ids.map { id -> async { limit.withPermit {
                     val error = try { onRefreshCatalog(id) }
                     catch (e: CancellationException) { throw e }
-                    catch (_: Exception) { "Could not refresh" }
+                    catch (_: Exception) { uiContext.getString(R.string.ui_could_not_refresh) }
                     error?.let { "${providers.firstOrNull { it.id == id }?.name ?: "Provider"}: $it" }
                 } } }.awaitAll().filterNotNull()
             }
-            refreshError = failures.firstOrNull()?.let { if (failures.size > 1) "${failures.size} providers could not refresh. $it" else it }
+            refreshError = failures.firstOrNull()?.let { if (failures.size > 1) uiContext.getString(R.string.ui_providers_could_not_refresh, (failures.size).toString(), (it).toString()) else it }
         } finally { isRefreshing = false }
     }
     LaunchedEffect(listedId, providers.map { it.id }, managing) {
@@ -181,14 +182,15 @@ fun ModelPickerSheet(
         return
     }
     @Composable fun SearchField() {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
         OutlinedTextField(value = if (choosingProvider) providerQuery else query,
                 onValueChange = { if (choosingProvider) providerQuery = it else query = it }, singleLine = true,
-                placeholder = { Text(if (choosingProvider) "Search providers" else "Search models or providers",
+                placeholder = { Text(if (choosingProvider) uiContext.getString(R.string.settings_providers_search) else uiContext.getString(R.string.ui_search_models_or_providers),
                     maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 leadingIcon = { Icon(Icons.Outlined.Search, null, Modifier.size(19.dp)) },
                 trailingIcon = { if ((if (choosingProvider) providerQuery else query).isNotEmpty()) IconButton(onClick = {
                     if (choosingProvider) providerQuery = "" else query = ""
-                }) { Icon(Icons.Filled.Close, "Clear search", Modifier.size(18.dp)) } },
+                }) { Icon(Icons.Filled.Close, uiContext.getString(R.string.settings_search_clear), Modifier.size(18.dp)) } },
                 shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
     }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -197,48 +199,48 @@ fun ModelPickerSheet(
             .navigationBarsPadding().imePadding()) {
             Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (choosingProvider) IconButton(onClick = { choosingProvider = false }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back to models", Modifier.size(20.dp))
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, uiContext.getString(R.string.ui_back_to_models), Modifier.size(20.dp))
                 }
-                Text(if (choosingProvider) "Switch provider" else "Choose a model", Modifier.weight(1f),
+                Text(if (choosingProvider) uiContext.getString(R.string.ui_switch_provider) else uiContext.getString(R.string.ui_choose_a_model), Modifier.weight(1f),
                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
                 sameModelAcrossChats?.let { shared ->
                     TextButton(onClick = { showScope = true }, enabled = modelScopeEnabled) {
-                        Text(if (shared) "All chats" else "This chat", style = MaterialTheme.typography.labelMedium)
+                        Text(if (shared) uiContext.getString(R.string.ui_all_chats) else uiContext.getString(R.string.ui_this_chat), style = MaterialTheme.typography.labelMedium)
                         Icon(Icons.Outlined.ExpandMore, null, Modifier.size(16.dp))
                     }
                 }
-                if (compactHeight && !choosingProvider) IconButton(onClick = { details = true }, enabled = chosenEntry != null) { Icon(Icons.Outlined.Info, "Selected model details", Modifier.size(19.dp)) }
-                IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, "Close", Modifier.size(20.dp)) }
+                if (compactHeight && !choosingProvider) IconButton(onClick = { details = true }, enabled = chosenEntry != null) { Icon(Icons.Outlined.Info, uiContext.getString(R.string.ui_selected_model_details), Modifier.size(19.dp)) }
+                IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, uiContext.getString(R.string.settings_action_close), Modifier.size(20.dp)) }
             }
             if (choosingProvider) {
                 LazyColumn(Modifier.weight(1f)) {
                     item { SearchField() }
-                    item { ProviderChoiceRow("All providers", "Search across your providers", listedId == null,
+                    item { ProviderChoiceRow(uiContext.getString(R.string.settings_provider_all_providers), uiContext.getString(R.string.ui_search_across_your_providers), listedId == null,
                         onClick = { focusManager.clearFocus(); listedId = null; query = ""; collection = "All"; choosingProvider = false }) }
                     val matches = providers.filter { ProviderModelSearch.providerMatches(it, catalogs[it.id].orEmpty(), providerQuery) }
                     items(matches, key = { it.id }) { provider ->
                         val count = ProviderModelSearch.models(provider, catalogs[provider.id].orEmpty()).size
-                        ProviderChoiceRow(provider.name, "$count ${if (count == 1) "model" else "models"} · ${if (provider.enabled) "Enabled" else "Disabled"}",
+                        ProviderChoiceRow(provider.name, uiContext.resources.getQuantityString(R.plurals.ui_model_count, count, count) + " · " + if (provider.enabled) uiContext.getString(R.string.settings_headers_enabled) else uiContext.getString(R.string.settings_provider_disabled),
                             listedId == provider.id, onClick = {
                                 focusManager.clearFocus(); listedId = provider.id; query = ""; collection = "All"; choosingProvider = false
                             })
                     }
-                    if (matches.isEmpty()) item { Text("No matching providers.", Modifier.padding(vertical = 24.dp), color = scheme.onSurfaceVariant) }
+                    if (matches.isEmpty()) item { Text(uiContext.getString(R.string.ui_no_matching_providers), Modifier.padding(vertical = 24.dp), color = scheme.onSurfaceVariant) }
                 }
                 HorizontalDivider(color = scheme.outlineVariant)
                 if (compactHeight) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     FilledTonalButton(onClick = { onDismiss(); (onAddProvider ?: onManageProviders)() },
                         modifier = Modifier.weight(1f).heightIn(min = 48.dp), shape = RoundedCornerShape(12.dp)) {
-                        Icon(Icons.Outlined.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Add provider")
+                        Icon(Icons.Outlined.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(uiContext.getString(R.string.settings_providers_add))
                     }
-                    TextButton(onClick = { onDismiss(); onManageProviders() }, Modifier.weight(1f)) { Text("Manage providers") }
+                    TextButton(onClick = { onDismiss(); onManageProviders() }, Modifier.weight(1f)) { Text(uiContext.getString(R.string.settings_search_manage_providers_title)) }
                 } else Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     FilledTonalButton(onClick = { onDismiss(); (onAddProvider ?: onManageProviders)() },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = RoundedCornerShape(12.dp)) {
-                        Icon(Icons.Outlined.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Add provider")
+                        Icon(Icons.Outlined.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(uiContext.getString(R.string.settings_providers_add))
                     }
-                    TextButton(onClick = { onDismiss(); onManageProviders() }, Modifier.fillMaxWidth()) { Text("Manage providers") }
+                    TextButton(onClick = { onDismiss(); onManageProviders() }, Modifier.fillMaxWidth()) { Text(uiContext.getString(R.string.settings_search_manage_providers_title)) }
                 }
             } else {
                 LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -248,9 +250,9 @@ fun ModelPickerSheet(
                             horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp),
                             itemVerticalAlignment = Alignment.CenterVertically) {
                             OutlinedButton(onClick = { focusManager.clearFocus(); choosingProvider = true }, shape = RoundedCornerShape(10.dp)) {
-                                Icon(Icons.Outlined.SwapHoriz, null, Modifier.size(17.dp)); Spacer(Modifier.width(6.dp)); Text("Switch provider")
+                                Icon(Icons.Outlined.SwapHoriz, null, Modifier.size(17.dp)); Spacer(Modifier.width(6.dp)); Text(uiContext.getString(R.string.ui_switch_provider))
                             }
-                            Text(listedProvider?.name ?: "All providers", style = MaterialTheme.typography.labelSmall,
+                            Text(listedProvider?.name ?: uiContext.getString(R.string.settings_provider_all_providers), style = MaterialTheme.typography.labelSmall,
                                 color = scheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
                         FlowRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp).selectableGroup(),
@@ -271,28 +273,28 @@ fun ModelPickerSheet(
                             }
                         }
                         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("${rows.size} ${if (rows.size == 1) "model" else "models"}${if (showAll) " · Show all" else ""}",
+                            Text(uiContext.resources.getQuantityString(R.plurals.ui_model_count, rows.size, rows.size) + if (showAll) uiContext.getString(R.string.ui_show_all) else "",
                                 Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
-                            TextButton(onClick = { managing = true }) { Text("Edit list", style = MaterialTheme.typography.labelMedium) }
+                            TextButton(onClick = { managing = true }) { Text(uiContext.getString(R.string.ui_edit_list), style = MaterialTheme.typography.labelMedium) }
                             ExpressiveIconButton(onClick = { scope.launch { refresh(scopedProviders.filter { it.enabled || listedId == it.id }.map { it.id }) } }, enabled = !isRefreshing) {
                                 if (isRefreshing) CatalogLoadingIndicator(Modifier.size(20.dp))
-                                else Icon(Icons.Outlined.Refresh, "Refresh models", Modifier.size(18.dp))
+                                else Icon(Icons.Outlined.Refresh, uiContext.getString(R.string.settings_chatgpt_refresh_models), Modifier.size(18.dp))
                             }
                         }
-                        refreshError?.let { Text("Couldn’t refresh. Saved models remain available. $it", Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        refreshError?.let { Text(uiContext.getString(R.string.ui_couldn_t_refresh_saved_models_remain_available, (it).toString()), Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                             style = MaterialTheme.typography.bodySmall, color = scheme.error) }
                     }
                     if (rows.isEmpty()) item {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(when {
-                                isRefreshing -> "Loading provider catalogs…"
-                                providers.isEmpty() -> "Add a provider to choose a model."
-                                collection == "Favourites" -> "Star a model to keep it here."
-                                collection == "Recent" -> "Models you use will appear here."
-                                else -> "No models match. Try another search or show all models."
+                                isRefreshing -> uiContext.getString(R.string.ui_loading_provider_catalogs)
+                                providers.isEmpty() -> uiContext.getString(R.string.ui_add_a_provider_to_choose_a_model)
+                                collection == "Favourites" -> uiContext.getString(R.string.ui_star_a_model_to_keep_it_here)
+                                collection == "Recent" -> uiContext.getString(R.string.ui_models_you_use_will_appear_here)
+                                else -> uiContext.getString(R.string.ui_no_models_match_try_another_search_or)
                             }, color = scheme.onSurfaceVariant)
-                            TextButton(onClick = { collection = "All"; query = ""; showAll = true }) { Text("Show all models") }
-                            if (providers.isEmpty()) TextButton(onClick = { onDismiss(); (onAddProvider ?: onManageProviders)() }) { Text("Add provider") }
+                            TextButton(onClick = { collection = "All"; query = ""; showAll = true }) { Text(uiContext.getString(R.string.ui_show_all_models)) }
+                            if (providers.isEmpty()) TextButton(onClick = { onDismiss(); (onAddProvider ?: onManageProviders)() }) { Text(uiContext.getString(R.string.settings_providers_add)) }
                         }
                     }
                     items(rows, key = { "${it.provider.id.length}:${it.provider.id}:${it.model.id}" }) { result ->
@@ -301,7 +303,7 @@ fun ModelPickerSheet(
                         Box(Modifier.padding(horizontal = 12.dp)) { ModelRow(entry, owner, owner.id == chosenProviderId && entry.id == chosenModelId,
                             !visible.includes(owner.id, entry.id),
                             ctxLabel(entry.contextTokens ?: ModelsDev.entry(ModelsDev.providerKeyFor(owner.baseUrl), entry.id)?.contextTokens),
-                            if (!result.available) "Unavailable · refresh or choose another model" else entry.note,
+                            if (!result.available) uiContext.getString(R.string.ui_unavailable_refresh_or_choose_another_model) else entry.note,
                             modelScopeEnabled && result.available, result.shortcut in saved.favourites,
                             onFavourite = { shortcuts.toggle(result.shortcut) },
                             onClick = { focusManager.clearFocus(); pendingProvider = owner.id; pendingModel = entry.id },
@@ -310,20 +312,20 @@ fun ModelPickerSheet(
                     }
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    FilterChip(selected = thinkOnly, onClick = { thinkOnly = !thinkOnly }, label = { Text("Thinking only") },
+                    FilterChip(selected = thinkOnly, onClick = { thinkOnly = !thinkOnly }, label = { Text(uiContext.getString(R.string.ui_thinking_only)) },
                         leadingIcon = { Icon(painterResource(R.drawable.ic_brain), null, Modifier.size(15.dp)) })
                     Spacer(Modifier.weight(1f))
                     Box {
-                        IconButton(onClick = { more = true }) { Icon(Icons.Outlined.MoreHoriz, "Model options") }
+                        IconButton(onClick = { more = true }) { Icon(Icons.Outlined.MoreHoriz, uiContext.getString(R.string.ui_model_options)) }
                         DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
-                            DropdownMenuItem(text = { Text(if (showAll) "Use customized list" else "Show all") }, onClick = { showAll = !showAll; more = false })
-                            DropdownMenuItem(text = { Text("Manage models") }, onClick = { more = false; managing = true })
+                            DropdownMenuItem(text = { Text(if (showAll) uiContext.getString(R.string.ui_use_customized_list) else uiContext.getString(R.string.ui_show_all_213)) }, onClick = { showAll = !showAll; more = false })
+                            DropdownMenuItem(text = { Text(uiContext.getString(R.string.settings_provider_manage_models)) }, onClick = { more = false; managing = true })
                             if (listedProvider != null && !ChatGptProtocol.isProvider(listedId) && !com.androidharness.app.local.LocalModelCatalog.isLocal(listedProvider.id))
-                                DropdownMenuItem(text = { Text("Custom model") }, onClick = { more = false; showAddCustom = true })
-                            if (collection == "Recent") DropdownMenuItem(text = { Text("Clear recent") }, onClick = {
+                                DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_custom_model)) }, onClick = { more = false; showAddCustom = true })
+                            if (collection == "Recent") DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_clear_recent)) }, onClick = {
                                 if (listedId != null) shortcuts.clearRecent(listedId!!) else providers.forEach { shortcuts.clearRecent(it.id) }; more = false
                             })
-                            fallbackSummary?.let { summary -> DropdownMenuItem(text = { Column { Text("Fallbacks"); Text(summary, style = MaterialTheme.typography.bodySmall) } },
+                            fallbackSummary?.let { summary -> DropdownMenuItem(text = { Column { Text(uiContext.getString(R.string.settings_search_fallbacks_title)); Text(summary, style = MaterialTheme.typography.bodySmall) } },
                                 enabled = modelScopeEnabled && fallbackEditEnabled, onClick = { more = false; onEditFallbacks() }) }
                         }
                     }
@@ -333,12 +335,12 @@ fun ModelPickerSheet(
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
                     if (!compactHeight) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(when (sameModelAcrossChats) { true -> "For all chats"; false -> "For this chat"; null -> "For this selection" }, style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
-                            Text(chosenEntry?.displayName ?: chosenModelId ?: "Choose a model", style = MaterialTheme.typography.bodyMedium,
+                            Text(when (sameModelAcrossChats) { true -> uiContext.getString(R.string.ui_for_all_chats); false -> uiContext.getString(R.string.ui_for_this_chat); null -> uiContext.getString(R.string.ui_for_this_selection) }, style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
+                            Text(chosenEntry?.displayName ?: chosenModelId ?: uiContext.getString(R.string.ui_choose_a_model), style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             chosenProvider?.let { Text(it.name, style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant) }
                         }
-                        IconButton(onClick = { details = true }, enabled = chosenEntry != null) { Icon(Icons.Outlined.Info, "Selected model details", Modifier.size(19.dp)) }
+                        IconButton(onClick = { details = true }, enabled = chosenEntry != null) { Icon(Icons.Outlined.Info, uiContext.getString(R.string.ui_selected_model_details), Modifier.size(19.dp)) }
                     }
                     val unchanged = pendingModel == null && initialShared == sameModelAcrossChats && chosenEntry != null
                     Button(onClick = {
@@ -348,7 +350,7 @@ fun ModelPickerSheet(
                         }
                     }, enabled = modelScopeEnabled && chosenEntry != null && !unchanged,
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 48.dp), shape = RoundedCornerShape(12.dp)) {
-                        Text(when { unchanged -> "Current model"; chosenProvider?.enabled == false -> "Enable and use"; sameModelAcrossChats == true -> "Use in all chats"; else -> "Use model" })
+                        Text(when { unchanged -> uiContext.getString(R.string.ui_current_model); chosenProvider?.enabled == false -> uiContext.getString(R.string.ui_enable_and_use); sameModelAcrossChats == true -> uiContext.getString(R.string.ui_use_in_all_chats); else -> uiContext.getString(R.string.ui_use_model) })
                         Spacer(Modifier.width(8.dp)); Icon(if (unchanged) Icons.Filled.Check else Icons.AutoMirrored.Filled.ArrowForward, null, Modifier.size(18.dp))
                     }
                 }
@@ -357,18 +359,18 @@ fun ModelPickerSheet(
     }
     enableChoice?.let { choice ->
         val provider = providers.firstOrNull { it.id == choice.providerId }
-        AlertDialog(onDismissRequest = { enableChoice = null }, title = { Text("Enable ${provider?.name ?: "provider"}?") },
-            text = { Text("Enable this provider and use ${choice.modelId}${if (sameModelAcrossChats == true) " in all chats" else " for this selection"}.") },
-            confirmButton = { TextButton(enabled = provider != null && modelScopeEnabled, onClick = { onEnableProvider(choice.providerId); commit(choice.providerId, choice.modelId) }) { Text("Enable and use") } },
-            dismissButton = { TextButton(onClick = { enableChoice = null }) { Text("Cancel") } })
+        AlertDialog(onDismissRequest = { enableChoice = null }, title = { Text(uiContext.getString(R.string.ui_enable, (provider?.name ?: "provider").toString())) },
+            text = { Text(uiContext.getString(R.string.ui_enable_this_provider_and_use, (choice.modelId).toString(), (if (sameModelAcrossChats == true) " in all chats" else " for this selection").toString())) },
+            confirmButton = { TextButton(enabled = provider != null && modelScopeEnabled, onClick = { onEnableProvider(choice.providerId); commit(choice.providerId, choice.modelId) }) { Text(uiContext.getString(R.string.ui_enable_and_use)) } },
+            dismissButton = { TextButton(onClick = { enableChoice = null }) { Text(uiContext.getString(R.string.settings_action_cancel)) } })
     }
-    if (showScope && sameModelAcrossChats != null) AlertDialog(onDismissRequest = { showScope = false }, title = { Text("Use model for") },
-        text = { Column { listOf(false to "This chat", true to "All chats").forEach { (shared, label) ->
+    if (showScope && sameModelAcrossChats != null) AlertDialog(onDismissRequest = { showScope = false }, title = { Text(uiContext.getString(R.string.ui_use_model_for)) },
+        text = { Column { listOf(false to uiContext.getString(R.string.ui_this_chat), true to uiContext.getString(R.string.ui_all_chats)).forEach { (shared, label) ->
             Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).selectable(sameModelAcrossChats == shared, enabled = modelScopeEnabled, role = Role.RadioButton,
                 onClick = { onModelScopeChange(shared); showScope = false }), verticalAlignment = Alignment.CenterVertically) {
                 RadioButton(sameModelAcrossChats == shared, null); Spacer(Modifier.width(8.dp)); Text(label)
             }
-        } } }, confirmButton = { TextButton(onClick = { showScope = false }) { Text("Close") } })
+        } } }, confirmButton = { TextButton(onClick = { showScope = false }) { Text(uiContext.getString(R.string.settings_action_close)) } })
     if (details && chosenEntry != null && chosenProvider != null) ModelDetailsDialog(chosenEntry, chosenProvider, onDismiss = { details = false })
     if (showAddCustom && listedProvider != null) AddCustomModelDialog(listedProvider.name,
         onDismiss = { showAddCustom = false }, onAdd = { model, reasoning ->
@@ -380,6 +382,7 @@ fun ModelPickerSheet(
 
 @Composable
 private fun ProviderChoiceRow(name: String, detail: String, selected: Boolean, onClick: () -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     Row(Modifier.fillMaxWidth().heightIn(min = 68.dp).selectable(selected, role = Role.RadioButton, onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         ModelProviderMark(name, 30.dp)
@@ -387,7 +390,7 @@ private fun ProviderChoiceRow(name: String, detail: String, selected: Boolean, o
             Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
             Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        if (selected) Icon(Icons.Filled.Check, "Selected provider", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+        if (selected) Icon(Icons.Filled.Check, uiContext.getString(R.string.ui_selected_provider), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 }
@@ -398,6 +401,7 @@ private fun ModelRow(
     note: String?, enabled: Boolean, favourite: Boolean, onFavourite: () -> Unit, onClick: () -> Unit,
     capabilities: ModelCapabilities, current: Boolean, onDelete: (() -> Unit)?,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val containerColor by animateColorAsState(
         if (selected) scheme.secondaryContainer else scheme.surface,
@@ -409,25 +413,25 @@ private fun ModelRow(
         modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f).heightIn(min = 72.dp).selectable(selected, enabled = enabled, role = Role.RadioButton, onClick = onClick)
-                .semantics { contentDescription = "Choose ${entry.displayName ?: entry.id} from ${provider.name}" }.padding(vertical = 10.dp),
+                .semantics { contentDescription = uiContext.getString(R.string.ui_choose_from, (entry.displayName ?: entry.id).toString(), (provider.name).toString()) }.padding(vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                 ModelProviderMark(provider.name, 28.dp)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(entry.displayName ?: entry.id, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(listOfNotNull(provider.name, if (current) "Current" else null, if (hidden) "Hidden" else null, if (entry.custom) "Custom" else null, context).joinToString(" · "),
+                    Text(listOfNotNull(provider.name, if (current) uiContext.getString(R.string.ui_current) else null, if (hidden) uiContext.getString(R.string.ui_hidden) else null, if (entry.custom) uiContext.getString(R.string.ui_custom) else null, context).joinToString(" · "),
                         style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
-                    if (!provider.enabled) Text("Disabled · Enable and use", style = MaterialTheme.typography.labelSmall, color = scheme.primary)
+                    if (!provider.enabled) Text(uiContext.getString(R.string.ui_disabled_enable_and_use), style = MaterialTheme.typography.labelSmall, color = scheme.primary)
                     ModelCapabilityLabels(capabilities)
                     note?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant) }
                 }
                 Box(Modifier.size(17.dp), contentAlignment = Alignment.Center) {
-                    if (selected) Icon(Icons.Outlined.CheckCircle, "Selected", Modifier.size(17.dp), tint = scheme.onSecondaryContainer)
+                    if (selected) Icon(Icons.Outlined.CheckCircle, uiContext.getString(R.string.settings_selected), Modifier.size(17.dp), tint = scheme.onSecondaryContainer)
                 }
             }
             ExpressiveIconButton(onClick = onFavourite) { Icon(if (favourite) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                if (favourite) "Remove ${entry.displayName ?: entry.id} from favourites" else "Favourite ${entry.displayName ?: entry.id}",
+                if (favourite) uiContext.getString(R.string.ui_remove_from_favourites, (entry.displayName ?: entry.id).toString()) else uiContext.getString(R.string.ui_favourite, (entry.displayName ?: entry.id).toString()),
                 Modifier.size(18.dp), tint = if (favourite) scheme.primary else scheme.onSurfaceVariant) }
-            if (onDelete != null) IconButton(onClick = onDelete) { Icon(Icons.Outlined.Close, "Remove custom model", Modifier.size(17.dp)) }
+            if (onDelete != null) IconButton(onClick = onDelete) { Icon(Icons.Outlined.Close, uiContext.getString(R.string.ui_remove_custom_model), Modifier.size(17.dp)) }
         }
     }
 }
@@ -435,6 +439,7 @@ private fun ModelRow(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ModelCapabilityLabels(capabilities: ModelCapabilities) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         @Composable fun Label(text: String, icon: Painter, value: ModelCapabilities.Capability) {
             if (value.supported == true) Row(Modifier.semantics { contentDescription = "$text: ${value.description}" },
@@ -444,9 +449,9 @@ private fun ModelCapabilityLabels(capabilities: ModelCapabilities) {
             }
         }
         val inferred = capabilities.thinking.source == ModelCapabilities.Source.FAMILY
-        Label(if (inferred) "Thinking unconfirmed" else "Thinking", painterResource(R.drawable.ic_brain), capabilities.thinking)
-        Label("Tools", rememberVectorPainter(Icons.Outlined.Build), capabilities.tools)
-        Label("Images", rememberVectorPainter(Icons.Outlined.Image), capabilities.images)
+        Label(if (inferred) uiContext.getString(R.string.ui_thinking_unconfirmed) else uiContext.getString(R.string.ui_thinking_2), painterResource(R.drawable.ic_brain), capabilities.thinking)
+        Label(uiContext.getString(R.string.ui_tools), rememberVectorPainter(Icons.Outlined.Build), capabilities.tools)
+        Label(uiContext.getString(R.string.ui_images), rememberVectorPainter(Icons.Outlined.Image), capabilities.images)
     }
 }
 
@@ -462,20 +467,21 @@ private fun ModelProviderMark(name: String, size: Dp) {
 
 @Composable
 private fun ModelDetailsDialog(entry: ModelEntry, provider: ProviderConfig, onDismiss: () -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val revision by ModelsDev.revision.collectAsStateWithLifecycle()
     val capabilities = remember(entry, provider, revision) { ModelCapabilities.of(entry, provider) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text(entry.displayName ?: entry.id) }, text = {
         Column(Modifier.heightIn(max = 340.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(provider.name, style = MaterialTheme.typography.bodyMedium)
-            listOf("Thinking" to capabilities.thinking, "Tools" to capabilities.tools, "Images" to capabilities.images).forEach { (label, value) ->
+            listOf(uiContext.getString(R.string.ui_thinking_2) to capabilities.thinking, uiContext.getString(R.string.ui_tools) to capabilities.tools, uiContext.getString(R.string.ui_images) to capabilities.images).forEach { (label, value) ->
                 Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(label, style = MaterialTheme.typography.labelLarge)
                     Text(value.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            Text("Thinking support does not guarantee visible thinking text. Capabilities can differ between providers serving the same model.", style = MaterialTheme.typography.bodySmall)
+            Text(uiContext.getString(R.string.ui_thinking_support_does_not_guarantee_visible_thinking), style = MaterialTheme.typography.bodySmall)
         }
-    }, confirmButton = { TextButton(onClick = onDismiss) { Text("Got it") } })
+    }, confirmButton = { TextButton(onClick = onDismiss) { Text(uiContext.getString(R.string.settings_action_got_it)) } })
 }
 
 @Composable
@@ -484,25 +490,26 @@ private fun AddCustomModelDialog(
     onDismiss: () -> Unit,
     onAdd: (modelId: String, reasoning: Boolean?) -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var modelId by remember { mutableStateOf("") }
     var thinking by remember { mutableStateOf(false) }
     val clean = modelId.trim()
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add custom model") },
+        title = { Text(uiContext.getString(R.string.ui_add_custom_model)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    "Add any model ID supported by $providerName.",
+                    uiContext.getString(R.string.ui_add_any_model_id_supported_by, (providerName).toString()),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 OutlinedTextField(
                     value = modelId,
                     onValueChange = { modelId = it },
-                    label = { Text("Model ID") },
-                    placeholder = { Text("e.g. meta-llama/llama-3.3-70b") },
+                    label = { Text(uiContext.getString(R.string.ui_model_id)) },
+                    placeholder = { Text(uiContext.getString(R.string.ui_e_g_meta_llama_llama_3_3)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -519,9 +526,9 @@ private fun AddCustomModelDialog(
                     )
                     Spacer(Modifier.width(8.dp))
                     Column {
-                        Text("Reasoning model", style = MaterialTheme.typography.bodyMedium)
+                        Text(uiContext.getString(R.string.ui_reasoning_model), style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            "Enables thinking level ladder for this model",
+                            uiContext.getString(R.string.ui_enables_thinking_level_ladder_for_this_model),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -537,12 +544,12 @@ private fun AddCustomModelDialog(
                     onDismiss()
                 },
             ) {
-                Text("Add & Select")
+                Text(uiContext.getString(R.string.ui_add_select))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(uiContext.getString(R.string.settings_action_cancel))
             }
         },
     )

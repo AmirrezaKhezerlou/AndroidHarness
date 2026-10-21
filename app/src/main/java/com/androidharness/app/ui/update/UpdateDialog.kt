@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.update
 
+import com.androidharness.app.R
 import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import android.content.Intent
 import android.net.Uri
@@ -172,6 +173,7 @@ private fun UpdateHeader(
     isBusy: Boolean,
     onDismiss: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val icon = when (step) {
         is UpdateManager.Step.Downloading -> Icons.Outlined.CloudDownload
         is UpdateManager.Step.Installing -> Icons.Outlined.SystemUpdate
@@ -217,7 +219,7 @@ private fun UpdateHeader(
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = "GitHub Releases",
+                text = uiContext.getString(R.string.ui_github_releases),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -229,7 +231,7 @@ private fun UpdateHeader(
             ) {
                 Icon(
                     imageVector = Icons.Filled.Close,
-                    contentDescription = "Close",
+                    contentDescription = uiContext.getString(R.string.settings_action_close),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp),
                 )
@@ -267,6 +269,7 @@ private fun UpdateBodyContent(
 
 @Composable
 private fun ReleaseAvailableContent(release: UpdateManager.LatestRelease) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val context = LocalContext.current
 
     Surface(
@@ -344,7 +347,7 @@ private fun ReleaseAvailableContent(release: UpdateManager.LatestRelease) {
     }
 
     Text(
-        text = "What's new",
+        text = uiContext.getString(R.string.ui_what_s_new),
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.onSurface,
@@ -359,7 +362,7 @@ private fun ReleaseAvailableContent(release: UpdateManager.LatestRelease) {
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
-                text = "No release notes provided.",
+                text = uiContext.getString(R.string.ui_no_release_notes_provided),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(16.dp),
@@ -391,6 +394,7 @@ private fun ReleaseAvailableContent(release: UpdateManager.LatestRelease) {
 
 @Composable
 private fun DownloadProgressContent(step: UpdateManager.Step.Downloading) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val animatedProgress by animateFloatAsState(
         targetValue = step.percent / 100f,
         animationSpec = tween(220),
@@ -403,7 +407,7 @@ private fun DownloadProgressContent(step: UpdateManager.Step.Downloading) {
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Text(
-            text = "Fetching APK asset from GitHub Releases…",
+            text = uiContext.getString(R.string.ui_fetching_apk_asset_from_github_releases),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
@@ -442,6 +446,7 @@ private fun DownloadProgressContent(step: UpdateManager.Step.Downloading) {
 
 @Composable
 private fun InstallingContent(step: UpdateManager.Step.Installing, release: UpdateManager.LatestRelease?) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLowest,
@@ -460,7 +465,7 @@ private fun InstallingContent(step: UpdateManager.Step.Installing, release: Upda
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = if (step.viaShizuku) "Installing via Shizuku…" else "Opening system installer…",
+                    text = if (step.viaShizuku) uiContext.getString(R.string.ui_installing_via_shizuku) else uiContext.getString(R.string.ui_opening_system_installer),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -468,9 +473,9 @@ private fun InstallingContent(step: UpdateManager.Step.Installing, release: Upda
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = if (step.viaShizuku) {
-                        "Shizuku is installing ${release?.tag ?: "update"} silently. The app will restart when done."
+                        uiContext.getString(R.string.ui_shizuku_is_installing_silently_the_app_will, (release?.tag ?: "update").toString())
                     } else {
-                        "Confirm the package installer prompt to finish updating."
+                        uiContext.getString(R.string.ui_confirm_the_package_installer_prompt_to_finish)
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -482,6 +487,7 @@ private fun InstallingContent(step: UpdateManager.Step.Installing, release: Upda
 
 @Composable
 private fun DoneContent(step: UpdateManager.Step.Done, release: UpdateManager.LatestRelease?) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLowest,
@@ -509,7 +515,7 @@ private fun DoneContent(step: UpdateManager.Step.Done, release: UpdateManager.La
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = if (step.viaShizuku) "Installation complete!" else "Ready to install",
+                    text = if (step.viaShizuku) uiContext.getString(R.string.ui_installation_complete) else uiContext.getString(R.string.ui_ready_to_install),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -517,9 +523,9 @@ private fun DoneContent(step: UpdateManager.Step.Done, release: UpdateManager.La
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = if (step.viaShizuku) {
-                        "${release?.tag ?: "Update"} was installed via Shizuku."
+                        uiContext.getString(R.string.ui_was_installed_via_shizuku, (release?.tag ?: "Update").toString())
                     } else {
-                        "APK staged. Follow installer instructions."
+                        uiContext.getString(R.string.ui_apk_staged_follow_installer_instructions)
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -531,6 +537,7 @@ private fun DoneContent(step: UpdateManager.Step.Done, release: UpdateManager.La
 
 @Composable
 private fun ErrorContent(step: UpdateManager.Step.Error, release: UpdateManager.LatestRelease?) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
@@ -550,7 +557,7 @@ private fun ErrorContent(step: UpdateManager.Step.Error, release: UpdateManager.
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = "Something went wrong",
+                    text = uiContext.getString(R.string.ui_something_went_wrong),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onErrorContainer,
@@ -566,7 +573,7 @@ private fun ErrorContent(step: UpdateManager.Step.Error, release: UpdateManager.
     }
     if (release != null) {
         Spacer(Modifier.height(8.dp))
-        LinkLine(release.htmlUrl, "Open release on GitHub →")
+        LinkLine(release.htmlUrl, uiContext.getString(R.string.ui_open_release_on_github))
     }
 }
 
@@ -577,6 +584,7 @@ private fun UpdateActions(
     onDismiss: () -> Unit,
     onUpdate: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.End,
@@ -588,7 +596,7 @@ private fun UpdateActions(
                     onClick = onDismiss,
                     shape = RoundedCornerShape(12.dp),
                 ) {
-                    Text("Later")
+                    Text(uiContext.getString(R.string.ui_later))
                 }
                 Spacer(Modifier.width(10.dp))
                 Button(
@@ -601,13 +609,13 @@ private fun UpdateActions(
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(Modifier.width(6.dp))
-                    Text("Update to ${release?.tag ?: "latest"}")
+                    Text(uiContext.getString(R.string.ui_update_to, (release?.tag ?: "latest").toString()))
                 }
             }
 
             is UpdateManager.Step.Downloading -> {
                 Text(
-                    "Downloading…",
+                    uiContext.getString(R.string.ui_downloading),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -615,7 +623,7 @@ private fun UpdateActions(
 
             is UpdateManager.Step.Installing -> {
                 Text(
-                    "Installing update…",
+                    uiContext.getString(R.string.ui_installing_update),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -626,7 +634,7 @@ private fun UpdateActions(
                     onClick = onDismiss,
                     shape = RoundedCornerShape(12.dp),
                 ) {
-                    Text("Done")
+                    Text(uiContext.getString(R.string.settings_action_done))
                 }
             }
 
@@ -635,14 +643,14 @@ private fun UpdateActions(
                     onClick = onDismiss,
                     shape = RoundedCornerShape(12.dp),
                 ) {
-                    Text("Close")
+                    Text(uiContext.getString(R.string.settings_action_close))
                 }
                 Spacer(Modifier.width(10.dp))
                 Button(
                     onClick = onUpdate,
                     shape = RoundedCornerShape(12.dp),
                 ) {
-                    Text(if (step.message == UpdateManager.NEED_INSTALL_PERMISSION) "Try again" else "Retry")
+                    Text(if (step.message == UpdateManager.NEED_INSTALL_PERMISSION) uiContext.getString(R.string.settings_action_try_again) else uiContext.getString(R.string.ui_retry))
                 }
             }
 
@@ -651,7 +659,7 @@ private fun UpdateActions(
                     onClick = onDismiss,
                     shape = RoundedCornerShape(12.dp),
                 ) {
-                    Text("Close")
+                    Text(uiContext.getString(R.string.settings_action_close))
                 }
             }
         }

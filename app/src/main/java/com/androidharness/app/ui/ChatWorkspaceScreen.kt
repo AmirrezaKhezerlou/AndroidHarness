@@ -1,5 +1,7 @@
 package com.androidharness.app.ui
 
+import com.androidharness.app.ui.common.localizedOption
+import com.androidharness.app.ui.common.localizedOptionLabel
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -47,6 +49,7 @@ fun ChatWorkspaceScreen(
     onNavigateToSession: (String) -> Unit = {},
     searchMessageId: String? = null,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val container = viewModel.container
     val settings by container.settings.settings.collectAsStateWithLifecycle(initialValue = com.androidharness.app.data.AppSettings())
     val chatState by viewModel.state.collectAsStateWithLifecycle()
@@ -137,16 +140,16 @@ fun ChatWorkspaceScreen(
         SideEffect { keyboardRouter?.register(keyboardOwner, ::handleKey) }
         DisposableEffect(keyboardRouter) { onDispose { keyboardRouter?.unregister(keyboardOwner) } }
         val controls: @Composable () -> Unit = {
-            WorkspaceToolButton("Files", Icons.Outlined.Folder, visible && tool == "Files", desktop) { showTool("Files") }
+            WorkspaceToolButton(uiContext.getString(R.string.ui_files), Icons.Outlined.Folder, visible && tool == "Files", desktop) { showTool("Files") }
             if (desktop) {
                 FilterChip(selected = githubProject != null, onClick = ::openGitHub, enabled = project != null,
                     label = { Text("GitHub", style = MaterialTheme.typography.labelMedium) },
                     leadingIcon = { Icon(painterResource(R.drawable.ic_github), null, Modifier.size(16.dp)) },
                     modifier = Modifier.padding(start = 6.dp).pointerHoverIcon(PointerIcon.Hand))
             }
-            WorkspaceToolButton("Changes", Icons.Outlined.Difference, visible && tool == "Changes", desktop,
+            WorkspaceToolButton(uiContext.getString(R.string.ui_changes), Icons.Outlined.Difference, visible && tool == "Changes", desktop,
                 enabled = chatState.sessionId != null) { showTool("Changes") }
-            WorkspaceToolButton("Terminal", Icons.Outlined.Terminal, visible && tool == "Terminal", desktop) { showTool("Terminal") }
+            WorkspaceToolButton(uiContext.getString(R.string.ui_terminal), Icons.Outlined.Terminal, visible && tool == "Terminal", desktop) { showTool("Terminal") }
             if (desktop) WorkspaceAccessMode(chatState.permissionMode, viewModel::setPermissionMode)
         }
         workspaceTools?.let { mode ->
@@ -159,9 +162,9 @@ fun ChatWorkspaceScreen(
                         toolsUsed = true; panelOpen = true; compactOpen = !wide
                     } else onOpenFile(path, atLine)
                 }, commands = listOf(
-                    WorkspaceCommand("Open files", "Browse this workspace", Icons.Outlined.Folder) { workspaceTools = null; if(embedded) showTool("Files") else onOpenFiles() },
-                    WorkspaceCommand("Open terminal", "Terminal for this workspace", Icons.Outlined.Terminal) { workspaceTools = null; if(embedded) showTool("Terminal") else onOpenTerminal() },
-                    WorkspaceCommand("Open settings", "App preferences and connections", Icons.Outlined.Settings) { workspaceTools = null; guard.navigate(onOpenSettings) },
+                    WorkspaceCommand(uiContext.getString(R.string.ui_open_files_925), uiContext.getString(R.string.ui_browse_this_workspace), Icons.Outlined.Folder) { workspaceTools = null; if(embedded) showTool("Files") else onOpenFiles() },
+                    WorkspaceCommand(uiContext.getString(R.string.ui_open_terminal), uiContext.getString(R.string.ui_terminal_for_this_workspace), Icons.Outlined.Terminal) { workspaceTools = null; if(embedded) showTool("Terminal") else onOpenTerminal() },
+                    WorkspaceCommand(uiContext.getString(R.string.ui_open_settings), uiContext.getString(R.string.ui_app_preferences_and_connections), Icons.Outlined.Settings) { workspaceTools = null; guard.navigate(onOpenSettings) },
                 ))
         }
         CompositionLocalProvider(LocalWorkspaceToolLauncher provides { workspaceTools = it }, LocalDesktopLayout provides desktop, LocalDesktopInput provides desktopInput,
@@ -176,10 +179,10 @@ fun ChatWorkspaceScreen(
                                 verticalAlignment = Alignment.CenterVertically) {
                                 IconButton(onClick = onOpenDrawer,
                                     modifier = Modifier.size(40.dp).pointerHoverIcon(PointerIcon.Hand)) {
-                                    Icon(Icons.Outlined.Menu, "Toggle sidebar", Modifier.size(18.dp))
+                                    Icon(Icons.Outlined.Menu, uiContext.getString(R.string.ui_toggle_sidebar), Modifier.size(18.dp))
                                 }
                                 Icon(Icons.Outlined.Folder, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(project?.name ?: "Workspace", Modifier.weight(1f).padding(start = 8.dp),
+                                Text(project?.name ?: uiContext.getString(R.string.ui_workspace), Modifier.weight(1f).padding(start = 8.dp),
                                     style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 if (inline) controls()
                             }
@@ -213,14 +216,14 @@ fun ChatWorkspaceScreen(
                                     scope.launch {
                                         try {
                                             val sid = chatState.sessionId ?: sourceId?.let { container.sessions.createProjectSession(it) }
-                                                ?: error("Workspace unavailable")
+                                                ?: error(uiContext.getString(R.string.ui_workspace_unavailable))
                                             container.pendingCodeDraft.value = com.androidharness.app.ui.files.CodeChatDraft(sid, prompt)
                                             if (chatState.sessionId == null) onNavigateToSession(sid)
                                             else { file = null; if (!wide) compactOpen = false }
                                         } catch (e: kotlinx.coroutines.CancellationException) { throw e }
                                         catch (_: Exception) {
                                             android.widget.Toast.makeText(container.appContext,
-                                                "Could not open chat. Choose an available workspace and retry.", android.widget.Toast.LENGTH_LONG).show()
+                                                uiContext.getString(R.string.ui_could_not_open_chat_choose_an_available), android.widget.Toast.LENGTH_LONG).show()
                                         }
                                     }
                                 })
@@ -246,18 +249,19 @@ fun ChatWorkspaceScreen(
 
 @Composable
 private fun WorkspaceAccessMode(permission: PermissionMode, onSelect: (PermissionMode) -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var expanded by remember { mutableStateOf(false) }
     Box {
         FilterChip(selected = expanded, onClick = { expanded = true },
-            label = { Text(permission.label, style = MaterialTheme.typography.labelMedium) },
+            label = { Text(localizedOption(permission.label), style = MaterialTheme.typography.labelMedium) },
             leadingIcon = { Icon(Icons.Outlined.Shield, null, Modifier.size(16.dp)) },
             trailingIcon = { Icon(Icons.Outlined.KeyboardArrowDown, null, Modifier.size(16.dp)) },
             modifier = Modifier.padding(start = 6.dp).pointerHoverIcon(PointerIcon.Hand)
-                .semantics { contentDescription = "Access mode: ${permission.label}" })
+                .semantics { contentDescription = uiContext.getString(R.string.ui_access_mode, (uiContext.localizedOptionLabel(permission.label)).toString()) })
         DropdownMenu(expanded, { expanded = false }) {
             PermissionMode.entries.forEach { option ->
-                DropdownMenuItem(text = { Text(option.label) }, onClick = { expanded = false; onSelect(option) },
-                    trailingIcon = { if (permission == option) Icon(Icons.Outlined.Check, "Selected", Modifier.size(16.dp)) })
+                DropdownMenuItem(text = { Text(localizedOption(option.label)) }, onClick = { expanded = false; onSelect(option) },
+                    trailingIcon = { if (permission == option) Icon(Icons.Outlined.Check, uiContext.getString(R.string.settings_selected), Modifier.size(16.dp)) })
             }
         }
     }

@@ -36,6 +36,7 @@ fun ProvidersScreen(
     container: AppContainer,
     onBack: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     // The provider list is where API keys are entered and revealed.
     val providers by container.providers.providers.collectAsStateWithLifecycle(initialValue = emptyList())
     val settings by container.settings.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
@@ -80,7 +81,7 @@ fun ProvidersScreen(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(enabled = !selection.busy, onClick = {
                             if (selection.selecting) selection.done() else selection.selecting = true
-                        }) { Text(if (selection.selecting) "Done" else "Select providers") }
+                        }) { Text(if (selection.selecting) uiContext.getString(R.string.settings_action_done) else uiContext.getString(R.string.ui_select_providers)) }
                     }
                     FilledTonalButton(
                         onClick = {
@@ -163,12 +164,12 @@ fun ProvidersScreen(
                             ) {
                                 ProviderMark(size = 48.dp)
                                 Text(
-                                    if (providers.isEmpty()) "No providers yet" else "No matching providers",
+                                    if (providers.isEmpty()) uiContext.getString(R.string.ui_no_providers_yet) else uiContext.getString(R.string.ui_no_matching_providers_1067),
                                     style = MaterialTheme.typography.titleSmallEmphasized,
                                     modifier = Modifier.padding(top = 12.dp),
                                 )
                                 Text(
-                                    if (providers.isEmpty()) "Add a provider, then choose its model." else "Try a different search or show disabled providers.",
+                                    if (providers.isEmpty()) uiContext.getString(R.string.ui_add_a_provider_then_choose_its_model) else uiContext.getString(R.string.ui_try_a_different_search_or_show_disabled),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = scheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 4.dp),
@@ -239,7 +240,7 @@ fun ProvidersScreen(
             onRefreshCatalog = { providerId ->
                 val provider = providers.firstOrNull { it.id == providerId }
                 when {
-                    provider == null -> "Unknown provider"
+                    provider == null -> uiContext.getString(R.string.ui_unknown_provider)
                     else -> when (
                         val result = com.androidharness.app.llm.ModelCatalog.listModels(
                             provider,

@@ -38,6 +38,7 @@ import java.util.Locale
 
 @Composable
 internal fun LocalModelsSection(container: AppContainer) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val context = LocalContext.current
     val manager = container.localModels
     val catalog by manager.models.collectAsStateWithLifecycle()
@@ -67,7 +68,7 @@ internal fun LocalModelsSection(container: AppContainer) {
     var showAll by rememberSaveable(format, search, onlyAbliterated) { mutableStateOf(false) }
     fun importFiles(uri: android.net.Uri, kind: LocalModelFormat) {
         importJob = scope.launch {
-            importProgress = "Checking model files"
+            importProgress = uiContext.getString(R.string.ui_checking_model_files)
             try {
                 val model = manager.importFromFiles(uri, kind) { importProgress = it }
                 message = context.getString(R.string.settings_local_models_imported, model.title)
@@ -119,7 +120,7 @@ internal fun LocalModelsSection(container: AppContainer) {
                     ),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            IconButton(onClick = { deviceDialog = true }) { Icon(Icons.Default.Info, "Device and local model information") }
+            IconButton(onClick = { deviceDialog = true }) { Icon(Icons.Default.Info, uiContext.getString(R.string.ui_device_and_local_model_information)) }
         }
     }
     manager.catalogError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -141,7 +142,7 @@ internal fun LocalModelsSection(container: AppContainer) {
     message?.let { text ->
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(text, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-            IconButton(onClick = { message = null }) { Icon(Icons.Default.Close, "Dismiss message") }
+            IconButton(onClick = { message = null }) { Icon(Icons.Default.Close, uiContext.getString(R.string.ui_dismiss_message)) }
         }
     }
     Text(stringResource(R.string.settings_local_models_yours), style = MaterialTheme.typography.titleMedium)
@@ -188,7 +189,7 @@ internal fun LocalModelsSection(container: AppContainer) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(text, style = MaterialTheme.typography.bodyMedium)
                 AppLinearProgressIndicator(Modifier.fillMaxWidth())
-                TextButton(onClick = { importProgress = "Cancelling import…"; importJob?.cancel() }) { Text(stringResource(R.string.settings_local_models_cancel_import)) }
+                TextButton(onClick = { importProgress = uiContext.getString(R.string.ui_cancelling_import); importJob?.cancel() }) { Text(stringResource(R.string.settings_local_models_cancel_import)) }
             }
         }
     }
@@ -200,8 +201,8 @@ internal fun LocalModelsSection(container: AppContainer) {
             })
         }
     }
-    Text(if (format == LocalModelFormat.GGUF) "Choose a download, paste a link, or open a GGUF from your files."
-        else "Import from a link or choose a folder with weights, config.json and tokenizer.json. Conversion happens on your phone.",
+    Text(if (format == LocalModelFormat.GGUF) uiContext.getString(R.string.ui_choose_a_download_paste_a_link_or)
+        else uiContext.getString(R.string.ui_import_from_a_link_or_choose_a),
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(onClick = { customDialog = true }, enabled = importJob == null, modifier = Modifier.weight(1f)) {
@@ -210,13 +211,13 @@ internal fun LocalModelsSection(container: AppContainer) {
         OutlinedButton(onClick = { if (format == LocalModelFormat.GGUF) filePicker.launch(arrayOf("*/*")) else folderPicker.launch(null) },
             enabled = importJob == null, modifier = Modifier.weight(1f)) {
             Icon(Icons.Default.FolderOpen, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp))
-            Text(if (format == LocalModelFormat.GGUF) "Import file" else "Import folder")
+            Text(if (format == LocalModelFormat.GGUF) uiContext.getString(R.string.ui_import_file) else uiContext.getString(R.string.ui_import_folder))
         }
     }
     Text(stringResource(R.string.settings_local_models_recommendations), style = MaterialTheme.typography.titleSmall)
     OutlinedTextField(search, { search = it }, placeholder = { Text(stringResource(R.string.settings_local_models_search)) }, singleLine = true,
         leadingIcon = { Icon(Icons.Default.Search, null) }, trailingIcon = {
-            if (search.isNotEmpty()) IconButton(onClick = { search = "" }) { Icon(Icons.Default.Close, "Clear model search") }
+            if (search.isNotEmpty()) IconButton(onClick = { search = "" }) { Icon(Icons.Default.Close, uiContext.getString(R.string.ui_clear_model_search)) }
         }, modifier = Modifier.fillMaxWidth())
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FilterChip(selected = !onlyAbliterated, onClick = { onlyAbliterated = false }, label = { Text(stringResource(R.string.settings_local_models_filter_all)) })
@@ -275,7 +276,7 @@ internal fun LocalModelsSection(container: AppContainer) {
                     catch (e: Exception) { message = e.message; download = null }
                     finally { busy = null }
                 }
-            }) { Text(if (warnings.isEmpty()) "Download" else "Continue") } },
+            }) { Text(if (warnings.isEmpty()) uiContext.getString(R.string.ui_download) else uiContext.getString(R.string.settings_action_continue)) } },
             dismissButton = { TextButton(enabled = busy == null, onClick = { download = null }) { Text(stringResource(R.string.settings_action_cancel)) } })
     }
     if (customDialog) CustomModelDialog(manager, format, onDismiss = { customDialog = false },
@@ -296,6 +297,7 @@ private fun LocalModelCard(model: LocalModelSpec, context: Int, device: LocalDev
     transfer: WorkInfo? = null, status: String? = null, enabled: Boolean,
     onPrimary: () -> Unit, onDetails: () -> Unit, onSettings: (() -> Unit)? = null,
     onImageSupport: (() -> Unit)? = null, onRemove: (() -> Unit)? = null, onStop: (() -> Unit)? = null) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var menu by remember { mutableStateOf(false) }
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -315,7 +317,7 @@ private fun LocalModelCard(model: LocalModelSpec, context: Int, device: LocalDev
                 }
                 Box {
                     IconButton(onClick = { menu = true }, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Default.MoreVert, "Options for ${model.title}")
+                        Icon(Icons.Default.MoreVert, uiContext.getString(R.string.ui_options_for, (model.title).toString()))
                     }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(text = { Text(stringResource(R.string.settings_local_models_details)) }, onClick = { menu = false; onDetails() })
@@ -330,7 +332,7 @@ private fun LocalModelCard(model: LocalModelSpec, context: Int, device: LocalDev
                 Text(model.description, style = MaterialTheme.typography.bodySmall)
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (selected) LocalModelBadge("Selected", positive = true)
+                if (selected) LocalModelBadge(uiContext.getString(R.string.settings_selected), positive = true)
                 if (model.abliterated) LocalModelBadge(stringResource(R.string.settings_local_models_badge_abliterated))
                 if (installed && model.projector != null) LocalModelBadge(stringResource(R.string.settings_local_models_badge_vision), positive = true)
                 Text(stringResource(R.string.settings_local_models_estimated_ram, size(model.estimatedMemory(context))), style = MaterialTheme.typography.bodySmall,
@@ -349,7 +351,7 @@ private fun LocalModelCard(model: LocalModelSpec, context: Int, device: LocalDev
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (!selected || !installed) Button(onClick = onPrimary, enabled = enabled) {
-                    Text(if (transfer != null) "Cancel download" else if (installed) "Use in chat" else "Download")
+                    Text(if (transfer != null) uiContext.getString(R.string.ui_cancel_download) else if (installed) uiContext.getString(R.string.ui_use_in_chat) else uiContext.getString(R.string.ui_download))
                 }
                 onSettings?.let { action -> OutlinedButton(onClick = action, enabled = enabled) {
                     Icon(Icons.Default.Tune, null, modifier = Modifier.size(18.dp))
@@ -397,6 +399,7 @@ private fun LocalDeviceDialog(device: LocalDeviceProfile, onDismiss: () -> Unit)
 
 @Composable
 private fun LocalModelDetailsDialog(model: LocalModelSpec, context: Int, onDismiss: () -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val uri = LocalUriHandler.current
     AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(R.string.settings_local_models_details)) }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -418,7 +421,7 @@ private fun LocalModelDetailsDialog(model: LocalModelSpec, context: Int, onDismi
             if (model.description.isNotBlank()) Text(model.description, style = MaterialTheme.typography.bodySmall)
             Text(if (model.localFile) stringResource(R.string.settings_local_models_copied_note)
                 else if (model.sha256.isNotBlank()) stringResource(R.string.settings_local_models_checksum_note)
-                else "File size and model headers are checked. Source checksums are verified when available.", style = MaterialTheme.typography.bodySmall)
+                else uiContext.getString(R.string.ui_file_size_and_model_headers_are_checked), style = MaterialTheme.typography.bodySmall)
             if (!model.localFile) TextButton(onClick = { uri.openUri(model.modelPage) }) { Text(stringResource(R.string.settings_projector_open_page)) }
         }
     }, confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_action_done)) } })
@@ -426,6 +429,7 @@ private fun LocalModelDetailsDialog(model: LocalModelSpec, context: Int, onDismi
 
 @Composable
 private fun LocalLimitsDialog(model: LocalModelSpec, manager: LocalModelManager, onDismiss: () -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var saved by remember { mutableStateOf<LocalModelLimits?>(null) }
     LaunchedEffect(model.id) { saved = withContext(Dispatchers.IO) { manager.limits(model.id) } }
     val limits = saved ?: return
@@ -470,8 +474,8 @@ private fun LocalLimitsDialog(model: LocalModelSpec, manager: LocalModelManager,
                 Spacer(Modifier.width(6.dp)); Icon(if (advanced) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null)
             }
             if (advanced) {
-                LocalNumberField("Input budget", input, "tokens", "Includes instructions and chat history. You can continue past this estimate.", !saving) { input = it }
-                LocalNumberField("Processing threads", threads, "threads", "More threads can increase heat and may not improve speed.", !saving) { threads = it }
+                LocalNumberField(uiContext.getString(R.string.ui_input_budget), input, "tokens", uiContext.getString(R.string.ui_includes_instructions_and_chat_history_you_can), !saving) { input = it }
+                LocalNumberField(uiContext.getString(R.string.ui_processing_threads), threads, "threads", uiContext.getString(R.string.ui_more_threads_can_increase_heat_and_may), !saving) { threads = it }
             }
             TextButton(enabled = !saving, onClick = {
                 context = model.defaultContext.toString()
@@ -515,15 +519,16 @@ internal fun CustomModelDialog(manager: LocalModelManager, format: LocalModelFor
 internal fun CustomModelLinkDialog(resolve: suspend (String) -> List<LocalModelSpec>,
     inspect: suspend (LocalModelSpec) -> LocalModelSpec, device: () -> LocalDeviceProfile,
     onDismiss: () -> Unit, onDownload: (LocalModelSpec) -> Unit, format: LocalModelFormat = LocalModelFormat.GGUF) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var link by remember { mutableStateOf("") }
     var candidates by remember { mutableStateOf<List<LocalModelSpec>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(if (format == LocalModelFormat.GGUF) "Add GGUF" else "Import safetensors") }, text = {
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(if (format == LocalModelFormat.GGUF) uiContext.getString(R.string.ui_add_gguf) else uiContext.getString(R.string.ui_import_safetensors)) }, text = {
         Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(if (format == LocalModelFormat.GGUF) "Paste a Hugging Face page or a direct GGUF download link."
-                else "Paste a Hugging Face model page. The files will be downloaded and converted on your phone.", style = MaterialTheme.typography.bodySmall)
+            Text(if (format == LocalModelFormat.GGUF) uiContext.getString(R.string.ui_paste_a_hugging_face_page_or_a)
+                else uiContext.getString(R.string.ui_paste_a_hugging_face_model_page_the), style = MaterialTheme.typography.bodySmall)
             OutlinedTextField(link, { link = it; candidates = emptyList(); error = null },
                 label = { Text(stringResource(R.string.settings_local_models_model_link)) }, enabled = !loading, maxLines = 3, modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri))
@@ -541,7 +546,7 @@ internal fun CustomModelLinkDialog(resolve: suspend (String) -> List<LocalModelS
                                 scope.launch {
                                     try { onDownload(inspect(model)) }
                                     catch (e: CancellationException) { throw e }
-                                    catch (e: Exception) { error = e.message ?: "Could not check model." }
+                                    catch (e: Exception) { error = e.message ?: uiContext.getString(R.string.ui_could_not_check_model) }
                                     finally { loading = false }
                                 }
                             }) { Text(stringResource(R.string.settings_local_models_choose_file_short)) }
@@ -555,9 +560,9 @@ internal fun CustomModelLinkDialog(resolve: suspend (String) -> List<LocalModelS
         scope.launch {
             try {
                 candidates = resolve(link)
-                if (candidates.isEmpty()) error = "No supported model files were found at this link."
+                if (candidates.isEmpty()) error = uiContext.getString(R.string.ui_no_supported_model_files_were_found_at)
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { error = e.message ?: "Could not find model files." }
+            catch (e: Exception) { error = e.message ?: uiContext.getString(R.string.ui_could_not_find_model_files) }
             finally { loading = false }
         }
     }) { Text(stringResource(R.string.settings_local_models_find_files)) } }, dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_action_cancel)) } })

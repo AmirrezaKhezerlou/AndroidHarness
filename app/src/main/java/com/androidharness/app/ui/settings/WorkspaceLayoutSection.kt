@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.settings
 
+import com.androidharness.app.ui.common.localizedOption
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -26,8 +27,8 @@ internal fun WorkspaceLayoutSection(selected: WorkspaceLayoutMode, onSelect: (Wo
                         onClick = { onSelect(mode) }).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected == mode, onClick = null)
                         Column(Modifier.weight(1f).padding(start = 8.dp)) {
-                            Text(mode.label, style = MaterialTheme.typography.bodyLarge)
-                            Text(mode.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(localizedOption(mode.label), style = MaterialTheme.typography.bodyLarge)
+                            Text(localizedOption(mode.description), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }

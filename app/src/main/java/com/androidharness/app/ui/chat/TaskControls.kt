@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat
 
+import com.androidharness.app.R
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
@@ -21,25 +22,26 @@ import com.androidharness.app.core.Role
 
 @Composable
 fun TaskProgressCard(record: TaskRecord, busy: Boolean, onResume: () -> Unit, onSettings: () -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     if (!record.resumable || record.status == "running" || busy) return
     Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
         shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainer,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
-            Text(if (record.status == "interrupted") "Task interrupted" else "Task paused",
+            Text(if (record.status == "interrupted") uiContext.getString(R.string.ui_task_interrupted) else uiContext.getString(R.string.ui_task_paused),
                 style = MaterialTheme.typography.titleSmall)
             SelectionContainer {
-                Text(record.reason ?: "Your progress is saved. Continue from the last completed action.",
+                Text(record.reason ?: uiContext.getString(R.string.ui_your_progress_is_saved_continue_from_the),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             record.reason?.let { CopyIconButton(it) }
             if (record.autoContinue && record.autoContinueAttempts >= record.autoContinueLimit.coerceIn(1, 5)) {
-                Text("Auto-continue limit reached. Resume manually to keep going.",
+                Text(uiContext.getString(R.string.ui_auto_continue_limit_reached_resume_manually_to),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onSettings) { Text("Context & limits") }
-                FilledTonalButton(onClick = onResume) { Text("Resume task") }
+                TextButton(onClick = onSettings) { Text(uiContext.getString(R.string.ui_context_limits)) }
+                FilledTonalButton(onClick = onResume) { Text(uiContext.getString(R.string.ui_resume_task)) }
             }
         }
     }
@@ -50,6 +52,7 @@ fun MessageQueueCard(
     queue: List<QueuedPrompt>, onEdit: (String, String) -> Unit,
     onMove: (String, Int) -> Unit, onSendNow: (String) -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     if (queue.isEmpty()) return
     var expanded by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<QueuedPrompt?>(null) }
@@ -60,14 +63,14 @@ fun MessageQueueCard(
             Row(Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(horizontal = 14.dp)
                 .heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
-                    Text("${queue.size} queued", style = MaterialTheme.typography.labelLarge)
+                    Text(uiContext.getString(R.string.ui_queued_extra69, (queue.size).toString()), style = MaterialTheme.typography.labelLarge)
                     if (!expanded) Text(com.androidharness.app.core.response.UserMessageContent.visibleText(queue.first().text), maxLines = 1, overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, "Manage queue")
+                Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, uiContext.getString(R.string.ui_manage_queue))
             }
             if (expanded) Column(Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState())) {
-                Text("Sends after this chat’s Run finished notification.", modifier = Modifier.padding(12.dp),
+                Text(uiContext.getString(R.string.ui_sends_after_this_chat_s_run_finished), modifier = Modifier.padding(12.dp),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 queue.forEachIndexed { index, item ->
                     HorizontalDivider()
@@ -77,14 +80,14 @@ fun MessageQueueCard(
                             style = MaterialTheme.typography.bodySmall)
                         FlowRow(Modifier.fillMaxWidth()) {
                             IconButton(onClick = { onMove(item.id, -1) }, enabled = index > 0) {
-                                Icon(Icons.Default.KeyboardArrowUp, "Move message up")
+                                Icon(Icons.Default.KeyboardArrowUp, uiContext.getString(R.string.ui_move_message_up))
                             }
                             IconButton(onClick = { onMove(item.id, 1) }, enabled = index < queue.lastIndex) {
-                                Icon(Icons.Default.KeyboardArrowDown, "Move message down")
+                                Icon(Icons.Default.KeyboardArrowDown, uiContext.getString(R.string.ui_move_message_down))
                             }
-                            IconButton(onClick = { editing = item }) { Icon(Icons.Default.Edit, "Edit queued message") }
-                            IconButton(onClick = { onEdit(item.id, "") }) { Icon(Icons.Default.Close, "Remove queued message") }
-                            TextButton(onClick = { onSendNow(item.id) }) { Text("Send now") }
+                            IconButton(onClick = { editing = item }) { Icon(Icons.Default.Edit, uiContext.getString(R.string.ui_edit_queued_message)) }
+                            IconButton(onClick = { onEdit(item.id, "") }) { Icon(Icons.Default.Close, uiContext.getString(R.string.ui_remove_queued_message)) }
+                            TextButton(onClick = { onSendNow(item.id) }) { Text(uiContext.getString(R.string.ui_send_now)) }
                         }
                     }
                 }
@@ -93,10 +96,10 @@ fun MessageQueueCard(
     }
     editing?.let { item ->
         var text by remember(item.id) { mutableStateOf(com.androidharness.app.core.response.UserMessageContent.visibleText(item.text)) }
-        AlertDialog(onDismissRequest = { editing = null }, title = { Text("Edit queued message") },
+        AlertDialog(onDismissRequest = { editing = null }, title = { Text(uiContext.getString(R.string.ui_edit_queued_message)) },
             text = { OutlinedTextField(text, { text = it }, modifier = Modifier.fillMaxWidth(), minLines = 3, maxLines = 8) },
-            confirmButton = { TextButton(onClick = { onEdit(item.id, com.androidharness.app.core.response.UserMessageContent.edit(text, item.text)); editing = null }, enabled = text.isNotBlank()) { Text("Save") } },
-            dismissButton = { TextButton(onClick = { editing = null }) { Text("Cancel") } })
+            confirmButton = { TextButton(onClick = { onEdit(item.id, com.androidharness.app.core.response.UserMessageContent.edit(text, item.text)); editing = null }, enabled = text.isNotBlank()) { Text(uiContext.getString(R.string.settings_action_save)) } },
+            dismissButton = { TextButton(onClick = { editing = null }) { Text(uiContext.getString(R.string.settings_action_cancel)) } })
     }
 }
 
@@ -107,6 +110,7 @@ fun TaskSettingsSheet(
     onSave: (String, String?, TaskLimits, Boolean) -> Unit,
     onRecoveryChange: (Boolean, Int) -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val record = state.taskControl
     val savedSummary = record.summaryOverride ?: state.messages.lastOrNull {
         it.role == Role.SYSTEM && it.text.startsWith(AgentEngine.COMPACTION_PREFIX)
@@ -132,82 +136,82 @@ fun TaskSettingsSheet(
         ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
             Column(Modifier.fillMaxWidth().imePadding().padding(horizontal = 20.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Context & limits", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                    TextButton(onClick = { usage = true }) { Text("Usage") }
+                    Text(uiContext.getString(R.string.ui_context_limits), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { usage = true }) { Text(uiContext.getString(R.string.settings_page_usage_title)) }
                 }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = section == 0, onClick = { section = 0 }, label = { Text("Context") })
-                    FilterChip(selected = section == 1, onClick = { section = 1 }, label = { Text("Task limits") })
-                    FilterChip(selected = section == 2, onClick = { section = 2 }, label = { Text("Recovery") })
+                    FilterChip(selected = section == 0, onClick = { section = 0 }, label = { Text(uiContext.getString(R.string.ui_context)) })
+                    FilterChip(selected = section == 1, onClick = { section = 1 }, label = { Text(uiContext.getString(R.string.ui_task_limits)) })
+                    FilterChip(selected = section == 2, onClick = { section = 2 }, label = { Text(uiContext.getString(R.string.ui_recovery)) })
                 }
                 Column(Modifier.weight(1f, fill = false).heightIn(max = 440.dp).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (state.busy && section != 2) Text("Pause the task to edit these settings.", style = MaterialTheme.typography.bodySmall)
+                    if (state.busy && section != 2) Text(uiContext.getString(R.string.ui_pause_the_task_to_edit_these_settings), style = MaterialTheme.typography.bodySmall)
                     if (section == 0) {
-                        Text("Keep the instructions that matter and choose what the agent remembers.",
+                        Text(uiContext.getString(R.string.ui_keep_the_instructions_that_matter_and_choose),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        OutlinedTextField(pins, { pins = it }, label = { Text("Pinned instructions") },
-                            placeholder = { Text("Use Kotlin. Keep the current theme.") },
+                        OutlinedTextField(pins, { pins = it }, label = { Text(uiContext.getString(R.string.ui_pinned_instructions)) },
+                            placeholder = { Text(uiContext.getString(R.string.ui_use_kotlin_keep_the_current_theme)) },
                             modifier = Modifier.fillMaxWidth(), minLines = 2, maxLines = 5, enabled = !state.busy)
-                        OutlinedTextField(summary, { summary = it }, label = { Text("Saved summary") },
-                            placeholder = { Text("No summary saved yet") },
+                        OutlinedTextField(summary, { summary = it }, label = { Text(uiContext.getString(R.string.ui_saved_summary)) },
+                            placeholder = { Text(uiContext.getString(R.string.ui_no_summary_saved_yet)) },
                             modifier = Modifier.fillMaxWidth(), minLines = 3, maxLines = 7, enabled = !state.busy)
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text("Remove older context", style = MaterialTheme.typography.bodyMedium)
-                                Text("Keep the latest user turn, summary and pins. Chat history stays visible.",
+                                Text(uiContext.getString(R.string.ui_remove_older_context), style = MaterialTheme.typography.bodyMedium)
+                                Text(uiContext.getString(R.string.ui_keep_the_latest_user_turn_summary_and),
                                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Switch(clearOlder, { clearOlder = it }, enabled = !state.busy)
                         }
                     } else if (section == 1) {
-                        Text("Optional limits for the whole task, including subagents. Leave blank for unlimited.",
+                        Text(uiContext.getString(R.string.ui_optional_limits_for_the_whole_task_including),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        OutlinedTextField(tokens, { tokens = it }, label = { Text("Total tokens") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        OutlinedTextField(tokens, { tokens = it }, label = { Text(uiContext.getString(R.string.ui_total_tokens)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.fillMaxWidth(), singleLine = true, enabled = !state.busy)
-                        OutlinedTextField(cost, { cost = it }, label = { Text("Estimated cost · USD") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        OutlinedTextField(cost, { cost = it }, label = { Text(uiContext.getString(R.string.ui_estimated_cost_usd)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             modifier = Modifier.fillMaxWidth(), singleLine = true, enabled = !state.busy)
-                        OutlinedTextField(minutes, { minutes = it }, label = { Text("Active time · minutes") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        OutlinedTextField(minutes, { minutes = it }, label = { Text(uiContext.getString(R.string.ui_active_time_minutes)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.fillMaxWidth(), singleLine = true, enabled = !state.busy)
-                        Text("Pauses before the next request or action. In-flight work may exceed a limit. Cost uses catalog prices or estimated rates. Raise a reached limit before resuming.",
+                        Text(uiContext.getString(R.string.ui_pauses_before_the_next_request_or_action),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (record.usedTokens > 0 || record.elapsedMs > 0) Text(
-                            "Used: ${record.usedTokens} tokens · $${"%.4f".format(record.usedCost)} · ${record.elapsedMs / 60000} min",
+                            uiContext.getString(R.string.ui_used_tokens_min, (record.usedTokens).toString(), ("%.4f".format(record.usedCost)).toString(), (record.elapsedMs / 60000).toString()),
                             style = MaterialTheme.typography.labelMedium)
-                        if (!valid) Text("Enter a positive number or leave blank.", color = MaterialTheme.colorScheme.error)
+                        if (!valid) Text(uiContext.getString(R.string.ui_enter_a_positive_number_or_leave_blank), color = MaterialTheme.colorScheme.error)
                     } else {
                         Row(Modifier.fillMaxWidth().clickable {
                             onRecoveryChange(!record.autoContinue, record.autoContinueLimit)
                         }.heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                                Text("Auto-continue", style = MaterialTheme.typography.bodyLarge)
-                                Text("Resume saved progress after a server or connection interruption.",
+                                Text(uiContext.getString(R.string.ui_auto_continue), style = MaterialTheme.typography.bodyLarge)
+                                Text(uiContext.getString(R.string.ui_resume_saved_progress_after_a_server_or),
                                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Switch(record.autoContinue, { onRecoveryChange(it, record.autoContinueLimit) })
                         }
-                        Text("Uses the same prompt as Resume task. Queued messages wait until this chat finishes successfully. Stops and task limits need your attention.",
+                        Text(uiContext.getString(R.string.ui_uses_the_same_prompt_as_resume_task),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Text("Retry limit per task", modifier = Modifier.weight(1f))
+                            Text(uiContext.getString(R.string.ui_retry_limit_per_task), modifier = Modifier.weight(1f))
                             IconButton(onClick = { onRecoveryChange(record.autoContinue, record.autoContinueLimit - 1) },
-                                enabled = record.autoContinueLimit > 1) { Icon(Icons.Default.Remove, "Decrease retry limit") }
+                                enabled = record.autoContinueLimit > 1) { Icon(Icons.Default.Remove, uiContext.getString(R.string.ui_decrease_retry_limit)) }
                             Text("${record.autoContinueLimit.coerceIn(1, 5)}")
                             IconButton(onClick = { onRecoveryChange(record.autoContinue, record.autoContinueLimit + 1) },
-                                enabled = record.autoContinueLimit < 5) { Icon(Icons.Default.Add, "Increase retry limit") }
+                                enabled = record.autoContinueLimit < 5) { Icon(Icons.Default.Add, uiContext.getString(R.string.ui_increase_retry_limit)) }
                         }
-                        Text("Automatic Continues used: ${record.autoContinueAttempts}. A new task resets the count.",
+                        Text(uiContext.getString(R.string.ui_automatic_continues_used_a_new_task_resets, (record.autoContinueAttempts).toString()),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("Changes are saved immediately.", style = MaterialTheme.typography.labelMedium)
+                        Text(uiContext.getString(R.string.ui_changes_are_saved_immediately), style = MaterialTheme.typography.labelMedium)
                     }
                 }
                 if (section == 2) {
-                    Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)) { Text("Done") }
+                    Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)) { Text(uiContext.getString(R.string.settings_action_done)) }
                 } else Button(onClick = {
                     onSave(pins, if (summary == savedSummary && !clearOlder) record.summaryOverride else summary,
                         TaskLimits(tokens.toLongOrNull() ?: 0, cost.toDoubleOrNull() ?: 0.0, minutes.toLongOrNull() ?: 0), clearOlder)
                     onDismiss()
-                }, enabled = valid && !state.busy, modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)) { Text("Save changes") }
+                }, enabled = valid && !state.busy, modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)) { Text(uiContext.getString(R.string.settings_root_browser_save_confirm)) }
             }
         }
     }

@@ -61,6 +61,7 @@ fun FallbackEditorSheet(
     customPolicy: FallbackPolicy? = null,
     selectedProviderId: String? = null,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val providers by container.providers.providers.collectAsStateWithLifecycle(initialValue = emptyList())
     val catalogs by container.providers.catalogs.collectAsStateWithLifecycle(initialValue = emptyMap())
     val settings by container.settings.settings.collectAsStateWithLifecycle(initialValue = com.androidharness.app.data.AppSettings())
@@ -92,7 +93,7 @@ fun FallbackEditorSheet(
                     if (old == null) container.providers.add(name, type, url, model, key, headers)
                     else container.providers.update(old.copy(name = name, type = type, baseUrl = url, model = model, headers = headers), key)
                 } catch (e: CancellationException) { throw e }
-                catch (_: Exception) { error = "Could not save the provider. Check the connection and retry." }
+                catch (_: Exception) { error = uiContext.getString(R.string.ui_could_not_save_the_provider_check_the) }
             } })
         return
     }
@@ -111,10 +112,10 @@ fun FallbackEditorSheet(
             },
             onRefreshCatalog = { id ->
                 val provider = providers.firstOrNull { it.id == id }
-                if (provider == null) "Provider unavailable" else {
+                if (provider == null) uiContext.getString(R.string.settings_fallback_provider_unavailable) else {
                     val key = if (id == HarnessProvider.ID) container.providers.harnessApiKey()
                         else provider.effectiveApiKey(container.providers.apiKey(id))
-                    if (key.isBlank()) "Reconnect this provider" else when (val result = ModelCatalog.listModels(provider, key)) {
+                    if (key.isBlank()) uiContext.getString(R.string.ui_reconnect_this_provider) else when (val result = ModelCatalog.listModels(provider, key)) {
                         is ModelCatalog.Result.Models -> { container.providers.saveCatalog(id, result.models); null }
                         is ModelCatalog.Result.Failed -> result.message
                     }
@@ -136,15 +137,15 @@ fun FallbackEditorSheet(
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(stringResource(R.string.settings_anchor_fallbacks), style = MaterialTheme.typography.titleMedium)
-                        Text(if (chatMode == null) "Default for chats" else "For this chat", style = MaterialTheme.typography.bodySmall,
+                        Text(if (chatMode == null) uiContext.getString(R.string.ui_default_for_chats) else uiContext.getString(R.string.ui_for_this_chat), style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    IconButton(onClick = onDismiss, enabled = !saving) { Icon(Icons.Default.Close, "Close fallbacks") }
+                    IconButton(onClick = onDismiss, enabled = !saving) { Icon(Icons.Default.Close, uiContext.getString(R.string.ui_close_fallbacks)) }
                 }
             }
             if (chatMode != null) item {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(FallbackMode.DEFAULT to "Use default", FallbackMode.CUSTOM to "Custom chain", FallbackMode.OFF to "Off").forEach { (value, label) ->
+                    listOf(FallbackMode.DEFAULT to uiContext.getString(R.string.ui_use_default), FallbackMode.CUSTOM to uiContext.getString(R.string.ui_custom_chain), FallbackMode.OFF to uiContext.getString(R.string.ui_off)).forEach { (value, label) ->
                         FilterChip(selected = mode == value, onClick = { modeName = value.name }, label = { Text(label) }, enabled = !saving)
                     }
                 }
@@ -176,11 +177,11 @@ fun FallbackEditorSheet(
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (privacy && provider != null) Text(runCatching { java.net.URI(
                             if (provider.id == HarnessProvider.ID) HarnessProvider.pool[target.model]?.baseUrl ?: provider.baseUrl else provider.baseUrl
-                        ).host }.getOrNull() ?: "Local device", style = MaterialTheme.typography.bodySmall,
+                        ).host }.getOrNull() ?: uiContext.getString(R.string.ui_local_device), style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                     if (editable) Box {
-                        IconButton(onClick = { menu = true }, enabled = !saving) { Icon(Icons.Default.MoreVert, "Fallback actions ${index + 1}") }
+                        IconButton(onClick = { menu = true }, enabled = !saving) { Icon(Icons.Default.MoreVert, uiContext.getString(R.string.ui_fallback_actions, (index + 1).toString())) }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             fun move(offset: Int) {
                                 val targets = draft.targets.toMutableList()
@@ -195,7 +196,7 @@ fun FallbackEditorSheet(
                     }
                 }
             }
-            if (shown.targets.isEmpty()) item { Text(if (mode == FallbackMode.OFF && chatMode != null) "Automatic switching is off for this chat." else "No backup models added.",
+            if (shown.targets.isEmpty()) item { Text(if (mode == FallbackMode.OFF && chatMode != null) uiContext.getString(R.string.ui_automatic_switching_is_off_for_this_chat) else uiContext.getString(R.string.ui_no_backup_models_added),
                 style = MaterialTheme.typography.bodyMedium) }
             if (chatMode != null && mode == FallbackMode.DEFAULT && !defaultPolicy.enabled) item {
                 Text(stringResource(R.string.settings_fallback_empty), style = MaterialTheme.typography.bodySmall,
@@ -233,12 +234,12 @@ fun FallbackEditorSheet(
             }
             item { Text(stringResource(R.string.settings_fallback_policy_note),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            item { TextButton(onClick = { privacy = !privacy }) { Text(if (privacy) "Hide privacy & routing" else "Privacy & routing") } }
+            item { TextButton(onClick = { privacy = !privacy }) { Text(if (privacy) uiContext.getString(R.string.ui_hide_privacy_routing) else uiContext.getString(R.string.ui_privacy_routing)) } }
             if (privacy) {
-                item { Text((if (shown.enabled) "Only your selected connection and the models in this chain may receive the conversation, including for subagents and automatic compaction. "
-                    else if (chatMode != null && mode != FallbackMode.DEFAULT) "Automatic switching is off for this chat. Explicitly configured subagent models still apply. "
-                    else "No default chain is enabled. Connected-account and subagent settings still apply. ") +
-                    "Data retention follows each provider’s policy; this setting does not guarantee ZDR.",
+                item { Text((if (shown.enabled) uiContext.getString(R.string.ui_only_your_selected_connection_and_the_models)
+                    else if (chatMode != null && mode != FallbackMode.DEFAULT) uiContext.getString(R.string.ui_automatic_switching_is_off_for_this_chat_989)
+                    else uiContext.getString(R.string.ui_no_default_chain_is_enabled_connected_account)) +
+                    uiContext.getString(R.string.ui_data_retention_follows_each_provider_s_policy),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 item {
                     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(shown.sameProviderOnly, enabled = editable && !saving, role = Role.Switch,
@@ -255,10 +256,10 @@ fun FallbackEditorSheet(
                     scope.launch {
                         try { onSave(if (chatMode == null) null else mode, draft); onDismiss() }
                         catch (e: CancellationException) { throw e }
-                        catch (_: Exception) { error = "Could not save fallbacks. Try again." }
+                        catch (_: Exception) { error = uiContext.getString(R.string.ui_could_not_save_fallbacks_try_again) }
                         finally { saving = false }
                     }
-                }, enabled = !saving, modifier = Modifier.fillMaxWidth()) { Text(if (saving) "Saving…" else "Save fallbacks") }
+                }, enabled = !saving, modifier = Modifier.fillMaxWidth()) { Text(if (saving) uiContext.getString(R.string.ui_saving) else uiContext.getString(R.string.ui_save_fallbacks)) }
             }
         }
     }

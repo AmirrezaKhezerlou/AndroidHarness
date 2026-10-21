@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.settings
 
+import com.androidharness.app.ui.common.localizedOption
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -29,6 +30,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 internal fun RootAccessSection(container: AppContainer) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val access = container.deviceAccess
     val prefs by access.preferences.collectAsStateWithLifecycle()
     val root by access.root.state.collectAsStateWithLifecycle()
@@ -54,7 +56,7 @@ internal fun RootAccessSection(container: AppContainer) {
                 Icon(Icons.Outlined.AdminPanelSettings, null, tint = MaterialTheme.colorScheme.primary)
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(R.string.settings_root_title), style = MaterialTheme.typography.titleMedium)
-                    Text(root.status.label, style = MaterialTheme.typography.bodySmall,
+                    Text(localizedOption(root.status.label), style = MaterialTheme.typography.bodySmall,
                         color = if (root.status == RootStatus.READY) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (busy || root.status == RootStatus.REQUESTING) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
@@ -85,7 +87,7 @@ internal fun RootAccessSection(container: AppContainer) {
                     busy = true
                     try { access.grantRoot(project?.id, settings.lastActiveSessionId) } finally { busy = false }
                 } }, enabled = !busy && root.status != RootStatus.REQUESTING, modifier = buttonModifier, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)) {
-                    Text(if (root.status == RootStatus.READY) "Enable root use" else "Grant root access")
+                    Text(if (root.status == RootStatus.READY) uiContext.getString(R.string.ui_enable_root_use) else uiContext.getString(R.string.ui_grant_root_access))
                 }
             }, second = { buttonModifier ->
                 OutlinedButton(onClick = { scope.launch {
@@ -97,23 +99,23 @@ internal fun RootAccessSection(container: AppContainer) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.weight(1f).padding(end = 12.dp)) {
                     Text(stringResource(R.string.settings_root_auto_fallback), style = MaterialTheme.typography.titleSmall)
-                    Text(if (prefs.mode == AccessMode.AUTO) "Always on · Root → Shizuku → Normal" else "Root → Shizuku → Normal", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (prefs.mode == AccessMode.AUTO) uiContext.getString(R.string.ui_always_on_root_shizuku_normal) else uiContext.getString(R.string.ui_root_shizuku_normal), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Switch(checked = prefs.mode == AccessMode.AUTO || prefs.autoFallback, enabled = prefs.mode != AccessMode.AUTO, onCheckedChange = { scope.launch { access.store.setFallback(it) } })
             }
             Text(stringResource(R.string.settings_root_access_mode), style = MaterialTheme.typography.titleSmall)
             AccessModeChoices(prefs.mode) { scope.launch { access.store.setMode(it) } }
             Text(when {
-                prefs.mode == AccessMode.AUTO -> "Auto chooses available access: Root, then Shizuku, then Normal. Root still requires permission for this project unless temporary root mode is off."
-                prefs.mode == AccessMode.BOTH -> "Both stay connected: Shizuku runs ordinary commands and direct root handles root requests. Root still requires permission unless temporary root mode is off."
-                !prefs.autoFallback && prefs.mode != AccessMode.NORMAL -> "Commands fail if the selected access is unavailable."
-                else -> "Fallback applies before a command starts. Interrupted commands are never automatically repeated."
+                prefs.mode == AccessMode.AUTO -> uiContext.getString(R.string.ui_auto_chooses_available_access_root_then_shizuku)
+                prefs.mode == AccessMode.BOTH -> uiContext.getString(R.string.ui_both_stay_connected_shizuku_runs_ordinary_commands)
+                !prefs.autoFallback && prefs.mode != AccessMode.NORMAL -> uiContext.getString(R.string.ui_commands_fail_if_the_selected_access_is)
+                else -> uiContext.getString(R.string.ui_fallback_applies_before_a_command_starts_interrupted)
             }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.weight(1f).padding(end = 12.dp)) {
                     Text(stringResource(R.string.settings_root_temp_mode), style = MaterialTheme.typography.titleSmall)
-                    Text(if (prefs.temporaryRoot) "Root is limited to an app session, one chat or one action, and to allowed projects."
-                        else "Root is allowed in every project and chat while the connection stays active.",
+                    Text(if (prefs.temporaryRoot) uiContext.getString(R.string.ui_root_is_limited_to_an_app_session)
+                        else uiContext.getString(R.string.ui_root_is_allowed_in_every_project_and),
                         style = MaterialTheme.typography.bodySmall,
                         color = if (prefs.temporaryRoot) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error)
                 }
@@ -125,10 +127,10 @@ internal fun RootAccessSection(container: AppContainer) {
                 Text(stringResource(R.string.settings_root_temp_use), style = MaterialTheme.typography.titleSmall)
                 Box {
                     OutlinedButton(onClick = { useMenu = true }, modifier = Modifier.fillMaxWidth()) {
-                        Text(prefs.rootUse.label, Modifier.weight(1f)); Icon(Icons.Outlined.ExpandMore, null)
+                        Text(localizedOption(prefs.rootUse.label), Modifier.weight(1f)); Icon(Icons.Outlined.ExpandMore, null)
                     }
                     DropdownMenu(expanded = useMenu, onDismissRequest = { useMenu = false }) {
-                        RootUse.entries.forEach { use -> DropdownMenuItem(text = { Text(use.label) },
+                        RootUse.entries.forEach { use -> DropdownMenuItem(text = { Text(localizedOption(use.label)) },
                             enabled = use != RootUse.CHAT || settings.lastActiveSessionId != null,
                             onClick = { useMenu = false; access.disableRootUse(); scope.launch { access.store.setRootUse(use) } }) }
                     }
@@ -209,7 +211,7 @@ internal fun AccessModeChoices(selected: AccessMode, onSelect: (AccessMode) -> U
                             colors = CardDefaults.outlinedCardColors(containerColor = if (selected == mode) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow)) {
                             Row(Modifier.heightIn(min = 52.dp).padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 RadioButton(selected == mode, onClick = null, modifier = Modifier.size(20.dp))
-                                Text(mode.label, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(localizedOption(mode.label), style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
                     }

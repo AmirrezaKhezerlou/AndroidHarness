@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.R
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -69,6 +70,7 @@ internal fun UserBubble(
     fileChips: List<com.androidharness.app.ui.chat.FileAttachments.Block> = emptyList(),
     onLongPress: (() -> Unit)? = null,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
         val bubbleMaxWidth = minOf(560.dp, maxWidth * 0.88f)
@@ -90,7 +92,7 @@ internal fun UserBubble(
                     images.forEach { img ->
                         AttachmentChip(
                             name = img.name,
-                            detail = "Image",
+                            detail = uiContext.getString(R.string.ui_image),
                             icon = Icons.Outlined.Image,
                         )
                     }
@@ -164,6 +166,7 @@ internal fun AssistantText(
     modifier: Modifier = Modifier,
     onFollowUp: ((com.androidharness.app.core.response.RichResponse.FollowUp) -> Unit)? = null,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val primaryTarget = remember(text, streaming) {
         if (!streaming && text.isNotBlank()) WebResourceExtractor.findPrimaryPreviewTarget(com.androidharness.app.core.response.RichResponse.markdownText(text)) else null
     }
@@ -180,7 +183,7 @@ internal fun AssistantText(
                 DotLoading()
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    "Working on it…",
+                    uiContext.getString(R.string.ui_working_on_it),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -301,11 +304,12 @@ internal fun RewindButton(
     hasCheckpoints: Boolean,
     onRewind: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     if (hasCheckpoints) {
         IconButton(onClick = onRewind) {
             Icon(
                 Icons.Outlined.History,
-                contentDescription = "Rewind",
+                contentDescription = uiContext.getString(R.string.ui_rewind),
                 modifier = Modifier.size(17.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )

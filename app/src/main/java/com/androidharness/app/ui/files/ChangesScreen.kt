@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.files
 
+import com.androidharness.app.R
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -75,6 +76,7 @@ fun ChangesScreen(
     onBack: () -> Unit,
     onAskAgent: (String) -> Unit = {},
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val colors = LocalStatusColors.current
     val fs by remember(sessionId) { container.workspace.forChat(sessionId) }
@@ -94,10 +96,10 @@ fun ChangesScreen(
         containerColor = scheme.surface,
         topBar = {
             AppHeader(
-                title = "Files changed",
+                title = uiContext.getString(R.string.ui_files_changed),
                 subtitle = "${merged.size} " +
                     (if (merged.size == 1) "file" else "files") +
-                    " · this chat",
+                    uiContext.getString(R.string.ui_this_chat_extra75),
                 onBack = onBack,
             )
         },
@@ -131,7 +133,7 @@ fun ChangesScreen(
             if (merged.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        "No files changed in this chat yet.\nEdits made by the agent show up here.",
+                        uiContext.getString(R.string.ui_no_files_changed_in_this_chat_yet),
                         style = MaterialTheme.typography.bodyMedium,
                         color = scheme.onSurfaceVariant,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -165,6 +167,7 @@ private fun ChangeRow(
     onUndo: suspend (ChangeDiff, Diff.UndoSection?) -> Unit,
     onAskAgent: (String) -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     var expanded by remember(change.relPath) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -177,34 +180,34 @@ private fun ChangeRow(
     var question by remember { mutableStateOf("") }
     questionTarget?.let { target ->
         AlertDialog(onDismissRequest = { questionTarget = null },
-            title = { Text(if (target.second == null) "Ask about this file" else "Ask about this section") },
+            title = { Text(if (target.second == null) uiContext.getString(R.string.ui_ask_about_this_file) else uiContext.getString(R.string.ui_ask_about_this_section)) },
             text = { Column {
                 Text(change.relPath, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(value = question, onValueChange = { question = it },
-                    label = { Text("Your question") }, minLines = 2, maxLines = 5,
+                    label = { Text(uiContext.getString(R.string.ui_your_question)) }, minLines = 2, maxLines = 5,
                     modifier = Modifier.fillMaxWidth())
             } },
             confirmButton = { TextButton(enabled = question.isNotBlank(), onClick = {
                 questionTarget = null
                 onAskAgent(com.androidharness.app.core.ChangeQuestion.prompt(change.relPath, question, target.first.unified, target.second))
-            }) { Text("Ask agent") } },
-            dismissButton = { TextButton(onClick = { questionTarget = null }) { Text("Cancel") } })
+            }) { Text(uiContext.getString(R.string.ui_ask_agent)) } },
+            dismissButton = { TextButton(onClick = { questionTarget = null }) { Text(uiContext.getString(R.string.settings_action_cancel)) } })
     }
     confirmation?.let { selection ->
         AlertDialog(onDismissRequest = { confirmation = null },
-            title = { Text(if (selection.second == null) "Undo this file?" else "Undo this section?") },
-            text = { Text("Restore ${change.relPath} to the shown original content. Other files and chat history stay intact.") },
+            title = { Text(if (selection.second == null) uiContext.getString(R.string.ui_undo_this_file) else uiContext.getString(R.string.ui_undo_this_section)) },
+            text = { Text(uiContext.getString(R.string.ui_restore_to_the_shown_original_content_other, (change.relPath).toString())) },
             confirmButton = { TextButton(onClick = {
                 confirmation = null; applying = true; error = null
                 scope.launch {
                     try { onUndo(selection.first, selection.second) }
-                    catch (e: Exception) { error = e.message ?: "Undo failed" }
+                    catch (e: Exception) { error = e.message ?: uiContext.getString(R.string.ui_undo_failed) }
                     finally { applying = false; refresh++ }
                 }
-            }) { Text("Undo") } },
-            dismissButton = { TextButton(onClick = { confirmation = null }) { Text("Cancel") } })
+            }) { Text(uiContext.getString(R.string.ui_undo)) } },
+            dismissButton = { TextButton(onClick = { confirmation = null }) { Text(uiContext.getString(R.string.settings_action_cancel)) } })
     }
 
     val fileName = change.relPath.substringAfterLast('/')
@@ -253,7 +256,7 @@ private fun ChangeRow(
             DiffStatText(change.added, change.removed)
             Icon(
                 Icons.Filled.KeyboardArrowDown,
-                contentDescription = if (expanded) "Collapse" else "Expand",
+                contentDescription = if (expanded) uiContext.getString(R.string.ui_collapse) else uiContext.getString(R.string.ui_expand),
                 modifier = Modifier
                     .size(18.dp)
                     .padding(start = 4.dp),
@@ -276,36 +279,36 @@ private fun ChangeRow(
                         strokeWidth = 2.dp,
                     )
                     !current.hasBase -> Text(
-                        "Diff unavailable: the pre-change content was too large to track.",
+                        uiContext.getString(R.string.ui_diff_unavailable_the_pre_change_content_was),
                         style = MaterialTheme.typography.labelMedium,
                         color = scheme.onSurfaceVariant,
                     )
                     else -> Column {
                         SessionDiffView(current.unified)
-                        TextButton(onClick = { question = ""; questionTarget = current to null }) { Text("Ask about changes") }
+                        TextButton(onClick = { question = ""; questionTarget = current to null }) { Text(uiContext.getString(R.string.ui_ask_about_changes)) }
                         error?.let { Text(it, color = scheme.error, style = MaterialTheme.typography.bodySmall) }
                         if (current.current != current.base || current.exists == change.isNew) {
                             TextButton(onClick = { confirmation = current to null }, enabled = canUndo && !applying) {
-                                Text(if (applying) "Undoing…" else "Undo file")
+                                Text(if (applying) uiContext.getString(R.string.ui_undoing) else uiContext.getString(R.string.ui_undo_file))
                             }
                             if (current.sections.isNotEmpty()) TextButton(onClick = { showSections = !showSections }) {
-                                Text(if (showSections) "Hide sections" else "Review ${current.sections.size} sections")
+                                Text(if (showSections) uiContext.getString(R.string.ui_hide_sections) else uiContext.getString(R.string.ui_review_sections, (current.sections.size).toString()))
                             }
                             if (showSections) Column(Modifier.heightIn(max = 280.dp).verticalScroll(rememberScrollState())) {
                             current.sections.forEachIndexed { index, section ->
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Text("Section ${index + 1} · ${section.after.count { it == '\n' }} changed lines",
+                                    Text(uiContext.getString(R.string.ui_section_changed_lines, (index + 1).toString(), (section.after.count { it == '\n' }).toString()),
                                         modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
-                                    TextButton(onClick = { confirmation = current to section }, enabled = canUndo && !applying) { Text("Undo section") }
+                                    TextButton(onClick = { confirmation = current to section }, enabled = canUndo && !applying) { Text(uiContext.getString(R.string.ui_undo_section)) }
                                 }
-                                TextButton(onClick = { question = ""; questionTarget = current to section }) { Text("Ask about section ${index + 1}") }
+                                TextButton(onClick = { question = ""; questionTarget = current to section }) { Text(uiContext.getString(R.string.ui_ask_about_section, (index + 1).toString())) }
                                 Text((section.after.ifEmpty { section.before }).take(180), maxLines = 3,
                                     overflow = TextOverflow.Ellipsis, fontFamily = HarnessMono,
                                     style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                             }
                             }
                             current.sectionNote?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                            if (!canUndo) Text("Pause active tasks before undoing changes.", style = MaterialTheme.typography.bodySmall)
+                            if (!canUndo) Text(uiContext.getString(R.string.ui_pause_active_tasks_before_undoing_changes), style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }

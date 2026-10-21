@@ -1,8 +1,10 @@
 package com.androidharness.app.ui.settings
 
 import android.content.Context
+import android.content.res.Configuration
 import androidx.annotation.StringRes
 import com.androidharness.app.R
+import java.util.Locale
 
 /**
  * A settings page, described entirely by string resources.
@@ -473,25 +475,44 @@ private val subSettingsEntries = listOf(
  * stay in English so the original vocabulary keeps working everywhere.
  */
 internal fun matchingSettingsEntries(query: String, context: Context): List<SettingsSearchEntry> {
+    val english = context.createConfigurationContext(Configuration(context.resources.configuration).apply {
+        setLocale(Locale.ENGLISH)
+    })
+    return matchingSettingsEntries(query, text = { context.getString(it) }, englishText = { english.getString(it) })
+}
+
+internal fun matchingSettingsEntries(
+    query: String,
+    text: (Int) -> String,
+    englishText: ((Int) -> String)? = null,
+): List<SettingsSearchEntry> {
     val terms = query.trim().lowercase().split(Regex("""\s+""")).filter { it.isNotBlank() }
     if (terms.isEmpty()) return primarySettingsEntries
     fun haystack(entry: SettingsSearchEntry): String = buildString {
-        append(context.getString(entry.title)).append(' ')
-        append(context.getString(entry.description)).append(' ')
-        append(context.getString(entry.page.title)).append(' ')
-        append(context.getString(entry.page.group)).append(' ')
+        append(text(entry.title)).append(' ')
+        append(text(entry.description)).append(' ')
+        append(text(entry.page.title)).append(' ')
+        append(text(entry.page.group)).append(' ')
+        englishText?.let { english ->
+            listOf(entry.title, entry.description, entry.page.title, entry.page.group).forEach {
+                append(english(it)).append(' ')
+            }
+        }
         append(entry.keywords)
     }.lowercase()
     return (primarySettingsEntries + subSettingsEntries)
         .filter { entry -> terms.all { it in haystack(entry) } }
         .sortedWith(
             compareBy<SettingsSearchEntry> { it.primary }
-                .thenBy { context.getString(it.title) },
+                .thenBy { text(it.title) },
         )
 }
 
 internal fun matchingSettingsPages(query: String, context: Context): List<SettingsPage> =
     matchingSettingsEntries(query, context).map { it.page }.distinct()
+
+internal fun matchingSettingsPages(query: String, text: (Int) -> String): List<SettingsPage> =
+    matchingSettingsEntries(query, text).map { it.page }.distinct()
 
 internal fun settingsDeepLink(target: String): SettingsPage? = when (target) {
     "troubleshooting" -> SettingsPage.TROUBLESHOOTING

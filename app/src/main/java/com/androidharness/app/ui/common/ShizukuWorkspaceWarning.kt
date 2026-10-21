@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.common
 
+import com.androidharness.app.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,6 +36,7 @@ internal fun ShizukuWorkspaceWarningEffect(manager: ShizukuManager) {
 
 @Composable
 internal fun ShizukuDisabledWarning(controller: ShizukuWarningController) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val visible by controller.visible.collectAsStateWithLifecycle()
     if (!visible) return
     var neverShowAgain by rememberSaveable { mutableStateOf(false) }
@@ -42,13 +44,13 @@ internal fun ShizukuDisabledWarning(controller: ShizukuWarningController) {
 
     AlertDialog(
         onDismissRequest = ::dismiss,
-        title = { Text("Shizuku is disabled") },
+        title = { Text(uiContext.getString(R.string.ui_shizuku_is_disabled)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    "Shizuku is no longer available. Its server may have stopped or been killed " +
-                        "in the background, or this app's access may have been revoked. " +
-                        "Start Shizuku and allow AndroidHarness access to use it again.",
+                    uiContext.getString(R.string.ui_shizuku_is_no_longer_available_its_server) +
+                        uiContext.getString(R.string.ui_in_the_background_or_this_app_s) +
+                        uiContext.getString(R.string.ui_start_shizuku_and_allow_androidharness_access_to),
                 )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -59,10 +61,10 @@ internal fun ShizukuDisabledWarning(controller: ShizukuWarningController) {
                     ),
                 ) {
                     Checkbox(checked = neverShowAgain, onCheckedChange = null)
-                    Text("Never show this message again")
+                    Text(uiContext.getString(R.string.ui_never_show_this_message_again))
                 }
             }
         },
-        confirmButton = { TextButton(onClick = ::dismiss) { Text("OK") } },
+        confirmButton = { TextButton(onClick = ::dismiss) { Text(uiContext.getString(R.string.ui_ok)) } },
     )
 }

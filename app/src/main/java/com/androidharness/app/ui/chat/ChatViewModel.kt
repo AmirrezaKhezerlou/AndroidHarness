@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat
 
+import com.androidharness.app.R
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -284,7 +285,7 @@ class ChatViewModel(
     fun refreshWebPreviewSources() { webPreviewRefresh.update { it + 1 } }
     private val sessionCreation = Mutex()
 
-    private suspend fun ensureSession(title: String = "New chat"): String = sessionCreation.withLock {
+    private suspend fun ensureSession(title: String = c.appContext.getString(R.string.settings_telegram_new_chat)): String = sessionCreation.withLock {
         sessionId ?: c.sessions.createSession(title, c.workspace.currentProjectOnce().id).also { sid ->
             c.chatModels.initialize(sid)
             sessionId = sid
@@ -318,7 +319,7 @@ class ChatViewModel(
         viewModelScope.launch {
             val approved = runCatching {
                 val workspace = requireNotNull(pendingMcpWorkspace)
-                check(workspace.displayPath == chatWorkspace().displayPath) { "The workspace changed. Send your message again to review its servers." }
+                check(workspace.displayPath == chatWorkspace().displayPath) { c.appContext.getString(R.string.ui_the_workspace_changed_send_your_message_again) }
                 c.mcp.approveWorkspace(workspace)
             }
             pendingMcpWorkspace = null
@@ -698,7 +699,7 @@ class ChatViewModel(
                 action()
                 applyModelState(c.chatModels.observe(sessionId).first())
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-            catch (e: Exception) { _state.update { it.copy(error = e.message ?: "Could not save the model selection") } }
+            catch (e: Exception) { _state.update { it.copy(error = e.message ?: c.appContext.getString(R.string.ui_could_not_save_the_model_selection)) } }
             finally { _state.update { it.copy(modelSelectionBusy = false) } }
         }
     }
@@ -714,27 +715,27 @@ class ChatViewModel(
      * Computed once per state emission, not per recomposition.
      */
     private fun ChatUiState.computeCurrentAction(): String? = when {
-        pendingQuestion != null -> "Waiting for your answer"
+        pendingQuestion != null -> c.appContext.getString(R.string.ui_waiting_for_your_answer)
         pendingApproval != null -> "Waiting for your approval"
-        installingEnvironment != null -> "Installing Linux environment"
+        installingEnvironment != null -> c.appContext.getString(R.string.ui_installing_linux_environment)
         pendingEnvironment != null -> when {
-            envState is com.androidharness.app.data.env.EnvState.NotInstalled -> "Waiting for your approval"
-            envState is com.androidharness.app.data.env.EnvState.Failed -> "Linux install failed"
+            envState is com.androidharness.app.data.env.EnvState.NotInstalled -> c.appContext.getString(R.string.ui_waiting_for_your_approval)
+            envState is com.androidharness.app.data.env.EnvState.Failed -> c.appContext.getString(R.string.ui_linux_install_failed)
             pendingEnvironment.repair -> when {
                 envState is com.androidharness.app.data.env.EnvState.Downloading ||
                     envState is com.androidharness.app.data.env.EnvState.Installing ->
-                    "Repairing Linux environment…"
-                else -> "Waiting for your approval"
+                    c.appContext.getString(R.string.ui_repairing_linux_environment_notice4)
+                else -> c.appContext.getString(R.string.ui_waiting_for_your_approval)
             }
-            else -> "Installing Linux environment…"
+            else -> c.appContext.getString(R.string.ui_installing_linux_environment_notice5)
         }
         retryStatus != null -> retryStatus
         runningCalls.isNotEmpty() -> currentToolAction ?: describeToolCall(runningCalls.last())
-        codeDrafts.values.any { it.stage == com.androidharness.app.agent.CodeDraftStage.GENERATING } -> "Generating code…"
+        codeDrafts.values.any { it.stage == com.androidharness.app.agent.CodeDraftStage.GENERATING } -> c.appContext.getString(R.string.ui_generating_code)
         streamingThinking != null && streamingText.isNullOrEmpty() -> "Thinking…"
-        streamingText != null -> "Writing response…"
+        streamingText != null -> c.appContext.getString(R.string.ui_writing_response)
         currentToolAction != null -> currentToolAction
-        busy -> if (mode == AgentMode.PLAN) "Planning…" else "Working…"
+        busy -> if (mode == AgentMode.PLAN) c.appContext.getString(R.string.ui_planning) else c.appContext.getString(R.string.ui_working)
         else -> null
     }
 
@@ -745,7 +746,7 @@ class ChatViewModel(
     /** True when the composer can consume the draft, including local commands and queued messages. */
     fun send(rawText: String): Boolean {
         if (compactionJob?.isActive == true) {
-            _state.update { it.copy(error = "Wait for compaction to finish, or stop it before sending a message.") }
+            _state.update { it.copy(error = c.appContext.getString(R.string.ui_wait_for_compaction_to_finish_or_stop)) }
             return false
         }
         val trimmed = rawText.trim()
@@ -770,7 +771,7 @@ class ChatViewModel(
             }
             SlashCommands.Kind.COMPACT -> {
                 if (_state.value.busy || startingRun) {
-                    _state.update { it.copy(error = "Stop the current task before compacting this chat.") }
+                    _state.update { it.copy(error = c.appContext.getString(R.string.ui_stop_the_current_task_before_compacting_this)) }
                     return false
                 }
                 compactionJob = viewModelScope.launch { forceCompact() }
@@ -862,14 +863,14 @@ class ChatViewModel(
                 _state.value.activeModel?.takeIf { it.isNotBlank() }
                     ?.let { active.copy(model = it) } ?: active
             }
-            ?: error("Saved provider is unavailable")
+            ?: error(c.appContext.getString(R.string.ui_saved_provider_is_unavailable))
         if (record.provider == null) {
             c.runManager.controls.update(sid) { it.copy(provider = provider) }
         }
         val key = if (provider.id == com.androidharness.app.llm.HarnessProvider.ID) {
             c.providers.harnessApiKey()
         } else provider.effectiveApiKey(c.providers.apiKey(provider.id))
-        check(key.isNotBlank()) { "Add the saved provider's API key before resuming" }
+        check(key.isNotBlank()) { c.appContext.getString(R.string.ui_add_the_saved_provider_s_api_key) }
         _state.update { it.copy(error = null) }
         c.runManager.resumeTask(sid, key)
     }
@@ -897,7 +898,7 @@ class ChatViewModel(
     suspend fun saveFallbacks(mode: com.androidharness.app.llm.FallbackMode?, policy: com.androidharness.app.llm.FallbackPolicy) {
         require(policy.valid())
         val sid = ensureSession()
-        check(!c.runManager.isRunning(sid)) { "Pause the task before editing its fallback chain." }
+        check(!c.runManager.isRunning(sid)) { c.appContext.getString(R.string.ui_pause_the_task_before_editing_its_fallback) }
         c.runManager.controls.update(sid) { it.copy(fallbackMode = mode ?: com.androidharness.app.llm.FallbackMode.DEFAULT,
             fallbackOverride = policy.takeIf { mode == com.androidharness.app.llm.FallbackMode.CUSTOM }) }
     }
@@ -906,7 +907,7 @@ class ChatViewModel(
         viewModelScope.launch {
             try {
                 val sid = ensureSession()
-                check(!c.runManager.isRunning(sid) && compactionJob?.isActive != true) { "Stop the task or compaction before changing context or limits" }
+                check(!c.runManager.isRunning(sid) && compactionJob?.isActive != true) { c.appContext.getString(R.string.ui_stop_the_task_or_compaction_before_changing) }
                 val cutoff = if (clearOlder) {
                     // Keep the latest user turn and all of its assistant/tool messages together.
                     c.sessions.messages(sid).lastOrNull { it.role == Role.USER }?.createdAt ?: 0
@@ -947,7 +948,7 @@ class ChatViewModel(
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val stored = c.images.import(uri)
             if (stored == null) {
-                _state.update { it.copy(error = "Could not load that image.") }
+                _state.update { it.copy(error = c.appContext.getString(R.string.ui_could_not_load_that_image)) }
                 return@launch
             }
             pendingAttachments += ImageRef(stored.file.name, stored.mime)
@@ -987,7 +988,7 @@ class ChatViewModel(
                         PdfTextExtractor.extract(stream)
                     }
                     if (pdfExtract != null && pdfExtract.text.isNotBlank()) {
-                        val pageLabel = if (pdfExtract.pageCount == 1) "1 page" else "${pdfExtract.pageCount} pages"
+                        val pageLabel = if (pdfExtract.pageCount == 1) "1 page" else c.appContext.getString(R.string.ui_pages, (pdfExtract.pageCount).toString())
                         val sizeLabel = "${FileAttachments.humanBytes(size ?: pdfExtract.text.length.toLong())}, $pageLabel"
                         addFileAttachment(
                             FileAttachment(
@@ -1012,7 +1013,7 @@ class ChatViewModel(
                 }
                 copyAttachmentToWorkspace(resolver, uri, name, mime, size)
             }.onFailure {
-                _state.update { st -> st.copy(error = "Could not attach that file: ${it.message}") }
+                _state.update { st -> st.copy(error = c.appContext.getString(R.string.ui_could_not_attach_that_file, (it.message).toString())) }
             }
         }
     }
@@ -1060,7 +1061,7 @@ class ChatViewModel(
     ) {
         val cap = FileAttachments.COPY_BYTE_LIMIT
         if (size != null && size > cap) {
-            throw IllegalStateException("file is larger than ${FileAttachments.humanBytes(cap)}")
+            throw IllegalStateException(c.appContext.getString(R.string.ui_file_is_larger_than, (FileAttachments.humanBytes(cap)).toString()))
         }
         val fs = chatWorkspace()
         val dir = fs.resolve(".harness/attachments")
@@ -1072,7 +1073,7 @@ class ChatViewModel(
         val bytes = resolver.openInputStream(uri)!!.use { it.readBytes() }
         if (bytes.size > cap) {
             runCatching { node.delete() }
-            throw IllegalStateException("file is larger than ${FileAttachments.humanBytes(cap)}")
+            throw IllegalStateException(c.appContext.getString(R.string.ui_file_is_larger_than, (FileAttachments.humanBytes(cap)).toString()))
         }
         node.writeBytes(bytes)
         addFileAttachment(
@@ -1124,7 +1125,7 @@ class ChatViewModel(
         val targetSession = sessionId
         val s0 = _state.value
         if (!s0.modelSelectionReady || s0.modelSelectionBusy) {
-            _state.update { it.copy(error = "Model selection is being saved. Try sending again in a moment.") }
+            _state.update { it.copy(error = c.appContext.getString(R.string.ui_model_selection_is_being_saved_try_sending)) }
             return false
         }
         if (s0.modelSelectionError != null) {
@@ -1137,12 +1138,12 @@ class ChatViewModel(
             else -> s0.activeProviderId
         }
         if (!s0.sameModelAcrossChats && selectedProviderId != null && s0.providers.none { it.id == selectedProviderId }) {
-            _state.update { it.copy(error = "This chat's provider is unavailable. Choose another provider in the model picker.") }
+            _state.update { it.copy(error = c.appContext.getString(R.string.ui_this_chat_s_provider_is_unavailable_choose)) }
             return false
         }
         if (selectedProviderId != null && com.androidharness.app.local.LocalModelCatalog.isLocal(selectedProviderId) &&
             s0.providers.none { it.id == selectedProviderId }) {
-            _state.update { it.copy(error = "The selected local model was removed. Download it again or explicitly choose another provider.") }
+            _state.update { it.copy(error = c.appContext.getString(R.string.ui_the_selected_local_model_was_removed_download)) }
             return false
         }
         // Separate planning/execution models: plan-mode runs use the planning
@@ -1155,7 +1156,7 @@ class ChatViewModel(
                 s0.providers.firstOrNull { it.id == s0.executionProviderId } ?: s0.activeProvider
             else -> s0.activeProvider
         } ?: run {
-            _state.update { it.copy(error = "No provider configured. Add one from the Providers screen first.") }
+            _state.update { it.copy(error = c.appContext.getString(R.string.ui_no_provider_configured_add_one_from_the)) }
             return false
         }
         val roleModel = when {
@@ -1173,13 +1174,13 @@ class ChatViewModel(
         if (!s0.sameModelAcrossChats && provider.id == com.androidharness.app.llm.HarnessProvider.ID &&
             com.androidharness.app.llm.HarnessProvider.sanitize(roleModel,
                 com.androidharness.app.llm.HarnessProvider.customModelIds) != roleModel) {
-            _state.update { it.copy(error = "This chat's model is no longer available. Choose another model in the picker.") }
+            _state.update { it.copy(error = c.appContext.getString(R.string.ui_this_chat_s_model_is_no_longer)) }
             return false
         }
         val apiKey = if (provider.id == com.androidharness.app.llm.HarnessProvider.ID) c.providers.harnessApiKey(s0.providers)
         else provider.effectiveApiKey(c.providers.apiKey(provider.id))
         if (apiKey.isBlank()) {
-            _state.update { it.copy(error = "Provider \"${provider.name}\" has no API key. Edit it on the Providers screen.") }
+            _state.update { it.copy(error = c.appContext.getString(R.string.ui_provider_has_no_api_key_edit_it, (provider.name).toString())) }
             return false
         }
 
@@ -1240,7 +1241,7 @@ class ChatViewModel(
                     ?.let { provider.copy(model = it) } ?: provider
                 val resolved = c.providers.resolveHarnessConfig(effectiveConfig)
                 check(s0.sameModelAcrossChats || resolved.model == effectiveConfig.model) {
-                    "This chat's model is no longer available. Choose another model in the picker."
+                    c.appContext.getString(R.string.ui_this_chat_s_model_is_no_longer)
                 }
                 if (resolved.model != effectiveConfig.model) {
                     when {
@@ -1252,7 +1253,7 @@ class ChatViewModel(
                     }
                 }
                 if (replacement != null) {
-                    check(targetSession != null && targetSession == sessionId) { "The active chat changed" }
+                    check(targetSession != null && targetSession == sessionId) { c.appContext.getString(R.string.ui_the_active_chat_changed) }
                 }
                 val localLimits = if (com.androidharness.app.local.LocalModelCatalog.isLocal(provider.id)) {
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { c.localModels.limits(provider.id.removePrefix(com.androidharness.app.local.LocalModelCatalog.PROVIDER_PREFIX)) }
@@ -1285,7 +1286,7 @@ class ChatViewModel(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(error = e.message ?: "Could not start the message") }
+                _state.update { it.copy(error = e.message ?: c.appContext.getString(R.string.ui_could_not_start_the_message)) }
             } finally {
                 startingRun = false
             }
@@ -1341,7 +1342,7 @@ class ChatViewModel(
         val wasDual = _state.value.dualPlanning
         _state.update { it.copy(mode = mode, dualPlanning = false).withCurrentAction() }
         if (wasDual) {
-            _state.update { it.copy(modeToast = "Dual planning off: ${if (mode == AgentMode.PLAN) "Plan mode" else "Act mode"}") }
+            _state.update { it.copy(modeToast = "Dual planning off: ${if (mode == AgentMode.PLAN) c.appContext.getString(R.string.ui_plan_mode) else c.appContext.getString(R.string.ui_act_mode)}") }
         } else {
             announceMode(mode)
         }
@@ -1351,7 +1352,7 @@ class ChatViewModel(
         val s = _state.value
         if (s.dualPlanning) {
             _state.update { it.copy(dualPlanning = false, mode = AgentMode.ACT).withCurrentAction() }
-            _state.update { it.copy(modeToast = "Dual planning off") }
+            _state.update { it.copy(modeToast = c.appContext.getString(R.string.ui_dual_planning_off)) }
             return
         }
 
@@ -1363,7 +1364,7 @@ class ChatViewModel(
             ?: s.activeProvider?.model
 
         if (planModel == null && execModel == null) {
-            _state.update { it.copy(modeToast = "Configure dual planning models in Settings first") }
+            _state.update { it.copy(modeToast = c.appContext.getString(R.string.ui_configure_dual_planning_models_in_settings_first)) }
             return
         }
 
@@ -1376,7 +1377,7 @@ class ChatViewModel(
                 mode = AgentMode.PLAN,
             ).withCurrentAction()
         }
-        _state.update { it.copy(modeToast = "Dual planning on: $planName -> $execName") }
+        _state.update { it.copy(modeToast = c.appContext.getString(R.string.ui_dual_planning_on, (planName).toString(), (execName).toString())) }
     }
 
     /** Approve the plan produced by a PLAN-mode run and execute it. */
@@ -1388,7 +1389,7 @@ class ChatViewModel(
     }
 
     private fun announceMode(mode: AgentMode) {
-        val label = if (mode == AgentMode.PLAN) "Plan mode" else "Act mode"
+        val label = if (mode == AgentMode.PLAN) c.appContext.getString(R.string.ui_plan_mode) else c.appContext.getString(R.string.ui_act_mode)
         _state.update { it.copy(modeToast = label) }
     }
 
@@ -1453,10 +1454,10 @@ class ChatViewModel(
         viewModelScope.launch {
             try {
                 val newSid = c.sessions.forkSession(sid, messageId)
-                _state.update { it.copy(modeToast = "Branched into new chat") }
+                _state.update { it.copy(modeToast = c.appContext.getString(R.string.ui_branched_into_new_chat)) }
                 onForked(newSid)
             } catch (e: Exception) {
-                _state.update { it.copy(error = "Fork failed: ${e.message}") }
+                _state.update { it.copy(error = c.appContext.getString(R.string.ui_fork_failed, (e.message).toString())) }
             }
         }
     }
@@ -1506,19 +1507,19 @@ class ChatViewModel(
     /** Read-only comparison from this turn's checkpoint to the current workspace file. */
     suspend fun fileDiff(turnId: String, path: String): String =
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            val sid = sessionId ?: error("This chat is no longer available.")
+            val sid = sessionId ?: error(c.appContext.getString(R.string.ui_this_chat_is_no_longer_available))
             val normalized = com.androidharness.app.workspace.normalizeRelPath(path)
             val checkpoint = c.checkpoints.entitiesForTurns(sid, listOf(turnId)).firstOrNull {
                 com.androidharness.app.workspace.normalizeRelPath(it.relPath) == normalized
-            } ?: error("No checkpoint is available for this file.")
-            check(!checkpoint.wasDirectory) { "This change is a directory, not a text file." }
+            } ?: error(c.appContext.getString(R.string.ui_no_checkpoint_is_available_for_this_file))
+            check(!checkpoint.wasDirectory) { c.appContext.getString(R.string.ui_this_change_is_a_directory_not_a) }
             val before = if (checkpoint.existedBefore) {
                 String(android.util.Base64.decode(checkpoint.contentB64, android.util.Base64.DEFAULT), Charsets.UTF_8)
             } else ""
             val fs = chatWorkspace()
             val node = fs.resolve(path)
             val current = if (!node.exists) "" else {
-                check(node.isFile && node.length <= 1_000_000) { "This file is too large for an inline review." }
+                check(node.isFile && node.length <= 1_000_000) { c.appContext.getString(R.string.ui_this_file_is_too_large_for_an) }
                 node.readText()
             }
             com.androidharness.app.core.Diff.unified(before, current, path)
@@ -1534,7 +1535,7 @@ class ChatViewModel(
                     val start = messageWindowStart.value ?: return@withLock
                     messageWindowStart.value = c.sessions.messageWindowStart(sid, before = start)
                 } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-                catch (e: Exception) { _state.update { it.copy(error = "Could not load older messages: ${e.message}") } }
+                catch (e: Exception) { _state.update { it.copy(error = c.appContext.getString(R.string.ui_could_not_load_older_messages, (e.message).toString())) } }
                 finally { _state.update { it.copy(isLoadingOlderMessages = false) } }
             }
         }
@@ -1612,21 +1613,21 @@ class ChatViewModel(
      * refreshed. Returns a user-facing summary for the snackbar.
      */
     suspend fun performRewind(turnId: String): String {
-        val sid = sessionId ?: return "No active chat."
+        val sid = sessionId ?: return c.appContext.getString(R.string.ui_no_active_chat)
         if (_state.value.busy || sid in c.runManager.runningSessionIds.value) {
-            return "Stop the running agent first."
+            return c.appContext.getString(R.string.ui_stop_the_running_agent_first)
         }
         val summary = runCatching { c.runManager.rewindFromTurn(sid, turnId) }
-            .getOrElse { e -> return "Rewind failed: ${e.message}" }
+            .getOrElse { e -> return c.appContext.getString(R.string.ui_rewind_failed, (e.message).toString()) }
         _state.update { it.copy(turnsWithCheckpoints = refreshCheckpoints(sid)) }
         return when {
             summary.filesFailed > 0 ->
-                "Undo incomplete: ${summary.filesRestored} file(s) restored, ${summary.filesFailed} failed. " +
-                    "History and failed checkpoints were kept. Retry undo after fixing the file access issue."
+                c.appContext.getString(R.string.ui_undo_incomplete_file_s_restored_failed, (summary.filesRestored).toString(), (summary.filesFailed).toString()) +
+                    c.appContext.getString(R.string.ui_history_and_failed_checkpoints_were_kept_retry)
             summary.filesTouched == 0 && summary.messagesDeleted == 0 -> "Nothing to rewind for that turn."
             else ->
-                "Undo complete: ${summary.filesRestored} file(s) restored, " +
-                    "${summary.messagesDeleted} message(s) removed."
+                c.appContext.getString(R.string.ui_undo_complete_file_s_restored, (summary.filesRestored).toString()) +
+                    c.appContext.getString(R.string.ui_message_s_removed, (summary.messagesDeleted).toString())
         }
     }
 
@@ -1771,7 +1772,7 @@ class ChatViewModel(
             if (target == ModelSelectionTarget.ACTIVE && s.dualPlanning) {
                 val chosen = (model ?: s.providers.firstOrNull { it.id == providerId }?.model)?.substringAfterLast('/') ?: "default"
                 _state.update { it.copy(dualPlanning = false, mode = AgentMode.ACT,
-                    modeToast = "Dual planning off. Switched to $chosen").withCurrentAction() }
+                    modeToast = c.appContext.getString(R.string.ui_dual_planning_off_switched_to, (chosen).toString())).withCurrentAction() }
             }
         }
     }

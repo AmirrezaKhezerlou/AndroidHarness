@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.common
 
+import com.androidharness.app.R
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -64,6 +65,7 @@ fun FolderPickerDialog(
     onPick: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val root = remember { android.os.Environment.getExternalStorageDirectory().absolutePath }
     var currentDir by remember { mutableStateOf(root) }
@@ -105,13 +107,13 @@ fun FolderPickerDialog(
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Up",
+                            contentDescription = uiContext.getString(R.string.ui_up),
                             tint = if (currentDir != root) scheme.onSurface
                             else scheme.onSurfaceVariant.copy(alpha = 0.4f),
                         )
                     }
                     Column(Modifier.weight(1f)) {
-                        Text("Choose a folder", style = MaterialTheme.typography.titleMediumEmphasized)
+                        Text(uiContext.getString(R.string.ui_choose_a_folder), style = MaterialTheme.typography.titleMediumEmphasized)
                         Text(
                             currentDir,
                             style = MaterialTheme.typography.labelSmall,
@@ -122,7 +124,7 @@ fun FolderPickerDialog(
                         )
                     }
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Filled.Close, contentDescription = "Close")
+                        Icon(Icons.Filled.Close, contentDescription = uiContext.getString(R.string.settings_action_close))
                     }
                 }
                 HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.5f))
@@ -136,25 +138,25 @@ fun FolderPickerDialog(
                             .padding(24.dp),
                     ) {
                         Text(
-                            "Storage access needed",
+                            uiContext.getString(R.string.ui_storage_access_needed),
                             style = MaterialTheme.typography.titleSmallEmphasized,
                         )
                         Text(
-                            "Browsing device folders needs one of these permissions. " +
-                                "Grant either to use the in-app file manager.",
+                            uiContext.getString(R.string.ui_browsing_device_folders_needs_one_of_these) +
+                                uiContext.getString(R.string.ui_grant_either_to_use_the_in_app),
                             style = MaterialTheme.typography.bodySmall,
                             color = scheme.onSurfaceVariant,
                         )
                         Button(
                             onClick = storageAccess.request,
                             modifier = Modifier.fillMaxWidth(),
-                        ) { Text("Grant storage access") }
+                        ) { Text(uiContext.getString(R.string.ui_grant_storage_access)) }
                         OutlinedButton(
                             onClick = {
                                 container.shizuku.requestPermission()
                             },
                             modifier = Modifier.fillMaxWidth(),
-                        ) { Text("Use Shizuku instead") }
+                        ) { Text(uiContext.getString(R.string.ui_use_shizuku_instead)) }
                         TextButton(
                             onClick = {
                                 storageAccess.refresh()
@@ -162,7 +164,7 @@ fun FolderPickerDialog(
                                 permTick++
                             },
                             modifier = Modifier.fillMaxWidth(),
-                        ) { Text("I've granted it, check again") }
+                        ) { Text(uiContext.getString(R.string.ui_i_ve_granted_it_check_again)) }
                     }
                 } else {
                     // ----- Folder list -----
@@ -212,7 +214,7 @@ fun FolderPickerDialog(
                         if (entries.isEmpty()) {
                             item {
                                 Text(
-                                    "No folders here.",
+                                    uiContext.getString(R.string.ui_no_folders_here),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = scheme.onSurfaceVariant,
                                     modifier = Modifier.padding(20.dp),
@@ -245,7 +247,7 @@ fun FolderPickerDialog(
                         Button(onClick = {
                             onPick(currentDir)
                             onDismiss()
-                        }) { Text("Use this folder") }
+                        }) { Text(uiContext.getString(R.string.ui_use_this_folder)) }
                     }
                 }
             }

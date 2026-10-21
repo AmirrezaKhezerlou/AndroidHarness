@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun ShizukuFailureDetails(failure: ShizukuConnectionFailure?, report: () -> String,
     startupReport: suspend () -> ShizukuStartupReport, recovered: Boolean = false) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     if (failure == null) return
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -31,7 +32,7 @@ internal fun ShizukuFailureDetails(failure: ShizukuConnectionFailure?, report: (
     var startup by remember(failure) { mutableStateOf<ShizukuStartupReport?>(null) }
     fun copy(text: String) {
         (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
-            .setPrimaryClip(ClipData.newPlainText("Shizuku connection", text))
+            .setPrimaryClip(ClipData.newPlainText(uiContext.getString(R.string.ui_shizuku_connection), text))
         copied = true
     }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.common
 
+import com.androidharness.app.R
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.CircleShape
@@ -53,6 +54,7 @@ internal fun ExpressiveIconButton(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun CatalogLoadingIndicator(modifier: Modifier = Modifier) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var phase by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) {
         delay(200)
@@ -60,7 +62,7 @@ internal fun CatalogLoadingIndicator(modifier: Modifier = Modifier) {
         delay(4_800)
         phase = 2
     }
-    Box(modifier.semantics { contentDescription = "Refreshing models" }, contentAlignment = Alignment.Center) {
+    Box(modifier.semantics { contentDescription = uiContext.getString(R.string.ui_refreshing_models) }, contentAlignment = Alignment.Center) {
         when (phase) {
             1 -> LoadingIndicator(Modifier.fillMaxSize())
             2 -> CircularProgressIndicator(Modifier.fillMaxSize(), strokeWidth = 2.dp)

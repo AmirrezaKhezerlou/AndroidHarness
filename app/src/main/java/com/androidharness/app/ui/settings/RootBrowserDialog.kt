@@ -26,6 +26,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 
 @Composable
 internal fun RootBrowserDialog(access: DeviceAccessManager, projectId: String?, sessionId: String?, onDismiss: () -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     var path by rememberSaveable { mutableStateOf("/") }
     var directory by remember { mutableStateOf<RootDirectory?>(null) }
@@ -49,7 +50,7 @@ internal fun RootBrowserDialog(access: DeviceAccessManager, projectId: String?, 
             val page = access.rootFiles(projectId, sessionId) { Json.decodeFromString(RootDirectory.serializer(), it.rootList(path, offset)) }
             directory = if (offset == 0) page else page.copy(entries = directory?.entries.orEmpty() + page.entries)
         } catch (e: CancellationException) { throw e }
-        catch (e: Exception) { error = e.message ?: "Could not read this folder." }
+        catch (e: Exception) { error = e.message ?: uiContext.getString(R.string.ui_could_not_read_this_folder) }
         finally { busy = false }
     }
     LaunchedEffect(path) { load() }
@@ -61,12 +62,12 @@ internal fun RootBrowserDialog(access: DeviceAccessManager, projectId: String?, 
                         if (opened != null) { opened = null; edit = false }
                         else if (path != "/") { directory = null; path = path.substringBeforeLast('/').ifBlank { "/" } }
                         else onDismiss()
-                    } }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back") }
+                    } }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, uiContext.getString(R.string.settings_action_back)) }
                     Column(Modifier.weight(1f)) {
                         Text(stringResource(R.string.settings_root_browser), style = MaterialTheme.typography.titleMedium)
                         Text(opened?.path ?: path, style = MaterialTheme.typography.bodySmall, maxLines = 2)
                     }
-                    IconButton(onClick = { requestLeave(onDismiss) }) { Icon(Icons.Outlined.Close, "Close root browser") }
+                    IconButton(onClick = { requestLeave(onDismiss) }) { Icon(Icons.Outlined.Close, uiContext.getString(R.string.ui_close_root_browser)) }
                 }
                 HorizontalDivider()
                 if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -74,7 +75,7 @@ internal fun RootBrowserDialog(access: DeviceAccessManager, projectId: String?, 
                 val file = opened
                 if (file != null) {
                     Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (edit) "Editing" else "Read only", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
+                        Text(if (edit) uiContext.getString(R.string.ui_editing) else uiContext.getString(R.string.ui_read_only), Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
                         if (!edit) FilledTonalButton(onClick = { edit = true }) { Text(stringResource(R.string.settings_root_browser_edit)) }
                         else {
                             TextButton(onClick = { draft = file.text; edit = false }) { Text(stringResource(R.string.settings_action_discard)) }
@@ -104,7 +105,7 @@ internal fun RootBrowserDialog(access: DeviceAccessManager, projectId: String?, 
                                             opened = access.rootFiles(projectId, sessionId) { Json.decodeFromString(RootText.serializer(), it.rootRead(entry.path)) }
                                             draft = opened!!.text; edit = false
                                         } catch (e: CancellationException) { throw e }
-                                        catch (e: Exception) { error = e.message ?: "This file cannot be opened as text." }
+                                        catch (e: Exception) { error = e.message ?: uiContext.getString(R.string.ui_this_file_cannot_be_opened_as_text) }
                                         finally { busy = false }
                                     }
                                 },
@@ -129,7 +130,7 @@ internal fun RootBrowserDialog(access: DeviceAccessManager, projectId: String?, 
                 opened = access.rootFiles(projectId, sessionId) { Json.decodeFromString(RootText.serializer(), it.rootWrite(file.path, file.hash, draft)) }
                 draft = opened!!.text; edit = false
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { error = e.message ?: "The file could not be saved." }
+            catch (e: Exception) { error = e.message ?: uiContext.getString(R.string.ui_the_file_could_not_be_saved) }
             finally { busy = false }
         } }) { Text(stringResource(R.string.settings_root_browser_save_confirm)) } },
         dismissButton = { TextButton(onClick = { confirmSave = false }) { Text(stringResource(R.string.settings_action_cancel)) } })

@@ -35,9 +35,9 @@ class DiagnosticReportTest {
     }
 
     @Test fun troubleshootingIsSearchable() {
-        assertTrue(SettingsPage.TROUBLESHOOTING in matchingSettingsPages("troubleshooting"))
-        assertTrue(SettingsPage.TROUBLESHOOTING in matchingSettingsPages("diagnostics"))
-        assertTrue(SettingsPage.TROUBLESHOOTING in matchingSettingsPages("repair"))
+        assertTrue(SettingsPage.TROUBLESHOOTING in matchingSettingsPages("troubleshooting", settingsTestStrings()))
+        assertTrue(SettingsPage.TROUBLESHOOTING in matchingSettingsPages("diagnostics", settingsTestStrings()))
+        assertTrue(SettingsPage.TROUBLESHOOTING in matchingSettingsPages("repair", settingsTestStrings()))
         assertEquals(SettingsPage.TROUBLESHOOTING, settingsDeepLink("troubleshooting"))
     }
 }

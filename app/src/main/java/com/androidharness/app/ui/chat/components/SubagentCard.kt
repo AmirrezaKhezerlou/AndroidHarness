@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.R
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
@@ -85,6 +86,7 @@ internal fun SubagentHeaderRow(
     /** When set, a trailing affordance opens this agent's full-screen page. */
     onOpenFull: (() -> Unit)? = null,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val success = LocalStatusColors.current.success
     Row(
@@ -107,7 +109,7 @@ internal fun SubagentHeaderRow(
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(
-                "subagent",
+                uiContext.getString(R.string.ui_subagent_last0),
                 style = MaterialTheme.typography.labelLarge,
                 fontFamily = HarnessMono,
                 maxLines = 1,
@@ -137,13 +139,13 @@ internal fun SubagentHeaderRow(
                 0 -> DotLoading(Modifier.size(width = 20.dp, height = 12.dp))
                 1 -> Icon(
                     Icons.Filled.CheckCircle,
-                    contentDescription = "Done",
+                    contentDescription = uiContext.getString(R.string.settings_action_done),
                     tint = success,
                     modifier = Modifier.size(18.dp),
                 )
                 2 -> Icon(
                     Icons.Filled.Close,
-                    contentDescription = "Failed",
+                    contentDescription = uiContext.getString(R.string.ui_failed_64),
                     tint = scheme.error,
                     modifier = Modifier.size(18.dp),
                 )
@@ -154,7 +156,7 @@ internal fun SubagentHeaderRow(
             IconButton(onClick = onOpenFull, modifier = Modifier.size(40.dp)) {
                 Icon(
                     Icons.Outlined.OpenInNew,
-                    contentDescription = "Open subagent page",
+                    contentDescription = uiContext.getString(R.string.ui_open_subagent_page),
                     tint = scheme.onSurfaceVariant,
                     modifier = Modifier.size(17.dp),
                 )
@@ -184,6 +186,7 @@ internal fun SubagentDetailBody(
     call: ToolCallData,
     result: ChatMessage?,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val taskInfo = remember(call.argumentsJson) { taskArgsObject(call.argumentsJson) }
     val prompt = taskInfo?.get("prompt")?.jsonPrimitive?.contentOrNull
     val title = taskInfo?.get("title")?.jsonPrimitive?.contentOrNull
@@ -197,7 +200,7 @@ internal fun SubagentDetailBody(
     }
     if (invocation != null) {
         Text(
-            "TASK",
+            uiContext.getString(R.string.ui_task),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 4.dp),
@@ -213,7 +216,7 @@ internal fun SubagentDetailBody(
             MonoBlock(it.text.take(4000))
         } else {
             Text(
-                "RESULT",
+                uiContext.getString(R.string.ui_result_last2),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 4.dp),

@@ -1,5 +1,7 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.ui.common.localizedOption
+import com.androidharness.app.ui.common.localizedThinkingOption
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.filled.Add
 
@@ -109,6 +111,7 @@ internal fun MainHeader(
     onAddThinkingLevel: (() -> Unit)? = null,
     onSetCustomThinking: (String) -> Unit = {},
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var menu by remember { mutableStateOf(false) }
     var thinkingMenu by remember { mutableStateOf(false) }
     var permissionMenu by remember { mutableStateOf(false) }
@@ -138,12 +141,12 @@ internal fun MainHeader(
                         .padding(start = 10.dp, end = 10.dp),
                 ) {
                     IconButton(onClick = onOpenDrawer) {
-                        Icon(painterResource(R.drawable.ic_chat_menu), contentDescription = "Open navigation", modifier = Modifier.size(18.dp))
+                        Icon(painterResource(R.drawable.ic_chat_menu), contentDescription = uiContext.getString(R.string.ui_open_navigation), modifier = Modifier.size(18.dp))
                     }
                     Column(Modifier.weight(1f).padding(horizontal = 6.dp, vertical = 6.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (sessionTitle.startsWith("Fork of ")) {
-                                Icon(Icons.Outlined.ForkRight, contentDescription = "Forked session",
+                                Icon(Icons.Outlined.ForkRight, contentDescription = uiContext.getString(R.string.ui_forked_session),
                                     tint = scheme.primary, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(4.dp))
                             }
@@ -162,13 +165,13 @@ internal fun MainHeader(
                         Icon(
                             painterResource(R.drawable.ic_chat_folder),
                             modifier = Modifier.size(18.dp),
-                            contentDescription = "Workspace files",
+                            contentDescription = uiContext.getString(R.string.ui_workspace_files),
                             tint = scheme.onSurfaceVariant,
                         )
                     }
                     Box {
                         IconButton(onClick = { menu = true }) {
-                            Icon(painterResource(R.drawable.ic_chat_ellipsis_vertical), contentDescription = "More options", modifier = Modifier.size(18.dp))
+                            Icon(painterResource(R.drawable.ic_chat_ellipsis_vertical), contentDescription = uiContext.getString(R.string.ui_more_options), modifier = Modifier.size(18.dp))
                         }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             WorkspaceMenuEntries { menu = false }
@@ -178,7 +181,7 @@ internal fun MainHeader(
                                 onClick = { menu = false; onOpenGitHub() },
                             )
                             DropdownMenuItem(
-                                text = { Text(if (mode == AgentMode.PLAN && !dualPlanning) "Act mode" else "Plan mode") },
+                                text = { Text(if (mode == AgentMode.PLAN && !dualPlanning) uiContext.getString(R.string.ui_act_mode) else uiContext.getString(R.string.ui_plan_mode)) },
                                 leadingIcon = {
                                     Icon(
                                         Icons.Outlined.EditNote,
@@ -188,7 +191,7 @@ internal fun MainHeader(
                                 },
                                 trailingIcon = {
                                     if (mode == AgentMode.PLAN && !dualPlanning) {
-                                        Icon(Icons.Filled.Check, contentDescription = "Enabled", tint = scheme.primary)
+                                        Icon(Icons.Filled.Check, contentDescription = uiContext.getString(R.string.settings_headers_enabled), tint = scheme.primary)
                                     }
                                 },
                                 onClick = {
@@ -197,7 +200,7 @@ internal fun MainHeader(
                                 },
                             )
                             DropdownMenuItem(
-                                text = { Text("Dual planning") },
+                                text = { Text(uiContext.getString(R.string.ui_dual_planning)) },
                                 leadingIcon = {
                                     Icon(
                                         Icons.Outlined.ForkRight,
@@ -207,7 +210,7 @@ internal fun MainHeader(
                                 },
                                 trailingIcon = {
                                     if (dualPlanning) {
-                                        Icon(Icons.Filled.Check, contentDescription = "Enabled", tint = scheme.primary)
+                                        Icon(Icons.Filled.Check, contentDescription = uiContext.getString(R.string.settings_headers_enabled), tint = scheme.primary)
                                     }
                                 },
                                 onClick = {
@@ -216,7 +219,7 @@ internal fun MainHeader(
                                 },
                             )
                             DropdownMenuItem(
-                                text = { Text("Thinking · ${thinkingResolved?.label ?: thinkingLevel.label}") },
+                                text = { Text(uiContext.getString(R.string.ui_thinking_152, (localizedThinkingOption(thinkingResolved?.label ?: thinkingLevel.label)).toString())) },
                                 leadingIcon = {
                                     Icon(
                                         painterResource(R.drawable.ic_brain),
@@ -234,7 +237,7 @@ internal fun MainHeader(
                                 onClick = { menu = false; thinkingMenu = true },
                             )
                             DropdownMenuItem(
-                                text = { Text("Permission · ${permissionMode.label}") },
+                                text = { Text(uiContext.getString(R.string.ui_permission, (localizedOption(permissionMode.label)).toString())) },
                                 leadingIcon = {
                                     Icon(
                                         Icons.Outlined.Shield,
@@ -257,7 +260,7 @@ internal fun MainHeader(
                                 onClick = { menu = false; permissionMenu = true },
                             )
                             DropdownMenuItem(
-                                text = { Text("Context & limits") },
+                                text = { Text(uiContext.getString(R.string.ui_context_limits)) },
                                 leadingIcon = {
                                     Icon(Icons.Outlined.QueryStats, contentDescription = null)
                                 },
@@ -265,17 +268,17 @@ internal fun MainHeader(
                             )
                             HorizontalDivider(Modifier.padding(vertical = 6.dp))
                             DropdownMenuItem(
-                                text = { Text("Terminal") },
+                                text = { Text(uiContext.getString(R.string.ui_terminal)) },
                                 leadingIcon = { Icon(Icons.Outlined.Terminal, contentDescription = null) },
                                 onClick = { menu = false; onOpenTerminal() },
                             )
                             DropdownMenuItem(
-                                text = { Text("Web preview (localhost)") },
+                                text = { Text(uiContext.getString(R.string.ui_web_preview_localhost)) },
                                 leadingIcon = { Icon(Icons.Outlined.Language, contentDescription = null) },
                                 onClick = { menu = false; onOpenWebPreview() },
                             )
                             DropdownMenuItem(
-                                text = { Text("Undo file changes…") },
+                                text = { Text(uiContext.getString(R.string.ui_undo_file_changes)) },
                                 leadingIcon = { Icon(Icons.Outlined.History, contentDescription = null) },
                                 enabled = canUndo,
                                 onClick = { menu = false; onOpenUndo() },
@@ -286,7 +289,7 @@ internal fun MainHeader(
                                 DropdownMenuItem(text = {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
-                                            entry.label,
+                                            localizedOption(entry.label),
                                             Modifier.weight(1f),
                                             color = if (entry == PermissionMode.FULL_ACCESS) FullAccessOrange
                                             else Color.Unspecified,
@@ -294,7 +297,7 @@ internal fun MainHeader(
                                         if (entry == permissionMode) {
                                             Icon(
                                                 Icons.Filled.Check,
-                                                contentDescription = "Selected",
+                                                contentDescription = uiContext.getString(R.string.settings_selected),
                                                 tint = if (entry == PermissionMode.FULL_ACCESS) FullAccessOrange
                                                 else scheme.primary,
                                             )
@@ -319,11 +322,11 @@ internal fun MainHeader(
                     }
                     Spacer(Modifier.width(8.dp))
                     ExpressiveIconButton(onClick = onOpenGitHub, enabled = canOpenGitHub) {
-                        Icon(painterResource(R.drawable.ic_github), contentDescription = "Open GitHub",
+                        Icon(painterResource(R.drawable.ic_github), contentDescription = uiContext.getString(R.string.ui_open_github),
                             modifier = Modifier.size(18.dp))
                     }
                     if (showWebPreviewShortcut) ExpressiveIconButton(onClick = onOpenWebPreview) {
-                        Icon(Icons.Outlined.Language, contentDescription = "Open web browser", modifier = Modifier.size(18.dp))
+                        Icon(Icons.Outlined.Language, contentDescription = uiContext.getString(R.string.ui_open_web_browser), modifier = Modifier.size(18.dp))
                     }
                 }
             }
@@ -345,6 +348,7 @@ private fun DesktopConversationHeader(
     onAddThinkingLevel: (() -> Unit)?,
     showPreviewShortcut: Boolean,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     var menu by remember { mutableStateOf(false) }
     var thinkingMenu by remember { mutableStateOf(false) }
@@ -358,28 +362,28 @@ private fun DesktopConversationHeader(
             if (thinkingResolved?.customConfig != null || levels.isNotEmpty() || thinkingResolved?.spec?.style == com.androidharness.app.agent.ThinkingSpecs.Style.AUTOMATIC)
                 HeaderThinkingControl(thinking, levels, thinkingMenu, { thinkingMenu = it }, onThinking, onModel, thinkingResolved, busy, onCustomizeThinking, onSetCustomThinking, onAddThinkingLevel)
             TextButton(onClick = { onMode(if (mode == AgentMode.PLAN) AgentMode.ACT else AgentMode.PLAN) }) {
-                Text(if (mode == AgentMode.PLAN) "Plan" else "Act", style = MaterialTheme.typography.labelMedium)
+                Text(if (mode == AgentMode.PLAN) uiContext.getString(R.string.settings_telegram_plan) else uiContext.getString(R.string.settings_telegram_act), style = MaterialTheme.typography.labelMedium)
             }
             ExpressiveIconButton(onClick = onGitHub, enabled = canGitHub, modifier = Modifier.size(36.dp)) {
-                Icon(painterResource(R.drawable.ic_github), "Open GitHub", Modifier.size(18.dp))
+                Icon(painterResource(R.drawable.ic_github), uiContext.getString(R.string.ui_open_github), Modifier.size(18.dp))
             }
             if (showPreviewShortcut) ExpressiveIconButton(onClick = onPreview, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Outlined.Language, "Open web browser", Modifier.size(18.dp))
+                Icon(Icons.Outlined.Language, uiContext.getString(R.string.ui_open_web_browser), Modifier.size(18.dp))
             }
             Box {
                 IconButton(onClick = { menu = true }, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Filled.MoreVert, "Conversation actions", Modifier.size(18.dp))
+                    Icon(Icons.Filled.MoreVert, uiContext.getString(R.string.ui_conversation_actions), Modifier.size(18.dp))
                 }
                 DropdownMenu(menu, { menu = false }) {
                     WorkspaceMenuEntries { menu = false }
-                    DropdownMenuItem(text = { Text("Context & limits") }, onClick = { menu = false; onContext() })
-                    DropdownMenuItem(text = { Text("Web preview") }, onClick = { menu = false; onPreview() })
+                    DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_context_limits)) }, onClick = { menu = false; onContext() })
+                    DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_web_preview)) }, onClick = { menu = false; onPreview() })
                     DropdownMenuItem(text = { Text("GitHub") }, enabled = canGitHub, onClick = { menu = false; onGitHub() })
-                    DropdownMenuItem(text = { Text("Undo file changes") }, enabled = canUndo, onClick = { menu = false; onUndo() })
+                    DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_undo_file_changes_165)) }, enabled = canUndo, onClick = { menu = false; onUndo() })
                     HorizontalDivider()
                     PermissionMode.entries.forEach { option ->
-                        DropdownMenuItem(text = { Text(option.label) }, onClick = { menu = false; onPermission(option) },
-                            trailingIcon = { if (permission == option) Icon(Icons.Filled.Check, "Selected", Modifier.size(16.dp)) })
+                        DropdownMenuItem(text = { Text(localizedOption(option.label)) }, onClick = { menu = false; onPermission(option) },
+                            trailingIcon = { if (permission == option) Icon(Icons.Filled.Check, uiContext.getString(R.string.settings_selected), Modifier.size(16.dp)) })
                     }
                 }
             }
@@ -390,6 +394,7 @@ private fun DesktopConversationHeader(
 
 @Composable
 private fun HeaderModelPicker(label: String, onPickModel: () -> Unit, modifier: Modifier = Modifier, scopeLabel: String? = null) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     Row(
         modifier.clip(RoundedCornerShape(10.dp)).clickable(onClick = onPickModel)
             .heightIn(min = 36.dp).padding(horizontal = 6.dp, vertical = 2.dp),
@@ -403,7 +408,7 @@ private fun HeaderModelPicker(label: String, onPickModel: () -> Unit, modifier: 
                 color = MaterialTheme.colorScheme.primary) }
         }
         Spacer(Modifier.width(4.dp))
-        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Switch model",
+        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = uiContext.getString(R.string.ui_switch_model),
             tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
     }
 }
@@ -422,6 +427,7 @@ private fun HeaderThinkingControl(
     onCustomLevel: (String) -> Unit = {},
     onAddLevel: (() -> Unit)? = null,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val thinkingOn = resolved?.active ?: (thinkingLevel != ThinkingLevel.OFF)
     val density = LocalDensity.current
@@ -450,10 +456,10 @@ private fun HeaderThinkingControl(
             ) {
                 Row(Modifier.heightIn(min = 28.dp).padding(horizontal = 8.dp, vertical = 3.dp),
                     verticalAlignment = Alignment.CenterVertically) {
-                    Icon(painterResource(R.drawable.ic_brain), contentDescription = "Thinking level", modifier = Modifier.size(14.dp),
+                    Icon(painterResource(R.drawable.ic_brain), contentDescription = uiContext.getString(R.string.ui_thinking_level), modifier = Modifier.size(14.dp),
                         tint = if (thinkingOn) scheme.primary else scheme.onSurfaceVariant)
                     Spacer(Modifier.width(4.dp))
-                    Text(resolved?.label ?: thinkingLevel.label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall,
+                    Text(resolved?.label ?: localizedOption(thinkingLevel.label), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Medium)
                 }
             }
@@ -464,16 +470,16 @@ private fun HeaderThinkingControl(
             offset = DpOffset(with(density) { horizontalOffset.toDp() }, 4.dp),
             modifier = Modifier.widthIn(min = 248.dp.coerceAtMost(maxMenuWidth), max = maxMenuWidth)
                 .onSizeChanged { menuWidth = it.width }
-                .semantics { paneTitle = "Thinking options" },
+                .semantics { paneTitle = uiContext.getString(R.string.ui_thinking_options) },
         ) {
-            Text("Thinking level", Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            Text(uiContext.getString(R.string.ui_thinking_level), Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant)
             if (appliesNext) {
-                Text("Applies to your next message", Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                Text(uiContext.getString(R.string.ui_applies_to_your_next_message), Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                     style = MaterialTheme.typography.labelSmall, color = scheme.primary)
             }
             if (resolved?.customConfig == null && thinkingLevels.isEmpty()) {
-                Text(if (resolved?.spec?.reasoningSupported == true) "This model manages its own effort." else "Levels aren't reported for this model.",
+                Text(if (resolved?.spec?.reasoningSupported == true) uiContext.getString(R.string.ui_this_model_manages_its_own_effort) else uiContext.getString(R.string.ui_levels_aren_t_reported_for_this_model),
                     Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             }
@@ -484,24 +490,24 @@ private fun HeaderThinkingControl(
                 }
             }
             if (resolved?.customConfig == null) thinkingLevels.forEach { entry ->
-                ThinkingMenuOption(resolved?.optionLabel(entry) ?: entry.label, entry == (resolved?.level ?: thinkingLevel)) {
+                ThinkingMenuOption(localizedThinkingOption(resolved?.optionLabel(entry) ?: entry.label), entry == (resolved?.level ?: thinkingLevel)) {
                     onSetThinking(entry); onMenuChange(false)
                 }
             }
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
             if (onCustomize != null) DropdownMenuItem(
-                text = { Text("Customize thinking") },
+                text = { Text(uiContext.getString(R.string.ui_customize_thinking)) },
                 leadingIcon = { Icon(Icons.Outlined.EditNote, null, tint = scheme.onSurfaceVariant) },
                 onClick = { onMenuChange(false); onCustomize() },
             )
             val addLevel = onAddLevel ?: onCustomize
             if (addLevel != null) DropdownMenuItem(
-                text = { Text("Add thinking level") },
+                text = { Text(uiContext.getString(R.string.ui_add_thinking_level)) },
                 leadingIcon = { Icon(Icons.Filled.Add, null, tint = scheme.primary) },
                 onClick = { onMenuChange(false); addLevel() },
             )
             DropdownMenuItem(
-                text = { Text("Switch model…") },
+                text = { Text(uiContext.getString(R.string.ui_switch_model_174)) },
                 leadingIcon = {
                     Icon(Icons.Outlined.SwapHoriz, contentDescription = null, tint = scheme.primary)
                 },
@@ -516,6 +522,7 @@ private fun HeaderThinkingControl(
 
 @Composable
 private fun ThinkingMenuOption(label: String, isSelected: Boolean, onClick: () -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     DropdownMenuItem(
         modifier = Modifier.padding(horizontal = 6.dp).clip(RoundedCornerShape(10.dp))
@@ -523,7 +530,7 @@ private fun ThinkingMenuOption(label: String, isSelected: Boolean, onClick: () -
             .semantics { selected = isSelected },
         text = { Text(label, color = if (isSelected) scheme.onSecondaryContainer else scheme.onSurface,
             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal) },
-        trailingIcon = { if (isSelected) Icon(Icons.Filled.Check, "Selected", tint = scheme.onSecondaryContainer) },
+        trailingIcon = { if (isSelected) Icon(Icons.Filled.Check, uiContext.getString(R.string.settings_selected), tint = scheme.onSecondaryContainer) },
         onClick = onClick,
     )
 }
@@ -533,11 +540,12 @@ internal val FullAccessOrange = Color(0xFFF59E0B)
 
 @Composable
 private fun WorkspaceMenuEntries(onDismiss: () -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val launcher = com.androidharness.app.ui.files.LocalWorkspaceToolLauncher.current ?: return
     listOf(
-        com.androidharness.app.ui.files.WorkspaceToolMode.FILES to "Quick Open",
-        com.androidharness.app.ui.files.WorkspaceToolMode.SEARCH to "Search project",
-        com.androidharness.app.ui.files.WorkspaceToolMode.COMMANDS to "Command palette",
+        com.androidharness.app.ui.files.WorkspaceToolMode.FILES to uiContext.getString(R.string.ui_quick_open),
+        com.androidharness.app.ui.files.WorkspaceToolMode.SEARCH to uiContext.getString(R.string.ui_search_project),
+        com.androidharness.app.ui.files.WorkspaceToolMode.COMMANDS to uiContext.getString(R.string.ui_command_palette),
     ).forEach { (mode, label) ->
         DropdownMenuItem(text = { Text(label) }, onClick = { onDismiss(); launcher(mode) })
     }

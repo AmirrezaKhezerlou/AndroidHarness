@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.files
 
+import com.androidharness.app.R
 import android.graphics.Typeface
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -120,6 +121,7 @@ internal fun CodeEditorScreen(
     initialColumn: Int? = null,
     jumpRequest: Long = 0,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val scheme = MaterialTheme.colorScheme
@@ -156,14 +158,14 @@ internal fun CodeEditorScreen(
             }
         } catch (e: kotlinx.coroutines.CancellationException) { throw e }
         catch (_: Exception) {
-            loadState = Load.Failed("Could not recover the editor draft. It has been kept on the device; the saved file has not been changed.")
+            loadState = Load.Failed(uiContext.getString(R.string.ui_could_not_recover_the_editor_draft_it))
             return@LaunchedEffect
         }
         val node = withContext(Dispatchers.IO) {
             fs?.let { f -> runCatching { f.resolve(path).takeIf { it.exists && it.isFile } }.getOrNull() }
         }
         if (node == null) {
-            loadState = Load.Failed("File not found or workspace unavailable.")
+            loadState = Load.Failed(uiContext.getString(R.string.ui_file_not_found_or_workspace_unavailable))
             return@LaunchedEffect
         }
         val fileLength = withContext(Dispatchers.IO) { node.length }
@@ -175,7 +177,7 @@ internal fun CodeEditorScreen(
             runCatching { node.openInputStream()?.use { it.readBytes() } }.getOrNull()
         }
         when {
-            bytes == null -> loadState = Load.Failed("Could not read file.")
+            bytes == null -> loadState = Load.Failed(uiContext.getString(R.string.ui_could_not_read_file))
             else -> {
                 val dec = EditorFileCodec.decode(bytes)
                 if (dec == null) loadState = Load.Binary(fileLength)
@@ -267,7 +269,7 @@ internal fun CodeEditorScreen(
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
-                    container.runManager.withIdleWorkspace(f, "An agent is working in this workspace. Wait for it to finish before saving; your edits are kept.") {
+                    container.runManager.withIdleWorkspace(f, uiContext.getString(R.string.ui_an_agent_is_working_in_this_workspace)) {
                         saveEditorFile(f, path, expected, EditorFileCodec.encode(dec, newText))
                     }
                 }
@@ -291,7 +293,7 @@ internal fun CodeEditorScreen(
                     dirty = buffer.text.value != newText
                     buffer.recovered.value = false
                     persistDraft(immediate = true)
-                    Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, uiContext.getString(R.string.ui_saved), Toast.LENGTH_SHORT).show()
                     // Feed the Files-changed tracker; repository keeps the
                     // earliest baseline even though we resend ours each time.
                     val sid = sessionId
@@ -310,7 +312,7 @@ internal fun CodeEditorScreen(
                     }
                 }
                 .onFailure { e ->
-                    Toast.makeText(context, "Save failed: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, uiContext.getString(R.string.ui_save_failed, (e.message).toString()), Toast.LENGTH_LONG).show()
                 }
             if (thenExit && saved && !dirty) leave()
         }
@@ -351,14 +353,14 @@ internal fun CodeEditorScreen(
         IconButton(
             onClick = { editorRef?.text?.undo() },
             enabled = undoAvailable,
-        ) { Icon(Icons.Outlined.Undo, contentDescription = "Undo") }
+        ) { Icon(Icons.Outlined.Undo, contentDescription = uiContext.getString(R.string.ui_undo)) }
         IconButton(
             onClick = { editorRef?.text?.redo() },
             enabled = redoAvailable,
-        ) { Icon(Icons.Outlined.Redo, contentDescription = "Redo") }
+        ) { Icon(Icons.Outlined.Redo, contentDescription = uiContext.getString(R.string.ui_redo)) }
         if (workspaceChrome != null) Spacer(Modifier.weight(1f))
         if (smart != null && SmartEditorSupport.outline(path)) IconButton(onClick = { smartAction = SmartEditorAction.OUTLINE }, enabled = editorRef != null && !saving) {
-            Icon(Icons.Outlined.AccountTree, contentDescription = "Code outline")
+            Icon(Icons.Outlined.AccountTree, contentDescription = uiContext.getString(R.string.ui_code_outline))
         }
         IconButton(onClick = {
             editing = !editing
@@ -368,37 +370,37 @@ internal fun CodeEditorScreen(
         }) {
             Icon(
                 if (editing) Icons.Outlined.Check else Icons.Outlined.Edit,
-                contentDescription = if (editing) "Done editing" else "Edit",
+                contentDescription = if (editing) uiContext.getString(R.string.ui_done_editing) else uiContext.getString(R.string.settings_action_edit),
                 tint = if (editing) scheme.primary else scheme.onSurfaceVariant,
             )
         }
         if (dirty && !saving) {
             IconButton(onClick = { save() }) {
-                Icon(Icons.Outlined.Save, contentDescription = "Save", tint = scheme.primary)
+                Icon(Icons.Outlined.Save, contentDescription = uiContext.getString(R.string.settings_action_save), tint = scheme.primary)
             }
         }
         Box {
             IconButton(onClick = { menuOpen = true }) {
-                Icon(Icons.Filled.MoreVert, contentDescription = "More")
+                Icon(Icons.Filled.MoreVert, contentDescription = uiContext.getString(R.string.ui_more))
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 if (smart != null) {
-                    if (SmartEditorSupport.format(path)) DropdownMenuItem(text = { Text("Format Document") }, leadingIcon = { Icon(Icons.Outlined.AutoFixHigh, null) }, enabled = editorRef != null && !saving,
+                    if (SmartEditorSupport.format(path)) DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_format_document)) }, leadingIcon = { Icon(Icons.Outlined.AutoFixHigh, null) }, enabled = editorRef != null && !saving,
                         onClick = { menuOpen = false; smartAction = SmartEditorAction.FORMAT })
                     if (SmartEditorSupport.navigation(path)) {
-                        DropdownMenuItem(text = { Text("Go to Definition") }, enabled = editorRef != null, onClick = { menuOpen = false; smartAction = SmartEditorAction.DEFINITION })
-                        DropdownMenuItem(text = { Text("Find References") }, enabled = editorRef != null, onClick = { menuOpen = false; smartAction = SmartEditorAction.REFERENCES })
+                        DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_go_to_definition)) }, enabled = editorRef != null, onClick = { menuOpen = false; smartAction = SmartEditorAction.DEFINITION })
+                        DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_find_references)) }, enabled = editorRef != null, onClick = { menuOpen = false; smartAction = SmartEditorAction.REFERENCES })
                     }
-                    if (SmartEditorSupport.rename(path)) DropdownMenuItem(text = { Text("Rename Symbol") }, enabled = editorRef != null && !saving, onClick = { menuOpen = false; smartAction = SmartEditorAction.RENAME })
-                    DropdownMenuItem(text = { Text("Language support") }, onClick = { menuOpen = false; languageSupport = true })
+                    if (SmartEditorSupport.rename(path)) DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_rename_symbol)) }, enabled = editorRef != null && !saving, onClick = { menuOpen = false; smartAction = SmartEditorAction.RENAME })
+                    DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_language_support)) }, onClick = { menuOpen = false; languageSupport = true })
                     androidx.compose.material3.HorizontalDivider()
                 }
-                onQuickOpen?.let { action -> DropdownMenuItem(text = { Text("Quick Open") }, leadingIcon = { Icon(Icons.Outlined.OpenInNew, null) }, onClick = { menuOpen = false; action() }) }
-                onProjectSearch?.let { action -> DropdownMenuItem(text = { Text("Search project") }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, onClick = { menuOpen = false; action() }) }
-                onCommands?.let { action -> DropdownMenuItem(text = { Text("Command palette") }, onClick = { menuOpen = false; action() }) }
+                onQuickOpen?.let { action -> DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_quick_open)) }, leadingIcon = { Icon(Icons.Outlined.OpenInNew, null) }, onClick = { menuOpen = false; action() }) }
+                onProjectSearch?.let { action -> DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_search_project)) }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, onClick = { menuOpen = false; action() }) }
+                onCommands?.let { action -> DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_command_palette)) }, onClick = { menuOpen = false; action() }) }
                 if (onQuickOpen != null) androidx.compose.material3.HorizontalDivider()
                 DropdownMenuItem(
-                    text = { Text(if (searchOpen) "Hide find" else "Find…") },
+                    text = { Text(if (searchOpen) uiContext.getString(R.string.ui_hide_find) else uiContext.getString(R.string.ui_find)) },
                     leadingIcon = { Icon(Icons.Outlined.Search, null) },
                     onClick = {
                         menuOpen = false
@@ -407,7 +409,7 @@ internal fun CodeEditorScreen(
                     },
                 )
                 DropdownMenuItem(
-                    text = { Text(if (wordwrapOn) "Word wrap: on" else "Word wrap: off") },
+                    text = { Text(if (wordwrapOn) uiContext.getString(R.string.ui_word_wrap_on) else uiContext.getString(R.string.ui_word_wrap_off)) },
                     onClick = {
                         menuOpen = false
                         val enabled = !wordwrapOn
@@ -416,11 +418,11 @@ internal fun CodeEditorScreen(
                     },
                 )
                 DropdownMenuItem(
-                    text = { Text("Go to line…") },
+                    text = { Text(uiContext.getString(R.string.ui_go_to_line)) },
                     onClick = { menuOpen = false; gotoOpen = true },
                 )
                 DropdownMenuItem(
-                    text = { Text("Share") },
+                    text = { Text(uiContext.getString(R.string.ui_share)) },
                     leadingIcon = { Icon(Icons.Outlined.Share, null) },
                     onClick = {
                         menuOpen = false
@@ -430,13 +432,13 @@ internal fun CodeEditorScreen(
                                 val node = withContext(Dispatchers.IO) { f.resolve(path) }
                                 FileOps.share(context, node)
                             }.onFailure { e ->
-                                Toast.makeText(context, e.message ?: "Share failed", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, e.message ?: uiContext.getString(R.string.ui_share_failed), Toast.LENGTH_SHORT).show()
                             }
                         }
                     },
                 )
                 DropdownMenuItem(
-                    text = { Text("Open externally") },
+                    text = { Text(uiContext.getString(R.string.ui_open_externally_830)) },
                     leadingIcon = { Icon(Icons.Outlined.OpenInNew, null) },
                     onClick = {
                         menuOpen = false
@@ -446,7 +448,7 @@ internal fun CodeEditorScreen(
                                 val node = withContext(Dispatchers.IO) { f.resolve(path) }
                                 FileOps.openWith(context, node)
                             }.onFailure { e ->
-                                Toast.makeText(context, e.message ?: "No app can open this", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, e.message ?: uiContext.getString(R.string.ui_no_app_can_open_this), Toast.LENGTH_SHORT).show()
                             }
                         }
                     },
@@ -479,7 +481,7 @@ internal fun CodeEditorScreen(
 
                 is Load.Binary -> NotTextView(
                     sizeBytes = st.sizeBytes,
-                    detail = "Binary file: it can't be edited as text.",
+                    detail = uiContext.getString(R.string.ui_binary_file_it_can_t_be_edited),
                     onShare = {
                         val f = fs ?: return@NotTextView
                         scope.launch {
@@ -502,7 +504,7 @@ internal fun CodeEditorScreen(
 
                 is Load.TooLarge -> NotTextView(
                     sizeBytes = st.sizeBytes,
-                    detail = "Too large to edit here (over ${formatFileSize(MAX_EDIT_BYTES)}).",
+                    detail = uiContext.getString(R.string.ui_too_large_to_edit_here_over, (formatFileSize(MAX_EDIT_BYTES)).toString()),
                     onShare = {
                         val f = fs ?: return@NotTextView
                         scope.launch {
@@ -526,10 +528,10 @@ internal fun CodeEditorScreen(
                 Load.Ready -> Column(Modifier.fillMaxSize()) {
                     if (dirty) Text(
                         when {
-                            draftStatus == EditorDraftStatus.FAILED -> "Draft recovery could not be saved. Keep this editor open or save the file."
-                            draftStatus == EditorDraftStatus.SAVING -> "Saving draft on device…"
-                            buffer.recovered.value -> "Recovered unsaved draft · file unchanged"
-                            else -> "Draft saved on device · file unsaved"
+                            draftStatus == EditorDraftStatus.FAILED -> uiContext.getString(R.string.ui_draft_recovery_could_not_be_saved_keep)
+                            draftStatus == EditorDraftStatus.SAVING -> uiContext.getString(R.string.ui_saving_draft_on_device)
+                            buffer.recovered.value -> uiContext.getString(R.string.ui_recovered_unsaved_draft_file_unchanged)
+                            else -> uiContext.getString(R.string.ui_draft_saved_on_device_file_unsaved)
                         },
                         style = MaterialTheme.typography.labelSmall,
                         color = if (draftStatus == EditorDraftStatus.FAILED) scheme.error else scheme.onSurfaceVariant,
@@ -537,13 +539,13 @@ internal fun CodeEditorScreen(
                     )
                     if (onAskAgent != null && selectedLength > 0) Surface(color = scheme.secondaryContainer) {
                         Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(if (selectedLength > SelectedCode.MAX_CHARS) "Select less code to ask the agent" else "Selected code",
+                            Text(if (selectedLength > SelectedCode.MAX_CHARS) uiContext.getString(R.string.ui_select_less_code_to_ask_the_agent) else uiContext.getString(R.string.ui_selected_code),
                                 style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
                             TextButton(enabled = selectedLength <= SelectedCode.MAX_CHARS, onClick = {
                                 val ed = editorRef ?: return@TextButton
                                 selection = SelectedCode.capture(path, ed.text.toString(), ed.cursor.left, ed.cursor.right, dirty)
                                 ed.hideSoftInput(); ed.hideEditorWindows()
-                            }) { Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Ask agent") }
+                            }) { Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(uiContext.getString(R.string.ui_ask_agent)) }
                         }
                     }
                     androidx.compose.runtime.key(draftKey) {
@@ -678,14 +680,14 @@ internal fun CodeEditorScreen(
             sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Ask about selected code", style = MaterialTheme.typography.titleLarge)
+                Text(uiContext.getString(R.string.ui_ask_about_selected_code), style = MaterialTheme.typography.titleLarge)
                 Text(captured.location, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                 Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp), color = scheme.surfaceContainer) {
                     Text(captured.text.take(700) + if (captured.text.length > 700) "\n…" else "",
                         fontFamily = com.androidharness.app.ui.theme.HarnessMono, style = MaterialTheme.typography.bodySmall,
                         maxLines = 7, modifier = Modifier.padding(12.dp))
                 }
-                Text("Choose an action, then review and send it in chat.", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                Text(uiContext.getString(R.string.ui_choose_an_action_then_review_and_send), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                 CodeAction.entries.forEach { action ->
                     Surface(onClick = {
                         selection = null
@@ -706,33 +708,33 @@ internal fun CodeEditorScreen(
             SmartEditorSheet(action, path, editorRef!!, buffer, smart, onDismiss = { smartAction = null }, onOpenLocation = onOpenSmartLocation)
         }
     }
-    if (languageSupport) AlertDialog(onDismissRequest = { languageSupport = false }, title = { Text("Language support") },
+    if (languageSupport) AlertDialog(onDismissRequest = { languageSupport = false }, title = { Text(uiContext.getString(R.string.ui_language_support)) },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("JavaScript & TypeScript: autocomplete, definitions, references, rename, outline and formatting.")
-            Text("HTML, CSS, SCSS, LESS & JSON: autocomplete, outline and formatting. CSS languages also support definitions and references within a file.")
-            Text("Markdown: outline and formatting. YAML: formatting.")
-            Text("Other languages keep syntax highlighting and the existing editor tools. Project indexing excludes dependency and generated folders.")
-            Text("Formatting reads JSON Prettier settings. JavaScript configs and external formatter plugins must run in Terminal.")
-        } }, confirmButton = { TextButton(onClick = { languageSupport = false }) { Text("Got it") } })
+            Text(uiContext.getString(R.string.ui_javascript_typescript_autocomplete_definitions_references_rename))
+            Text(uiContext.getString(R.string.ui_html_css_scss_less_json_autocomplete_outline))
+            Text(uiContext.getString(R.string.ui_markdown_outline_and_formatting_yaml_formatting))
+            Text(uiContext.getString(R.string.ui_other_languages_keep_syntax_highlighting_and_the))
+            Text(uiContext.getString(R.string.ui_formatting_reads_json_prettier_settings_javascript_configs))
+        } }, confirmButton = { TextButton(onClick = { languageSupport = false }) { Text(uiContext.getString(R.string.settings_action_got_it)) } })
 
     conflict?.let { reviewed ->
         AlertDialog(
             onDismissRequest = { conflict = null },
-            title = { Text(if (compareConflict) "Compare changes" else "File changed on disk") },
+            title = { Text(if (compareConflict) uiContext.getString(R.string.ui_compare_changes) else uiContext.getString(R.string.ui_file_changed_on_disk)) },
             text = {
                 Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("The saved file changed after you opened it. Your edits are still here. Reload replaces your edits with the saved version.")
+                    Text(uiContext.getString(R.string.ui_the_saved_file_changed_after_you_opened))
                     if (compareConflict) {
-                        Text("Current saved file", style = MaterialTheme.typography.titleSmall)
+                        Text(uiContext.getString(R.string.ui_current_saved_file), style = MaterialTheme.typography.titleSmall)
                         androidx.compose.foundation.text.selection.SelectionContainer {
-                            Text(reviewed.text?.take(12000) ?: if (reviewed.bytes == null) "File was deleted" else "File is no longer text",
+                            Text(reviewed.text?.take(12000) ?: if (reviewed.bytes == null) uiContext.getString(R.string.ui_file_was_deleted) else uiContext.getString(R.string.ui_file_is_no_longer_text),
                                 fontFamily = com.androidharness.app.ui.theme.HarnessMono, style = MaterialTheme.typography.bodySmall)
                         }
                         androidx.compose.material3.HorizontalDivider()
-                        Text("Your edits", style = MaterialTheme.typography.titleSmall)
+                        Text(uiContext.getString(R.string.ui_your_edits), style = MaterialTheme.typography.titleSmall)
                         Text(editorText().take(12000), fontFamily = com.androidharness.app.ui.theme.HarnessMono, style = MaterialTheme.typography.bodySmall)
-                        if ((reviewed.text?.length ?: 0) > 12000 || editorText().length > 12000) Text("Preview shortened to 12,000 characters per version.")
-                    } else TextButton(onClick = { compareConflict = true }) { Text("Compare") }
+                        if ((reviewed.text?.length ?: 0) > 12000 || editorText().length > 12000) Text(uiContext.getString(R.string.ui_preview_shortened_to_12_000_characters_per))
+                    } else TextButton(onClick = { compareConflict = true }) { Text(uiContext.getString(R.string.ui_compare)) }
                     if (reviewed.text != null) TextButton(onClick = {
                         val text = requireNotNull(reviewed.text)
                         decoded.value = EditorFileCodec.decode(requireNotNull(reviewed.bytes))
@@ -745,26 +747,26 @@ internal fun CodeEditorScreen(
                         persistDraft(immediate = true)
                         conflict = null
                         pendingNavigation = null
-                    }) { Text("Reload file") }
+                    }) { Text(uiContext.getString(R.string.ui_reload_file)) }
                 }
             },
-            confirmButton = { TextButton(enabled = !saving, onClick = { save(conflictThenExit, reviewed.version) }) { Text("Keep my edits") } },
-            dismissButton = { TextButton(onClick = { conflict = null; pendingNavigation = null }) { Text("Cancel") } },
+            confirmButton = { TextButton(enabled = !saving, onClick = { save(conflictThenExit, reviewed.version) }) { Text(uiContext.getString(R.string.ui_keep_my_edits)) } },
+            dismissButton = { TextButton(onClick = { conflict = null; pendingNavigation = null }) { Text(uiContext.getString(R.string.settings_action_cancel)) } },
         )
     }
     if (showExitPrompt) {
         AlertDialog(
             onDismissRequest = { showExitPrompt = false; pendingNavigation = null },
-            title = { Text("Unsaved changes") },
-            text = { Text("${path.substringAfterLast('/')} has unsaved changes.") },
+            title = { Text(uiContext.getString(R.string.ui_unsaved_changes)) },
+            text = { Text(uiContext.getString(R.string.ui_has_unsaved_changes, (path.substringAfterLast('/')).toString())) },
             confirmButton = {
                 TextButton(onClick = { showExitPrompt = false; save(thenExit = true) }) {
-                    Text("Save & exit")
+                    Text(uiContext.getString(R.string.ui_save_exit))
                 }
             },
             dismissButton = {
                 Row {
-                    TextButton(onClick = { showExitPrompt = false; pendingNavigation = null }) { Text("Cancel") }
+                    TextButton(onClick = { showExitPrompt = false; pendingNavigation = null }) { Text(uiContext.getString(R.string.settings_action_cancel)) }
                     TextButton(onClick = {
                         showExitPrompt = false
                         editorRef?.setText(lastSavedText.value)
@@ -774,7 +776,7 @@ internal fun CodeEditorScreen(
                         persistDraft(immediate = true)
                         leave()
                     }) {
-                        Text("Discard")
+                        Text(uiContext.getString(R.string.settings_action_discard))
                     }
                 }
             },
@@ -834,6 +836,7 @@ private fun NotTextView(
     onShare: () -> Unit,
     onOpenWith: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     Column(
         Modifier
@@ -853,12 +856,12 @@ private fun NotTextView(
             OutlinedButton(onClick = onShare) {
                 Icon(Icons.Outlined.Share, null, Modifier.size(17.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Share")
+                Text(uiContext.getString(R.string.ui_share))
             }
             Button(onClick = onOpenWith) {
                 Icon(Icons.Outlined.OpenInNew, null, Modifier.size(17.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Open with…")
+                Text(uiContext.getString(R.string.ui_open_with))
             }
         }
     }
@@ -882,6 +885,7 @@ private fun FindBar(
     onRegexChanged: (Boolean) -> Unit,
     onClosed: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     var query by remember { mutableStateOf("") }
     var replaceWith by remember { mutableStateOf("") }
@@ -894,7 +898,7 @@ private fun FindBar(
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    placeholder = { Text("Find", style = MaterialTheme.typography.bodySmall) },
+                    placeholder = { Text(uiContext.getString(R.string.ui_find_861), style = MaterialTheme.typography.bodySmall) },
                     singleLine = true,
                     isError = patternError,
                     textStyle = MaterialTheme.typography.bodySmall,
@@ -911,25 +915,25 @@ private fun FindBar(
                     val s = editor?.searcher ?: return@IconButton
                     s.gotoPrevious()
                     matchInfo = matchInfo.first to s.getCurrentMatchedPositionIndex()
-                }) { Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = "Previous match") }
+                }) { Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = uiContext.getString(R.string.ui_previous_match)) }
                 IconButton(onClick = {
                     val s = editor?.searcher ?: return@IconButton
                     s.gotoNext()
                     matchInfo = matchInfo.first to s.getCurrentMatchedPositionIndex()
-                }) { Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = "Next match") }
-                ToggleChip("Aa", matchCase, "Match case", onMatchCaseChanged)
-                ToggleChip(".*", regexOn, "Regex", onRegexChanged)
+                }) { Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = uiContext.getString(R.string.ui_next_match)) }
+                ToggleChip(uiContext.getString(R.string.ui_aa), matchCase, uiContext.getString(R.string.ui_match_case), onMatchCaseChanged)
+                ToggleChip(".*", regexOn, uiContext.getString(R.string.ui_regex), onRegexChanged)
                 IconButton(onClick = {
                     editor?.searcher?.stopSearch()
                     onClosed()
-                }) { Icon(Icons.Outlined.Close, contentDescription = "Close find") }
+                }) { Icon(Icons.Outlined.Close, contentDescription = uiContext.getString(R.string.ui_close_find)) }
             }
             if (editingEnabled) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         value = replaceWith,
                         onValueChange = { replaceWith = it },
-                        placeholder = { Text("Replace with", style = MaterialTheme.typography.bodySmall) },
+                        placeholder = { Text(uiContext.getString(R.string.ui_replace_with), style = MaterialTheme.typography.bodySmall) },
                         singleLine = true,
                         textStyle = MaterialTheme.typography.bodySmall,
                         shape = MaterialTheme.shapes.medium,
@@ -937,10 +941,10 @@ private fun FindBar(
                     )
                     TextButton(onClick = {
                         editor?.searcher?.replaceCurrentMatch(replaceWith)
-                    }) { Text("Replace") }
+                    }) { Text(uiContext.getString(R.string.ui_replace)) }
                     TextButton(onClick = {
                         editor?.searcher?.replaceAll(replaceWith)
-                    }) { Text("All") }
+                    }) { Text(uiContext.getString(R.string.settings_local_models_filter_all)) }
                 }
             }
         }
@@ -995,16 +999,17 @@ private fun ToggleChip(label: String, selected: Boolean, description: String, on
 
 @Composable
 private fun GoToLineDialog(editor: CodeEditor?, onDismiss: () -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var value by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Go to line") },
+        title = { Text(uiContext.getString(R.string.ui_go_to_line_870)) },
         text = {
             OutlinedTextField(
                 value = value,
                 onValueChange = { v -> value = v.filter(Char::isDigit) },
                 singleLine = true,
-                placeholder = { Text("Line number") },
+                placeholder = { Text(uiContext.getString(R.string.ui_line_number)) },
             )
         },
         confirmButton = {
@@ -1016,8 +1021,8 @@ private fun GoToLineDialog(editor: CodeEditor?, onDismiss: () -> Unit) {
                     editor.ensurePositionVisible(line, 0)
                 }
                 onDismiss()
-            }) { Text("Go") }
+            }) { Text(uiContext.getString(R.string.ui_go)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(uiContext.getString(R.string.settings_action_cancel)) } },
     )
 }

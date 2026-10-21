@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.common
 
+import com.androidharness.app.R
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -85,6 +86,7 @@ fun VisualDiffViewer(
     showFileHeader: Boolean = true,
     onOpenFile: ((String) -> Unit)? = null,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val parsed = remember(diffText) { Diff.parseUnified(diffText) }
     val scheme = MaterialTheme.colorScheme
     val clipboard = LocalClipboardManager.current
@@ -106,7 +108,7 @@ fun VisualDiffViewer(
                     removed = parsed.totalRemoved.toLong(),
                     onCopy = {
                         clipboard.setText(AnnotatedString(diffText))
-                        Toast.makeText(context, "Diff copied to clipboard", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, uiContext.getString(R.string.ui_diff_copied_to_clipboard), Toast.LENGTH_SHORT).show()
                     },
                     onOpenFile = onOpenFile?.let { cb -> { cb(displayPath) } },
                 )
@@ -121,7 +123,7 @@ fun VisualDiffViewer(
                         .padding(12.dp),
                 ) {
                     Text(
-                        diffText.ifBlank { "(empty diff)" },
+                        diffText.ifBlank { uiContext.getString(R.string.ui_empty_diff) },
                         style = MaterialTheme.typography.bodySmall,
                         fontFamily = HarnessMono,
                         color = scheme.onSurfaceVariant,
@@ -153,7 +155,7 @@ fun VisualDiffViewer(
                                 .padding(horizontal = 12.dp, vertical = 6.dp),
                         ) {
                             Text(
-                                "Diff truncated for display performance",
+                                uiContext.getString(R.string.ui_diff_truncated_for_display_performance),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = scheme.onSurfaceVariant,
                                 fontFamily = HarnessMono,
@@ -174,6 +176,7 @@ private fun DiffHeaderBar(
     onCopy: () -> Unit,
     onOpenFile: (() -> Unit)? = null,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val fileName = filePath.substringAfterLast('/')
     val dir = filePath.substringBeforeLast('/', "")
@@ -219,7 +222,7 @@ private fun DiffHeaderBar(
         ) {
             Icon(
                 Icons.Default.ContentCopy,
-                contentDescription = "Copy Diff",
+                contentDescription = uiContext.getString(R.string.ui_copy_diff),
                 tint = scheme.onSurfaceVariant,
                 modifier = Modifier.size(16.dp),
             )
@@ -229,6 +232,7 @@ private fun DiffHeaderBar(
 
 @Composable
 private fun DiffHunkSection(hunk: DiffHunk) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     var expanded by remember { mutableStateOf(true) }
 
@@ -252,7 +256,7 @@ private fun DiffHunkSection(hunk: DiffHunk) {
                 )
                 Icon(
                     if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = if (expanded) "Collapse hunk" else "Expand hunk",
+                    contentDescription = if (expanded) uiContext.getString(R.string.ui_collapse_hunk) else uiContext.getString(R.string.ui_expand_hunk),
                     tint = scheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp),
                 )

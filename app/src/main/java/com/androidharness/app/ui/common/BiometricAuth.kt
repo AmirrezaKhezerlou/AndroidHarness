@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.common
 
+import com.androidharness.app.R
 import android.content.Context
 import android.content.ContextWrapper
 import android.widget.Toast
@@ -23,7 +24,7 @@ object BiometricAuth {
     fun prompt(
         activity: FragmentActivity,
         title: String,
-        subtitle: String = "Confirm your fingerprint, face, or PIN",
+        subtitle: String = activity.getString(R.string.ui_confirm_your_fingerprint_face_or_pin),
         onSuccess: () -> Unit,
         onError: ((String) -> Unit)? = null,
     ) {
@@ -33,17 +34,17 @@ object BiometricAuth {
             if (canAuth == BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED) {
                 Toast.makeText(
                     activity,
-                    "Set up screen lock (PIN/fingerprint) in device Settings first",
+                    activity.getString(R.string.ui_set_up_screen_lock_pin_fingerprint_in),
                     Toast.LENGTH_LONG,
                 ).show()
             } else {
                 Toast.makeText(
                     activity,
-                    "Biometric authentication not supported on this device",
+                    activity.getString(R.string.ui_biometric_authentication_not_supported_on_this_device),
                     Toast.LENGTH_SHORT,
                 ).show()
             }
-            onError?.invoke("Biometrics unavailable")
+            onError?.invoke(activity.getString(R.string.ui_biometrics_unavailable))
             return
         }
 
@@ -73,7 +74,7 @@ object BiometricAuth {
         try {
             prompt.authenticate(promptInfo)
         } catch (e: Exception) {
-            onError?.invoke(e.message ?: "Authentication failed")
+            onError?.invoke(e.message ?: activity.getString(R.string.ui_authentication_failed))
         }
     }
 }

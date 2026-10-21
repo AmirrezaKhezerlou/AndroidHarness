@@ -55,6 +55,7 @@ internal fun ProgressBarStyleSection(selectedStyle: ProgressBarStyle, onSelect: 
 
 @Composable
 private fun ProgressStyleChoice(style: ProgressBarStyle, isSelected: Boolean, onClick: () -> Unit, modifier: Modifier) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     Surface(shape = RoundedCornerShape(12.dp),
         color = if (isSelected) scheme.secondaryContainer else scheme.surfaceContainerLow,
@@ -63,7 +64,7 @@ private fun ProgressStyleChoice(style: ProgressBarStyle, isSelected: Boolean, on
         modifier = modifier.selectable(selected = isSelected, role = Role.RadioButton, onClick = onClick)) {
         Column(Modifier.heightIn(min = 80.dp).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(if (style == ProgressBarStyle.FLAT) "Flat" else "Squiggly", Modifier.weight(1f),
+                Text(if (style == ProgressBarStyle.FLAT) uiContext.getString(R.string.ui_flat) else uiContext.getString(R.string.ui_squiggly), Modifier.weight(1f),
                     style = MaterialTheme.typography.labelLarge)
                 RadioButton(selected = isSelected, onClick = null)
             }

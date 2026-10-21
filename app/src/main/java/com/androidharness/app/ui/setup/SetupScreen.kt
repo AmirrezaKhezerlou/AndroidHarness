@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.setup
 
+import com.androidharness.app.R
 import android.Manifest
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -68,6 +69,7 @@ fun SetupScreen(
     container: AppContainer,
     onFinish: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val scheme = MaterialTheme.colorScheme
@@ -127,16 +129,16 @@ fun SetupScreen(
             ) {
                 HarnessMark(size = 44.dp)
                 Spacer(Modifier.size(2.dp))
-                Text("Welcome to AndroidHarness", style = MaterialTheme.typography.headlineSmall)
+                Text(uiContext.getString(R.string.ui_welcome_to_androidharness), style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    "Grant storage access to start coding. Notifications and other tools are optional.",
+                    uiContext.getString(R.string.ui_grant_storage_access_to_start_coding_notifications),
                     style = MaterialTheme.typography.bodyMedium,
                     color = scheme.onSurfaceVariant,
                 )
 
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        "$completed of 5 complete",
+                        uiContext.getString(R.string.ui_of_5_complete, (completed).toString()),
                         style = MaterialTheme.typography.labelMediumEmphasized,
                         color = scheme.onSurfaceVariant,
                     )
@@ -150,23 +152,23 @@ fun SetupScreen(
                 // -- 1. Storage access (required) --------------------------
                 SetupStep(
                     icon = { Icon(Icons.Outlined.SdStorage, null, Modifier.size(16.dp), scheme.onSurfaceVariant) },
-                    title = "Storage access",
-                    status = if (storageGranted) "Device storage access granted"
-                             else "Required: allow access to device files and folders",
+                    title = uiContext.getString(R.string.settings_env_storage_access),
+                    status = if (storageGranted) uiContext.getString(R.string.ui_device_storage_access_granted)
+                             else uiContext.getString(R.string.ui_required_allow_access_to_device_files_and),
                     complete = storageGranted,
                     optional = false,
                 ) {
                     if (!storageGranted) {
-                        Button(onClick = storageAccess.request) { Text("Grant") }
+                        Button(onClick = storageAccess.request) { Text(uiContext.getString(R.string.settings_action_grant)) }
                     }
                 }
 
                 // -- 2. Notifications (optional) ---------------------------
                 SetupStep(
                     icon = { Icon(Icons.Outlined.Notifications, null, Modifier.size(16.dp), scheme.onSurfaceVariant) },
-                    title = "Notifications",
-                    status = if (notifGranted) "Runs report progress and approvals" 
-                             else "Progress and approvals outside the app",
+                    title = uiContext.getString(R.string.ui_notifications),
+                    status = if (notifGranted) uiContext.getString(R.string.ui_runs_report_progress_and_approvals)
+                             else uiContext.getString(R.string.ui_progress_and_approvals_outside_the_app),
                     complete = notifGranted,
                     optional = true,
                 ) {
@@ -175,7 +177,7 @@ fun SetupScreen(
                             if (android.os.Build.VERSION.SDK_INT >= 33) {
                                 notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                             } else notifGranted = true
-                        }) { Text("Allow") }
+                        }) { Text(uiContext.getString(R.string.ui_allow)) }
                     }
                 }
 
@@ -184,22 +186,22 @@ fun SetupScreen(
                     icon = { Icon(Icons.Outlined.Shield, null, Modifier.size(16.dp), scheme.onSurfaceVariant) },
                     title = "Shizuku",
                     status = when (shizukuState) {
-                        ShizukuState.NOT_INSTALLED -> "Optional: full shell toolchain & background servers"
-                        ShizukuState.NOT_RUNNING -> "Open the Shizuku app and start it"
-                        ShizukuState.RUNNING_NO_PERMISSION -> "Grant access to unlock ADB-level commands"
+                        ShizukuState.NOT_INSTALLED -> uiContext.getString(R.string.ui_optional_full_shell_toolchain_background_servers)
+                        ShizukuState.NOT_RUNNING -> uiContext.getString(R.string.ui_open_the_shizuku_app_and_start_it)
+                        ShizukuState.RUNNING_NO_PERMISSION -> uiContext.getString(R.string.ui_grant_access_to_unlock_adb_level_commands)
                         ShizukuState.GRANTED ->
                             if (serviceState.isReady)
-                                "Connected: privileged shell ready"
-                            else "Granted: waiting for user service…"
+                                uiContext.getString(R.string.ui_connected_privileged_shell_ready)
+                            else uiContext.getString(R.string.ui_granted_waiting_for_user_service)
                     },
                     complete = shizukuDone,
                     optional = true,
                 ) {
                     when (shizukuState) {
                         ShizukuState.RUNNING_NO_PERMISSION ->
-                            Button(onClick = { container.shizuku.requestPermission() }) { Text("Grant") }
+                            Button(onClick = { container.shizuku.requestPermission() }) { Text(uiContext.getString(R.string.settings_action_grant)) }
                         ShizukuState.NOT_INSTALLED, ShizukuState.NOT_RUNNING ->
-                            OutlinedButton(onClick = { container.shizuku.refresh() }) { Text("Refresh") }
+                            OutlinedButton(onClick = { container.shizuku.refresh() }) { Text(uiContext.getString(R.string.ui_refresh)) }
                         ShizukuState.GRANTED -> {}
                     }
                 }
@@ -207,12 +209,12 @@ fun SetupScreen(
                 // -- 4. Linux environment (optional) -----------------------
                 SetupStep(
                     icon = { Icon(Icons.Outlined.Terminal, null, Modifier.size(16.dp), scheme.onSurfaceVariant) },
-                    title = "Linux environment",
+                    title = uiContext.getString(R.string.settings_search_linux_title),
                     status = when (val s = envState) {
-                        EnvState.Ready -> "Ready: bash, git, python, node and npm for real commands"
+                        EnvState.Ready -> uiContext.getString(R.string.ui_ready_bash_git_python_node_and_npm)
                         is EnvState.Downloading, is EnvState.Installing, EnvState.Preparing -> ""
                         is EnvState.Failed -> s.message.take(80)
-                        EnvState.NotInstalled -> "Optional: bash, git, python, pip, node, npm for real commands"
+                        EnvState.NotInstalled -> uiContext.getString(R.string.ui_optional_bash_git_python_pip_node_npm)
                     },
                     complete = envDone,
                     optional = true,
@@ -223,7 +225,7 @@ fun SetupScreen(
                         EnvState.NotInstalled, is EnvState.Failed ->
                             OutlinedButton(onClick = {
                                 scope.launch { container.linuxEnv.install(container.linuxEnv.fullPackages) }
-                            }) { Text(if (envState is EnvState.Failed) "Retry" else "Install") }
+                            }) { Text(if (envState is EnvState.Failed) uiContext.getString(R.string.ui_retry) else uiContext.getString(R.string.settings_action_install)) }
                         else -> {}
                     }
                 }
@@ -233,9 +235,9 @@ fun SetupScreen(
                     icon = {
                         Icon(Icons.Outlined.BatteryChargingFull, null, Modifier.size(16.dp), scheme.onSurfaceVariant)
                     },
-                    title = "Battery optimization",
-                    status = if (batteryExempt) "Exempted: long runs survive screen-off"
-                             else "Optional: keeps long runs alive on aggressive OEMs",
+                    title = uiContext.getString(R.string.settings_search_battery_title),
+                    status = if (batteryExempt) uiContext.getString(R.string.ui_exempted_long_runs_survive_screen_off)
+                             else uiContext.getString(R.string.ui_optional_keeps_long_runs_alive_on_aggressive),
                     complete = batteryExempt,
                     optional = true,
                 ) {
@@ -243,7 +245,7 @@ fun SetupScreen(
                         OutlinedButton(onClick = {
                             SystemGrants.requestBatteryExemption(context)
                             batteryExempt = SystemGrants.isIgnoringBatteryOptimizations(context)
-                        }) { Text("Fix") }
+                        }) { Text(uiContext.getString(R.string.settings_action_fix)) }
                     }
                 }
             }
@@ -257,12 +259,12 @@ fun SetupScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    if (storageGranted) "Ready to begin" else "Allow storage access to begin",
+                    if (storageGranted) uiContext.getString(R.string.ui_ready_to_begin) else uiContext.getString(R.string.ui_allow_storage_access_to_begin),
                     style = MaterialTheme.typography.bodySmall,
                     color = if (storageGranted) success else scheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f).padding(end = 12.dp),
                 )
-                Button(onClick = ::finish, enabled = storageGranted) { Text("Start harness") }
+                Button(onClick = ::finish, enabled = storageGranted) { Text(uiContext.getString(R.string.ui_start_harness)) }
             }
         }
     }
@@ -281,6 +283,7 @@ private fun SetupStep(
     progress: (@Composable () -> Unit)? = null,
     trailing: @Composable () -> Unit = {},
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val success = LocalStatusColors.current.success
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
@@ -303,7 +306,7 @@ private fun SetupStep(
                     Text(title, style = MaterialTheme.typography.titleSmallEmphasized)
                     if (optional) {
                         Text(
-                            "Optional",
+                            uiContext.getString(R.string.ui_optional),
                             style = MaterialTheme.typography.labelSmall,
                             color = scheme.onSurfaceVariant,
                             maxLines = 1,
@@ -325,7 +328,7 @@ private fun SetupStep(
             if (complete) {
                 Icon(
                     Icons.Filled.CheckCircle,
-                    contentDescription = "Done",
+                    contentDescription = uiContext.getString(R.string.settings_action_done),
                     tint = success,
                     modifier = Modifier.size(18.dp),
                 )

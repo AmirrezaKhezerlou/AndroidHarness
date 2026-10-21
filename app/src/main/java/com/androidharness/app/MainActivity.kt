@@ -137,13 +137,13 @@ class MainActivity : FragmentActivity() {
                             )
                             Spacer(Modifier.height(16.dp))
                             Text(
-                                "AndroidHarness is Locked",
+                                getString(R.string.ui_androidharness_is_locked),
                                 style = MaterialTheme.typography.titleLarge,
                                 textAlign = TextAlign.Center,
                             )
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                "Unlock with biometric or device credentials to access your workspaces and chats.",
+                                getString(R.string.ui_unlock_with_biometric_or_device_credentials_to),
                                 style = MaterialTheme.typography.bodyMedium,
                                 textAlign = TextAlign.Center,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -152,7 +152,7 @@ class MainActivity : FragmentActivity() {
                             Button(onClick = { promptBiometricUnlock() }) {
                                 Icon(Icons.Outlined.Fingerprint, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.size(8.dp))
-                                Text("Unlock")
+                                Text(getString(R.string.ui_unlock))
                             }
                         }
                     }
@@ -225,8 +225,8 @@ class MainActivity : FragmentActivity() {
         promptShownThisResume = true
         BiometricAuth.prompt(
             activity = this,
-            title = "Unlock AndroidHarness",
-            subtitle = "Confirm your fingerprint, face, or PIN",
+            title = getString(R.string.ui_unlock_androidharness),
+            subtitle = getString(R.string.ui_confirm_your_fingerprint_face_or_pin),
             onSuccess = { isUnlocked = true },
             onError = {
                 // If biometrics not enrolled or unavailable, fallback unlock so user is not permanently locked out

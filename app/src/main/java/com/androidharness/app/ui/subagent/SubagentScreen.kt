@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.subagent
 
+import com.androidharness.app.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -61,6 +62,7 @@ fun SubagentScreen(
     toolCallId: String,
     onBack: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val success = LocalStatusColors.current.success
     val messages by container.sessions.messagesFlow(sessionId)
@@ -93,13 +95,13 @@ fun SubagentScreen(
         parentCall?.let { taskArgsObject(it.argumentsJson) }
     }
     val title = taskInfo?.get("title")?.jsonPrimitive?.contentOrNull
-        ?.takeIf { it.isNotBlank() } ?: "Subagent"
+        ?.takeIf { it.isNotBlank() } ?: uiContext.getString(R.string.ui_subagent)
     val prompt = taskInfo?.get("prompt")?.jsonPrimitive?.contentOrNull.orEmpty()
     val statusText = when {
-        running -> steps.lastOrNull() ?: "Running…"
-        result?.isError == true -> "Failed"
-        result != null -> "Done"
-        else -> "Interrupted"
+        running -> steps.lastOrNull() ?: uiContext.getString(R.string.ui_running)
+        result?.isError == true -> uiContext.getString(R.string.ui_failed_64)
+        result != null -> uiContext.getString(R.string.settings_action_done)
+        else -> uiContext.getString(R.string.ui_interrupted)
     }
 
     val listState = rememberLazyListState()
@@ -133,13 +135,13 @@ fun SubagentScreen(
                         running -> DotLoading(Modifier.size(width = 20.dp, height = 12.dp))
                         result?.isError == true -> Icon(
                             Icons.Filled.Close,
-                            contentDescription = "Failed",
+                            contentDescription = uiContext.getString(R.string.ui_failed_64),
                             tint = scheme.error,
                             modifier = Modifier.size(18.dp),
                         )
                         result != null -> Icon(
                             Icons.Filled.CheckCircle,
-                            contentDescription = "Done",
+                            contentDescription = uiContext.getString(R.string.settings_action_done),
                             tint = success,
                             modifier = Modifier.size(18.dp),
                         )
@@ -150,7 +152,7 @@ fun SubagentScreen(
     ) { padding ->
         if (parentCall == null) {
             Text(
-                "This subagent run isn't part of this chat anymore.",
+                uiContext.getString(R.string.ui_this_subagent_run_isn_t_part_of),
                 style = MaterialTheme.typography.bodyMedium,
                 color = scheme.onSurfaceVariant,
                 modifier = Modifier.padding(padding).padding(20.dp),
@@ -223,7 +225,7 @@ fun SubagentScreen(
             if (!running && result == null && innerTurns.isEmpty()) {
                 item(key = "interrupted") {
                     Text(
-                        "This run was interrupted before it produced anything.",
+                        uiContext.getString(R.string.ui_this_run_was_interrupted_before_it_produced),
                         style = MaterialTheme.typography.bodySmall,
                         color = scheme.onSurfaceVariant,
                     )

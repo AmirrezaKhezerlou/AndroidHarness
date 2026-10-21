@@ -1,5 +1,6 @@
 package com.androidharness.app
 
+import com.androidharness.app.ui.common.localizedOptionLabel
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -99,15 +100,15 @@ object RunResultNotifications {
         manager.createNotificationChannel(
             NotificationChannel(
                 AgentService.RESULTS_CHANNEL_ID,
-                "Run results",
+                context.getString(R.string.ui_run_results),
                 NotificationManager.IMPORTANCE_DEFAULT,
-            ).apply { description = "Notified when a background agent run finishes" },
+            ).apply { description = context.getString(R.string.ui_notified_when_a_background_agent_run_finishes) },
         )
         manager.notify(notificationId(result.sessionId), build(context, result))
     }
 
     private fun build(context: Context, result: RunResultNotification): Notification {
-        val preview = result.summary.trim().ifBlank { "Run finished" }
+        val preview = result.summary.trim().ifBlank { context.getString(R.string.ui_run_finished) }
         val compactPreview = preview.replace('\n', ' ').take(180)
         val intent = Intent(context, MainActivity::class.java)
             .putExtra(AgentService.EXTRA_SESSION_ID, result.sessionId)
@@ -120,7 +121,7 @@ object RunResultNotifications {
         )
         return Notification.Builder(context, AgentService.RESULTS_CHANNEL_ID)
             .setContentTitle(
-                result.notificationTitle ?: if (result.ok) "Run finished" else "Run needs attention",
+                result.notificationTitle ?: if (result.ok) context.getString(R.string.ui_run_finished) else context.getString(R.string.ui_run_needs_attention),
             )
             .setContentText(compactPreview)
             .setSubText(result.title)
@@ -213,24 +214,24 @@ class AgentService : Service() {
         nm.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_ID,
-                "Agent runs",
+                getString(R.string.ui_agent_runs),
                 NotificationManager.IMPORTANCE_LOW,
-            ).apply { description = "Live progress while the coding agent is working" },
+            ).apply { description = getString(R.string.ui_live_progress_while_the_coding_agent_is) },
         )
         nm.createNotificationChannel(
             NotificationChannel(
                 RESULTS_CHANNEL_ID,
-                "Run results",
+                getString(R.string.ui_run_results),
                 NotificationManager.IMPORTANCE_DEFAULT,
-            ).apply { description = "Notified when a background agent run finishes" },
+            ).apply { description = getString(R.string.ui_notified_when_a_background_agent_run_finishes) },
         )
         nm.createNotificationChannel(
             NotificationChannel(
                 ALERT_CHANNEL_ID,
-                "Action needed",
+                getString(R.string.ui_action_needed),
                 NotificationManager.IMPORTANCE_HIGH,
             ).apply {
-                description = "Agent prompts you can answer right from the notification"
+                description = getString(R.string.ui_agent_prompts_you_can_answer_right_from)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             },
         )
@@ -249,7 +250,7 @@ class AgentService : Service() {
     private fun buildNotification(text: String): Notification =
         Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("AndroidHarness")
-            .setContentText(text)
+            .setContentText(localizedOptionLabel(text))
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentIntent(appPendingIntent())
             .setOnlyAlertOnce(true)
@@ -259,7 +260,7 @@ class AgentService : Service() {
             .setShowWhen(false)
             .addAction(
                 Notification.Action.Builder(
-                    null as Icon?, "Stop", stopPendingIntent(),
+                    null as Icon?, getString(R.string.settings_action_stop), stopPendingIntent(),
                 ).build(),
             )
             .build()
@@ -316,9 +317,9 @@ class AgentService : Service() {
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(
                 when (p.kind) {
-                    PendingPrompt.Kind.APPROVAL -> "Approval needed"
-                    PendingPrompt.Kind.QUESTION -> "Agent asks"
-                    PendingPrompt.Kind.ENVIRONMENT -> "Linux environment"
+                    PendingPrompt.Kind.APPROVAL -> getString(R.string.ui_approval_needed)
+                    PendingPrompt.Kind.QUESTION -> getString(R.string.ui_agent_asks)
+                    PendingPrompt.Kind.ENVIRONMENT -> getString(R.string.settings_search_linux_title)
                 },
             )
             .setContentText("${p.sessionTitle}: ${p.headline}")
@@ -329,14 +330,14 @@ class AgentService : Service() {
 
         when (p.kind) {
             PendingPrompt.Kind.APPROVAL -> {
-                builder.addAction(button(ACTION_DENY, "Deny", p.sessionId))
-                builder.addAction(button(ACTION_APPROVE, "Approve", p.sessionId))
-                builder.addAction(button(ACTION_APPROVE_ALWAYS, "Always allow", p.sessionId))
+                builder.addAction(button(ACTION_DENY, getString(R.string.ui_deny), p.sessionId))
+                builder.addAction(button(ACTION_APPROVE, getString(R.string.ui_approve), p.sessionId))
+                builder.addAction(button(ACTION_APPROVE_ALWAYS, getString(R.string.ui_always_allow), p.sessionId))
             }
 
             PendingPrompt.Kind.ENVIRONMENT -> {
-                builder.addAction(button(ACTION_ENV_SKIP, "Skip", p.sessionId))
-                builder.addAction(button(ACTION_ENV_INSTALL, "Install", p.sessionId))
+                builder.addAction(button(ACTION_ENV_SKIP, getString(R.string.ui_skip), p.sessionId))
+                builder.addAction(button(ACTION_ENV_INSTALL, getString(R.string.settings_action_install), p.sessionId))
             }
 
             PendingPrompt.Kind.QUESTION -> {
@@ -351,7 +352,7 @@ class AgentService : Service() {
                     )
                 }
                 val remoteInput = RemoteInput.Builder(NotificationActionReceiver.KEY_REPLY_TEXT)
-                    .setLabel("Your answer")
+                    .setLabel(getString(R.string.ui_your_answer))
                     .build()
                 val replyAction = Notification.Action.Builder(
                     null as Icon?, "Reply…",

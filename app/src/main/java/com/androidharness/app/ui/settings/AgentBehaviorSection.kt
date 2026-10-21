@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.settings
 
+import com.androidharness.app.ui.common.localizedOption
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -63,7 +64,7 @@ internal fun AgentBehaviorSection(
             SettingsAnchor(R.string.settings_anchor_default_permission) {
                 BehaviorValueRow(
                     title = stringResource(R.string.settings_anchor_default_permission),
-                    value = settings.permissionMode.label,
+                    value = localizedOption(settings.permissionMode.label),
                     description = settings.permissionMode.description(),
                     onClick = { pickerName = BehaviorPicker.PERMISSIONS.name },
                     caution = settings.permissionMode == PermissionMode.FULL_ACCESS,
@@ -112,7 +113,7 @@ internal fun AgentBehaviorSection(
                 description = stringResource(R.string.settings_agent_permission_subtitle)
                 selected = settings.permissionMode.name
                 choices = PermissionMode.entries.map {
-                    BehaviorChoice(it.name, it.label, it.description())
+                    BehaviorChoice(it.name, localizedOption(it.label), it.description())
                 }
             }
             BehaviorPicker.CONTEXT -> {

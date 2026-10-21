@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.R
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -37,6 +38,7 @@ fun SkillsPickerSheet(
     onDismiss: () -> Unit,
     onPick: (SkillMeta) -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var query by remember { mutableStateOf("") }
     val enabled = skills.filter { it.enabled }
@@ -56,9 +58,9 @@ fun SkillsPickerSheet(
                 .navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
-            Text("Skills", style = MaterialTheme.typography.titleMedium)
+            Text(uiContext.getString(R.string.settings_page_skills_title), style = MaterialTheme.typography.titleMedium)
             Text(
-                "Pick one to load it into this turn. The agent also loads these on its own via skill_view.",
+                uiContext.getString(R.string.ui_pick_one_to_load_it_into_this),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
@@ -68,7 +70,7 @@ fun SkillsPickerSheet(
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                label = { Text("Search skills") },
+                label = { Text(uiContext.getString(R.string.ui_search_skills)) },
             )
             Spacer(Modifier.height(8.dp))
             LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -120,6 +122,7 @@ fun SkillsPickerSheet(
 
 @Composable
 internal fun SkillUsedBadge(name: String, source: SkillSource? = null) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     Row(
         modifier = Modifier.padding(bottom = 4.dp),
@@ -131,7 +134,7 @@ internal fun SkillUsedBadge(name: String, source: SkillSource? = null) {
             shape = MaterialTheme.shapes.extraSmall,
         ) {
             Text(
-                "skill · $name",
+                uiContext.getString(R.string.ui_skill, (name).toString()),
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                 style = MaterialTheme.typography.labelSmall,
                 fontFamily = HarnessMono,

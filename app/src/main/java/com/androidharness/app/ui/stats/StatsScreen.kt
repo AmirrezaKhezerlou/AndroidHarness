@@ -1,5 +1,7 @@
 package com.androidharness.app.ui.stats
 
+import com.androidharness.app.ui.common.localizedOption
+import com.androidharness.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -42,6 +44,7 @@ fun StatsScreen(container: AppContainer, onBack: () -> Unit) = StatsScreen(conta
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun StatsScreen(repository: SessionRepository, onBack: () -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var range by rememberSaveable { mutableStateOf(StatsRange.WEEK) }
     var sort by rememberSaveable { mutableStateOf(StatsSort.TOKENS) }
     var definitions by rememberSaveable { mutableStateOf(false) }
@@ -71,7 +74,7 @@ internal fun StatsScreen(repository: SessionRepository, onBack: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val green = LocalStatusColors.current.success
     Scaffold(containerColor = scheme.surface, topBar = {
-        AppHeader("Usage", subtitle = "Model activity and AI code changes", onBack = onBack)
+        AppHeader(uiContext.getString(R.string.settings_page_usage_title), subtitle = uiContext.getString(R.string.ui_model_activity_and_ai_code_changes), onBack = onBack)
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -80,7 +83,7 @@ internal fun StatsScreen(repository: SessionRepository, onBack: () -> Unit) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         row.forEach { option ->
                             FilterChip(selected = range == option, onClick = { range = option }, modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                                label = { Text(option.label, Modifier.fillMaxWidth(), textAlign = TextAlign.Center) })
+                                label = { Text(localizedOption(option.label), Modifier.fillMaxWidth(), textAlign = TextAlign.Center) })
                         }
                     }
                 }
@@ -88,44 +91,44 @@ internal fun StatsScreen(repository: SessionRepository, onBack: () -> Unit) {
                 StatsRange.entries.forEachIndexed { index, option ->
                     SegmentedButton(selected = range == option, onClick = { range = option }, icon = {},
                         shape = SegmentedButtonDefaults.itemShape(index, StatsRange.entries.size)) {
-                        Text(option.label, style = MaterialTheme.typography.labelMedium)
+                        Text(localizedOption(option.label), style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }
             Card(colors = CardDefaults.cardColors(containerColor = scheme.primaryContainer), shape = RoundedCornerShape(24.dp)) {
                 Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("MODEL ACTIVITY", style = MaterialTheme.typography.labelMedium, color = scheme.onPrimaryContainer)
+                    Text(uiContext.getString(R.string.ui_model_activity), style = MaterialTheme.typography.labelMedium, color = scheme.onPrimaryContainer)
                     Text(formatTokenCount(bundle.input + bundle.output), style = MaterialTheme.typography.displayMedium,
                         fontFamily = HarnessMono, color = scheme.onPrimaryContainer)
-                    Text("total tokens · ${bundle.requests} ${if (bundle.requests == 1L) "request" else "requests"} · ${bundle.sessionCount} ${if (bundle.sessionCount == 1) "session" else "sessions"}",
+                    Text(uiContext.getString(R.string.ui_total_tokens_1396, (bundle.requests).toString(), (if (bundle.requests == 1L) "request" else "requests").toString(), (bundle.sessionCount).toString(), (if (bundle.sessionCount == 1) "session" else "sessions").toString()),
                         style = MaterialTheme.typography.bodySmall, color = scheme.onPrimaryContainer)
                     HorizontalDivider(color = scheme.onPrimaryContainer.copy(alpha = .18f))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         UsageMetric("Estimated cost", cost?.let { "$${"%.2f".format(it)}" } ?: "Unavailable", Modifier.weight(1f))
                         UsageMetric("Cache hit rate", if (bundle.input > 0) "${"%.1f".format(bundle.cached.toDouble() / bundle.input * 100)}%" else "—", Modifier.weight(1f))
                     }
-                    if (knownPrices.size < models.size) Text("Cost includes models with known list prices only.", style = MaterialTheme.typography.labelSmall)
+                    if (knownPrices.size < models.size) Text(uiContext.getString(R.string.ui_cost_includes_models_with_known_list_prices), style = MaterialTheme.typography.labelSmall)
                 }
             }
             UsageCard {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Icon(Icons.Outlined.Code, null, tint = scheme.primary)
                     Column {
-                        Text("AI code changes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text("${range.label} · ${code.edits} tracked edits", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                        Text(uiContext.getString(R.string.ui_ai_code_changes), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text(uiContext.getString(R.string.ui_tracked_edits, (range.label).toString(), (code.edits).toString()), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Surface(Modifier.weight(1f), shape = RoundedCornerShape(16.dp), color = green.copy(alpha = .09f)) {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text("+${lineCount(code.added)}", style = if (lineCount(code.added).length > 8) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineSmall, fontFamily = HarnessMono, color = green)
-                            Text("Lines added", style = MaterialTheme.typography.labelMedium)
+                            Text(uiContext.getString(R.string.ui_lines_added), style = MaterialTheme.typography.labelMedium)
                         }
                     }
                     Surface(Modifier.weight(1f), shape = RoundedCornerShape(16.dp), color = scheme.errorContainer.copy(alpha = .45f)) {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text("−${lineCount(code.removed)}", style = if (lineCount(code.removed).length > 8) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineSmall, fontFamily = HarnessMono, color = scheme.error)
-                            Text("Lines removed", style = MaterialTheme.typography.labelMedium)
+                            Text(uiContext.getString(R.string.ui_lines_removed), style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }
@@ -135,27 +138,27 @@ internal fun StatsScreen(repository: SessionRepository, onBack: () -> Unit) {
                     if (code.removed > 0) Box(Modifier.weight(code.removed.toFloat() / total).fillMaxHeight().background(scheme.error, RoundedCornerShape(3.dp)))
                 }
                 val net = code.added - code.removed
-                Text("Net change  ${if (net >= 0) "+" else "−"}${lineCount(kotlin.math.abs(net))} lines", style = MaterialTheme.typography.bodyMedium)
-                if (code.edits == 0L) Text("No tracked code changes in this period.", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
-                Text("Source code and configuration · totals stay after chat deletion", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                Text(uiContext.getString(R.string.ui_net_change_lines, (if (net >= 0) "+" else "−").toString(), (lineCount(kotlin.math.abs(net))).toString()), style = MaterialTheme.typography.bodyMedium)
+                if (code.edits == 0L) Text(uiContext.getString(R.string.ui_no_tracked_code_changes_in_this_period), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                Text(uiContext.getString(R.string.ui_source_code_and_configuration_totals_stay_after), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             }
             UsageCard {
-                Text("Token breakdown", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(uiContext.getString(R.string.ui_token_breakdown), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    UsageMetric("Fresh input", formatTokenCount(bundle.freshInput), Modifier.weight(1f))
-                    UsageMetric("Output", formatTokenCount(bundle.output), Modifier.weight(1f))
+                    UsageMetric(uiContext.getString(R.string.ui_fresh_input), formatTokenCount(bundle.freshInput), Modifier.weight(1f))
+                    UsageMetric(uiContext.getString(R.string.ui_output_1407), formatTokenCount(bundle.output), Modifier.weight(1f))
                 }
                 HorizontalDivider(color = scheme.outlineVariant.copy(alpha = .5f))
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    UsageMetric("Cache reads", formatTokenCount(bundle.cached), Modifier.weight(1f))
-                    UsageMetric("Cache writes", formatTokenCount(bundle.cacheWrite), Modifier.weight(1f))
+                    UsageMetric(uiContext.getString(R.string.ui_cache_reads), formatTokenCount(bundle.cached), Modifier.weight(1f))
+                    UsageMetric(uiContext.getString(R.string.ui_cache_writes_1409), formatTokenCount(bundle.cacheWrite), Modifier.weight(1f))
                 }
             }
             UsageCard {
-                Text("By model", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(uiContext.getString(R.string.ui_by_model), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                     StatsSort.entries.forEachIndexed { index, option ->
-                        SegmentedButton(selected = sort == option, onClick = { sort = option }, icon = {}, shape = SegmentedButtonDefaults.itemShape(index, StatsSort.entries.size)) { Text(option.label) }
+                        SegmentedButton(selected = sort == option, onClick = { sort = option }, icon = {}, shape = SegmentedButtonDefaults.itemShape(index, StatsSort.entries.size)) { Text(localizedOption(option.label)) }
                     }
                 }
                 val sorted = when (sort) {
@@ -163,16 +166,16 @@ internal fun StatsScreen(repository: SessionRepository, onBack: () -> Unit) {
                     StatsSort.PRICE -> models.sortedByDescending { it.second ?: -1.0 }
                     StatsSort.REQUESTS -> models.sortedByDescending { it.first.requests }
                 }
-                if (sorted.isEmpty()) Text("No dated model activity in this period. Earlier usage is available in Lifetime.", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                if (sorted.isEmpty()) Text(uiContext.getString(R.string.ui_no_dated_model_activity_in_this_period), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                 val max = sorted.maxOfOrNull { it.first.totalTokens }?.coerceAtLeast(1) ?: 1
                 sorted.forEachIndexed { index, (model, price) ->
                     if (index > 0) HorizontalDivider(color = scheme.outlineVariant.copy(alpha = .45f))
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(model.model, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text("${model.providerName} · ${model.requests} requests", style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
+                        Text(uiContext.getString(R.string.ui_requests_extra84, (model.providerName).toString(), (model.requests).toString()), style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("${formatTokenCount(model.totalTokens)} tokens", fontFamily = HarnessMono, style = MaterialTheme.typography.bodySmall)
-                            Text(price?.let { "≈ $${"%.2f".format(it)}" } ?: "Price unavailable", style = MaterialTheme.typography.bodySmall)
+                            Text(uiContext.getString(R.string.settings_agent_context_value, (formatTokenCount(model.totalTokens)).toString()), fontFamily = HarnessMono, style = MaterialTheme.typography.bodySmall)
+                            Text(price?.let { "≈ $${"%.2f".format(it)}" } ?: uiContext.getString(R.string.ui_price_unavailable), style = MaterialTheme.typography.bodySmall)
                         }
                         LinearProgressIndicator(progress = { model.totalTokens.toFloat() / max }, modifier = Modifier.fillMaxWidth().height(4.dp))
                     }
@@ -180,14 +183,14 @@ internal fun StatsScreen(repository: SessionRepository, onBack: () -> Unit) {
             }
             UsageCard {
                 TextButton(onClick = { definitions = !definitions }, modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(0.dp)) {
-                    Text("How Usage is counted", Modifier.weight(1f), color = scheme.onSurface)
+                    Text(uiContext.getString(R.string.ui_how_usage_is_counted), Modifier.weight(1f), color = scheme.onSurface)
                     Icon(if (definitions) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null)
                 }
                 if (definitions) {
-                    Text("AI code changes count applied source and configuration edits, including repeated edits and later reversals. Net is added minus removed activity, not the current Git diff. Manual editor saves, documentation, generated files, dependencies and binary files are excluded.", style = MaterialTheme.typography.bodySmall)
-                    Text("Tracked file tools and eligible local foreground shell changes are included. Background commands, remote shell changes and comparisons beyond size or work limits can be missing. Earlier totals use retained edit records; deleted history cannot be recovered. No file contents are kept in Usage.", style = MaterialTheme.typography.bodySmall)
-                    Text("Today uses your device's calendar day. 1 week includes today and the previous 6 days; 1 month includes today and the previous 29 days. Undated token usage appears only in Lifetime.", style = MaterialTheme.typography.bodySmall)
-                    Text("Token totals include subagents and compaction. Cache reads and writes are separate from fresh input. Prices are estimates from the bundled model price list, not provider invoices. DeepSeek requests use peak rates 01:00-04:00 and 06:00-10:00 UTC on weekdays; all other times, including weekends, are billed at half.", style = MaterialTheme.typography.bodySmall)
+                    Text(uiContext.getString(R.string.ui_ai_code_changes_count_applied_source_and), style = MaterialTheme.typography.bodySmall)
+                    Text(uiContext.getString(R.string.ui_tracked_file_tools_and_eligible_local_foreground), style = MaterialTheme.typography.bodySmall)
+                    Text(uiContext.getString(R.string.ui_today_uses_your_device_s_calendar_day), style = MaterialTheme.typography.bodySmall)
+                    Text(uiContext.getString(R.string.ui_token_totals_include_subagents_and_compaction_cache), style = MaterialTheme.typography.bodySmall)
                 }
             }
         }

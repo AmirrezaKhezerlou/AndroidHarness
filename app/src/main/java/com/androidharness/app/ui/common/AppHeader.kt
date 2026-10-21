@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.common
 
+import com.androidharness.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -42,6 +43,7 @@ fun AppHeader(
     onMenu: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val desktop = com.androidharness.app.ui.LocalDesktopLayout.current
     Column(
@@ -59,11 +61,11 @@ fun AppHeader(
             when {
                 onBack != null -> IconButton(onClick = onBack) {
                     Icon(if (desktop) Icons.Outlined.Close else Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = if (desktop) "Close panel" else "Back",
+                        contentDescription = if (desktop) uiContext.getString(R.string.ui_close_panel) else uiContext.getString(R.string.settings_action_back),
                         modifier = if (desktop) Modifier.padding(4.dp) else Modifier)
                 }
                 onMenu != null -> IconButton(onClick = onMenu) {
-                    Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+                    Icon(Icons.Filled.Menu, contentDescription = uiContext.getString(R.string.ui_open_navigation))
                 }
             }
             Column(

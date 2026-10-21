@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.settings
 
+import com.androidharness.app.ui.common.localizedOption
 import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import android.Manifest
 import android.content.ClipData
@@ -58,19 +59,21 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable internal fun TelegramSection(container: AppContainer) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val manager = container.telegram
     val setup by manager.setup.state.collectAsStateWithLifecycle()
     val projects by container.workspace.projects.collectAsStateWithLifecycle(initialValue = emptyList())
     val sessions by container.sessions.sessions.collectAsStateWithLifecycle(initialValue = emptyList())
     val models by remember(setup.sessionId) { container.chatModels.observe(setup.sessionId) }.collectAsStateWithLifecycle(initialValue = null)
     TelegramSettingsContent(manager, projects.map { TelegramChoiceItem(it.id, it.name) },
-        sessions.filter { it.projectId == setup.projectId }.map { TelegramChoiceItem(it.id, it.title.ifBlank { "Untitled chat" }) }, models,
+        sessions.filter { it.projectId == setup.projectId }.map { TelegramChoiceItem(it.id, it.title.ifBlank { uiContext.getString(R.string.ui_untitled_chat) }) }, models,
         onOpenChat = { setup.sessionId?.let { container.pendingSessionId.tryEmit(it) } },
         onPermissions = { container.pendingSettingsScroll.value = "agent" })
 }
 
 @Composable internal fun TelegramSettingsContent(manager: TelegramManager, projects: List<TelegramChoiceItem>, chats: List<TelegramChoiceItem>,
     modelState: ChatModelState? = null, onOpenChat: () -> Unit = {}, onPermissions: () -> Unit = {}) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val context = LocalContext.current
     val setup by manager.setup.state.collectAsStateWithLifecycle()
     val runtime by manager.runtime.collectAsStateWithLifecycle()
@@ -98,7 +101,7 @@ import kotlinx.coroutines.launch
         scope.launch {
             try { block(); message = success }
             catch (e: CancellationException) { throw e }
-            catch (e: Exception) { failed = true; message = com.androidharness.app.tools.SecretRedactor.redact(e.message ?: "Could not finish this action. Please retry.") }
+            catch (e: Exception) { failed = true; message = com.androidharness.app.tools.SecretRedactor.redact(e.message ?: uiContext.getString(R.string.ui_could_not_finish_this_action_please_retry)) }
             finally { busy = false }
         }
     }
@@ -108,26 +111,26 @@ import kotlinx.coroutines.launch
         catch (_: Exception) { failed = true; message = context.getString(R.string.settings_telegram_open_in_app, username) }
     }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        action("Telegram enabled.") { manager.enable() }
+        action(uiContext.getString(R.string.ui_telegram_enabled)) { manager.enable() }
     }
     fun enable() {
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-        else action("Telegram enabled.") { manager.enable() }
+        else action(uiContext.getString(R.string.ui_telegram_enabled)) { manager.enable() }
     }
     TelegramPanel {
         val canEnable = setup.ownerId != null && !busy && pairing.challenge == null && manager.store.loadError == null
         val status = when {
-            serviceError != null || manager.store.loadError != null -> "Needs attention"
-            pairing.challenge != null -> "Pairing"
-            setup.enabled -> runtime.label
-            else -> "Off"
+            serviceError != null || manager.store.loadError != null -> uiContext.getString(R.string.ui_needs_attention)
+            pairing.challenge != null -> uiContext.getString(R.string.ui_pairing)
+            setup.enabled -> localizedOption(runtime.label)
+            else -> uiContext.getString(R.string.ui_off)
         }
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             val enableCd = stringResource(R.string.settings_telegram_enable)
             Row(Modifier.weight(1f).semantics { contentDescription = enableCd }
                 .toggleable(value = setup.enabled, enabled = canEnable, role = Role.Switch,
-                    onValueChange = { checked -> if (checked) enable() else action("Telegram paused.") { manager.pause() } }),
+                    onValueChange = { checked -> if (checked) enable() else action(uiContext.getString(R.string.ui_telegram_paused)) { manager.pause() } }),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(Modifier.size(38.dp).background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(12.dp)),
                     contentAlignment = Alignment.Center) {
@@ -141,25 +144,25 @@ import kotlinx.coroutines.launch
                 Switch(checked = setup.enabled, enabled = canEnable, onCheckedChange = null)
             }
             Box {
-                IconButton(onClick = { moreMenu = true }) { Icon(Icons.Outlined.MoreVert, "More options") }
+                IconButton(onClick = { moreMenu = true }) { Icon(Icons.Outlined.MoreVert, uiContext.getString(R.string.ui_more_options)) }
                 DropdownMenu(moreMenu, { moreMenu = false }) {
                     if (setup.botUsername != null) {
                         DropdownMenuItem(text = { Text(stringResource(R.string.settings_telegram_change_token)) }, enabled = !busy && canConfigure,
                             onClick = { moreMenu = false; token = ""; visible = false; tokenDialog = true })
-                        DropdownMenuItem(text = { Text(if (setup.ownerId == null) "Pair account" else "Pair again") },
+                        DropdownMenuItem(text = { Text(if (setup.ownerId == null) uiContext.getString(R.string.settings_telegram_pair_account) else uiContext.getString(R.string.ui_pair_again)) },
                             enabled = !busy && canConfigure && pairing.challenge == null,
-                            onClick = { moreMenu = false; action("Pairing started.") { manager.beginPairing() } })
+                            onClick = { moreMenu = false; action(uiContext.getString(R.string.ui_pairing_started)) { manager.beginPairing() } })
                     }
                     DropdownMenuItem(text = { Text(stringResource(R.string.settings_telegram_test_message)) }, enabled = setup.ownerId != null && !busy,
-                        onClick = { moreMenu = false; action("Test message sent.") { manager.sendConnectionTest() } })
+                        onClick = { moreMenu = false; action(uiContext.getString(R.string.ui_test_message_sent)) { manager.sendConnectionTest() } })
                     DropdownMenuItem(text = { Text(stringResource(R.string.settings_telegram_stop_task)) }, enabled = setup.sessionId != null && !busy,
-                        onClick = { moreMenu = false; action("Task stopped.") { manager.stopTasks() } })
+                        onClick = { moreMenu = false; action(uiContext.getString(R.string.ui_task_stopped)) { manager.stopTasks() } })
                     DropdownMenuItem(text = { Text(stringResource(R.string.settings_telegram_battery)) }, onClick = {
                         moreMenu = false
                         context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                     })
                     if (setup.ownerId != null) DropdownMenuItem(text = { Text(stringResource(R.string.settings_telegram_unpair)) }, enabled = !busy,
-                        onClick = { moreMenu = false; action("Account unpaired.") { manager.unpair() } })
+                        onClick = { moreMenu = false; action(uiContext.getString(R.string.ui_account_unpaired)) { manager.unpair() } })
                     if (setup.botUsername != null) DropdownMenuItem(text = { Text(stringResource(R.string.settings_telegram_disconnect), color = MaterialTheme.colorScheme.error) }, enabled = !busy,
                         onClick = { moreMenu = false; disconnectDialog = true })
                 }
@@ -170,7 +173,7 @@ import kotlinx.coroutines.launch
         if (setup.ownerId != null) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { setup.botUsername?.let { openBot(it) } }, enabled = !busy) { Text(stringResource(R.string.settings_telegram_open_bot)) }
-                if (!canConfigure) OutlinedButton(enabled = !busy, onClick = { action("Task stopped.") { manager.stopTasks() } }) { Text(stringResource(R.string.settings_telegram_stop_task)) }
+                if (!canConfigure) OutlinedButton(enabled = !busy, onClick = { action(uiContext.getString(R.string.ui_task_stopped)) { manager.stopTasks() } }) { Text(stringResource(R.string.settings_telegram_stop_task)) }
             }
         }
         if (busy) AppLinearProgressIndicator(Modifier.fillMaxWidth())
@@ -180,10 +183,10 @@ import kotlinx.coroutines.launch
         if (!failed) message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
         runtime.action?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
     }
-    TelegramGroup("Connection", Icons.Outlined.AccountCircle) {
-        TelegramDetail("Bot", setup.botUsername?.let { "@$it" } ?: "Not connected", setup.botUsername != null)
+    TelegramGroup(uiContext.getString(R.string.ui_connection), Icons.Outlined.AccountCircle) {
+        TelegramDetail(uiContext.getString(R.string.ui_bot), setup.botUsername?.let { "@$it" } ?: uiContext.getString(R.string.ui_not_connected), setup.botUsername != null)
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .4f))
-        TelegramDetail("Account", setup.ownerName?.let { "$it · Paired" } ?: "Not paired", setup.ownerId != null)
+        TelegramDetail(uiContext.getString(R.string.ui_account), setup.ownerName?.let { "$it · Paired" } ?: uiContext.getString(R.string.ui_not_paired), setup.ownerId != null)
         if (setup.botUsername == null) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(enabled = !busy, onClick = { token = ""; visible = false; tokenDialog = true }) { Text(stringResource(R.string.settings_telegram_connect_bot)) }
@@ -191,15 +194,15 @@ import kotlinx.coroutines.launch
             }
         } else if (setup.ownerId == null) {
             Button(enabled = !busy && canConfigure && pairing.challenge == null,
-                onClick = { action("Pairing started.") { manager.beginPairing() } }) { Text(stringResource(R.string.settings_telegram_pair_account)) }
+                onClick = { action(uiContext.getString(R.string.ui_pairing_started)) { manager.beginPairing() } }) { Text(stringResource(R.string.settings_telegram_pair_account)) }
         }
     }
-    TelegramGroup("Workspace", Icons.Outlined.FolderOpen) {
-        TelegramChoice("Project", projects.firstOrNull { it.id == setup.projectId }?.label ?: "Choose project", projects, !busy && canConfigure && projects.isNotEmpty()) { id -> action("Project selected.") { manager.selectDestination(id, null) } }
-        TelegramChoice("Chat", chats.firstOrNull { it.id == setup.sessionId }?.label ?: "New Telegram chat", listOf(TelegramChoiceItem("", "New Telegram chat")) + chats, !busy && canConfigure && setup.projectId != null) { id -> action("Chat selected.") { manager.selectDestination(requireNotNull(setup.projectId), id.ifBlank { null }) } }
+    TelegramGroup(uiContext.getString(R.string.ui_workspace), Icons.Outlined.FolderOpen) {
+        TelegramChoice(uiContext.getString(R.string.ui_project), projects.firstOrNull { it.id == setup.projectId }?.label ?: uiContext.getString(R.string.ui_choose_project), projects, !busy && canConfigure && projects.isNotEmpty()) { id -> action(uiContext.getString(R.string.ui_project_selected)) { manager.selectDestination(id, null) } }
+        TelegramChoice(uiContext.getString(R.string.ui_chat), chats.firstOrNull { it.id == setup.sessionId }?.label ?: uiContext.getString(R.string.ui_new_telegram_chat), listOf(TelegramChoiceItem("", uiContext.getString(R.string.ui_new_telegram_chat))) + chats, !busy && canConfigure && setup.projectId != null) { id -> action(uiContext.getString(R.string.ui_chat_selected)) { manager.selectDestination(requireNotNull(setup.projectId), id.ifBlank { null }) } }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(enabled = setup.sessionId != null && !busy, onClick = onOpenChat) { Text(stringResource(R.string.settings_telegram_open_chat)) }
-            TextButton(enabled = setup.projectId != null && !busy && canConfigure, onClick = { action("New chat ready.") { manager.newChat() } }) { Text(stringResource(R.string.settings_telegram_new_chat)) }
+            TextButton(enabled = setup.projectId != null && !busy && canConfigure, onClick = { action(uiContext.getString(R.string.ui_new_chat_ready)) { manager.newChat() } }) { Text(stringResource(R.string.settings_telegram_new_chat)) }
         }
     }
     val activeChoice = if (modelState?.settings?.planningModelsEnabled == true) {
@@ -219,20 +222,20 @@ import kotlinx.coroutines.launch
         val id = providerChoice ?: return@LaunchedEffect
         loadingModels = true; modelError = null
         try { modelChoices = manager.bridge.models(id) }
-        catch (e: CancellationException) { throw e } catch (e: Exception) { modelError = e.message ?: "Could not refresh models. Please retry." }
+        catch (e: CancellationException) { throw e } catch (e: Exception) { modelError = e.message ?: uiContext.getString(R.string.ui_could_not_refresh_models_please_retry) }
         finally { loadingModels = false }
     }
-    TelegramGroup("Agent", Icons.Outlined.Tune) {
+    TelegramGroup(uiContext.getString(R.string.ui_agent), Icons.Outlined.Tune) {
         if (modelState?.settings?.sameModelAcrossChats == true) Text(stringResource(R.string.settings_telegram_shared), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        TelegramChoice("Provider", providers.firstOrNull { it.id == providerChoice }?.label ?: "Choose provider", providers, !busy && canConfigure && setup.sessionId != null) { providerChoice = it }
+        TelegramChoice(uiContext.getString(R.string.ui_provider), providers.firstOrNull { it.id == providerChoice }?.label ?: uiContext.getString(R.string.ui_choose_provider), providers, !busy && canConfigure && setup.sessionId != null) { providerChoice = it }
         val selectedModel = if (providerChoice == activeChoice?.providerId) activeChoice?.model else null
-        TelegramChoice("Model", selectedModel ?: "Choose model", modelChoices, !busy && !loadingModels && canConfigure && setup.sessionId != null) { id -> action("Model selected.") { manager.selectModel(requireNotNull(providerChoice), id) } }
+        TelegramChoice(uiContext.getString(R.string.ui_model), selectedModel ?: uiContext.getString(R.string.settings_provider_choose_model_title), modelChoices, !busy && !loadingModels && canConfigure && setup.sessionId != null) { id -> action(uiContext.getString(R.string.ui_model_selected)) { manager.selectModel(requireNotNull(providerChoice), id) } }
         if (loadingModels) AppLinearProgressIndicator(Modifier.fillMaxWidth())
         modelError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         TextButton(enabled = !loadingModels && !busy, onClick = { refreshModels++ }) { Text(stringResource(R.string.settings_chatgpt_refresh_models)) }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = setup.mode == "PLAN", enabled = !busy && canConfigure && setup.ownerId != null, onClick = { action("Plan mode selected.") { manager.setMode("PLAN") } }, label = { Text(stringResource(R.string.settings_telegram_plan)) })
-            FilterChip(selected = setup.mode == "ACT", enabled = !busy && canConfigure && setup.ownerId != null, onClick = { action("Act mode selected.") { manager.setMode("ACT") } }, label = { Text(stringResource(R.string.settings_telegram_act)) })
+            FilterChip(selected = setup.mode == "PLAN", enabled = !busy && canConfigure && setup.ownerId != null, onClick = { action(uiContext.getString(R.string.ui_plan_mode_selected)) { manager.setMode("PLAN") } }, label = { Text(stringResource(R.string.settings_telegram_plan)) })
+            FilterChip(selected = setup.mode == "ACT", enabled = !busy && canConfigure && setup.ownerId != null, onClick = { action(uiContext.getString(R.string.ui_act_mode_selected)) { manager.setMode("ACT") } }, label = { Text(stringResource(R.string.settings_telegram_act)) })
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .4f))
         Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onPermissions).padding(vertical = 8.dp),
@@ -240,7 +243,7 @@ import kotlinx.coroutines.launch
             Icon(Icons.Outlined.Security, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             Column(Modifier.weight(1f)) {
                 Text(stringResource(R.string.settings_telegram_permissions), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(modelState?.settings?.permissionMode?.label ?: "App default", style = MaterialTheme.typography.bodyMedium)
+                Text(modelState?.settings?.permissionMode?.label ?: uiContext.getString(R.string.ui_app_default), style = MaterialTheme.typography.bodyMedium)
             }
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -252,33 +255,33 @@ import kotlinx.coroutines.launch
     }
     val requests = saved.requests.filter { it.retryable && it.sessionId != null && it.callback == null }.asReversed()
     val deliveries = saved.deliveries.filter { it.status in listOf(TelegramDeliveryStatus.FAILED, TelegramDeliveryStatus.UNCERTAIN) }.asReversed()
-    if (requests.isNotEmpty() || deliveries.isNotEmpty()) TelegramGroup("Saved work", Icons.Outlined.Tune) {
+    if (requests.isNotEmpty() || deliveries.isNotEmpty()) TelegramGroup(uiContext.getString(R.string.ui_saved_work), Icons.Outlined.Tune) {
         (if (showAllSaved) requests else requests.take(5)).forEach { request ->
             Text(stringResource(R.string.settings_telegram_request, request.id.toString()), style = MaterialTheme.typography.titleSmall)
             Text(request.text.take(160), style = MaterialTheme.typography.bodySmall)
-            Text(request.error ?: "Interrupted", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            TextButton(enabled = !busy, onClick = { action("Task queued.") { manager.retry(request.id) } }) { Text(stringResource(R.string.settings_telegram_retry)) }
+            Text(request.error ?: uiContext.getString(R.string.ui_interrupted), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            TextButton(enabled = !busy, onClick = { action(uiContext.getString(R.string.ui_task_queued)) { manager.retry(request.id) } }) { Text(stringResource(R.string.settings_telegram_retry)) }
             HorizontalDivider()
         }
         (if (showAllSaved) deliveries else deliveries.take(5)).forEach { delivery ->
             Text(delivery.text.take(160), style = MaterialTheme.typography.bodySmall)
-            Text(delivery.error ?: "Reply delivery failed. Check Telegram before resending.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            TextButton(enabled = !busy, onClick = { action("Reply queued.") { manager.resend(delivery.key) } }) { Text(stringResource(R.string.settings_telegram_resend)) }
+            Text(delivery.error ?: uiContext.getString(R.string.ui_reply_delivery_failed_check_telegram_before_resending), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            TextButton(enabled = !busy, onClick = { action(uiContext.getString(R.string.ui_reply_queued)) { manager.resend(delivery.key) } }) { Text(stringResource(R.string.settings_telegram_resend)) }
             HorizontalDivider()
         }
-        if (requests.size > 5 || deliveries.size > 5) TextButton(onClick = { showAllSaved = !showAllSaved }) { Text(if (showAllSaved) "Show fewer" else "Show all saved work") }
+        if (requests.size > 5 || deliveries.size > 5) TextButton(onClick = { showAllSaved = !showAllSaved }) { Text(if (showAllSaved) uiContext.getString(R.string.ui_show_fewer) else uiContext.getString(R.string.ui_show_all_saved_work)) }
     }
     if (tokenDialog) AlertDialog(onDismissRequest = { if (!busy) { tokenDialog = false; token = "" } }, title = { Text(stringResource(R.string.settings_telegram_connect_title)) }, text = {
         SecureDialogEffect()
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(stringResource(R.string.settings_telegram_token_hint), style = MaterialTheme.typography.bodySmall)
             OutlinedTextField(token, { token = it }, singleLine = true, label = { Text(stringResource(R.string.settings_telegram_bot_token)) }, visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(), trailingIcon = {
-                IconButton(onClick = { visible = !visible }) { Icon(if (visible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, if (visible) "Hide bot token" else "Show bot token") }
+                IconButton(onClick = { visible = !visible }) { Icon(if (visible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, if (visible) uiContext.getString(R.string.ui_hide_bot_token) else uiContext.getString(R.string.ui_show_bot_token)) }
             }, modifier = Modifier.fillMaxWidth())
             if (busy) AppLinearProgressIndicator(Modifier.fillMaxWidth())
             if (failed) message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         }
-    }, confirmButton = { TextButton(enabled = !busy && token.isNotBlank(), onClick = { action("Bot verified.") { manager.connect(token); tokenDialog = false; token = "" } }) { Text(stringResource(R.string.settings_telegram_verify)) } }, dismissButton = { TextButton(enabled = !busy, onClick = { tokenDialog = false; token = "" }) { Text(stringResource(R.string.settings_action_cancel)) } })
+    }, confirmButton = { TextButton(enabled = !busy && token.isNotBlank(), onClick = { action(uiContext.getString(R.string.ui_bot_verified)) { manager.connect(token); tokenDialog = false; token = "" } }) { Text(stringResource(R.string.settings_telegram_verify)) } }, dismissButton = { TextButton(enabled = !busy, onClick = { tokenDialog = false; token = "" }) { Text(stringResource(R.string.settings_action_cancel)) } })
     val challenge = pairing.challenge
     if (challenge != null && pairing.candidate == null) {
         var remaining by remember(challenge) { mutableLongStateOf((challenge.expiresAt - System.currentTimeMillis()).coerceAtLeast(0)) }
@@ -294,7 +297,7 @@ import kotlinx.coroutines.launch
                     ),
                     style = MaterialTheme.typography.labelSmall,
                 )
-                TextButton(onClick = { (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Telegram pairing", "/pair ${challenge.code}")) }) { Text(stringResource(R.string.settings_telegram_copy_code)) }
+                TextButton(onClick = { (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText(uiContext.getString(R.string.ui_telegram_pairing), "/pair ${challenge.code}")) }) { Text(stringResource(R.string.settings_telegram_copy_code)) }
             }
         }, confirmButton = { TextButton(onClick = { setup.botUsername?.let { openBot(it, challenge.code) } }) { Text(stringResource(R.string.settings_telegram_open_pair)) } }, dismissButton = { TextButton(onClick = { manager.cancelPairing() }) { Text(stringResource(R.string.settings_action_cancel)) } })
     }
@@ -306,15 +309,15 @@ import kotlinx.coroutines.launch
                             candidate.account.userId.toString(),
                         ),
                     )
-    }, confirmButton = { TextButton(enabled = !busy, onClick = { action("Account paired.") { manager.confirmPairing() } }) { Text(stringResource(R.string.settings_telegram_pair_account)) } }, dismissButton = { TextButton(onClick = { manager.cancelPairing() }) { Text(stringResource(R.string.settings_action_cancel)) } }) }
+    }, confirmButton = { TextButton(enabled = !busy, onClick = { action(uiContext.getString(R.string.ui_account_paired)) { manager.confirmPairing() } }) { Text(stringResource(R.string.settings_telegram_pair_account)) } }, dismissButton = { TextButton(onClick = { manager.cancelPairing() }) { Text(stringResource(R.string.settings_action_cancel)) } }) }
     if (disconnectDialog) AlertDialog(onDismissRequest = { disconnectDialog = false }, title = { Text(stringResource(R.string.settings_telegram_disconnect_title)) }, text = { Text(stringResource(R.string.settings_telegram_disconnect_message)) },
-        confirmButton = { TextButton(enabled = !busy, onClick = { disconnectDialog = false; action("Bot disconnected.") { manager.disconnect() } }) { Text(stringResource(R.string.settings_action_disconnect)) } }, dismissButton = { TextButton(onClick = { disconnectDialog = false }) { Text(stringResource(R.string.settings_action_cancel)) } })
+        confirmButton = { TextButton(enabled = !busy, onClick = { disconnectDialog = false; action(uiContext.getString(R.string.ui_bot_disconnected)) { manager.disconnect() } }) { Text(stringResource(R.string.settings_action_disconnect)) } }, dismissButton = { TextButton(onClick = { disconnectDialog = false }) { Text(stringResource(R.string.settings_action_cancel)) } })
     if (helpDialog) AlertDialog(onDismissRequest = { helpDialog = false }, title = { Text(stringResource(R.string.settings_telegram_commands)) }, text = {
         Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(stringResource(R.string.settings_telegram_commands_desc), style = MaterialTheme.typography.bodySmall)
-            listOf("/projects" to "Projects", "/chats" to "Chats", "/new" to "New chat", "/model" to "Model",
-                "/mode plan" to "Plan", "/mode act" to "Act", "/status" to "Status", "/stop" to "Stop task",
-                "/retry" to "Retry / resume", "/pause" to "Pause Telegram").forEach { (command, title) ->
+            listOf("/projects" to uiContext.getString(R.string.ui_projects), "/chats" to uiContext.getString(R.string.ui_chats), "/new" to uiContext.getString(R.string.settings_telegram_new_chat), "/model" to uiContext.getString(R.string.ui_model),
+                "/mode plan" to uiContext.getString(R.string.settings_telegram_plan), "/mode act" to uiContext.getString(R.string.settings_telegram_act), "/status" to uiContext.getString(R.string.ui_status), "/stop" to uiContext.getString(R.string.settings_telegram_stop_task),
+                "/retry" to uiContext.getString(R.string.ui_retry_resume), "/pause" to uiContext.getString(R.string.ui_pause_telegram)).forEach { (command, title) ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(command, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
                     Text(title, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)

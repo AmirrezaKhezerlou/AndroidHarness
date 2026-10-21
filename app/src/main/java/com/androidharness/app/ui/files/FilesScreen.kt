@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.files
 
+import com.androidharness.app.R
 import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -118,6 +119,7 @@ fun FilesScreen(
     onOpenFileAtLine: ((String, Int?) -> Unit)? = null,
     onOpenTerminal: (() -> Unit)? = null,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     com.androidharness.app.ui.common.ShizukuWorkspaceWarningEffect(container.shizuku)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -213,7 +215,7 @@ fun FilesScreen(
                 val dir = f.resolve(currentPath)
                 if (!dir.isDirectory) emptyList() else dir.list()
             }.getOrElse { e ->
-                loadError = e.message ?: "Could not list $currentPath"
+                loadError = e.message ?: uiContext.getString(R.string.ui_could_not_list, (currentPath).toString())
                 emptyList()
             }.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
         }
@@ -269,12 +271,12 @@ fun FilesScreen(
         WorkspaceToolsSheet(container, sessionId, projectId, mode, onDismiss = { workspaceTools = null },
             onOpenFile = { path, line -> workspaceTools = null; onOpenFileAtLine?.invoke(path, line) ?: onOpenFile(path) },
             commands = listOf(
-                WorkspaceCommand("Refresh files", "Reload the current folder", Icons.Outlined.Refresh) { workspaceTools = null; refreshTick++ },
-                WorkspaceCommand("Filter current folder", "Filter names in this folder", Icons.Outlined.Search) { workspaceTools = null; filterActive = true },
+                WorkspaceCommand(uiContext.getString(R.string.ui_refresh_files), uiContext.getString(R.string.ui_reload_the_current_folder), Icons.Outlined.Refresh) { workspaceTools = null; refreshTick++ },
+                WorkspaceCommand(uiContext.getString(R.string.ui_filter_current_folder), uiContext.getString(R.string.ui_filter_names_in_this_folder), Icons.Outlined.Search) { workspaceTools = null; filterActive = true },
             ) + listOfNotNull(
-                currentWorkspace?.let { project -> WorkspaceCommand("GitHub · Commit & push", "Review and publish workspace changes", Icons.Outlined.Code) { workspaceTools = null; githubProject = project.id to project.name } },
-                onOpenChanges?.let { action -> WorkspaceCommand("Show changes", "Review changes made in this chat", Icons.Outlined.Difference) { workspaceTools = null; action() } },
-                onOpenTerminal?.let { action -> WorkspaceCommand("Open terminal", "Terminal for this workspace", Icons.Outlined.Code) { workspaceTools = null; action() } },
+                currentWorkspace?.let { project -> WorkspaceCommand(uiContext.getString(R.string.ui_github_commit_push), uiContext.getString(R.string.ui_review_and_publish_workspace_changes), Icons.Outlined.Code) { workspaceTools = null; githubProject = project.id to project.name } },
+                onOpenChanges?.let { action -> WorkspaceCommand(uiContext.getString(R.string.ui_show_changes), uiContext.getString(R.string.ui_review_changes_made_in_this_chat), Icons.Outlined.Difference) { workspaceTools = null; action() } },
+                onOpenTerminal?.let { action -> WorkspaceCommand(uiContext.getString(R.string.ui_open_terminal), uiContext.getString(R.string.ui_terminal_for_this_workspace), Icons.Outlined.Code) { workspaceTools = null; action() } },
             ))
     }
 
@@ -288,7 +290,7 @@ fun FilesScreen(
         containerColor = scheme.surface,
         topBar = {
             AppHeader(
-                title = if (selecting) "${selectedNodes.size} selected" else "Files",
+                title = if (selecting) "${selectedNodes.size} selected" else uiContext.getString(R.string.ui_files),
                 subtitle = if (currentPath == ".") fs?.displayPath.orEmpty()
                 else "${fs?.displayPath.orEmpty().substringAfterLast('/')}/$currentPath",
                 onBack = { if (selecting) closeSelection() else onBack() },
@@ -301,47 +303,47 @@ fun FilesScreen(
                                 selectedPaths = if (selectedPaths.containsAll(paths)) selectedPaths - paths else selectedPaths + paths
                             },
                         ) {
-                            Text(if (visibleEntries.isNotEmpty() && visibleEntries.all { it.relPath in selectedPaths }) "Deselect all" else "Select all")
+                            Text(if (visibleEntries.isNotEmpty() && visibleEntries.all { it.relPath in selectedPaths }) uiContext.getString(R.string.ui_deselect_all) else uiContext.getString(R.string.ui_select_all))
                         }
                     } else {
                         if (projectId == null || sessionId != null) IconButton(onClick = { showWorkspaceSheet = true }) {
                             Icon(
                                 Icons.Outlined.Folder,
-                                contentDescription = "Switch workspace",
+                                contentDescription = uiContext.getString(R.string.ui_switch_workspace),
                                 tint = if (currentWorkspace != null) scheme.onSurfaceVariant else scheme.primary,
                             )
                         }
                         IconButton(onClick = { workspaceTools = WorkspaceToolMode.SEARCH }) {
-                            Icon(Icons.Outlined.Search, contentDescription = "Search project")
+                            Icon(Icons.Outlined.Search, contentDescription = uiContext.getString(R.string.ui_search_project))
                         }
                         IconButton(onClick = { refreshTick++ }) {
-                            Icon(Icons.Outlined.Refresh, contentDescription = "Refresh")
+                            Icon(Icons.Outlined.Refresh, contentDescription = uiContext.getString(R.string.ui_refresh))
                         }
                         Box {
                             IconButton(onClick = { headerMenuOpen = true }) {
-                                Icon(Icons.Filled.MoreVert, contentDescription = "More")
+                                Icon(Icons.Filled.MoreVert, contentDescription = uiContext.getString(R.string.ui_more))
                             }
                             DropdownMenu(expanded = headerMenuOpen, onDismissRequest = { headerMenuOpen = false }) {
-                                DropdownMenuItem(text = { Text("Quick Open") }, onClick = { headerMenuOpen = false; workspaceTools = WorkspaceToolMode.FILES })
-                                DropdownMenuItem(text = { Text("Command palette") }, onClick = { headerMenuOpen = false; workspaceTools = WorkspaceToolMode.COMMANDS })
-                                DropdownMenuItem(text = { Text("Filter current folder") }, onClick = { headerMenuOpen = false; filterActive = !filterActive })
+                                DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_quick_open)) }, onClick = { headerMenuOpen = false; workspaceTools = WorkspaceToolMode.FILES })
+                                DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_command_palette)) }, onClick = { headerMenuOpen = false; workspaceTools = WorkspaceToolMode.COMMANDS })
+                                DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_filter_current_folder)) }, onClick = { headerMenuOpen = false; filterActive = !filterActive })
                                 HorizontalDivider()
                                 DropdownMenuItem(
-                                    text = { Text("GitHub · Commit & push") },
+                                    text = { Text(uiContext.getString(R.string.ui_github_commit_push)) },
                                     enabled = currentWorkspace != null,
                                     onClick = { headerMenuOpen = false; currentWorkspace?.let { githubProject = it.id to it.name } },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Select items") },
+                                    text = { Text(uiContext.getString(R.string.ui_select_items)) },
                                     onClick = { headerMenuOpen = false; selecting = true },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("New file") },
+                                    text = { Text(uiContext.getString(R.string.ui_new_file)) },
                                     leadingIcon = { Icon(Icons.Outlined.NoteAdd, null) },
                                     onClick = { headerMenuOpen = false; creatingFile = true },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("New folder") },
+                                    text = { Text(uiContext.getString(R.string.ui_new_folder)) },
                                     leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, null) },
                                     onClick = { headerMenuOpen = false; creatingFolder = true },
                                 )
@@ -366,21 +368,21 @@ fun FilesScreen(
                                     } catch (cancelled: kotlinx.coroutines.CancellationException) {
                                         throw cancelled
                                     } catch (error: Exception) {
-                                        batchErrors = listOf(error.message ?: "Share failed")
+                                        batchErrors = listOf(error.message ?: uiContext.getString(R.string.ui_share_failed))
                                     } finally {
                                         batchBusy = false
                                     }
                                 }
-                            }) { Text("Share") }
+                            }) { Text(uiContext.getString(R.string.ui_share)) }
                             TextButton(enabled = selectedNodes.isNotEmpty() && !batchBusy, onClick = {
                                 batchTargets = selectedNodes.toList(); batchAction = "Copy"
-                            }) { Text("Copy") }
+                            }) { Text(uiContext.getString(R.string.ui_copy)) }
                             TextButton(enabled = selectedNodes.isNotEmpty() && !batchBusy, onClick = {
                                 batchTargets = selectedNodes.toList(); batchAction = "Move"
-                            }) { Text("Move") }
+                            }) { Text(uiContext.getString(R.string.ui_move)) }
                             TextButton(enabled = selectedNodes.isNotEmpty() && !batchBusy, onClick = {
                                 batchTargets = selectedNodes.toList(); batchAction = "Delete"
-                            }) { Text("Delete", color = if (selectedNodes.isNotEmpty() && !batchBusy) scheme.error else scheme.onSurfaceVariant) }
+                            }) { Text(uiContext.getString(R.string.settings_action_delete), color = if (selectedNodes.isNotEmpty() && !batchBusy) scheme.error else scheme.onSurfaceVariant) }
                         }
                     }
                 }
@@ -411,7 +413,7 @@ fun FilesScreen(
                         )
                         Spacer(Modifier.width(10.dp))
                         Text(
-                            "${activeChanges.size} files changed",
+                            uiContext.getString(R.string.ui_files_changed_758, (activeChanges.size).toString()),
                             style = MaterialTheme.typography.labelLarge,
                             modifier = Modifier.weight(1f),
                         )
@@ -434,7 +436,7 @@ fun FilesScreen(
                     value = filter,
                     onValueChange = { filter = it },
                     singleLine = true,
-                    placeholder = { Text("Filter this folder", style = MaterialTheme.typography.bodySmall) },
+                    placeholder = { Text(uiContext.getString(R.string.ui_filter_this_folder), style = MaterialTheme.typography.bodySmall) },
                     textStyle = MaterialTheme.typography.bodySmall,
                     shape = MaterialTheme.shapes.medium,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
@@ -551,7 +553,7 @@ fun FilesScreen(
                                 }
                                 if (!selecting) {
                                     IconButton(onClick = { menuNode = node }) {
-                                        Icon(Icons.Filled.MoreVert, contentDescription = "Actions for ${node.name}")
+                                        Icon(Icons.Filled.MoreVert, contentDescription = uiContext.getString(R.string.settings_provider_actions_cd, (node.name).toString()))
                                     }
                                 }
                                 if (node.isDirectory && !selecting) {
@@ -586,8 +588,8 @@ fun FilesScreen(
                                     tint = scheme.onSurfaceVariant.copy(alpha = 0.6f),
                                 )
                                 Text(
-                                    if (filter.isNotBlank()) "Nothing matches \"${filter}\"."
-                                    else "Empty directory.",
+                                    if (filter.isNotBlank()) uiContext.getString(R.string.ui_nothing_matches, (filter).toString())
+                                    else uiContext.getString(R.string.ui_empty_directory),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = scheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 12.dp),
@@ -623,45 +625,45 @@ fun FilesScreen(
                 HorizontalDivider(m, color = scheme.outlineVariant.copy(alpha = 0.4f))
             }
             SheetAction(if (node.isDirectory) Icons.Outlined.Folder else Icons.Outlined.OpenInNew,
-                if (node.isDirectory) "Open" else "Open in editor") {
+                if (node.isDirectory) uiContext.getString(R.string.ui_open) else uiContext.getString(R.string.ui_open_in_editor)) {
                 menuNode = null
                 if (node.isDirectory) currentPath = node.relPath else onOpenFile(node.relPath)
             }
             divider(Modifier.padding(horizontal = 16.dp))
-            SheetAction(Icons.Outlined.DriveFileRenameOutline, "Rename…") {
+            SheetAction(Icons.Outlined.DriveFileRenameOutline, uiContext.getString(R.string.ui_rename_764)) {
                 menuNode = null
                 renamingNode = node
             }
             divider(Modifier.padding(horizontal = 16.dp))
-            SheetAction(Icons.Outlined.ContentCopy, "Copy to…") {
+            SheetAction(Icons.Outlined.ContentCopy, uiContext.getString(R.string.ui_copy_to)) {
                 menuNode = null
                 pickCopyDest = node
             }
             divider(Modifier.padding(horizontal = 16.dp))
-            SheetAction(Icons.Outlined.Folder, "Move to…") {
+            SheetAction(Icons.Outlined.Folder, uiContext.getString(R.string.ui_move_to)) {
                 menuNode = null
                 pickMoveDest = node
             }
             divider(Modifier.padding(horizontal = 16.dp))
-            SheetAction(Icons.Outlined.Delete, "Delete", tint = scheme.error) {
+            SheetAction(Icons.Outlined.Delete, uiContext.getString(R.string.settings_action_delete), tint = scheme.error) {
                 menuNode = null
                 deletingNode = node
             }
             if (node.isFile) {
                 divider(Modifier.padding(horizontal = 16.dp))
-                SheetAction(Icons.Outlined.Share, "Share…") {
+                SheetAction(Icons.Outlined.Share, uiContext.getString(R.string.ui_share_767)) {
                     menuNode = null
                     scope.launch {
                         runCatching { FileOps.share(context, node) }
-                            .onFailure { toast(it.message ?: "Share failed") }
+                            .onFailure { toast(it.message ?: uiContext.getString(R.string.ui_share_failed)) }
                     }
                 }
                 divider(Modifier.padding(horizontal = 16.dp))
-                SheetAction(Icons.Outlined.OpenInNew, "Open externally…") {
+                SheetAction(Icons.Outlined.OpenInNew, uiContext.getString(R.string.ui_open_externally)) {
                     menuNode = null
                     scope.launch {
                         runCatching { FileOps.openWith(context, node) }
-                            .onFailure { toast(it.message ?: "No app can open this") }
+                            .onFailure { toast(it.message ?: uiContext.getString(R.string.ui_no_app_can_open_this)) }
                     }
                 }
             }
@@ -673,13 +675,13 @@ fun FilesScreen(
     renamingNode?.let { node ->
         val parentRel = node.relPath.substringBeforeLast('/', "")
         NameDialog(
-            title = "Rename “${node.name}”",
+            title = uiContext.getString(R.string.ui_rename_770, (node.name).toString()),
             initialName = node.name,
             takenNames = siblingNames(fs, parentRel) - setOf(node.name),
-            confirmLabel = "Rename",
+            confirmLabel = uiContext.getString(R.string.ui_rename),
             onDismiss = { renamingNode = null },
             onConfirm = { newName ->
-                perform("Renamed") {
+                perform(uiContext.getString(R.string.ui_renamed)) {
                     withContext(Dispatchers.IO) { node.renameTo(newName) }
                     renamingNode = null
                 }
@@ -689,13 +691,13 @@ fun FilesScreen(
 
     if (creatingFolder) {
         NameDialog(
-            title = "New folder",
+            title = uiContext.getString(R.string.ui_new_folder),
             initialName = "",
             takenNames = siblingNames(fs, currentPath),
-            confirmLabel = "Create",
+            confirmLabel = uiContext.getString(R.string.ui_create),
             onDismiss = { creatingFolder = false },
             onConfirm = { name ->
-                perform("Created $name") {
+                perform(uiContext.getString(R.string.ui_created, (name).toString())) {
                     val dirNode = fs?.resolve(currentPath) ?: return@perform
                     dirNode.createDir(name)
                     creatingFolder = false
@@ -705,13 +707,13 @@ fun FilesScreen(
     }
     if (creatingFile) {
         NameDialog(
-            title = "New file",
+            title = uiContext.getString(R.string.ui_new_file),
             initialName = "",
             takenNames = siblingNames(fs, currentPath),
-            confirmLabel = "Create",
+            confirmLabel = uiContext.getString(R.string.ui_create),
             onDismiss = { creatingFile = false },
             onConfirm = { name ->
-                perform("Created $name") {
+                perform(uiContext.getString(R.string.ui_created, (name).toString())) {
                     val dirNode = fs?.resolve(currentPath) ?: return@perform
                     dirNode.createFile(name)
                     creatingFile = false
@@ -723,21 +725,21 @@ fun FilesScreen(
     deletingNode?.let { node ->
         AlertDialog(
             onDismissRequest = { deletingNode = null },
-            title = { Text("Delete ${node.name}?") },
+            title = { Text(uiContext.getString(R.string.settings_bulk_delete_one_title, (node.name).toString())) },
             text = {
                 Text(
                     if (node.isDirectory)
-                        "The folder and everything inside it will be removed permanently."
-                    else "This file will be removed permanently.",
+                        uiContext.getString(R.string.ui_the_folder_and_everything_inside_it_will)
+                    else uiContext.getString(R.string.ui_this_file_will_be_removed_permanently),
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     deletingNode = null
-                    perform("Deleted ${node.name}") { node.delete() }
-                }) { Text("Delete", color = scheme.error) }
+                    perform(uiContext.getString(R.string.ui_deleted, (node.name).toString())) { node.delete() }
+                }) { Text(uiContext.getString(R.string.settings_action_delete), color = scheme.error) }
             },
-            dismissButton = { TextButton(onClick = { deletingNode = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { deletingNode = null }) { Text(uiContext.getString(R.string.settings_action_cancel)) } },
         )
     }
 
@@ -746,11 +748,11 @@ fun FilesScreen(
             fs = fs,
             startPath = currentPath,
             mustAvoidSubtreeOf = src.relPath,
-            confirmLabel = "Copy here",
+            confirmLabel = uiContext.getString(R.string.ui_copy_here),
             onDismiss = { pickCopyDest = null },
             onPick = { destDir ->
                 pickCopyDest = null
-                perform("Copied ${src.name}") { FileOps.copy(src, destDir, src.name) }
+                perform(uiContext.getString(R.string.ui_copied, (src.name).toString())) { FileOps.copy(src, destDir, src.name) }
             },
         )
     }
@@ -759,11 +761,11 @@ fun FilesScreen(
             fs = fs,
             startPath = currentPath,
             mustAvoidSubtreeOf = src.relPath,
-            confirmLabel = "Move here",
+            confirmLabel = uiContext.getString(R.string.ui_move_here),
             onDismiss = { pickMoveDest = null },
             onPick = { destDir ->
                 pickMoveDest = null
-                perform("Moved ${src.name}") { FileOps.move(src, destDir, src.name) }
+                perform(uiContext.getString(R.string.ui_moved, (src.name).toString())) { FileOps.move(src, destDir, src.name) }
             },
         )
     }
@@ -771,22 +773,22 @@ fun FilesScreen(
     if (batchAction == "Delete") {
         AlertDialog(
             onDismissRequest = { batchAction = null },
-            title = { Text("Delete ${batchTargets.size} items?") },
+            title = { Text(uiContext.getString(R.string.ui_delete_items, (batchTargets.size).toString())) },
             text = {
                 Text(
                     batchTargets.take(8).joinToString("\n") { it.name } +
                         (if (batchTargets.size > 8) "\n…and ${batchTargets.size - 8} more" else "") +
-                        "\n\nThese items and any folder contents will be permanently deleted.",
+                        uiContext.getString(R.string.ui_these_items_and_any_folder_contents_will),
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     val nodes = batchTargets
                     batchAction = null
-                    runBatch("Deleted", nodes) { node -> check(node.delete()) { "Could not delete this item." } }
-                }) { Text("Delete", color = scheme.error) }
+                    runBatch(uiContext.getString(R.string.ui_deleted_784), nodes) { node -> check(node.delete()) { uiContext.getString(R.string.ui_could_not_delete_this_item) } }
+                }) { Text(uiContext.getString(R.string.settings_action_delete), color = scheme.error) }
             },
-            dismissButton = { TextButton(onClick = { batchAction = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { batchAction = null }) { Text(uiContext.getString(R.string.settings_action_cancel)) } },
         )
     }
     if (batchAction == "Copy" || batchAction == "Move") {
@@ -795,12 +797,13 @@ fun FilesScreen(
             fs = fs,
             startPath = currentPath,
             mustAvoidSubtrees = batchTargets.filter { it.isDirectory }.map { it.relPath },
-            confirmLabel = "$action ${batchTargets.size} here",
+            confirmLabel = uiContext.getString(R.string.ui_batch_destination_confirm,
+                uiContext.getString(if (action == "Copy") R.string.ui_copy else R.string.ui_move), batchTargets.size.toString()),
             onDismiss = { batchAction = null },
             onPick = { destination ->
                 val nodes = batchTargets
                 batchAction = null
-                runBatch(if (action == "Copy") "Copied" else "Moved", nodes) { node ->
+                runBatch(if (action == "Copy") uiContext.getString(R.string.settings_shizuku_copied) else uiContext.getString(R.string.ui_moved_786), nodes) { node ->
                     if (action == "Copy") FileOps.copy(node, destination, node.name, preserveAll = true)
                     else FileOps.move(node, destination, node.name)
                 }
@@ -810,14 +813,14 @@ fun FilesScreen(
     if (batchErrors.isNotEmpty()) {
         AlertDialog(
             onDismissRequest = { batchErrors = emptyList() },
-            title = { Text("Some items could not be processed") },
+            title = { Text(uiContext.getString(R.string.ui_some_items_could_not_be_processed)) },
             text = {
                 Text(
                     batchErrors.joinToString("\n\n"),
                     modifier = Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()),
                 )
             },
-            confirmButton = { TextButton(onClick = { batchErrors = emptyList() }) { Text("OK") } },
+            confirmButton = { TextButton(onClick = { batchErrors = emptyList() }) { Text(uiContext.getString(R.string.ui_ok)) } },
         )
     }
 
@@ -844,7 +847,7 @@ fun FilesScreen(
             onDelete = { project ->
                 scope.launch {
                     try { container.workspace.deleteProject(project) }
-                    catch (e: Exception) { toast(e.message ?: "Could not remove workspace") }
+                    catch (e: Exception) { toast(e.message ?: uiContext.getString(R.string.ui_could_not_remove_workspace)) }
                 }
             },
         )
@@ -972,6 +975,7 @@ fun NameDialog(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var value by remember(title) { mutableStateOf(initialName) }
     val trimmed = value.trim()
     val isDuplicate = trimmed.isNotEmpty() &&
@@ -991,15 +995,15 @@ fun NameDialog(
                 )
                 if (isDuplicate) {
                     Text(
-                        "Something named \"$trimmed\" already exists here.",
+                        uiContext.getString(R.string.ui_something_named_already_exists_here, (trimmed).toString()),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(top = 6.dp),
                     )
                 } else if (illegal && trimmed != initialName) {
                     Text(
-                        if (trimmed.isEmpty()) "Enter a name."
-                        else "That name isn't valid.",
+                        if (trimmed.isEmpty()) uiContext.getString(R.string.ui_enter_a_name)
+                        else uiContext.getString(R.string.ui_that_name_isn_t_valid),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(top = 6.dp),
@@ -1013,6 +1017,6 @@ fun NameDialog(
                 onClick = { onDismiss(); onConfirm(trimmed) },
             ) { Text(confirmLabel) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(uiContext.getString(R.string.settings_action_cancel)) } },
     )
 }

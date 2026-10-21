@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.files
 
+import com.androidharness.app.R
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -46,6 +47,7 @@ internal fun DestinationPickerDialog(
     onDismiss: () -> Unit,
     onPick: (FsNode) -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val forbidden = remember(mustAvoidSubtrees) { mustAvoidSubtrees.filter { it.isNotBlank() } }
     fun forbiddenPath(path: String) = forbidden.any { isInsideForbidden(path, it.trim('/')) }
     var dir by remember { mutableStateOf(if (forbiddenPath(startPath)) "." else startPath) }
@@ -62,11 +64,11 @@ internal fun DestinationPickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Choose a folder") },
+        title = { Text(uiContext.getString(R.string.ui_choose_a_folder)) },
         text = {
             Column {
                 Text(
-                    if (dir == ".") "Workspace root" else dir,
+                    if (dir == ".") uiContext.getString(R.string.ui_workspace_root_732) else dir,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
@@ -120,7 +122,7 @@ internal fun DestinationPickerDialog(
                     if (dirs.isEmpty()) {
                         item {
                             Text(
-                                "No subfolders here.",
+                                uiContext.getString(R.string.ui_no_subfolders_here),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -139,7 +141,7 @@ internal fun DestinationPickerDialog(
                 },
             ) { Text(confirmLabel) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(uiContext.getString(R.string.settings_action_cancel)) } },
     )
 }
 

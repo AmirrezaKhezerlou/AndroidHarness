@@ -33,6 +33,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 internal fun SettingsBackupSection(container: AppContainer) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val context = LocalContext.current
     val backup = remember(container) { SettingsBackup(container) }
     val scope = rememberCoroutineScope()
@@ -104,7 +105,7 @@ internal fun SettingsBackupSection(container: AppContainer) {
                             trailingIcon = {
                                 IconButton(onClick = { showConfirmation = !showConfirmation }, enabled = !busy) {
                                     Icon(if (showConfirmation) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
-                                        contentDescription = if (showConfirmation) "Hide confirmation password" else "Show confirmation password")
+                                        contentDescription = if (showConfirmation) uiContext.getString(R.string.ui_hide_confirmation_password) else uiContext.getString(R.string.ui_show_confirmation_password))
                                 }
                             },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
@@ -142,10 +143,10 @@ internal fun SettingsBackupSection(container: AppContainer) {
                         } catch (e: CancellationException) { throw e }
                         catch (e: Exception) {
                             failed = true
-                            message = if (exporting) settingsBackupExportError(e) else "Could not unlock backup. Check the password and file."
+                            message = if (exporting) settingsBackupExportError(e) else uiContext.getString(R.string.ui_could_not_unlock_backup_check_the_password)
                         } finally { chars.fill('\u0000'); busy = false }
                     }
-                }) { Text(if (exporting) "Encrypt" else "Unlock") }
+                }) { Text(if (exporting) uiContext.getString(R.string.ui_encrypt) else uiContext.getString(R.string.ui_unlock)) }
             },
             dismissButton = { TextButton(onClick = { clear() }, enabled = !busy) { Text(stringResource(R.string.settings_action_cancel)) } },
         )

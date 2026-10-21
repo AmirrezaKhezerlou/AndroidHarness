@@ -87,6 +87,7 @@ fun PackageManagerSheet(
     container: AppContainer,
     onDismiss: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     val linuxEnv = container.linuxEnv
@@ -113,7 +114,7 @@ fun PackageManagerSheet(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                errorMessage = e.message ?: "Failed to install $name"
+                errorMessage = e.message ?: uiContext.getString(R.string.ui_failed_to_install, (name).toString())
             } finally {
                 installedList = linuxEnv.installedPackages()
                 requestedPackage = null
@@ -163,7 +164,7 @@ fun PackageManagerSheet(
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(R.string.settings_packages_title), style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "${installedList.size} installed · Termux repository",
+                        uiContext.getString(R.string.ui_installed_termux_repository, (installedList.size).toString()),
                         style = MaterialTheme.typography.bodySmall,
                         color = scheme.onSurfaceVariant,
                     )
@@ -251,7 +252,7 @@ fun PackageManagerSheet(
                     if (searching) {
                         item {
                             Text(
-                                "Searching repository…",
+                                uiContext.getString(R.string.ui_searching_repository),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = scheme.onSurfaceVariant,
                                 modifier = Modifier.padding(vertical = 16.dp),
@@ -260,7 +261,7 @@ fun PackageManagerSheet(
                     } else if (searchResults.isEmpty()) {
                         item {
                             Text(
-                                "No packages found matching \"$query\".",
+                                uiContext.getString(R.string.ui_no_packages_found_matching, (query).toString()),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = scheme.onSurfaceVariant,
                                 modifier = Modifier.padding(vertical = 16.dp),
@@ -286,7 +287,7 @@ fun PackageManagerSheet(
                     // Default browse mode: Popular Tools
                     item {
                         Text(
-                            "POPULAR TOOLS",
+                            uiContext.getString(R.string.ui_popular_tools),
                             style = MaterialTheme.typography.labelSmall,
                             color = scheme.primary,
                             fontWeight = FontWeight.SemiBold,
@@ -313,7 +314,7 @@ fun PackageManagerSheet(
                     item {
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "ALL INSTALLED (${installedList.size})",
+                            uiContext.getString(R.string.ui_all_installed, (installedList.size).toString()),
                             style = MaterialTheme.typography.labelSmall,
                             color = scheme.onSurfaceVariant,
                             fontWeight = FontWeight.SemiBold,
@@ -348,6 +349,7 @@ private fun PackageItemRow(
     onInstall: () -> Unit,
     onReviewRemoval: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     Surface(
         color = scheme.surfaceContainerLow,
@@ -422,7 +424,7 @@ private fun PackageItemRow(
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            "Installed",
+                            uiContext.getString(R.string.ui_installed),
                             style = MaterialTheme.typography.labelSmall,
                             color = scheme.primary,
                         )
@@ -469,6 +471,7 @@ private fun InstalledPackageRow(
     isBusy: Boolean,
     onReviewRemoval: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     Surface(
         color = scheme.surfaceContainerLowest,
@@ -488,7 +491,7 @@ private fun InstalledPackageRow(
             )
             if (isCore) {
                 Text(
-                    "required",
+                    uiContext.getString(R.string.ui_required_last7),
                     style = MaterialTheme.typography.labelSmall,
                     color = scheme.outline,
                 )

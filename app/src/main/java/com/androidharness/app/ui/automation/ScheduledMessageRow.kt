@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.automation
 
+import com.androidharness.app.R
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChevronRight
@@ -32,6 +33,7 @@ internal fun scheduleStatus(task: AutomationTask, connection: AutomationConnecti
 
 @Composable
 internal fun ScheduledMessageRow(tasks: List<AutomationTask>, connection: AutomationConnection, now: Long, onOpen: () -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     if (tasks.isEmpty()) return
     Surface(onClick = onOpen, color = MaterialTheme.colorScheme.surfaceContainerLow,
         shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
@@ -39,12 +41,12 @@ internal fun ScheduledMessageRow(tasks: List<AutomationTask>, connection: Automa
             horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(Icons.Outlined.Schedule, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
             Column(Modifier.weight(1f)) {
-                Text(if (tasks.size == 1) scheduleStatus(tasks.first(), connection, now) else "${tasks.size} scheduled messages",
+                Text(if (tasks.size == 1) scheduleStatus(tasks.first(), connection, now) else uiContext.getString(R.string.ui_scheduled_messages_1558, (tasks.size).toString()),
                     style = MaterialTheme.typography.labelLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (tasks.size == 1) Text(tasks.first().title, style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Icon(Icons.Outlined.ChevronRight, "Open scheduled messages", modifier = Modifier.size(18.dp))
+            Icon(Icons.Outlined.ChevronRight, uiContext.getString(R.string.ui_open_scheduled_messages), modifier = Modifier.size(18.dp))
         }
     }
 }

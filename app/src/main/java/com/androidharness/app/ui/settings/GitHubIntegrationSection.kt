@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 internal fun GitHubIntegrationSection(container: AppContainer) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val state by container.github.state.collectAsStateWithLifecycle()
     val project by container.workspace.currentProject.collectAsStateWithLifecycle(initialValue = null)
     val context = LocalContext.current
@@ -45,12 +46,12 @@ internal fun GitHubIntegrationSection(container: AppContainer) {
 
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(state.login?.takeIf { it.isNotEmpty() }?.let { "Connected as $it" } ?: "Connect GitHub",
+            Text(state.login?.takeIf { it.isNotEmpty() }?.let { uiContext.getString(R.string.ui_connected_as, (it).toString()) } ?: uiContext.getString(R.string.ui_connect_github),
                 style = MaterialTheme.typography.titleMedium)
             Text(if (state.login != null) {
-                if (state.oauth) "GitHub sign-in · credentials stored securely on this device"
-                else "Personal access token · credentials stored securely on this device"
-            } else "Sign in to import private repositories and publish your work.", style = MaterialTheme.typography.bodySmall)
+                if (state.oauth) uiContext.getString(R.string.ui_github_sign_in_credentials_stored_securely_on)
+                else uiContext.getString(R.string.ui_personal_access_token_credentials_stored_securely_on)
+            } else uiContext.getString(R.string.ui_sign_in_to_import_private_repositories_and), style = MaterialTheme.typography.bodySmall)
 
             if (state.code != null) {
                 val code = requireNotNull(state.code)
@@ -58,14 +59,14 @@ internal fun GitHubIntegrationSection(container: AppContainer) {
                 Text(stringResource(R.string.settings_github_copy_code_note))
                 Button(onClick = {
                     (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
-                        .setPrimaryClip(ClipData.newPlainText("GitHub sign-in code", code.userCode))
+                        .setPrimaryClip(ClipData.newPlainText(uiContext.getString(R.string.ui_github_sign_in_code), code.userCode))
                     open(code.url)
                 }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.settings_github_copy_open)) }
                 TextButton(onClick = { container.github.cancelSignIn() }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.settings_chatgpt_cancel_signin)) }
             } else if (!patForm && !state.busy) {
                 Button(onClick = { message = null; container.github.startSignIn(workflow) },
                     enabled = !working && container.github.clientId.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
-                    Text(if (state.login == null) "Sign in with GitHub" else "Sign in with another account")
+                    Text(if (state.login == null) uiContext.getString(R.string.ui_sign_in_with_github) else uiContext.getString(R.string.ui_sign_in_with_another_account))
                 }
                 if (container.github.clientId.isBlank()) Text(stringResource(R.string.settings_github_signin_unavailable),
                     style = MaterialTheme.typography.bodySmall)
@@ -107,7 +108,7 @@ internal fun GitHubIntegrationSection(container: AppContainer) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(stringResource(R.string.settings_github_repositories), style = MaterialTheme.typography.titleMedium)
             Button(onClick = { importing = true }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.settings_github_import)) }
-            Text(project?.let { "Current workspace: ${it.name}" } ?: "Choose a workspace to publish changes.", style = MaterialTheme.typography.bodySmall)
+            Text(project?.let { uiContext.getString(R.string.ui_current_workspace_1002, (it.name).toString()) } ?: uiContext.getString(R.string.ui_choose_a_workspace_to_publish_changes), style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = { project?.let { publishing = it.id to it.name } },
                 enabled = project != null, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.settings_github_commit_push)) }
             Text(stringResource(R.string.settings_github_commit_note),

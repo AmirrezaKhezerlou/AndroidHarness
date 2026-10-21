@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 internal fun SubagentModelSection(container: AppContainer, settings: AppSettings) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val providers by container.providers.providers.collectAsStateWithLifecycle(initialValue = emptyList())
     val catalogs by container.providers.catalogs.collectAsStateWithLifecycle(initialValue = emptyMap())
     val scope = rememberCoroutineScope()
@@ -42,8 +43,8 @@ internal fun SubagentModelSection(container: AppContainer, settings: AppSettings
                         Text(stringResource(R.string.settings_anchor_subagent_model), style = MaterialTheme.typography.titleSmall)
                         Text(
                             when {
-                                settings.subagentProviderId == null -> "Use main agent model"
-                                selected == null -> "Selected provider unavailable"
+                                settings.subagentProviderId == null -> uiContext.getString(R.string.settings_subagent_use_main)
+                                selected == null -> uiContext.getString(R.string.ui_selected_provider_unavailable)
                                 else -> "${selected.name} · ${settings.subagentModel ?: selected.model}"
                             },
                             style = MaterialTheme.typography.bodyMedium,
@@ -53,7 +54,7 @@ internal fun SubagentModelSection(container: AppContainer, settings: AppSettings
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.settings_subagent_choose_model))
                 }
                 Text(
-                    "Choose a provider and model for all subagents. The main agent keeps its current model.",
+                    uiContext.getString(R.string.ui_choose_a_provider_and_model_for_all),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -80,10 +81,10 @@ internal fun SubagentModelSection(container: AppContainer, settings: AppSettings
             val provider = providers.firstOrNull { it.id == providerId }
             val key = container.providers.apiKey(providerId)
             when {
-                provider == null -> "Unknown provider"
+                provider == null -> uiContext.getString(R.string.ui_unknown_provider)
                 else -> {
                     val usable = provider.effectiveApiKey(key)
-                    if (usable.isBlank()) "No API key for this provider"
+                    if (usable.isBlank()) uiContext.getString(R.string.ui_no_api_key_for_this_provider)
                     else when (val result = ModelCatalog.listModels(provider, usable)) {
                         is ModelCatalog.Result.Models -> {
                             container.providers.saveCatalog(providerId, result.models)

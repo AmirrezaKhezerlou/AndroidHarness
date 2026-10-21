@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.automation
 
+import com.androidharness.app.R
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.compose.foundation.BorderStroke
@@ -69,6 +70,7 @@ fun AutomationScreen(
     initialTaskId: String? = null,
     createOnOpen: Boolean = false,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val manager = container.automation
     val allTasks by manager.repository.tasks.collectAsStateWithLifecycle()
     val allHistory by manager.repository.history.collectAsStateWithLifecycle()
@@ -99,15 +101,15 @@ fun AutomationScreen(
     }
 
     fun act(action: () -> Unit) {
-        runCatching(action).onFailure { error = it.message ?: "Something went wrong" }
+        runCatching(action).onFailure { error = it.message ?: uiContext.getString(R.string.ui_something_went_wrong) }
     }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             AppHeader(
-                "Automation",
-                subtitle = if (projectId == null) "Run agent tasks on your schedule" else project?.name ?: "Project unavailable",
+                uiContext.getString(R.string.ui_automation),
+                subtitle = if (projectId == null) uiContext.getString(R.string.ui_run_agent_tasks_on_your_schedule) else project?.name ?: uiContext.getString(R.string.ui_project_unavailable),
                 onBack = onBack,
             )
         },
@@ -148,7 +150,7 @@ fun AutomationScreen(
                                 Icon(Icons.Outlined.AutoMode, contentDescription = null)
                             }
                         },
-                    ) { Text("Tasks") }
+                    ) { Text(uiContext.getString(R.string.ui_tasks)) }
                     SegmentedButton(
                         selected = showHistory,
                         onClick = { showHistory = true },
@@ -158,13 +160,13 @@ fun AutomationScreen(
                                 Icon(Icons.Outlined.History, contentDescription = null)
                             }
                         },
-                    ) { Text("History") }
+                    ) { Text(uiContext.getString(R.string.ui_history)) }
                 }
             }
 
             item {
                 OutlinedButton(onClick = { project?.let { githubPresetProject = it.id to it.name } },
-                    enabled = project != null, modifier = Modifier.fillMaxWidth()) { Text("GitHub push preset") }
+                    enabled = project != null, modifier = Modifier.fillMaxWidth()) { Text(uiContext.getString(R.string.ui_github_push_preset)) }
             }
 
             error?.let { message ->
@@ -290,6 +292,7 @@ private fun AutomationSummaryCard(
     onCreateAutomation: () -> Unit,
     createEnabled: Boolean,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var showCreateMenu by remember { mutableStateOf(false) }
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -317,15 +320,15 @@ private fun AutomationSummaryCard(
                 }
                 Column(Modifier.weight(1f)) {
                     Text(
-                        projectName ?: "No workspace selected",
+                        projectName ?: uiContext.getString(R.string.ui_no_workspace_selected),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        if (projectName == null) "Choose a workspace to create automations"
-                        else "Automations run inside this workspace",
+                        if (projectName == null) uiContext.getString(R.string.ui_choose_a_workspace_to_create_automations)
+                        else uiContext.getString(R.string.ui_automations_run_inside_this_workspace),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -341,13 +344,13 @@ private fun AutomationSummaryCard(
                 ) {
                     Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("New")
+                    Text(uiContext.getString(R.string.ui_new))
                 }
                 DropdownMenu(showCreateMenu, { showCreateMenu = false }) {
-                    DropdownMenuItem(text = { Text("Scheduled message") },
+                    DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_scheduled_message)) },
                         leadingIcon = { Icon(Icons.Outlined.Schedule, null) },
                         onClick = { showCreateMenu = false; onCreate() })
-                    DropdownMenuItem(text = { Text("Automation with checks") },
+                    DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_automation_with_checks)) },
                         leadingIcon = { Icon(Icons.Outlined.AutoMode, null) },
                         onClick = { showCreateMenu = false; onCreateAutomation() })
                 }
@@ -357,9 +360,9 @@ private fun AutomationSummaryCard(
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
             Row(Modifier.fillMaxWidth()) {
-                AutomationMetric("Tasks", taskCount.toString(), Modifier.weight(1f))
-                AutomationMetric("Scheduled", scheduledCount.toString(), Modifier.weight(1f))
-                AutomationMetric("Runs", runCount.toString(), Modifier.weight(1f))
+                AutomationMetric(uiContext.getString(R.string.ui_tasks), taskCount.toString(), Modifier.weight(1f))
+                AutomationMetric(uiContext.getString(R.string.ui_scheduled), scheduledCount.toString(), Modifier.weight(1f))
+                AutomationMetric(uiContext.getString(R.string.ui_runs), runCount.toString(), Modifier.weight(1f))
             }
         }
     }
@@ -384,16 +387,17 @@ private fun AutomationMetric(label: String, value: String, modifier: Modifier = 
 
 @Composable
 private fun AutomationEmptyTasks(projectAvailable: Boolean, onCreate: () -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     EmptyStateCard(
         icon = { Icon(Icons.Outlined.AutoMode, contentDescription = null, modifier = Modifier.size(28.dp)) },
-        title = "Create your first automation",
-        body = "Describe what you want to AI, or configure a manual, one-time, or daily automation yourself.",
+        title = uiContext.getString(R.string.ui_create_your_first_automation),
+        body = uiContext.getString(R.string.ui_describe_what_you_want_to_ai_or),
         action = if (projectAvailable) {
             {
                 FilledTonalButton(onClick = onCreate) {
                     Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("New automation")
+                    Text(uiContext.getString(R.string.ui_new_automation))
                 }
             }
         } else null,
@@ -402,10 +406,11 @@ private fun AutomationEmptyTasks(projectAvailable: Boolean, onCreate: () -> Unit
 
 @Composable
 private fun AutomationEmptyHistory() {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     EmptyStateCard(
         icon = { Icon(Icons.Outlined.History, contentDescription = null, modifier = Modifier.size(30.dp)) },
-        title = "No runs yet",
-        body = "Completed and failed runs will appear here with their latest result.",
+        title = uiContext.getString(R.string.ui_no_runs_yet),
+        body = uiContext.getString(R.string.ui_completed_and_failed_runs_will_appear_here),
     )
 }
 
@@ -455,24 +460,25 @@ private fun AutomationTaskCard(
     onToggle: () -> Unit,
     statusText: String,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var confirmCancel by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     if (confirmDelete) AlertDialog(
         onDismissRequest = { confirmDelete = false },
-        title = { Text("Delete automation?") },
-        text = { Text("\u201c${task.title}\u201d will be removed and any active or scheduled runs will stop. Chat history and previous run results will stay available.") },
+        title = { Text(uiContext.getString(R.string.ui_delete_automation)) },
+        text = { Text(uiContext.getString(R.string.ui_will_be_removed_and_any_active_or, (task.title).toString())) },
         confirmButton = {
             TextButton(onClick = { confirmDelete = false; onDelete() },
                 colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
-                Text("Delete automation")
+                Text(uiContext.getString(R.string.ui_delete_automation_1466))
             }
         },
-        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Keep automation") } },
+        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(uiContext.getString(R.string.ui_keep_automation)) } },
     )
-    if (confirmCancel) AlertDialog(onDismissRequest = { confirmCancel = false }, title = { Text("Cancel this schedule?") },
-        text = { Text("Future runs will stop. Chat history and completed work will stay available.") },
-        confirmButton = { TextButton(onClick = { confirmCancel = false; onStop() }) { Text("Cancel schedule") } },
-        dismissButton = { TextButton(onClick = { confirmCancel = false }) { Text("Keep schedule") } })
+    if (confirmCancel) AlertDialog(onDismissRequest = { confirmCancel = false }, title = { Text(uiContext.getString(R.string.ui_cancel_this_schedule)) },
+        text = { Text(uiContext.getString(R.string.ui_future_runs_will_stop_chat_history_and)) },
+        confirmButton = { TextButton(onClick = { confirmCancel = false; onStop() }) { Text(uiContext.getString(R.string.ui_cancel_schedule)) } },
+        dismissButton = { TextButton(onClick = { confirmCancel = false }) { Text(uiContext.getString(R.string.ui_keep_schedule)) } })
     ElevatedCard(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.elevatedCardColors(
@@ -536,7 +542,7 @@ private fun AutomationTaskCard(
                     modifier = Modifier.size(16.dp),
                 )
                 Text(
-                    if (task.githubPush != null) "GitHub · ${task.githubPush.branch}" else task.model ?: "App default AI",
+                    if (task.githubPush != null) uiContext.getString(R.string.ui_github, (task.githubPush.branch).toString()) else task.model ?: uiContext.getString(R.string.ui_app_default_ai),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -553,23 +559,23 @@ private fun AutomationTaskCard(
                 InfoPill(
                     icon = Icons.Outlined.Schedule,
                     text = when (task.schedule) {
-                        AutomationSchedule.MANUAL -> "Manual"
-                        AutomationSchedule.ONCE -> "One time"
-                        AutomationSchedule.HOURLY -> "Every hour"
+                        AutomationSchedule.MANUAL -> uiContext.getString(R.string.ui_manual)
+                        AutomationSchedule.ONCE -> uiContext.getString(R.string.ui_one_time)
+                        AutomationSchedule.HOURLY -> uiContext.getString(R.string.ui_every_hour)
                         AutomationSchedule.DAILY -> "%02d:%02d daily".format(task.hour, task.minute)
                     },
                 )
                 if (task.enabled && task.nextRunAt != null) {
                     InfoPill(
                         icon = Icons.Outlined.CheckCircle,
-                        text = "Next ${formatAutomationTime(requireNotNull(task.nextRunAt))}",
+                        text = uiContext.getString(R.string.ui_next_1477, (formatAutomationTime(requireNotNull(task.nextRunAt))).toString()),
                     )
                 }
             }
 
-            Text(if (task.unmeteredOnly) "Unmetered only" else "Any internet", style = MaterialTheme.typography.labelMedium,
+            Text(if (task.unmeteredOnly) uiContext.getString(R.string.ui_unmetered_only) else uiContext.getString(R.string.ui_any_internet), style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-            task.targetSessionId?.let { Text("Continues an existing chat", style = MaterialTheme.typography.labelSmall,
+            task.targetSessionId?.let { Text(uiContext.getString(R.string.ui_continues_an_existing_chat), style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant) }
             if (statusText.startsWith("Waiting")) Text(statusText, style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary)
@@ -604,19 +610,19 @@ private fun AutomationTaskCard(
                 ) {
                     Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Run now")
+                    Text(uiContext.getString(R.string.ui_run_now))
                 }
                 OutlinedButton(onClick = onEdit, shape = RoundedCornerShape(12.dp),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp), modifier = Modifier.weight(1f)) {
                     Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Edit")
+                    Text(uiContext.getString(R.string.settings_action_edit))
                 }
             }
             if (task.schedule != AutomationSchedule.MANUAL && task.lastStatus != AutomationStatus.CANCELLED) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = onToggle, modifier = Modifier.weight(1f)) { Text(if (task.enabled) "Pause" else "Resume") }
-                    TextButton(onClick = { confirmCancel = true }, modifier = Modifier.weight(1f)) { Text("Cancel") }
+                    TextButton(onClick = onToggle, modifier = Modifier.weight(1f)) { Text(if (task.enabled) uiContext.getString(R.string.ui_pause) else uiContext.getString(R.string.ui_resume)) }
+                    TextButton(onClick = { confirmCancel = true }, modifier = Modifier.weight(1f)) { Text(uiContext.getString(R.string.settings_action_cancel)) }
                 }
             }
 
@@ -627,14 +633,14 @@ private fun AutomationTaskCard(
             ) {
                 if (task.lastSessionId != null) {
                     TextButton(onClick = onOpen, modifier = Modifier.heightIn(min = 48.dp)) {
-                        Text("Open latest run")
+                        Text(uiContext.getString(R.string.ui_open_latest_run))
                     }
                 }
                 TextButton(onClick = { confirmDelete = true }, modifier = Modifier.heightIn(min = 48.dp),
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
                     Icon(Icons.Outlined.DeleteOutline, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Delete")
+                    Text(uiContext.getString(R.string.settings_action_delete))
                 }
             }
         }
@@ -648,6 +654,7 @@ private fun HistoryCard(
     onOpen: () -> Unit,
     onRunAgain: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         shape = RoundedCornerShape(18.dp),
@@ -690,13 +697,13 @@ private fun HistoryCard(
             if (entry.sessionId != null || canRunAgain) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (entry.sessionId != null) {
-                        TextButton(onClick = onOpen) { Text("Open run") }
+                        TextButton(onClick = onOpen) { Text(uiContext.getString(R.string.ui_open_run)) }
                     }
                     if (canRunAgain) {
                         TextButton(onClick = onRunAgain) {
                             Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(17.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("Run again")
+                            Text(uiContext.getString(R.string.ui_run_again))
                         }
                     }
                 }
@@ -707,6 +714,7 @@ private fun HistoryCard(
 
 @Composable
 private fun AutomationModelPill(model: String?) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     Surface(
         color = MaterialTheme.colorScheme.secondaryContainer,
         shape = CircleShape,
@@ -718,7 +726,7 @@ private fun AutomationModelPill(model: String?) {
         ) {
             Icon(Icons.Outlined.AutoAwesome, contentDescription = null, modifier = Modifier.size(15.dp))
             Text(
-                model?.substringAfterLast('/') ?: "Unknown model",
+                model?.substringAfterLast('/') ?: uiContext.getString(R.string.ui_unknown_model),
                 style = MaterialTheme.typography.labelMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -779,20 +787,21 @@ private fun AutomationModePicker(
     mode: AutomationEditorMode,
     onModeChange: (AutomationEditorMode) -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         AutomationModeCard(
-            title = "Ask AI",
-            subtitle = "Describe it naturally",
+            title = uiContext.getString(R.string.ui_ask_ai),
+            subtitle = uiContext.getString(R.string.ui_describe_it_naturally),
             icon = Icons.Outlined.AutoAwesome,
             selected = mode == AutomationEditorMode.ASK_AI,
             modifier = Modifier.weight(1f),
         ) { onModeChange(AutomationEditorMode.ASK_AI) }
         AutomationModeCard(
-            title = "Manual",
-            subtitle = "Configure every detail",
+            title = uiContext.getString(R.string.ui_manual),
+            subtitle = uiContext.getString(R.string.ui_configure_every_detail),
             icon = Icons.Outlined.Tune,
             selected = mode == AutomationEditorMode.MANUAL,
             modifier = Modifier.weight(1f),
@@ -861,6 +870,7 @@ private fun AutomationEditorDialog(
     onDelete: (() -> Unit)?,
     onSave: (String, String, String, AutomationSchedule, Long?, Int, Int, String?, String?) -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val providers by container.providers.providers.collectAsStateWithLifecycle(initialValue = emptyList())
     val catalogs by container.providers.catalogs.collectAsStateWithLifecycle(initialValue = emptyMap())
     val settings by container.settings.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
@@ -946,7 +956,7 @@ private fun AutomationEditorDialog(
                         }
                     }
                 }
-                .onFailure { aiError = it.message ?: "Could not ask AI." }
+                .onFailure { aiError = it.message ?: uiContext.getString(R.string.ui_could_not_ask_ai) }
             aiBusy = false
         }
     }
@@ -983,7 +993,7 @@ private fun AutomationEditorDialog(
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        if (task == null) "New automation" else "Edit automation",
+                        if (task == null) uiContext.getString(R.string.ui_new_automation) else uiContext.getString(R.string.ui_edit_automation),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -998,7 +1008,7 @@ private fun AutomationEditorDialog(
                     }
                 }
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Filled.Close, contentDescription = "Close")
+                    Icon(Icons.Filled.Close, contentDescription = uiContext.getString(R.string.settings_action_close))
                 }
             }
 
@@ -1055,7 +1065,7 @@ private fun AutomationEditorDialog(
                         TextButton(
                             onClick = it,
                             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                        ) { Text("Delete") }
+                        ) { Text(uiContext.getString(R.string.settings_action_delete)) }
                     }
                     Spacer(Modifier.weight(1f))
                     Button(
@@ -1076,7 +1086,7 @@ private fun AutomationEditorDialog(
                             }
                         },
                     ) {
-                        Text(if (task == null) "Create automation" else "Save changes")
+                        Text(if (task == null) uiContext.getString(R.string.ui_create_automation) else uiContext.getString(R.string.settings_root_browser_save_confirm))
                     }
                 }
             }
@@ -1100,10 +1110,10 @@ private fun AutomationEditorDialog(
                 val provider = providers.firstOrNull { it.id == providerId }
                 val key = container.providers.apiKey(providerId)
                 when {
-                    provider == null -> "Unknown provider"
+                    provider == null -> uiContext.getString(R.string.ui_unknown_provider)
                     else -> {
                         val usable = provider.effectiveApiKey(key)
-                        if (usable.isBlank()) "No API key for this provider"
+                        if (usable.isBlank()) uiContext.getString(R.string.ui_no_api_key_for_this_provider)
                         else when (val result = com.androidharness.app.llm.ModelCatalog.listModels(provider, usable)) {
                             is com.androidharness.app.llm.ModelCatalog.Result.Models -> {
                                 container.providers.saveCatalog(providerId, result.models)
@@ -1175,6 +1185,7 @@ private fun AutomationModelSelector(
     model: String?,
     onClick: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     OutlinedCard(
         onClick = onClick,
         colors = CardDefaults.outlinedCardColors(
@@ -1195,22 +1206,22 @@ private fun AutomationModelSelector(
                 modifier = Modifier.size(20.dp),
             )
             Column(Modifier.weight(1f)) {
-                Text("Run model", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(uiContext.getString(R.string.ui_run_model), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
-                    if (providerName != null && model != null) "$providerName · $model" else "Choose a provider and model",
+                    if (providerName != null && model != null) "$providerName · $model" else uiContext.getString(R.string.ui_choose_a_provider_and_model),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    "Saved with this automation. Chat model changes won't affect it.",
+                    uiContext.getString(R.string.ui_saved_with_this_automation_chat_model_changes),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                 )
             }
-            Text("Change", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            Text(uiContext.getString(R.string.ui_change), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         }
     }
 }
@@ -1227,6 +1238,7 @@ private fun AskAiAutomationEditor(
     modifier: Modifier = Modifier,
     onEditManually: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     Column(modifier = modifier) {
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -1254,12 +1266,12 @@ private fun AskAiAutomationEditor(
                         }
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text(
-                                "Build an automation with AI",
+                                uiContext.getString(R.string.ui_build_an_automation_with_ai),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
                             )
                             Text(
-                                "Say what it should do and when it should run.",
+                                uiContext.getString(R.string.ui_say_what_it_should_do_and_when),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -1272,23 +1284,23 @@ private fun AskAiAutomationEditor(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text(
-                            "QUICK START",
+                            uiContext.getString(R.string.ui_quick_start),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         AutomationPromptSuggestion(
-                            title = "Keep the project building",
-                            subtitle = "Every hour · find and fix build failures",
+                            title = uiContext.getString(R.string.ui_keep_the_project_building),
+                            subtitle = uiContext.getString(R.string.ui_every_hour_find_and_fix_build_failures),
                             onClick = { onAsk("Every hour, check the project for build failures and fix them.") },
                         )
                         AutomationPromptSuggestion(
-                            title = "Build a debug APK",
-                            subtitle = "Tomorrow at 8 PM · fix errors if needed",
+                            title = uiContext.getString(R.string.ui_build_a_debug_apk),
+                            subtitle = uiContext.getString(R.string.ui_tomorrow_at_8_pm_fix_errors_if),
                             onClick = { onAsk("Tomorrow at 8 PM, build the debug APK and fix any build errors.") },
                         )
                         AutomationPromptSuggestion(
-                            title = "Run the test suite",
-                            subtitle = "Daily at 9 AM · fix failing tests",
+                            title = uiContext.getString(R.string.ui_run_the_test_suite),
+                            subtitle = uiContext.getString(R.string.ui_daily_at_9_am_fix_failing_tests),
                             onClick = { onAsk("Every day at 9 AM, run the project tests and fix failures.") },
                         )
                     }
@@ -1304,7 +1316,7 @@ private fun AskAiAutomationEditor(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        Text("Working out the automation…", style = MaterialTheme.typography.bodySmall)
+                        Text(uiContext.getString(R.string.ui_working_out_the_automation), style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
@@ -1340,7 +1352,7 @@ private fun AskAiAutomationEditor(
                     onValueChange = onInputChange,
                     enabled = !busy,
                     placeholder = {
-                        Text(if (turns.isEmpty()) "Describe your automation…" else "Answer AI…")
+                        Text(if (turns.isEmpty()) uiContext.getString(R.string.ui_describe_your_automation) else uiContext.getString(R.string.ui_answer_ai))
                     },
                     minLines = 2,
                     maxLines = 2,
@@ -1350,7 +1362,7 @@ private fun AskAiAutomationEditor(
                             onClick = { onAsk(input) },
                             enabled = input.isNotBlank() && !busy,
                         ) {
-                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
+                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = uiContext.getString(R.string.ui_send))
                         }
                     },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp).heightIn(min = 88.dp),
@@ -1412,6 +1424,7 @@ private fun AutomationAiBubble(turn: AutomationAiTurn) {
 
 @Composable
 private fun AutomationAiDraftCard(draft: AutomationAiDraft, onEditManually: () -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     OutlinedCard(shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
         modifier = Modifier.fillMaxWidth()) {
@@ -1423,7 +1436,7 @@ private fun AutomationAiDraftCard(draft: AutomationAiDraft, onEditManually: () -
                 }
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Ready to create", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    Text(uiContext.getString(R.string.ui_ready_to_create), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                     Text(draft.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 }
             }
@@ -1431,7 +1444,7 @@ private fun AutomationAiDraftCard(draft: AutomationAiDraft, onEditManually: () -
                 maxLines = 5, overflow = TextOverflow.Ellipsis)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 InfoPill(Icons.Outlined.Schedule, draftScheduleLabel(draft))
-                if (draft.checkCommand.isNotBlank()) InfoPill(Icons.Outlined.CheckCircle, "Success check")
+                if (draft.checkCommand.isNotBlank()) InfoPill(Icons.Outlined.CheckCircle, uiContext.getString(R.string.ui_success_check))
             }
             if (draft.checkCommand.isNotBlank()) {
                 Surface(
@@ -1445,7 +1458,7 @@ private fun AutomationAiDraftCard(draft: AutomationAiDraft, onEditManually: () -
             }
             TextButton(onClick = onEditManually, modifier = Modifier.align(Alignment.End)) {
                 Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(17.dp))
-                Spacer(Modifier.width(6.dp)); Text("Edit manually")
+                Spacer(Modifier.width(6.dp)); Text(uiContext.getString(R.string.ui_edit_manually))
             }
         }
     }
@@ -1461,20 +1474,21 @@ private fun ManualAutomationEditor(
     hour: String, onHourChange: (String) -> Unit,
     minute: String, onMinuteChange: (String) -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val context = LocalContext.current
     val zone = remember { ZoneId.systemDefault() }
     val once = remember(onceAt, zone) { Instant.ofEpochMilli(onceAt).atZone(zone) }
 
     AutomationEditorSection(
-        title = "Task details",
-        subtitle = "What should the agent work on?",
+        title = uiContext.getString(R.string.ui_task_details),
+        subtitle = uiContext.getString(R.string.ui_what_should_the_agent_work_on),
         icon = Icons.Outlined.AutoMode,
     ) {
         OutlinedTextField(
             value = title,
             onValueChange = onTitleChange,
-            label = { Text("Name") },
-            placeholder = { Text("Build debug APK") },
+            label = { Text(uiContext.getString(R.string.settings_mcp_name)) },
+            placeholder = { Text(uiContext.getString(R.string.ui_build_debug_apk)) },
             singleLine = true,
             shape = RoundedCornerShape(14.dp),
             modifier = Modifier.fillMaxWidth(),
@@ -1482,7 +1496,7 @@ private fun ManualAutomationEditor(
         OutlinedTextField(
             value = prompt,
             onValueChange = onPromptChange,
-            label = { Text("Instructions") },
+            label = { Text(uiContext.getString(R.string.ui_instructions)) },
             placeholder = { Text("Build the debug APK and fix any build errors.") },
             minLines = 4,
             maxLines = 7,
@@ -1492,24 +1506,24 @@ private fun ManualAutomationEditor(
     }
 
     AutomationEditorSection(
-        title = "Schedule",
-        subtitle = "When should it run?",
+        title = uiContext.getString(R.string.ui_schedule),
+        subtitle = uiContext.getString(R.string.ui_when_should_it_run),
         icon = Icons.Outlined.Schedule,
     ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    ScheduleChoiceChip("Manual", schedule == AutomationSchedule.MANUAL, Modifier.weight(1f)) {
+                    ScheduleChoiceChip(uiContext.getString(R.string.ui_manual), schedule == AutomationSchedule.MANUAL, Modifier.weight(1f)) {
                         onScheduleChange(AutomationSchedule.MANUAL)
                     }
-                    ScheduleChoiceChip("Once", schedule == AutomationSchedule.ONCE, Modifier.weight(1f)) {
+                    ScheduleChoiceChip(uiContext.getString(R.string.ui_once), schedule == AutomationSchedule.ONCE, Modifier.weight(1f)) {
                         onScheduleChange(AutomationSchedule.ONCE)
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    ScheduleChoiceChip("Hourly", schedule == AutomationSchedule.HOURLY, Modifier.weight(1f)) {
+                    ScheduleChoiceChip(uiContext.getString(R.string.ui_hourly), schedule == AutomationSchedule.HOURLY, Modifier.weight(1f)) {
                         onScheduleChange(AutomationSchedule.HOURLY)
                     }
-                    ScheduleChoiceChip("Daily", schedule == AutomationSchedule.DAILY, Modifier.weight(1f)) {
+                    ScheduleChoiceChip(uiContext.getString(R.string.ui_daily), schedule == AutomationSchedule.DAILY, Modifier.weight(1f)) {
                         onScheduleChange(AutomationSchedule.DAILY)
                     }
                 }
@@ -1535,7 +1549,7 @@ private fun ManualAutomationEditor(
                     }
                 }
                 if (onceAt <= System.currentTimeMillis()) {
-                    Text("Choose a future date and time.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    Text(uiContext.getString(R.string.ui_choose_a_future_date_and_time), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 }
             }
             if (schedule == AutomationSchedule.HOURLY) {
@@ -1546,7 +1560,7 @@ private fun ManualAutomationEditor(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(
-                        "Runs every hour. The first scheduled run is about one hour after you create it.",
+                        uiContext.getString(R.string.ui_runs_every_hour_the_first_scheduled_run),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(12.dp),
@@ -1556,32 +1570,32 @@ private fun ManualAutomationEditor(
             if (schedule == AutomationSchedule.DAILY) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(value = hour, onValueChange = { onHourChange(it.filter(Char::isDigit).take(2)) },
-                        label = { Text("Hour") }, supportingText = { Text("0 to 23") },
+                        label = { Text(uiContext.getString(R.string.ui_hour)) }, supportingText = { Text(uiContext.getString(R.string.ui_0_to_23)) },
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true, modifier = Modifier.weight(1f))
                     OutlinedTextField(value = minute, onValueChange = { onMinuteChange(it.filter(Char::isDigit).take(2)) },
-                        label = { Text("Minute") }, supportingText = { Text("0 to 59") },
+                        label = { Text(uiContext.getString(R.string.ui_minute)) }, supportingText = { Text(uiContext.getString(R.string.ui_0_to_59)) },
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true, modifier = Modifier.weight(1f))
                 }
             }
             if (schedule != AutomationSchedule.MANUAL) {
-                Text("Android may delay background work slightly to respect system scheduling limits.",
+                Text(uiContext.getString(R.string.ui_android_may_delay_background_work_slightly_to),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
     }
 
     AutomationEditorSection(
-        title = "Success check",
-        subtitle = "Optional verification after the agent finishes.",
+        title = uiContext.getString(R.string.ui_success_check),
+        subtitle = uiContext.getString(R.string.ui_optional_verification_after_the_agent_finishes),
         icon = Icons.Outlined.CheckCircle,
     ) {
         OutlinedTextField(
             value = checkCommand,
             onValueChange = onCheckCommandChange,
-            label = { Text("Command") },
+            label = { Text(uiContext.getString(R.string.settings_mcp_command)) },
             placeholder = { Text("./gradlew test") },
-            supportingText = { Text("Exit code 0 means success. Failures can be retried automatically.") },
+            supportingText = { Text(uiContext.getString(R.string.ui_exit_code_0_means_success_failures_can)) },
             shape = RoundedCornerShape(14.dp),
             modifier = Modifier.fillMaxWidth(),
         )

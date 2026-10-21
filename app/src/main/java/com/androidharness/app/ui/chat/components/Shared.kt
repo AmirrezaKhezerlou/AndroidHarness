@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.R
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -103,6 +104,7 @@ internal fun ClickableOutput(
     text: String,
     onOpenFile: (path: String, line: Int?) -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     // Line splitting + regex matching are memoized; expanded output can hold
     // ~200 rows and the card recomposes on every state emission.
     val lines = remember(text) { text.lines() }
@@ -145,7 +147,7 @@ internal fun ClickableOutput(
         }
         if (lines.size > 200) {
             Text(
-                "[${lines.size - 200} more lines]",
+                uiContext.getString(R.string.ui_more_lines, (lines.size - 200).toString()),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

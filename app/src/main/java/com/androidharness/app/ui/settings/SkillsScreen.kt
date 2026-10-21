@@ -53,6 +53,7 @@ fun SkillsScreen(
     container: AppContainer,
     onBack: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val settings by container.settings.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
     val skills = remember(settings.disabledSkills, settings.cavemanInstalled) { container.skills.list() }
     val scope = rememberCoroutineScope()
@@ -88,16 +89,16 @@ fun SkillsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                "The model sees these names every turn and loads a body with skill_view when one matches. /skills opens the picker. /name force-loads one.",
+                uiContext.getString(R.string.ui_the_model_sees_these_names_every_turn),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            SkillGroup("Bundled", bundled, container, scope, onEdit = null)
+            SkillGroup(uiContext.getString(R.string.ui_bundled), bundled, container, scope, onEdit = null)
             if (user.isNotEmpty()) {
-                SkillGroup("Your skills", user, container, scope, onEdit = { editing = it })
+                SkillGroup(uiContext.getString(R.string.ui_your_skills), user, container, scope, onEdit = { editing = it })
             }
             if (project.isNotEmpty()) {
-                SkillGroup("This workspace", project, container, scope, onEdit = null)
+                SkillGroup(uiContext.getString(R.string.ui_this_workspace), project, container, scope, onEdit = null)
             }
             Spacer(Modifier.height(72.dp))
         }
@@ -190,6 +191,7 @@ private fun SkillEditorDialog(
     onDismiss: () -> Unit,
     onSave: (String) -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var text by remember { mutableStateOf(initial) }
     var error by remember { mutableStateOf<String?>(null) }
     val parsed = runCatching { SkillParser.parse(text) }.getOrNull()
@@ -211,7 +213,7 @@ private fun SkillEditorDialog(
                     label = { Text(stringResource(R.string.settings_skills_file)) },
                 )
                 Text(
-                    "Catalog line: ${parsed?.name ?: "?"} · ${parsed?.catalogDescription ?: "fix frontmatter"}",
+                    uiContext.getString(R.string.ui_catalog_line, (parsed?.name ?: "?").toString(), (parsed?.catalogDescription ?: "fix frontmatter").toString()),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

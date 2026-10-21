@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.R
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
@@ -64,6 +65,7 @@ internal fun ThinkingBlock(
     thinking: String,
     live: Boolean = false,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     if (thinking.isBlank() && !live) return
     var expanded by rememberSaveable { mutableStateOf(false) }
     val rotation = animateFloatAsState(
@@ -87,14 +89,14 @@ internal fun ThinkingBlock(
                     Spacer(Modifier.width(8.dp))
                 }
                 Text(
-                    if (live) "Thinking…" else "Thinking",
+                    if (live) uiContext.getString(R.string.ui_thinking) else uiContext.getString(R.string.ui_thinking_2),
                     style = MaterialTheme.typography.labelMedium,
                     color = scheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f),
                 )
                 Icon(
                     Icons.Filled.KeyboardArrowDown,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    contentDescription = if (expanded) uiContext.getString(R.string.ui_collapse) else uiContext.getString(R.string.ui_expand),
                     modifier = Modifier
                         .size(18.dp)
                         .graphicsLayer { rotationZ = rotation.value },

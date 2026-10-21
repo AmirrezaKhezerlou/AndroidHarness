@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.R
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -52,6 +53,7 @@ fun WorkspaceSwitcherSheet(
     onDelete: ((ProjectEntity) -> Unit)? = null,
     chatWorkspace: Boolean = false,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
@@ -62,15 +64,15 @@ fun WorkspaceSwitcherSheet(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(if (chatWorkspace) "Chat workspace" else "Workspace", style = MaterialTheme.typography.titleMediumEmphasized)
+                    Text(if (chatWorkspace) uiContext.getString(R.string.ui_chat_workspace) else uiContext.getString(R.string.ui_workspace), style = MaterialTheme.typography.titleMediumEmphasized)
                     Text(
-                        if (chatWorkspace) "Assigned to this chat" else "Default for new chats",
+                        if (chatWorkspace) uiContext.getString(R.string.ui_assigned_to_this_chat) else uiContext.getString(R.string.ui_default_for_new_chats),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Filled.Close, contentDescription = "Close")
+                    Icon(Icons.Filled.Close, contentDescription = uiContext.getString(R.string.settings_action_close))
                 }
             }
             // Bounded height: wrap-content lists inside sheets fight the
@@ -102,7 +104,7 @@ fun WorkspaceSwitcherSheet(
                             )
                             Text(
                                 desc.kindLabel +
-                                    if (desc.shellCapable) " · full shell" else " · file tools only",
+                                    if (desc.shellCapable) uiContext.getString(R.string.ui_full_shell) else uiContext.getString(R.string.ui_file_tools_only),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
@@ -112,7 +114,7 @@ fun WorkspaceSwitcherSheet(
                         if (project.id == currentProjectId) {
                             Icon(
                                 Icons.Filled.CheckCircle,
-                                contentDescription = "Active",
+                                contentDescription = uiContext.getString(R.string.settings_workspace_active_badge),
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(18.dp),
                             )
@@ -124,7 +126,7 @@ fun WorkspaceSwitcherSheet(
                             }) {
                                 Icon(
                                     Icons.Outlined.Delete,
-                                    contentDescription = "Delete ${project.name}",
+                                    contentDescription = uiContext.getString(R.string.settings_workspace_delete_cd, (project.name).toString()),
                                     tint = MaterialTheme.colorScheme.error,
                                     modifier = Modifier.size(18.dp),
                                 )
@@ -142,7 +144,7 @@ fun WorkspaceSwitcherSheet(
                     TextButton(onClick = {
                         onDismiss()
                         onAdd()
-                    }) { Text("Add workspace…") }
+                    }) { Text(uiContext.getString(R.string.ui_add_workspace)) }
                 }
             }
         }

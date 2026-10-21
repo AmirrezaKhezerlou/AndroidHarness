@@ -44,9 +44,10 @@ import kotlinx.coroutines.withContext
 
 @Composable
 internal fun ConceptAttachmentChip(attachment: com.androidharness.app.artifacts.ArtifactAttachment, onRemove: () -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     InputChip(selected = true, onClick = onRemove,
-        label = { Text("Concept · ${attachment.title}", maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 200.dp)) },
-        trailingIcon = { Icon(Icons.Filled.Close, "Remove concept attachment", Modifier.size(14.dp)) },
+        label = { Text(uiContext.getString(R.string.ui_concept, (attachment.title).toString()), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 200.dp)) },
+        trailingIcon = { Icon(Icons.Filled.Close, uiContext.getString(R.string.ui_remove_concept_attachment), Modifier.size(14.dp)) },
         modifier = Modifier.padding(horizontal = 8.dp))
 }
 
@@ -58,6 +59,7 @@ internal fun ArtifactCard(
     loadRevisions: (suspend () -> List<ChatArtifact>)? = null,
     onRevise: (ChatArtifact) -> Unit = {},
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var savedVersions by remember(artifact.id) { mutableStateOf<List<ChatArtifact>>(emptyList()) }
     val versions = remember(revisions, artifact, savedVersions) { (savedVersions + revisions + artifact).distinctBy { it.revision } }
     var revision by rememberSaveable(artifact.revision) { mutableStateOf(artifact.revision) }
@@ -85,7 +87,7 @@ internal fun ArtifactCard(
         if (loadRevisions != null) try {
             savedVersions = withContext(Dispatchers.IO) { loadRevisions().filter { it.id == artifact.id } }
         } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-        catch (_: Exception) { error = "Couldn’t load older versions. Reopen the concept to retry." }
+        catch (_: Exception) { error = uiContext.getString(R.string.ui_couldn_t_load_older_versions_reopen_the) }
     }
     val save = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/html")) { uri ->
         val document = versions.firstOrNull { it.revision == exportingRevision }
@@ -95,9 +97,9 @@ internal fun ArtifactCard(
                 withContext(Dispatchers.IO) {
                     requireNotNull(context.contentResolver.openOutputStream(uri)).bufferedWriter().use { it.write(ArtifactSandbox.sourceDocument(document, dark)) }
                 }
-                "HTML saved"
+                uiContext.getString(R.string.ui_html_saved)
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-            catch (_: Exception) { "Couldn’t save. Try again." }
+            catch (_: Exception) { uiContext.getString(R.string.ui_couldn_t_save_try_again) }
         }
     }
     val header: @Composable (Boolean) -> Unit = { fullscreen ->
@@ -106,16 +108,16 @@ internal fun ArtifactCard(
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(selected.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text("Interactive concept", style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
+                Text(uiContext.getString(R.string.ui_interactive_concept), style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
             }
             if (versions.size > 1) Box {
                 TextButton(onClick = { versionMenu = true }) {
                     Text("v${versions.indexOf(selected) + 1}", style = MaterialTheme.typography.labelMedium)
-                    Icon(Icons.Filled.KeyboardArrowDown, "Concept versions", Modifier.size(14.dp))
+                    Icon(Icons.Filled.KeyboardArrowDown, uiContext.getString(R.string.ui_concept_versions), Modifier.size(14.dp))
                 }
                 DropdownMenu(versionMenu, { versionMenu = false }) {
                     versions.forEachIndexed { index, version -> DropdownMenuItem(
-                        text = { Text("Version ${index + 1}") },
+                        text = { Text(uiContext.getString(R.string.ui_version, (index + 1).toString())) },
                         trailingIcon = { if (version.revision == selected.revision) Icon(Icons.Filled.Check, null, Modifier.size(16.dp)) },
                         onClick = { revision = version.revision; versionMenu = false },
                     ) }
@@ -123,17 +125,17 @@ internal fun ArtifactCard(
             }
             IconButton(onClick = { expanded = !fullscreen }) {
                 Icon(if (fullscreen) Icons.Filled.Close else Icons.Outlined.Fullscreen,
-                    if (fullscreen) "Close concept" else "Expand concept", Modifier.size(20.dp))
+                    if (fullscreen) uiContext.getString(R.string.ui_close_concept) else uiContext.getString(R.string.ui_expand_concept), Modifier.size(20.dp))
             }
         }
     }
     val tabs: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            FilterChip(selected = !source, onClick = { source = false }, label = { Text("Preview") })
+            FilterChip(selected = !source, onClick = { source = false }, label = { Text(uiContext.getString(R.string.ui_preview)) })
             Spacer(Modifier.width(6.dp))
-            FilterChip(selected = source, onClick = { source = true }, label = { Text("Code") }, leadingIcon = { Icon(Icons.Outlined.Code, null, Modifier.size(16.dp)) })
+            FilterChip(selected = source, onClick = { source = true }, label = { Text(uiContext.getString(R.string.ui_code)) }, leadingIcon = { Icon(Icons.Outlined.Code, null, Modifier.size(16.dp)) })
             Spacer(Modifier.weight(1f))
-            IconButton(onClick = { error = null; reload++ }) { Icon(Icons.Outlined.Refresh, "Reload concept", Modifier.size(18.dp)) }
+            IconButton(onClick = { error = null; reload++ }) { Icon(Icons.Outlined.Refresh, uiContext.getString(R.string.ui_reload_concept), Modifier.size(18.dp)) }
         }
     }
     val content: @Composable (Modifier) -> Unit = { modifier ->
@@ -144,8 +146,8 @@ internal fun ArtifactCard(
             } else {
                 if (unavailable) Column(Modifier.fillMaxSize().padding(24.dp),
                     verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Preview unavailable", style = MaterialTheme.typography.titleSmall)
-                    TextButton(onClick = { reload++ }) { Text("Reload preview") }
+                    Text(uiContext.getString(R.string.ui_preview_unavailable), style = MaterialTheme.typography.titleSmall)
+                    TextButton(onClick = { reload++ }) { Text(uiContext.getString(R.string.ui_reload_preview)) }
                 } else ArtifactViewHost(web, Modifier.fillMaxSize())
                 if (loading) AppLinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter))
             }
@@ -156,12 +158,12 @@ internal fun ArtifactCard(
             error?.let { Text(it, Modifier.padding(horizontal = 14.dp, vertical = 6.dp), style = MaterialTheme.typography.labelSmall, color = scheme.error) }
             saveStatus?.let { Text(it, Modifier.padding(horizontal = 14.dp), style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant) }
             Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { expanded = false; onRevise(selected) }) { Text("Revise") }
+                TextButton(onClick = { expanded = false; onRevise(selected) }) { Text(uiContext.getString(R.string.ui_revise)) }
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = {
                     exportingRevision = selected.revision
                     save.launch(selected.title.replace(Regex("[^a-zA-Z0-9_-]+"), "-").take(64).ifBlank { "concept" } + ".html")
-                }) { Icon(Icons.Outlined.Download, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("Save HTML") }
+                }) { Icon(Icons.Outlined.Download, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(uiContext.getString(R.string.ui_save_html)) }
             }
         }
     }
@@ -173,7 +175,7 @@ internal fun ArtifactCard(
                 content(Modifier.fillMaxWidth().height(300.dp))
                 HorizontalDivider(color = scheme.outlineVariant); footer()
             } else Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
-                TextButton(onClick = { expanded = true }) { Text("Concept is expanded") }
+                TextButton(onClick = { expanded = true }) { Text(uiContext.getString(R.string.ui_concept_is_expanded)) }
             }
         }
     }

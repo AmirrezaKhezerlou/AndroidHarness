@@ -1,5 +1,7 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.ui.common.localizedOptionLabel
+import com.androidharness.app.R
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.expandVertically
@@ -45,23 +47,24 @@ import com.androidharness.app.ui.theme.fastEffectsSpec
 @Composable
 internal fun LiveCodeCard(draft: LiveCodeDraft, awaitingApproval: Boolean = false,
     onOpenFile: ((String, Int?) -> Unit)? = null) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val action = when {
-        awaitingApproval -> "Awaiting approval"
-        draft.stage == CodeDraftStage.FAILED -> "Not saved"
-        draft.tool == "write_file" -> if (draft.stage == CodeDraftStage.SAVED) "Write" else "Writing"
-        else -> if (draft.stage == CodeDraftStage.SAVED) "Edit" else "Editing"
+        awaitingApproval -> uiContext.getString(R.string.ui_awaiting_approval)
+        draft.stage == CodeDraftStage.FAILED -> uiContext.getString(R.string.ui_not_saved)
+        draft.tool == "write_file" -> if (draft.stage == CodeDraftStage.SAVED) uiContext.getString(R.string.ui_write) else uiContext.getString(R.string.ui_writing)
+        else -> if (draft.stage == CodeDraftStage.SAVED) uiContext.getString(R.string.settings_action_edit) else uiContext.getString(R.string.ui_editing)
     }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         draft.workspaceName?.let { Text(it, style = MaterialTheme.typography.labelSmall,
             color = scheme.primary, modifier = Modifier.padding(horizontal = 2.dp)) }
-        draft.files.ifEmpty { listOf(LiveCodeFile("File name arriving…", 0, 0, emptyList())) }.forEach { file ->
+        draft.files.ifEmpty { listOf(LiveCodeFile(uiContext.getString(R.string.ui_file_name_arriving), 0, 0, emptyList())) }.forEach { file ->
             key(draft.id, file.path) {
                 var expanded by rememberSaveable(draft.id, file.path) { mutableStateOf(false) }
                 Column {
                     Surface(onClick = { expanded = !expanded }, color = Color.Transparent,
                         shape = MaterialTheme.shapes.small,
-                        modifier = Modifier.fillMaxWidth().semantics { stateDescription = draft.stage.label }) {
+                        modifier = Modifier.fillMaxWidth().semantics { stateDescription = uiContext.localizedOptionLabel(draft.stage.label) }) {
                         BoxWithConstraints(Modifier.padding(horizontal = 2.dp, vertical = 6.dp).heightIn(min = 36.dp)) {
                             val narrow = maxWidth < 360.dp * androidx.compose.ui.platform.LocalDensity.current.fontScale
                             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -77,7 +80,7 @@ internal fun LiveCodeCard(draft: LiveCodeDraft, awaitingApproval: Boolean = fals
                                         if (file.removed > 0) AnimatedLineCount(file.removed, '−', scheme.error)
                                     }
                                     Icon(Icons.Default.KeyboardArrowDown,
-                                        if (expanded) "Collapse code preview" else "Expand code preview",
+                                        if (expanded) uiContext.getString(R.string.ui_collapse_code_preview) else uiContext.getString(R.string.ui_expand_code_preview),
                                         Modifier.size(16.dp).rotate(if (expanded) 180f else 0f), tint = scheme.onSurfaceVariant)
                                 }
                                 if (narrow) CodeFileName(file.path, Modifier.padding(start = 24.dp), showFolder = false)
@@ -106,22 +109,22 @@ internal fun LiveCodeCard(draft: LiveCodeDraft, awaitingApproval: Boolean = fals
                                     }
                                 }
                             }
-                            Text("≈ ${formatTokens(draft.estimatedTokens)} tool tokens · estimated",
+                            Text(uiContext.getString(R.string.ui_tool_tokens_estimated, (formatTokens(draft.estimatedTokens)).toString()),
                                 style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
                             draft.responseOutputTokens?.let { tokens ->
-                                Text("Response: ${formatTokens(tokens)} output tokens", style = MaterialTheme.typography.labelSmall,
+                                Text(uiContext.getString(R.string.ui_response_output_tokens, (formatTokens(tokens)).toString()), style = MaterialTheme.typography.labelSmall,
                                     color = scheme.onSurfaceVariant)
                             }
-                            if (!draft.comparisonAvailable) Text("Generated code · original file comparison unavailable",
+                            if (!draft.comparisonAvailable) Text(uiContext.getString(R.string.ui_generated_code_original_file_comparison_unavailable),
                                 style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
-                            if (draft.limited || file.lines.size >= 80) Text("Showing a bounded code preview",
+                            if (draft.limited || file.lines.size >= 80) Text(uiContext.getString(R.string.ui_showing_a_bounded_code_preview),
                                 style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
-                            if (draft.stage != CodeDraftStage.SAVED) Text("Draft · not saved yet",
+                            if (draft.stage != CodeDraftStage.SAVED) Text(uiContext.getString(R.string.ui_draft_not_saved_yet),
                                 style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
-                            if (draft.responseOutputTokens != null) Text("Response tokens include reasoning and all generated output.",
+                            if (draft.responseOutputTokens != null) Text(uiContext.getString(R.string.ui_response_tokens_include_reasoning_and_all_generated),
                                 style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
                             if (draft.stage == CodeDraftStage.SAVED && onOpenFile != null) TextButton(onClick = { onOpenFile(file.path, null) }) {
-                                Text("Open file")
+                                Text(uiContext.getString(R.string.ui_open_file))
                             }
                         }
                     }
@@ -155,9 +158,10 @@ private fun CodeFileName(path: String, modifier: Modifier, showFolder: Boolean) 
 
 @Composable
 private fun AnimatedLineCount(count: Int, sign: Char, color: Color) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val displayed by animateIntAsState(count, fastEffectsSpec(), label = "live line count")
     Text("$sign$displayed", style = MaterialTheme.typography.labelMedium, fontFamily = HarnessMono, color = color,
-        modifier = Modifier.semantics { contentDescription = "$count lines ${if (sign == '+') "added" else "removed"}" })
+        modifier = Modifier.semantics { contentDescription = uiContext.getString(R.string.ui_lines, (count).toString(), (if (sign == '+') uiContext.getString(R.string.ui_added_suffix) else uiContext.getString(R.string.ui_removed_suffix)).toString()) })
 }
 
 @Composable

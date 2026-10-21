@@ -1,5 +1,6 @@
 package com.androidharness.app.ui
 
+import com.androidharness.app.R
 import androidx.compose.foundation.layout.fillMaxHeight
 
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -100,6 +101,7 @@ import java.nio.charset.StandardCharsets
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AppNav(container: AppContainer) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     com.androidharness.app.ui.settings.LocalModelWarningDialog(container.localModels)
     val nav = rememberNavController()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -196,7 +198,7 @@ fun AppNav(container: AppContainer) {
         val count = chatWorkspaceSelection?.grants?.size ?: 1
         "$count workspace${if (count == 1) "" else "s"}" +
             currentWorkspace?.name?.let { " · Primary: $it" }.orEmpty()
-    } else currentWorkspace?.name ?: "Choose workspace"
+    } else currentWorkspace?.name ?: uiContext.getString(R.string.ui_choose_workspace)
     val activeFs by remember(workspaceSessionId, workspaceProjectId) { container.workspace.forTools(workspaceSessionId, workspaceProjectId) }
         .collectAsStateWithLifecycle(initialValue = null)
     var workspaceError by remember { mutableStateOf<String?>(null) }
@@ -294,12 +296,13 @@ fun AppNav(container: AppContainer) {
             SidebarChatAction.ARCHIVE -> scope.launch {
                 val wasArchived = session.id in settings.archivedSessions
                 container.settings.setArchived(session.id, !wasArchived)
-                if (sidebarSnackbar.showSnackbar(if (wasArchived) "Chat restored" else "Chat archived", actionLabel = "Undo") ==
+                if (sidebarSnackbar.showSnackbar(if (wasArchived) uiContext.getString(R.string.ui_chat_restored) else uiContext.getString(R.string.ui_chat_archived), actionLabel = uiContext.getString(R.string.ui_undo)) ==
                     androidx.compose.material3.SnackbarResult.ActionPerformed) container.settings.setArchived(session.id, wasArchived)
             }
         }
     }
     @Composable fun Sidebar(onCollapse: () -> Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
         val changes by remember(currentSessionId) {
             currentSessionId?.let(container.sessions::fileChangesFor) ?: kotlinx.coroutines.flow.flowOf(emptyList())
         }.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -320,8 +323,8 @@ fun AppNav(container: AppContainer) {
             onProjectChat = { project -> if (!creatingProjectChat) {
                 creatingProjectChat = true
                 val create = { scope.launch {
-                    try { openChat(container.sessions.createSession("New chat", project.id)) }
-                    catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; workspaceError = e.message ?: "Could not create chat." }
+                    try { openChat(container.sessions.createSession(uiContext.getString(R.string.settings_telegram_new_chat), project.id)) }
+                    catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; workspaceError = e.message ?: uiContext.getString(R.string.ui_could_not_create_chat) }
                     finally { creatingProjectChat = false }
                 }; Unit }
                 if (desktopNavigation) {
@@ -337,10 +340,10 @@ fun AppNav(container: AppContainer) {
             onAutomation = { navigateFromSidebar { nav.navigate("automation") { launchSingleTop = true } } },
             onProviders = { navigateFromSidebar { nav.navigate("providers") { launchSingleTop = true } } },
             onSettings = { navigateFromSidebar { nav.navigate("settings") { launchSingleTop = true } } },
-            workspaceLabel = if (chatWorkspaceContext) "Workspaces for this chat" else "Workspace", workspaceSummary = workspaceSummary,
+            workspaceLabel = if (chatWorkspaceContext) uiContext.getString(R.string.ui_workspaces_for_this_chat) else uiContext.getString(R.string.ui_workspace), workspaceSummary = workspaceSummary,
             onWorkspaces = { scope.launch { drawerState.close() }; showWorkspaceSheet = true }, onCollapse = onCollapse,
             currentRoute = currentRoute, projectCreationEnabled = !creatingProjectChat,
-            changesSummary = changes.takeIf { it.isNotEmpty() }?.let { "${it.size} files changed" },
+            changesSummary = changes.takeIf { it.isNotEmpty() }?.let { uiContext.getString(R.string.ui_files_changed_758, (it.size).toString()) },
             onChanges = { currentSessionId?.let { sid -> navigateFromSidebar { nav.navigate("changes/${encode(sid)}") } } },
             snackbar = sidebarSnackbar,
             projectsView = settings.sidebarProjects,
@@ -357,7 +360,7 @@ fun AppNav(container: AppContainer) {
                 SidebarProjectAction.ARCHIVE -> scope.launch {
                     val wasArchived = project.id in settings.archivedProjects
                     container.settings.setProjectArchived(project.id, !wasArchived)
-                    if (sidebarSnackbar.showSnackbar(if (wasArchived) "Project restored" else "Project archived", actionLabel = "Undo") ==
+                    if (sidebarSnackbar.showSnackbar(if (wasArchived) uiContext.getString(R.string.ui_project_restored) else uiContext.getString(R.string.ui_project_archived), actionLabel = uiContext.getString(R.string.ui_undo)) ==
                         androidx.compose.material3.SnackbarResult.ActionPerformed) container.settings.setProjectArchived(project.id, wasArchived)
                 }
             } },
@@ -576,7 +579,7 @@ fun AppNav(container: AppContainer) {
                             try {
                                 val sid = sessionArg.takeIf { it.isNotBlank() }
                                     ?: sourceId?.let { container.sessions.createProjectSession(it) }
-                                    ?: error("Choose a workspace before asking about code.")
+                                    ?: error(uiContext.getString(R.string.ui_choose_a_workspace_before_asking_about_code))
                                 container.pendingCodeDraft.value = com.androidharness.app.ui.files.CodeChatDraft(sid, prompt)
                                 val route = if (draftSessionId == sid) "chat" else "chat/$sid"
                                 if (!nav.popBackStack(route, inclusive = false)) openChat(sid)
@@ -735,8 +738,8 @@ fun AppNav(container: AppContainer) {
         )
     }
     workspaceError?.let { message ->
-        AlertDialog(onDismissRequest = { workspaceError = null }, title = { Text("Workspace") },
-            text = { Text(message) }, confirmButton = { TextButton(onClick = { workspaceError = null }) { Text("OK") } })
+        AlertDialog(onDismissRequest = { workspaceError = null }, title = { Text(uiContext.getString(R.string.ui_workspace)) },
+            text = { Text(message) }, confirmButton = { TextButton(onClick = { workspaceError = null }) { Text(uiContext.getString(R.string.ui_ok)) } })
     }
     if (showAddWorkspace) {
         com.androidharness.app.ui.common.AddWorkspaceDialog(
@@ -756,12 +759,12 @@ fun AppNav(container: AppContainer) {
     if (showLatePackagesNotice) {
         AlertDialog(
             onDismissRequest = { dismissLatePackagesNotice() },
-            title = { Text("Terminal & environment updated") },
+            title = { Text(uiContext.getString(R.string.ui_terminal_environment_updated)) },
             text = {
                 Text(
-                    "The Linux toolchain gained new packages: ${latePackages.joinToString(", ")}. " +
-                        "Fetch them to add the new tools to your installed environment; " +
-                        "until then they show up as missing.",
+                    uiContext.getString(R.string.ui_the_linux_toolchain_gained_new_packages, (latePackages.joinToString(", ")).toString()) +
+                        uiContext.getString(R.string.ui_fetch_them_to_add_the_new_tools) +
+                        uiContext.getString(R.string.ui_until_then_they_show_up_as_missing),
                 )
             },
             confirmButton = {
@@ -769,10 +772,10 @@ fun AppNav(container: AppContainer) {
                     dismissLatePackagesNotice()
                     nav.navigate("settings")
                     scope.launch { container.linuxEnv.updateEnvironment() }
-                }) { Text("Fetch now") }
+                }) { Text(uiContext.getString(R.string.ui_fetch_now)) }
             },
             dismissButton = {
-                TextButton(onClick = { dismissLatePackagesNotice() }) { Text("Later") }
+                TextButton(onClick = { dismissLatePackagesNotice() }) { Text(uiContext.getString(R.string.ui_later)) }
             },
         )
     }
@@ -786,34 +789,34 @@ fun AppNav(container: AppContainer) {
             title = { Text(session.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    SessionAction("Rename") {
+                    SessionAction(uiContext.getString(R.string.ui_rename)) {
                         renamingSession = session
                         actionsSession = null
                     }
-                    SessionAction(if (pinned) "Unpin" else "Pin") {
+                    SessionAction(if (pinned) uiContext.getString(R.string.ui_unpin) else uiContext.getString(R.string.ui_pin)) {
                         sidebarAction(session, SidebarChatAction.PIN)
                         actionsSession = null
                     }
-                    SessionAction(if (archived) "Unarchive" else "Archive") {
+                    SessionAction(if (archived) uiContext.getString(R.string.ui_unarchive) else uiContext.getString(R.string.ui_archive)) {
                         sidebarAction(session, SidebarChatAction.ARCHIVE)
                         actionsSession = null
                     }
-                    SessionAction("Chat details") { detailsSession = session; actionsSession = null }
-                    SessionAction("Delete", destructive = true) {
+                    SessionAction(uiContext.getString(R.string.ui_chat_details)) { detailsSession = session; actionsSession = null }
+                    SessionAction(uiContext.getString(R.string.settings_action_delete), destructive = true) {
                         deletingSession = session
                         actionsSession = null
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { actionsSession = null }) { Text("Close") }
+                TextButton(onClick = { actionsSession = null }) { Text(uiContext.getString(R.string.settings_action_close)) }
             },
         )
     }
 
     deletingSession?.let { session ->
-        AlertDialog(onDismissRequest = { deletingSession = null }, title = { Text("Delete chat?") },
-            text = { Text("Delete \"${session.title}\" and its conversation history?") },
+        AlertDialog(onDismissRequest = { deletingSession = null }, title = { Text(uiContext.getString(R.string.ui_delete_chat)) },
+            text = { Text(uiContext.getString(R.string.ui_delete_and_its_conversation_history, (session.title).toString())) },
             confirmButton = { TextButton(onClick = {
                 val remove = { scope.launch {
                     container.runManager.stopAndJoin(session.id)
@@ -823,21 +826,21 @@ fun AppNav(container: AppContainer) {
                 }; Unit }
                 deletingSession = null
                 if (desktopNavigation && session.id == currentSessionId) desktopGuard.navigate(remove) else remove()
-            }) { Text("Delete chat", color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { deletingSession = null }) { Text("Keep chat") } })
+            }) { Text(uiContext.getString(R.string.ui_delete_chat_1705), color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { deletingSession = null }) { Text(uiContext.getString(R.string.ui_keep_chat)) } })
     }
     detailsSession?.let { session ->
         val choice = if (settings.sameModelAcrossChats) com.androidharness.app.data.ChatModelSelection.from(settings, providers).active
             else runCatching { com.androidharness.app.data.ChatModelSelection.decode(session.modelSelectionJson)?.active
                 ?: com.androidharness.app.data.ChatModelSelection.from(settings, providers).active }.getOrNull()
-        AlertDialog(onDismissRequest = { detailsSession = null }, title = { Text("Chat details") },
+        AlertDialog(onDismissRequest = { detailsSession = null }, title = { Text(uiContext.getString(R.string.ui_chat_details)) },
             text = { Column(Modifier.heightIn(max = 340.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(session.title, style = MaterialTheme.typography.titleSmall)
-                Text("Workspace: ${allWorkspaces.firstOrNull { it.id == session.projectId }?.name ?: "Other chats"}")
-                Text("Model: ${choice?.model ?: "Unavailable"}")
-                Text("Tokens used: ${formatTokens(session.totalInputTokens + session.totalOutputTokens)}")
-                Text("Updated: ${formatRelativeTime(session.updatedAt)}")
-            } }, confirmButton = { TextButton(onClick = { detailsSession = null }) { Text("Close") } })
+                Text(uiContext.getString(R.string.ui_workspace_1707, (allWorkspaces.firstOrNull { it.id == session.projectId }?.name ?: "Other chats").toString()))
+                Text(uiContext.getString(R.string.ui_model_1708, (choice?.model ?: "Unavailable").toString()))
+                Text(uiContext.getString(R.string.ui_tokens_used, (formatTokens(session.totalInputTokens + session.totalOutputTokens)).toString()))
+                Text(uiContext.getString(R.string.ui_updated_1710, (formatRelativeTime(session.updatedAt)).toString()))
+            } }, confirmButton = { TextButton(onClick = { detailsSession = null }) { Text(uiContext.getString(R.string.settings_action_close)) } })
     }
 
     deletingProject?.let { project ->
@@ -851,20 +854,20 @@ fun AppNav(container: AppContainer) {
     }
 
     renamingProject?.let { project ->
-        AlertDialog(onDismissRequest = { renamingProject = null }, title = { Text("Rename project") },
-            text = { OutlinedTextField(projectName, { projectName = it }, singleLine = true, label = { Text("Project name") }) },
+        AlertDialog(onDismissRequest = { renamingProject = null }, title = { Text(uiContext.getString(R.string.ui_rename_project)) },
+            text = { OutlinedTextField(projectName, { projectName = it }, singleLine = true, label = { Text(uiContext.getString(R.string.ui_project_name)) }) },
             confirmButton = { TextButton(enabled = projectName.isNotBlank(), onClick = { scope.launch {
                 try { container.workspace.renameProject(project.id, projectName); renamingProject = null }
                 catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; workspaceError = e.message }
-            } }) { Text("Save") } },
-            dismissButton = { TextButton(onClick = { renamingProject = null }) { Text("Cancel") } })
+            } }) { Text(uiContext.getString(R.string.settings_action_save)) } },
+            dismissButton = { TextButton(onClick = { renamingProject = null }) { Text(uiContext.getString(R.string.settings_action_cancel)) } })
     }
 
     renamingSession?.let { session ->
         var title by remember(session) { mutableStateOf(session.title) }
         AlertDialog(
             onDismissRequest = { renamingSession = null },
-            title = { Text("Rename chat") },
+            title = { Text(uiContext.getString(R.string.ui_rename_chat)) },
             text = {
                 OutlinedTextField(
                     value = title,
@@ -879,10 +882,10 @@ fun AppNav(container: AppContainer) {
                         scope.launch { container.sessions.renameSession(session.id, title.trim()) }
                     }
                     renamingSession = null
-                }) { Text("Save") }
+                }) { Text(uiContext.getString(R.string.settings_action_save)) }
             },
             dismissButton = {
-                TextButton(onClick = { renamingSession = null }) { Text("Cancel") }
+                TextButton(onClick = { renamingSession = null }) { Text(uiContext.getString(R.string.settings_action_cancel)) }
             },
         )
     }
@@ -895,6 +898,7 @@ internal fun MessageHitRow(
     fuzzy: Boolean,
     onClick: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val annotated = run {
         val snippet = ChatSearch.snippet(hit.text, ChatSearch.highlightNeedles(query, fuzzy))
@@ -919,7 +923,7 @@ internal fun MessageHitRow(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                hit.sessionTitle.ifBlank { "Chat" },
+                hit.sessionTitle.ifBlank { uiContext.getString(R.string.ui_chat) },
                 style = MaterialTheme.typography.labelSmall,
                 color = scheme.onSurfaceVariant,
                 maxLines = 1,

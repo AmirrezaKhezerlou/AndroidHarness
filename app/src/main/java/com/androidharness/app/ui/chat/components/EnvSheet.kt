@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -52,6 +53,7 @@ fun EnvSheet(
     container: AppContainer,
     onDismiss: () -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     var checkResult by remember { mutableStateOf<String?>(null) }
@@ -69,15 +71,15 @@ fun EnvSheet(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("Linux environment", style = MaterialTheme.typography.titleMedium)
+            Text(uiContext.getString(R.string.settings_search_linux_title), style = MaterialTheme.typography.titleMedium)
             Text(
                 when (envState) {
-                    is EnvState.Ready -> "Installed"
-                    is EnvState.Preparing -> "Resolving packages…"
-                    is EnvState.Downloading -> "Downloading packages…"
-                    is EnvState.Installing -> "Installing packages…"
-                    is EnvState.Failed -> "Failed: ${envState.message}"
-                    EnvState.NotInstalled -> "Not installed"
+                    is EnvState.Ready -> uiContext.getString(R.string.ui_installed)
+                    is EnvState.Preparing -> uiContext.getString(R.string.ui_resolving_packages)
+                    is EnvState.Downloading -> uiContext.getString(R.string.ui_downloading_packages)
+                    is EnvState.Installing -> uiContext.getString(R.string.ui_installing_packages)
+                    is EnvState.Failed -> uiContext.getString(R.string.ui_failed, (envState.message).toString())
+                    EnvState.NotInstalled -> uiContext.getString(R.string.ui_not_installed)
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = if (envState is EnvState.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -88,7 +90,7 @@ fun EnvSheet(
                     val installed = linuxEnv.installedPackages()
                     if (installed.isNotEmpty()) {
                         Text(
-                            "Packages (${installed.size}): ${installed.joinToString(", ")}",
+                            uiContext.getString(R.string.ui_packages, (installed.size).toString(), (installed.joinToString(", ")).toString()),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -108,7 +110,7 @@ fun EnvSheet(
                         FilledTonalButton(onClick = { showPackagesSheet = true }) {
                             Icon(Icons.Outlined.Inventory2, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text("Packages")
+                            Text(uiContext.getString(R.string.settings_env_packages))
                         }
                         OutlinedButton(
                             enabled = !checking,
@@ -119,30 +121,30 @@ fun EnvSheet(
                                     checking = false
                                 }
                             },
-                        ) { Text(if (checking) "Checking…" else "Check missing") }
+                        ) { Text(if (checking) uiContext.getString(R.string.ui_checking) else uiContext.getString(R.string.ui_check_missing)) }
                         if (checkResult != null && !checkResult!!.startsWith("All present")) {
                             Button(onClick = {
                                 checkResult = null
                                 scope.launch { linuxEnv.updateEnvironment() }
-                            }) { Text("Update") }
+                            }) { Text(uiContext.getString(R.string.settings_action_update)) }
                         }
                     }
                     OutlinedButton(
                         onClick = { confirmUninstall = true },
                         modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Uninstall") }
+                    ) { Text(uiContext.getString(R.string.settings_action_uninstall)) }
                 }
                 is EnvState.NotInstalled, is EnvState.Failed -> {
                     Text(
-                        if (envState is EnvState.Failed) "Fix the issue (usually network) and install again."
-                        else "Installs bash, git, python 3, pip, node.js and npm into private storage.",
+                        if (envState is EnvState.Failed) uiContext.getString(R.string.ui_fix_the_issue_usually_network_and_install)
+                        else uiContext.getString(R.string.ui_installs_bash_git_python_3_pip_node),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Button(
                         onClick = { scope.launch { linuxEnv.install(linuxEnv.fullPackages) } },
                         modifier = Modifier.fillMaxWidth(),
-                    ) { Text(if (envState is EnvState.Failed) "Retry install" else "Install full environment") }
+                    ) { Text(if (envState is EnvState.Failed) uiContext.getString(R.string.ui_retry_install) else uiContext.getString(R.string.ui_install_full_environment)) }
                 }
                 is EnvState.Downloading, is EnvState.Installing, is EnvState.Preparing -> {
                     PackageInstallProgress(envState)
@@ -155,8 +157,8 @@ fun EnvSheet(
     if (confirmUninstall) {
         AlertDialog(
             onDismissRequest = { confirmUninstall = false },
-            title = { Text("Uninstall Linux environment?") },
-            text = { Text("This removes the shared toolchain for every local workspace (bash, git, python, node, npm and all downloaded packages). The agent falls back to toybox sh until it is installed again.") },
+            title = { Text(uiContext.getString(R.string.settings_env_uninstall_title)) },
+            text = { Text(uiContext.getString(R.string.settings_env_uninstall_message)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmUninstall = false
@@ -165,10 +167,10 @@ fun EnvSheet(
                         catch (e: kotlinx.coroutines.CancellationException) { throw e }
                         catch (e: Exception) { checkResult = e.message }
                     }
-                }) { Text("Uninstall", color = MaterialTheme.colorScheme.error) }
+                }) { Text(uiContext.getString(R.string.settings_action_uninstall), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmUninstall = false }) { Text("Cancel") }
+                TextButton(onClick = { confirmUninstall = false }) { Text(uiContext.getString(R.string.settings_action_cancel)) }
             },
         )
     }

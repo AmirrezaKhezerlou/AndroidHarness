@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.files
 
+import com.androidharness.app.R
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -54,6 +55,7 @@ internal fun WorkspaceEditorScreen(
     onAskAgent: ((String?, String) -> Unit)? = null,
     onOpenTerminal: (() -> Unit)? = null,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val fs by remember(sessionId, projectId) { container.workspace.forTools(sessionId, projectId) }
         .collectAsStateWithLifecycle(initialValue = null)
     val project by remember(sessionId, projectId) { container.workspace.projectForTools(sessionId, projectId) }
@@ -86,7 +88,7 @@ internal fun WorkspaceEditorScreen(
                 }
             }
             workspace = state
-        } catch (e: Exception) { if (e is CancellationException) throw e; failure = e.message ?: "Could not restore editor tabs." }
+        } catch (e: Exception) { if (e is CancellationException) throw e; failure = e.message ?: uiContext.getString(R.string.ui_could_not_restore_editor_tabs) }
     }
     val state = workspace
     DisposableEffect(state) { onDispose { state?.let(container.editorTabs::persist) } }
@@ -146,13 +148,13 @@ internal fun WorkspaceEditorScreen(
     ) + listOfNotNull(onOpenTerminal?.let { action -> WorkspaceCommand("Open terminal", "Terminal for this workspace", Icons.Outlined.Terminal) { tools = null; actions.close?.invoke(action) ?: action() } })
     val chrome: @Composable () -> Unit = {
         Column {
-            AppHeader(title = "Editor", subtitle = if(state?.paths?.size == 1) active else project?.name ?: identity?.substringBefore(" [primary=")?.substringAfterLast('/') ?: "Workspace", onBack = { actions.close?.invoke(onBack) ?: onBack() },
+            AppHeader(title = uiContext.getString(R.string.ui_editor), subtitle = if(state?.paths?.size == 1) active else project?.name ?: identity?.substringBefore(" [primary=")?.substringAfterLast('/') ?: "Workspace", onBack = { actions.close?.invoke(onBack) ?: onBack() },
                 actions = {
                     FilledTonalButton(onClick = { openFiles = true }, contentPadding = PaddingValues(horizontal = 12.dp),
-                        modifier = Modifier.heightIn(min = 44.dp).semantics { contentDescription = "Open files, ${state?.paths?.size ?: 0} open" }) {
+                        modifier = Modifier.heightIn(min = 44.dp).semantics { contentDescription = uiContext.getString(R.string.ui_open_files_open, (state?.paths?.size ?: 0).toString()) }) {
                         Icon(Icons.Outlined.Tab, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text((state?.paths?.size ?: 0).toString())
                     }
-                    ExpressiveIconButton(onClick = { active?.let(::close) }, enabled = active != null && !saving) { Icon(Icons.Outlined.Close, "Close current file") }
+                    ExpressiveIconButton(onClick = { active?.let(::close) }, enabled = active != null && !saving) { Icon(Icons.Outlined.Close, uiContext.getString(R.string.ui_close_current_file)) }
                 })
             if (state != null && state.paths.size > 1) {
                 val selected = state.paths.indexOf(active).coerceAtLeast(0)
@@ -160,7 +162,7 @@ internal fun WorkspaceEditorScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow, divider = { HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant) }) {
                     state.paths.forEach { tab ->
                         val unsaved = state.buffers[tab]?.dirty?.value == true
-                        Tab(selected = tab == active, enabled = !saving, onClick = { select(tab) }, modifier = Modifier.semantics { contentDescription = "Tab $tab${if(unsaved) ", unsaved changes" else ""}" },
+                        Tab(selected = tab == active, enabled = !saving, onClick = { select(tab) }, modifier = Modifier.semantics { contentDescription = uiContext.getString(R.string.ui_tab, (tab).toString(), (if(unsaved) ", unsaved changes" else "").toString()) },
                             text = {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                                     Text(tab.substringAfterLast('/'), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 170.dp))
@@ -175,7 +177,7 @@ internal fun WorkspaceEditorScreen(
                     Text(active.orEmpty(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            if(state?.persistenceError != null) Text("Open tabs could not be saved. Your editor drafts are kept.",
+            if(state?.persistenceError != null) Text(uiContext.getString(R.string.ui_open_tabs_could_not_be_saved_your),
                 Modifier.padding(horizontal = 16.dp, vertical = 6.dp), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
         }
     }
@@ -199,7 +201,7 @@ internal fun WorkspaceEditorScreen(
                     when {
                         failure != null -> Text(failure.orEmpty(), color = MaterialTheme.colorScheme.error)
                         state == null -> CircularProgressIndicator()
-                        else -> { Icon(Icons.Outlined.Description, null, Modifier.size(32.dp)); Spacer(Modifier.height(12.dp)); Text("No files open", style = MaterialTheme.typography.titleMedium); Spacer(Modifier.height(16.dp)); Button(onClick = { tools = WorkspaceToolMode.FILES }) { Text("Open a file") } }
+                        else -> { Icon(Icons.Outlined.Description, null, Modifier.size(32.dp)); Spacer(Modifier.height(12.dp)); Text(uiContext.getString(R.string.ui_no_files_open), style = MaterialTheme.typography.titleMedium); Spacer(Modifier.height(16.dp)); Button(onClick = { tools = WorkspaceToolMode.FILES }) { Text(uiContext.getString(R.string.ui_open_a_file)) } }
                     }
                 }
             }
@@ -207,8 +209,8 @@ internal fun WorkspaceEditorScreen(
         if(openFiles && state != null) ModalBottomSheet(onDismissRequest = { openFiles = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp), containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                Text("Open files", style = MaterialTheme.typography.titleLargeEmphasized)
-                Text("${state.paths.size} open · ${state.paths.count { state.buffers[it]?.dirty?.value == true }} unsaved", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(uiContext.getString(R.string.ui_open_files_925), style = MaterialTheme.typography.titleLargeEmphasized)
+                Text(uiContext.getString(R.string.ui_open_unsaved, (state.paths.size).toString(), (state.paths.count { state.buffers[it]?.dirty?.value == true }).toString()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(12.dp))
                 LazyColumn(Modifier.heightIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     items(state.paths, key = { it }) { tab ->
@@ -226,14 +228,14 @@ internal fun WorkspaceEditorScreen(
                                         }
                                     }
                                 }
-                                ExpressiveIconButton(onClick = { close(tab) }) { Icon(Icons.Outlined.Close, "Close tab $tab") }
+                                ExpressiveIconButton(onClick = { close(tab) }) { Icon(Icons.Outlined.Close, uiContext.getString(R.string.ui_close_tab, (tab).toString())) }
                             }
                         }
                     }
                 }
                 Spacer(Modifier.height(8.dp)); HorizontalDivider()
                 TextButton(onClick = { openFiles = false; tools = WorkspaceToolMode.FILES }, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                    Icon(Icons.Outlined.FolderOpen, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Open another file")
+                    Icon(Icons.Outlined.FolderOpen, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(uiContext.getString(R.string.ui_open_another_file))
                 }
             }
         }

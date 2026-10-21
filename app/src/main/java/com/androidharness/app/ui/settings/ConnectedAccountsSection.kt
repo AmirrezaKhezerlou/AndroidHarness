@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 internal fun ConnectedAccountsSection(container: AppContainer) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val state by container.chatGpt.state.collectAsStateWithLifecycle()
     val settings by container.settings.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
     val context = LocalContext.current
@@ -29,9 +30,9 @@ internal fun ConnectedAccountsSection(container: AppContainer) {
         catch (e: Exception) {
             selectionError = when {
                 e is java.io.IOException && e.message?.startsWith("ChatGPT") == true -> e.message
-                e.message in setOf("This account did not offer any models.", "Reconnect ChatGPT to use this account.",
-                    "Choose a model offered by this account.") -> e.message
-                else -> "Could not update this account. Check your connection and try again."
+                e.message in setOf(uiContext.getString(R.string.ui_this_account_did_not_offer_any_models), uiContext.getString(R.string.ui_reconnect_chatgpt_to_use_this_account),
+                    uiContext.getString(R.string.ui_choose_a_model_offered_by_this_account)) -> e.message
+                else -> uiContext.getString(R.string.ui_could_not_update_this_account_check_your)
             }
         }
     } }

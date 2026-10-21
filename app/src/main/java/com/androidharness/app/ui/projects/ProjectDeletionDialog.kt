@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.projects
 
+import com.androidharness.app.R
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
@@ -20,6 +21,7 @@ internal fun ProjectDeletionDialog(
     onDismiss: () -> Unit,
     onDeleted: (Set<String>) -> Unit,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var preview by remember(project.id) { mutableStateOf<ProjectDeletionPreview?>(null) }
     var error by remember(project.id) { mutableStateOf<String?>(null) }
     var deleting by remember(project.id) { mutableStateOf(false) }
@@ -27,21 +29,21 @@ internal fun ProjectDeletionDialog(
     LaunchedEffect(project.id) {
         try { preview = container.projectDeletion.preview(project.id) }
         catch (e: CancellationException) { throw e }
-        catch (e: Exception) { error = e.message ?: "Could not review this project." }
+        catch (e: Exception) { error = e.message ?: uiContext.getString(R.string.ui_could_not_review_this_project) }
     }
     AlertDialog(
         onDismissRequest = { if (!deleting) onDismiss() },
-        title = { Text("Delete project?") },
+        title = { Text(uiContext.getString(R.string.ui_delete_project_1680)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(project.name, style = MaterialTheme.typography.titleSmall)
                 val review = preview
-                if (review == null && error == null) Text("Checking project…")
+                if (review == null && error == null) Text(uiContext.getString(R.string.ui_checking_project))
                 if (review != null) {
                     val chats = "${review.chatIds.size} saved ${if (review.chatIds.size == 1) "chat" else "chats"}"
                     val automations = "${review.automationIds.size} ${if (review.automationIds.size == 1) "automation" else "automations"}"
-                    Text("Removes this project, $chats and $automations from the app. Conversation history and undo history for these chats will be deleted. This cannot be undone.")
-                    Text("Your folder and files stay on disk.", style = MaterialTheme.typography.bodyMedium)
+                    Text(uiContext.getString(R.string.ui_removes_this_project_and_from_the_app, (chats).toString(), (automations).toString()))
+                    Text(uiContext.getString(R.string.ui_your_folder_and_files_stay_on_disk), style = MaterialTheme.typography.bodyMedium)
                     review.blocker?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -57,12 +59,12 @@ internal fun ProjectDeletionDialog(
                     scope.launch {
                         try { container.projectDeletion.delete(review); onDeleted(review.chatIds) }
                         catch (e: CancellationException) { throw e }
-                        catch (e: Exception) { error = e.message ?: "Could not delete this project." }
+                        catch (e: Exception) { error = e.message ?: uiContext.getString(R.string.ui_could_not_delete_this_project) }
                         finally { deleting = false }
                     }
                 },
-            ) { Text(if (deleting) "Deleting…" else "Delete project") }
+            ) { Text(if (deleting) uiContext.getString(R.string.ui_deleting) else uiContext.getString(R.string.ui_delete_project)) }
         },
-        dismissButton = { TextButton(enabled = !deleting, onClick = onDismiss) { Text("Keep project") } },
+        dismissButton = { TextButton(enabled = !deleting, onClick = onDismiss) { Text(uiContext.getString(R.string.ui_keep_project)) } },
     )
 }

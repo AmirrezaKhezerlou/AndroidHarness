@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.files
 
+import com.androidharness.app.R
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -30,6 +31,7 @@ internal enum class SmartEditorAction(val title: String, val operation: String) 
 internal fun SmartEditorSheet(action: SmartEditorAction, path: String, editor: CodeEditor,
     buffer: EditorBuffer, controller: SmartEditorController, onDismiss: () -> Unit,
     onOpenLocation: ((SmartLocation) -> Unit)?) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val source = remember { editor.text.toString() }
@@ -46,9 +48,9 @@ internal fun SmartEditorSheet(action: SmartEditorAction, path: String, editor: C
     suspend fun load(newName: String? = null) {
         loading = true; error = null
         try {
-            check(current()) { "The document changed. Close this sheet and try again." }
+            check(current()) { uiContext.getString(R.string.ui_the_document_changed_close_this_sheet_and) }
             val result = controller.request(action.operation, path, source, offset, newName)
-            check(current()) { "The document changed. Close this sheet and try again." }
+            check(current()) { uiContext.getString(R.string.ui_the_document_changed_close_this_sheet_and) }
             if (action == SmartEditorAction.FORMAT) {
                 val formatted = result.result.jsonPrimitive.content
                 if (formatted != source) {
@@ -59,7 +61,7 @@ internal fun SmartEditorSheet(action: SmartEditorAction, path: String, editor: C
                     val pos = editor.text.indexer.getCharPosition(offset.coerceAtMost(formatted.length))
                     editor.setSelection(pos.line, pos.column)
                 }
-                Toast.makeText(context, if(formatted == source) "Already formatted" else "Document formatted · Undo available", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, if(formatted == source) uiContext.getString(R.string.ui_already_formatted) else uiContext.getString(R.string.ui_document_formatted_undo_available), Toast.LENGTH_SHORT).show()
                 onDismiss()
             } else if (action == SmartEditorAction.RENAME) {
                 val edits = result.result.jsonArray.map { item -> item.jsonObject.let {
@@ -67,13 +69,13 @@ internal fun SmartEditorSheet(action: SmartEditorAction, path: String, editor: C
                         it.getValue("end").jsonPrimitive.int, it.getValue("text").jsonPrimitive.content)
                 } }
                 rename = SmartRenamePlan(result.snapshot, edits)
-                check(rename!!.changes.isNotEmpty()) { "The new name produces no changes." }
+                check(rename!!.changes.isNotEmpty()) { uiContext.getString(R.string.ui_the_new_name_produces_no_changes) }
                 patches = rename!!.changes.mapValues { (file, text) ->
                     com.androidharness.app.core.Diff.unified(result.snapshot.sources.getValue(file).text, text, file)
                 }
             }
             answer = result
-        } catch (e: Exception) { if (e is CancellationException) throw e; error = e.message ?: "The language action could not finish." }
+        } catch (e: Exception) { if (e is CancellationException) throw e; error = e.message ?: uiContext.getString(R.string.ui_the_language_action_could_not_finish) }
         finally { loading = false }
     }
     LaunchedEffect(Unit) {
@@ -90,27 +92,27 @@ internal fun SmartEditorSheet(action: SmartEditorAction, path: String, editor: C
                     Text(path.substringAfterLast('/'), style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                ExpressiveIconButton(onClick = onDismiss, enabled = !loading || action != SmartEditorAction.RENAME) { Icon(Icons.Outlined.Close, "Close code tools") }
+                ExpressiveIconButton(onClick = onDismiss, enabled = !loading || action != SmartEditorAction.RENAME) { Icon(Icons.Outlined.Close, uiContext.getString(R.string.ui_close_code_tools)) }
             }
             Spacer(Modifier.height(12.dp))
             if (action == SmartEditorAction.OUTLINE) OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(),
-                label = { Text("Find symbol") }, singleLine = true, leadingIcon = { Icon(Icons.Outlined.Search, null) }, shape = RoundedCornerShape(18.dp))
+                label = { Text(uiContext.getString(R.string.ui_find_symbol)) }, singleLine = true, leadingIcon = { Icon(Icons.Outlined.Search, null) }, shape = RoundedCornerShape(18.dp))
             if (action == SmartEditorAction.RENAME && !applied) {
                 OutlinedTextField(name, { name = it; rename = null; error = null }, Modifier.fillMaxWidth(),
-                    label = { Text("New symbol name") }, singleLine = true, enabled = !loading, shape = RoundedCornerShape(18.dp))
-                Text("Review every affected file. Changes open as drafts; save each file when ready.",
+                    label = { Text(uiContext.getString(R.string.ui_new_symbol_name)) }, singleLine = true, enabled = !loading, shape = RoundedCornerShape(18.dp))
+                Text(uiContext.getString(R.string.ui_review_every_affected_file_changes_open_as),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 10.dp))
-                if(rename == null) Button(onClick = { scope.launch { load(name.trim()) } }, enabled = name.isNotBlank() && !loading, modifier = Modifier.fillMaxWidth()) { Text("Review rename") }
+                if(rename == null) Button(onClick = { scope.launch { load(name.trim()) } }, enabled = name.isNotBlank() && !loading, modifier = Modifier.fillMaxWidth()) { Text(uiContext.getString(R.string.ui_review_rename)) }
             }
             if (loading) Row(Modifier.fillMaxWidth().padding(vertical = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(Modifier.size(24.dp)); Text(if(action == SmartEditorAction.FORMAT) "Formatting draft…" else "Reading project symbols…")
+                CircularProgressIndicator(Modifier.size(24.dp)); Text(if(action == SmartEditorAction.FORMAT) uiContext.getString(R.string.ui_formatting_draft) else uiContext.getString(R.string.ui_reading_project_symbols))
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(vertical = 12.dp)) }
             if (applied) {
                 val count = rename?.changes?.size ?: 0
-                Text("Renamed in $count ${if(count == 1) "file" else "files"}. Review the open drafts and save when ready.", modifier = Modifier.padding(vertical = 16.dp))
-                Button(onClick = onDismiss, Modifier.fillMaxWidth()) { Text("Back to editor") }
+                Text(uiContext.getString(R.string.ui_renamed_in_review_the_open_drafts_and, (count).toString(), (if(count == 1) "file" else "files").toString()), modifier = Modifier.padding(vertical = 16.dp))
+                Button(onClick = onDismiss, Modifier.fillMaxWidth()) { Text(uiContext.getString(R.string.ui_back_to_editor)) }
             } else if (!loading) {
                 val result = answer
                 if (action == SmartEditorAction.OUTLINE && result != null) {
@@ -120,12 +122,12 @@ internal fun SmartEditorSheet(action: SmartEditorAction, path: String, editor: C
                             it.getValue("line").jsonPrimitive.int, it.getValue("depth").jsonPrimitive.int)
                     } }.filter { query.isBlank() || it.name.contains(query, true) }
                     Text("${symbols.size} ${if(symbols.size == 1) "symbol" else "symbols"}", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(vertical = 12.dp))
-                    if(symbols.isEmpty()) Text(if(query.isBlank()) "No symbols in this document." else "No matching symbols.", style = MaterialTheme.typography.bodyMedium)
+                    if(symbols.isEmpty()) Text(if(query.isBlank()) uiContext.getString(R.string.ui_no_symbols_in_this_document) else uiContext.getString(R.string.ui_no_matching_symbols), style = MaterialTheme.typography.bodyMedium)
                     LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         itemsIndexed(symbols, key = { index, symbol -> "$index:${symbol.start}" }) { _, symbol ->
                             SmartResultRow(symbol.name, "${symbolKind(symbol.kind)} · line ${symbol.line}", depth = symbol.depth) {
                                 if(current()) { val pos = editor.text.indexer.getCharPosition(symbol.start); editor.setSelection(pos.line, pos.column); editor.ensurePositionVisible(pos.line, pos.column); onDismiss() }
-                                else error = "The document changed. Reopen the outline."
+                                else error = uiContext.getString(R.string.ui_the_document_changed_reopen_the_outline)
                             }
                         }
                     }
@@ -134,14 +136,14 @@ internal fun SmartEditorSheet(action: SmartEditorAction, path: String, editor: C
                         SmartLocation(it.getValue("path").jsonPrimitive.content, it.getValue("start").jsonPrimitive.int,
                             it.getValue("line").jsonPrimitive.int, it.getValue("column").jsonPrimitive.int, it.getValue("preview").jsonPrimitive.content)
                     } }
-                    Text(if(locations.isEmpty()) "No project locations found. Place the cursor on a symbol and try again." else "${locations.size} ${if(locations.size == 1) "location" else "locations"}",
+                    Text(if(locations.isEmpty()) uiContext.getString(R.string.ui_no_project_locations_found_place_the_cursor) else "${locations.size} ${if(locations.size == 1) "location" else "locations"}",
                         style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 12.dp))
                     Text(result.snapshot.notice, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(8.dp))
                     LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         itemsIndexed(locations, key = { index, item -> "$index:${item.path}:${item.start}" }) { _, item ->
                             SmartResultRow("${item.path} · ${item.line}:${item.column}", item.preview) {
-                                if (!current()) error = "The document changed. Close this sheet and try again."
+                                if (!current()) error = uiContext.getString(R.string.ui_the_document_changed_close_this_sheet_and)
                                 else if (item.path == path) { val pos = editor.text.indexer.getCharPosition(item.start); editor.setSelection(pos.line, pos.column); editor.ensurePositionVisible(pos.line, pos.column); onDismiss() }
                                 else { onDismiss(); onOpenLocation?.invoke(item) }
                             }
@@ -149,7 +151,7 @@ internal fun SmartEditorSheet(action: SmartEditorAction, path: String, editor: C
                     }
                 } else if (action == SmartEditorAction.RENAME && rename != null) {
                     val plan = rename!!
-                    Text("${plan.edits.size} ${if(plan.edits.size == 1) "reference" else "references"} in ${plan.changes.size} ${if(plan.changes.size == 1) "file" else "files"}", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(vertical = 12.dp))
+                    Text(uiContext.getString(R.string.ui_in, (plan.edits.size).toString(), (if(plan.edits.size == 1) "reference" else "references").toString(), (plan.changes.size).toString(), (if(plan.changes.size == 1) "file" else "files").toString()), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(vertical = 12.dp))
                     LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         itemsIndexed(plan.changes.entries.toList(), key = { _, entry -> entry.key }) { _, entry ->
                             Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
@@ -164,10 +166,10 @@ internal fun SmartEditorSheet(action: SmartEditorAction, path: String, editor: C
                     }
                     Button(onClick = { scope.launch {
                         loading = true; error = null
-                        try { check(current()) { "The document changed. Try again." }; controller.applyRename(plan); applied = true }
-                        catch(e: Exception) { if(e is CancellationException) throw e; error = e.message ?: "Could not apply rename." }
+                        try { check(current()) { uiContext.getString(R.string.ui_the_document_changed_try_again) }; controller.applyRename(plan); applied = true }
+                        catch(e: Exception) { if(e is CancellationException) throw e; error = e.message ?: uiContext.getString(R.string.ui_could_not_apply_rename) }
                         finally { loading = false }
-                    } }, enabled = !loading && plan.changes.isNotEmpty(), modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) { Text("Rename in ${plan.changes.size} ${if(plan.changes.size == 1) "file" else "files"}") }
+                    } }, enabled = !loading && plan.changes.isNotEmpty(), modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) { Text(uiContext.getString(R.string.ui_rename_in, (plan.changes.size).toString(), (if(plan.changes.size == 1) "file" else "files").toString())) }
                 }
             }
             Spacer(Modifier.height(16.dp))

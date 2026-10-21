@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.R
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -31,6 +32,7 @@ fun ChatWorkspaceManagerSheet(
     onDismiss: () -> Unit,
     onSave: (suspend (ChatWorkspaceSelection) -> Unit)? = null,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val projects by container.workspace.projects.collectAsStateWithLifecycle(initialValue = emptyList())
     val selected by remember(sessionId) { container.workspace.selectionForChat(sessionId) }.collectAsStateWithLifecycle(initialValue = null)
     val primary by remember(sessionId) { container.workspace.projectForChat(sessionId) }.collectAsStateWithLifecycle(initialValue = null)
@@ -43,7 +45,7 @@ fun ChatWorkspaceManagerSheet(
         androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) scope.launch {
             try { container.workspace.addPickedFolder(uri, activate = false) }
-            catch (e: Exception) { android.widget.Toast.makeText(context, e.message ?: "Could not add workspace", android.widget.Toast.LENGTH_LONG).show() }
+            catch (e: Exception) { android.widget.Toast.makeText(context, e.message ?: uiContext.getString(R.string.ui_could_not_add_workspace), android.widget.Toast.LENGTH_LONG).show() }
         }
     }
     if (initial != null) ChatWorkspacesSheet(projects, initial, container.workspace::describe,
@@ -64,6 +66,7 @@ fun ChatWorkspacesSheet(
     onDismiss: () -> Unit,
     onAdd: (() -> Unit)? = null,
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var draftJson by rememberSaveable(selection) { mutableStateOf(ChatWorkspaceSelection.encode(selection)) }
     // Empty drafts are allowed while choosing; validation belongs to Save.
     val draft = remember(draftJson) { kotlinx.serialization.json.Json.decodeFromString<ChatWorkspaceSelection>(draftJson) }
@@ -75,10 +78,10 @@ fun ChatWorkspacesSheet(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Workspaces for this chat", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-                IconButton(onClick = onDismiss, enabled = !saving) { Icon(Icons.Filled.Close, "Close without saving") }
+                Text(uiContext.getString(R.string.ui_workspaces_for_this_chat), Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                IconButton(onClick = onDismiss, enabled = !saving) { Icon(Icons.Filled.Close, uiContext.getString(R.string.ui_close_without_saving)) }
             }
-            Text("Choose access for each project. Primary is the default place for new files.",
+            Text(uiContext.getString(R.string.ui_choose_access_for_each_project_primary_is),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 12.dp))
             LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 430.dp)) {
@@ -102,12 +105,12 @@ fun ChatWorkspacesSheet(
                             Box {
                                 OutlinedButton(onClick = { accessMenu = true }, enabled = !saving,
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                    modifier = Modifier.semantics { contentDescription = "${project.name} access: ${if (grant.canEdit) "Can edit" else "Read only"}" }) {
-                                    Text(if (grant.canEdit) "Can edit" else "Read only", style = MaterialTheme.typography.labelMedium)
+                                    modifier = Modifier.semantics { contentDescription = uiContext.getString(R.string.ui_access, (project.name).toString(), (if (grant.canEdit) uiContext.getString(R.string.ui_can_edit) else uiContext.getString(R.string.ui_read_only)).toString()) }) {
+                                    Text(if (grant.canEdit) uiContext.getString(R.string.ui_can_edit) else uiContext.getString(R.string.ui_read_only), style = MaterialTheme.typography.labelMedium)
                                     Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(16.dp))
                                 }
                                 DropdownMenu(accessMenu, { accessMenu = false }) {
-                                    listOf(false to "Read only", true to "Can edit").forEach { (canEdit, label) ->
+                                    listOf(false to uiContext.getString(R.string.ui_read_only), true to uiContext.getString(R.string.ui_can_edit)).forEach { (canEdit, label) ->
                                         DropdownMenuItem(text = { Text(label) }, onClick = {
                                             update(draft.copy(grants = draft.grants.map { if (it.projectId == project.id) it.copy(canEdit = canEdit) else it }))
                                             accessMenu = false
@@ -118,9 +121,9 @@ fun ChatWorkspacesSheet(
                             Row(verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.toggleable(draft.primaryId == project.id, enabled = !saving, role = Role.RadioButton) {
                                     update(draft.copy(primaryId = project.id))
-                                }.heightIn(min = 44.dp).semantics { contentDescription = "Primary workspace: ${project.name}" }) {
+                                }.heightIn(min = 44.dp).semantics { contentDescription = uiContext.getString(R.string.ui_primary_workspace, (project.name).toString()) }) {
                                 RadioButton(draft.primaryId == project.id, onClick = null)
-                                Text("Primary", style = MaterialTheme.typography.labelMedium)
+                                Text(uiContext.getString(R.string.ui_primary), style = MaterialTheme.typography.labelMedium)
                             }
                         }
                     }
@@ -131,14 +134,14 @@ fun ChatWorkspacesSheet(
                     TextButton(enabled = !saving, onClick = {
                         val remaining = draft.grants - grant
                         update(draft.copy(grants = remaining, primaryId = if (draft.primaryId == grant.projectId) remaining.firstOrNull()?.projectId.orEmpty() else draft.primaryId))
-                    }) { Text("Remove unavailable workspace") }
+                    }) { Text(uiContext.getString(R.string.ui_remove_unavailable_workspace)) }
                 }
-                if (onAdd != null) item { TextButton(onClick = onAdd, enabled = !saving) { Text("Add workspace…") } }
+                if (onAdd != null) item { TextButton(onClick = onAdd, enabled = !saving) { Text(uiContext.getString(R.string.ui_add_workspace)) } }
             }
-            if (draft.grants.any { !it.canEdit }) Text("Commands and integrations require edit access to all selected workspaces.",
+            if (draft.grants.any { !it.canEdit }) Text(uiContext.getString(R.string.ui_commands_and_integrations_require_edit_access_to),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 12.dp))
-            if (draft.grants.size > 1) Text("Workspace MCP servers aren't available in multi-workspace chats yet.",
+            if (draft.grants.size > 1) Text(uiContext.getString(R.string.ui_workspace_mcp_servers_aren_t_available_in),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp))
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp)) }
@@ -147,10 +150,10 @@ fun ChatWorkspacesSheet(
                 scope.launch {
                     try { onSave(draft.validated()); onDismiss() }
                     catch (e: CancellationException) { throw e }
-                    catch (e: Exception) { error = e.message ?: "Could not save workspace access." }
+                    catch (e: Exception) { error = e.message ?: uiContext.getString(R.string.ui_could_not_save_workspace_access) }
                     finally { saving = false }
                 }
-            }) { Text(if (saving) "Saving…" else "Use ${draft.grants.size} workspace${if (draft.grants.size == 1) "" else "s"}") }
+            }) { Text(if (saving) uiContext.getString(R.string.ui_saving) else uiContext.getString(R.string.ui_use_workspace, (draft.grants.size).toString(), (if (draft.grants.size == 1) "" else "s").toString())) }
         }
     }
 }
