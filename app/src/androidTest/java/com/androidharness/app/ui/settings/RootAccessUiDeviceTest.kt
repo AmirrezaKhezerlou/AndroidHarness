@@ -34,6 +34,9 @@ class RootAccessUiDeviceTest {
         val saved = container.deviceAccess.store.preferences.first()
         try {
             container.deviceAccess.store.setMode(AccessMode.AUTO)
+            // The project picker is disabled unless temporary mode is on, and the
+            // device may arrive with it off from manual testing.
+            container.deviceAccess.store.setTemporaryRoot(true)
             ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
                 scenario.onActivity { host -> host.setContent { HarnessTheme {
                     Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
@@ -66,6 +69,7 @@ class RootAccessUiDeviceTest {
         } finally {
             container.deviceAccess.store.setMode(saved.mode)
             container.deviceAccess.store.setFallback(saved.autoFallback)
+            container.deviceAccess.store.setTemporaryRoot(saved.temporaryRoot)
         }
     }
     private fun screenshot(name: String) {

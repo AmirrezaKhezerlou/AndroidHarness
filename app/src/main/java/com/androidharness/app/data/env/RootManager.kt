@@ -145,6 +145,20 @@ class RootManager(private val context: Context) {
         true
     }
 
+    /**
+     * The direct grant was denied, but privileged commands can still run through a
+     * root Shizuku. Say so instead of leaving the stale "denied" reason next to a
+     * working fallback.
+     */
+    internal fun explainShizukuFallback() {
+        if (mutableState.value.status == RootStatus.READY) return
+        mutableState.value = mutableState.value.copy(
+            status = RootStatus.UNAVAILABLE,
+            detail = "Direct root was denied. Privileged commands run through Shizuku (UID 0) instead.",
+            checkedAt = System.currentTimeMillis(),
+        )
+    }
+
     internal suspend fun run(cmd: Array<String>, env: Array<String>?, dir: String?, timeoutMs: Int, maxBytes: Int): PrivilegedResult? = withContext(Dispatchers.IO) {
         val svc = service ?: return@withContext null
         // Null means dispatch never happened. A binder failure after dispatch is an uncertain result.

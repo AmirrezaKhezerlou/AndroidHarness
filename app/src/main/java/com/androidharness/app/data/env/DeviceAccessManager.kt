@@ -58,7 +58,11 @@ class DeviceAccessManager(
             allowance.value = "Open a chat before enabling root for the current chat."
             return false
         }
-        if (!root.requestAccess() && probeShizuku() != 0) return false
+        val directRoot = root.requestAccess()
+        if (!directRoot) {
+            if (probeShizuku() != 0) return false
+            root.explainShizukuFallback()
+        }
         if (projectId != null) store.allowProject(projectId, true)
         if (prefs.temporaryRoot) enableTemporaryUse(prefs.rootUse, sessionId)
         else allowance.value = "Temporary mode off · root is allowed in every project"

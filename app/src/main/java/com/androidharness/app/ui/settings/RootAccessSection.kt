@@ -69,8 +69,10 @@ internal fun RootAccessSection(container: AppContainer) {
                     color = if (root.status == RootStatus.READY) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (shizukuUid == 0) Text(stringResource(R.string.settings_root_shizuku_available), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            val rootEnabled = (root.status == RootStatus.READY || shizukuUid == 0) &&
-                access.rootUseActive(settings.lastActiveSessionId, prefs)
+            val rootEnabled = rootChipEnabled(
+                root.status,
+                access.rootUseActive(settings.lastActiveSessionId, prefs),
+            )
             AccessActionPair(first = { buttonModifier ->
                 if (rootEnabled) Surface(
                     modifier = buttonModifier.heightIn(min = 48.dp),
@@ -198,6 +200,14 @@ internal fun RootAccessSection(container: AppContainer) {
         dismissButton = { TextButton(onClick = { clipboard.setText(AnnotatedString(text)) }) { Text(stringResource(R.string.settings_root_copy_report)) } }) }
     if (browser) RootBrowserDialog(access, project?.id, settings.lastActiveSessionId) { browser = false }
 }
+
+/**
+ * "Root enabled" describes the direct root service only. Shizuku has its own
+ * status line; counting it here claimed root was enabled after a denied
+ * KernelSU/Magisk grant while the detail said no connection was active.
+ */
+internal fun rootChipEnabled(status: RootStatus, useActive: Boolean): Boolean =
+    status == RootStatus.READY && useActive
 
 @Composable
 internal fun AccessModeChoices(selected: AccessMode, onSelect: (AccessMode) -> Unit) {
