@@ -298,15 +298,12 @@
     <string name="settings_chatgpt_subtitle">Connect your accounts and choose which one to use.</string>
     <string name="settings_chatgpt_finish_signin">Finish signing in in your browser, then return here.</string>
     <string name="settings_chatgpt_cancel_signin">Cancel sign-in</string>
-    <string name="settings_chatgpt_add_account_hint">Add or enable another account to switch automatically.</string>
     <string name="settings_chatgpt_selected">Selected</string>
     <string name="settings_chatgpt_refresh_models">Refresh models</string>
     <string name="settings_chatgpt_check_new_models">Check newer models</string>
     <string name="settings_chatgpt_sign_out">Sign out</string>
     <string name="settings_chatgpt_checking_models">Checking newer models. Small test requests use this account\'s plan.</string>
     <string name="settings_chatgpt_limits_usage">Limits &amp; usage in ChatGPT</string>
-    <string name="settings_chatgpt_fallback_model">Fallback model</string>
-    <string name="settings_chatgpt_fallback_auto">Automatic</string>
     <string name="settings_restore_reconnect_title">Reconnect restored chats</string>
     <string name="settings_restore_reconnect_note">Read-only access stays read-only. Chats that used multiple workspaces need separate folders for each one.</string>
     <string name="settings_accounts_using_plan">You\'re using your ChatGPT plan</string>
@@ -572,7 +569,6 @@
     <!-- Settings · formatted strings with counts and names. -->
     <string name="settings_accounts_models_available">%1$s available</string>
     <string name="settings_accounts_manage_cd">Manage %1$s</string>
-    <string name="settings_accounts_fallback_cd">Fallback model for %1$s</string>
     <string name="settings_restore_choose_workspace">Choose a workspace for %1$s. Existing chats stay unchanged. Files and folder permissions are not included in the backup.</string>
     <string name="settings_restore_one_chat">this restored chat</string>
     <string name="settings_restore_many_chats">these %1$s restored chats</string>
@@ -604,8 +600,6 @@
     <string name="settings_provider_enable_cd">Enable %1$s</string>
     <string name="settings_chatgpt_checking_available">Checking available models…</string>
     <string name="settings_chatgpt_signed_out">Signed out</string>
-    <string name="settings_chatgpt_usage_limit">Usage limit reached</string>
-    <string name="settings_chatgpt_usage_limit_chat">Usage limit reached · try again in chat</string>
 
     <!-- Settings · provider list and headers. -->
     <string name="settings_provider_select_label">Select provider</string>

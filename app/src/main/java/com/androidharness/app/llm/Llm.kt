@@ -81,7 +81,6 @@ data class RequestOptions(
     val thinking: com.androidharness.app.agent.ThinkingLevel =
         com.androidharness.app.agent.ThinkingLevel.OFF,
     val cacheKey: String? = null,
-    val allowAccountSwitch: Boolean = true,
     /** The same provider catalog snapshot used by the chat controls, also available to model overrides. */
     val modelCatalogs: Map<String, List<ModelEntry>> = emptyMap(),
     val customReasoning: Map<String, com.androidharness.app.agent.CustomReasoningConfig> = emptyMap(),

@@ -19,9 +19,9 @@ class ChatGptAccountsTest {
     } + "]}"
 
     private class Fixture(val manager: ChatGptAccounts, val stored: () -> String, val requests: MutableList<String>)
-    private fun fixture(accounts: List<ChatGptRegistration>, enabled: Boolean = true,
+    private fun fixture(accounts: List<ChatGptRegistration>,
         catalogs: Map<String, String> = emptyMap()): Fixture {
-        var stored = json.encodeToString(ChatGptStore("fixture-host", accounts, autoSwitch = enabled))
+        var stored = json.encodeToString(ChatGptStore("fixture-host", accounts))
         val requests = mutableListOf<String>()
         val client = OkHttpClient.Builder().addInterceptor { chain ->
             val request = chain.request()
@@ -36,52 +36,21 @@ class ChatGptAccountsTest {
     private fun config(id: String) = ProviderConfig(ChatGptProtocol.providerId(id), "ChatGPT", ProviderType.OPENAI_RESPONSES,
         ChatGptProtocol.RESOURCE, "sol")
 
-    @Test fun `fresh account catalog keeps same model or uses compatible preference`() = runBlocking {
-        val f = fixture(listOf(account("a"), account("b").copy(fallbackModel = "luna")), catalogs = mapOf("b" to catalog("terra", "luna")))
-        val next = f.manager.nextAccount(config("a"), setOf(config("a").id), "", emptyList(), emptyList())!!
-        assertEquals(config("b").id, next.id); assertEquals("luna", next.model)
-        assertEquals(listOf("b"), f.requests)
-        val keep = f.manager.selectAccount(config("b").id, "terra")
-        assertEquals("terra", keep.model)
+    @Test fun `manual selection keeps an offered model or uses the first one`() = runBlocking {
+        val f = fixture(listOf(account("a"), account("b"), account("signed-out").copy(accessToken = null)),
+            catalogs = mapOf("b" to catalog("terra", "luna")))
+        assertEquals("terra", f.manager.selectAccount(config("b").id, "terra").model)
+        assertEquals("terra", f.manager.selectAccount(config("b").id, "gone").model)
+        assertEquals(listOf("b", "b"), f.requests)
+        assertTrue(runCatching { f.manager.selectAccount(config("signed-out").id, "sol") }.isFailure)
     }
 
-    @Test fun `old verified model cannot bypass fresh entitlement catalog`() = runBlocking {
-        val f = fixture(listOf(account("a"), account("b").copy(verifiedModels = listOf(ModelEntry("sol")), fallbackModel = "sol")),
-            catalogs = mapOf("b" to catalog("luna")))
-        assertEquals("luna", f.manager.nextAccount(config("a"), setOf(config("a").id), "", emptyList(), emptyList())!!.model)
-    }
-
-    @Test fun `disabled disconnected opted out empty and unavailable accounts are skipped`() = runBlocking {
-        val f = fixture(listOf(account("a"), account("signed-out").copy(accessToken = null), account("excluded").copy(useForAutoSwitch = false),
-            account("offline"), account("empty"), account("c")), catalogs = mapOf("empty" to catalog()))
-        val next = f.manager.nextAccount(config("a"), setOf(config("a").id), "", emptyList(), emptyList())!!
-        assertEquals(config("c").id, next.id); assertEquals(listOf("offline", "empty", "c"), f.requests)
-        assertTrue(f.manager.stateAccount(config("offline").id).connected)
-        f.manager.setAutoSwitch(false)
-        assertNull(f.manager.nextAccount(config("a"), setOf(config("a").id), "", emptyList(), emptyList()))
-    }
-
-    @Test fun `settings and limit markers survive restart without mixing identities`() = runBlocking {
-        val f = fixture(listOf(account("a"), account("b")), enabled = false)
-        f.manager.setAutoSwitch(true)
-        f.manager.setFallback(config("b").id, false, "sol")
-        f.manager.recordUsageLimit(config("a").id)
-        val restored = ChatGptAccounts(f.stored, {}, {}, refreshOnStart = false)
-        assertTrue(restored.state.value.autoSwitch)
-        assertTrue(restored.stateAccount(config("a").id).usageLimited)
-        assertFalse(restored.stateAccount(config("b").id).useForAutoSwitch)
-        assertEquals("sol", restored.stateAccount(config("b").id).fallbackModel)
-        f.manager.selectAccount(config("a").id, "sol")
-        assertTrue("A model refresh cannot prove that usage has reset", f.manager.stateAccount(config("a").id).usageLimited)
-        f.manager.recordUsageSuccess(config("a").id)
-        assertFalse(f.manager.stateAccount(config("a").id).usageLimited)
-        val stored = json.decodeFromString<ChatGptStore>(f.stored())
-        assertEquals(listOf("fixture-a", "fixture-b"), stored.accounts.map { it.accessToken })
-    }
-
-    @Test fun `old credential store migrates with automatic switching off`() {
-        val original = """{"hostId":"host","accounts":[],"welcomeSeen":true}"""
+    @Test fun `stored accounts survive removed switching preferences`() {
+        val original = """{"hostId":"host","autoSwitch":true,"welcomeSeen":true,"accounts":[{"clientId":"legacy","accessToken":"fixture-legacy","scopes":["${ChatGptProtocol.PLAN_SCOPE}"],"models":[{"id":"sol"}],"useForAutoSwitch":false,"fallbackModel":"sol","usageLimitedAt":123}]}"""
         val restored = ChatGptAccounts({ original }, {}, {}, refreshOnStart = false)
-        assertFalse(restored.state.value.autoSwitch)
+        val account = restored.state.value.accounts.single()
+        assertEquals(ChatGptProtocol.providerId("legacy"), account.providerId)
+        assertTrue(account.connected)
+        assertEquals(listOf("sol"), account.models.map { it.id })
     }
 }

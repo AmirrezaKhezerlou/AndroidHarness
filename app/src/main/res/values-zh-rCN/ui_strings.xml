@@ -1007,10 +1007,7 @@
     <string name="ui_hide_report">"隐藏报告"</string>
     <string name="ui_show_report">"显示报告"</string>
     <string name="ui_add_account">"添加账号"</string>
-    <string name="ui_auto_switch_at_usage_limit">"达到用量上限时自动切换"</string>
-    <string name="ui_continue_with_another_account_keep_the_same">"使用其他账号继续。有相同模型时保留当前模型，否则使用该账号的备用模型。"</string>
     <string name="ui_sign_in_again">"重新登录"</string>
-    <string name="ui_include_in_auto_switch">"加入自动切换"</string>
     <string name="ui_close_model_management">"关闭模型管理"</string>
     <string name="ui_clear">"清除"</string>
     <string name="ui_could_not_refresh_models_try_again">"无法刷新模型。请重试。"</string>

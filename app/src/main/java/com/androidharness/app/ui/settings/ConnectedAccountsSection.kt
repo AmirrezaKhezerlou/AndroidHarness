@@ -40,7 +40,6 @@ internal fun ConnectedAccountsSection(container: AppContainer) {
         error = selectionError ?: state.error,
         onAdd = { container.chatGpt.startSignIn { openOAuthBrowser(context, Uri.parse(it)) } },
         onCancelSignIn = container.chatGpt::cancelSignIn,
-        onAutoSwitch = { update { container.chatGpt.setAutoSwitch(it) } },
         onSelect = { account ->
             if (selecting == null) {
                 selecting = account.providerId
@@ -52,7 +51,6 @@ internal fun ConnectedAccountsSection(container: AppContainer) {
                 }
             }
         },
-        onFallback = { account, enabled, model -> update { container.chatGpt.setFallback(account.providerId, enabled, model) } },
         onRefresh = { container.chatGpt.refresh(it.providerId) },
         onCheckModels = { container.chatGpt.checkNewerModels(it.providerId) },
         onReconnect = { account -> container.chatGpt.startSignIn(account.providerId) { openOAuthBrowser(context, Uri.parse(it)) } },

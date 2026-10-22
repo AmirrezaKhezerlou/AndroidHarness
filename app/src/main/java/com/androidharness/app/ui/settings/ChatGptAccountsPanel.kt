@@ -3,7 +3,6 @@ package com.androidharness.app.ui.settings
 import com.androidharness.app.R
 import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -13,9 +12,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.androidharness.app.chatgpt.ChatGptAccount
 import com.androidharness.app.chatgpt.ChatGptAccountState
@@ -23,8 +19,8 @@ import com.androidharness.app.chatgpt.ChatGptAccountState
 @Composable
 internal fun ChatGptAccountsPanel(
     state: ChatGptAccountState, selectedId: String?, selectedModel: String?, selecting: String?, error: String?,
-    onAdd: () -> Unit, onCancelSignIn: () -> Unit, onAutoSwitch: (Boolean) -> Unit,
-    onSelect: (ChatGptAccount) -> Unit, onFallback: (ChatGptAccount, Boolean, String?) -> Unit,
+    onAdd: () -> Unit, onCancelSignIn: () -> Unit,
+    onSelect: (ChatGptAccount) -> Unit,
     onRefresh: (ChatGptAccount) -> Unit, onCheckModels: (ChatGptAccount) -> Unit,
     onReconnect: (ChatGptAccount) -> Unit, onSignOut: (ChatGptAccount) -> Unit, onUsage: () -> Unit,
 ) {
@@ -50,15 +46,7 @@ internal fun ChatGptAccountsPanel(
                 }
                 error?.let { Text(it, color = colors.error, style = MaterialTheme.typography.bodySmall) }
             }
-            if (state.accounts.isNotEmpty()) {
-                HorizontalDivider(color = colors.outlineVariant)
-                AccountSwitchRow(uiContext.getString(R.string.ui_auto_switch_at_usage_limit),
-                    uiContext.getString(R.string.ui_continue_with_another_account_keep_the_same), state.autoSwitch, onAutoSwitch)
-                if (state.autoSwitch && state.accounts.count { it.connected && it.useForAutoSwitch } < 2) {
-                    Text(stringResource(R.string.settings_chatgpt_add_account_hint), style = MaterialTheme.typography.bodySmall,
-                        color = colors.onSurfaceVariant, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp))
-                }
-            }
+            if (state.accounts.isNotEmpty()) HorizontalDivider(color = colors.outlineVariant)
             state.accounts.forEach { account ->
                 key(account.providerId) {
                     HorizontalDivider(color = colors.outlineVariant)
@@ -67,8 +55,6 @@ internal fun ChatGptAccountsPanel(
                     val subtitle = when {
                         selecting == account.providerId -> stringResource(R.string.settings_chatgpt_checking_available)
                         !account.connected -> stringResource(R.string.settings_chatgpt_signed_out)
-                        account.usageLimited -> if (selected) stringResource(R.string.settings_chatgpt_usage_limit_chat)
-                            else stringResource(R.string.settings_chatgpt_usage_limit)
                         selected -> account.models.firstOrNull { it.id == selectedModel }?.displayName ?: selectedModel.orEmpty()
                         else -> pluralStringResource(R.plurals.settings_accounts_models_available, account.models.size, account.models.size)
                     }
@@ -84,8 +70,7 @@ internal fun ChatGptAccountsPanel(
                             }
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Text(account.label, style = MaterialTheme.typography.titleSmall)
-                                Text(subtitle, style = MaterialTheme.typography.bodySmall,
-                                    color = if (account.usageLimited) colors.error else colors.onSurfaceVariant)
+                                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                                 if (selected) Text(stringResource(R.string.settings_chatgpt_selected), style = MaterialTheme.typography.labelSmall, color = colors.primary)
                             }
                             if (selecting == account.providerId) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -105,11 +90,6 @@ internal fun ChatGptAccountsPanel(
                                 }
                             }
                         }
-                    }
-                    if (state.autoSwitch && account.connected) {
-                        AccountSwitchRow(uiContext.getString(R.string.ui_include_in_auto_switch), null, account.useForAutoSwitch,
-                            { onFallback(account, it, account.fallbackModel) }, inset = true)
-                        if (account.useForAutoSwitch) FallbackModelRow(account) { onFallback(account, true, it) }
                     }
                     if (state.checkingModelsFor == account.providerId) {
                         AppLinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
@@ -131,42 +111,3 @@ internal fun ChatGptAccountsPanel(
     }
 }
 
-@Composable
-private fun AccountSwitchRow(title: String, description: String?, checked: Boolean, onChange: (Boolean) -> Unit, inset: Boolean = false) {
-    Row(Modifier.fillMaxWidth().toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
-        .padding(start = if (inset) 64.dp else 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp).heightIn(min = 48.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, style = MaterialTheme.typography.bodyMedium)
-            description?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        }
-        Switch(checked = checked, onCheckedChange = null)
-    }
-}
-
-@Composable
-private fun FallbackModelRow(account: ChatGptAccount, onSelect: (String?) -> Unit) {
-    val uiContext = androidx.compose.ui.platform.LocalContext.current
-    var expanded by remember { mutableStateOf(false) }
-    val choice = account.models.firstOrNull { it.id == account.fallbackModel }
-    val fallbackCd = stringResource(R.string.settings_accounts_fallback_cd, account.label)
-    Box(Modifier.fillMaxWidth().padding(start = 64.dp, end = 16.dp, bottom = 12.dp)) {
-        Surface(onClick = { expanded = true }, color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().semantics {
-                contentDescription = fallbackCd
-            }) {
-            Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp).heightIn(min = 36.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(stringResource(R.string.settings_chatgpt_fallback_model), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(choice?.displayName ?: choice?.id ?: uiContext.getString(R.string.settings_chatgpt_fallback_auto), style = MaterialTheme.typography.bodyMedium)
-                }
-                Icon(Icons.Outlined.ExpandMore, null, Modifier.size(20.dp))
-            }
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(text = { Text(stringResource(R.string.settings_chatgpt_fallback_auto)) }, onClick = { expanded = false; onSelect(null) })
-            account.models.forEach { model -> DropdownMenuItem(text = { Text(model.displayName ?: model.id) },
-                onClick = { expanded = false; onSelect(model.id) }) }
-        }
-    }
-}

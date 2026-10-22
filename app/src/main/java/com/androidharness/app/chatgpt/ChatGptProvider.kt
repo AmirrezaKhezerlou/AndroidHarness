@@ -160,6 +160,6 @@ class ChatGptProvider(
 
     private fun failure(code: String?, status: Int? = null) = StreamEvent.Failure(
         ChatGptProtocol.requestError(code, status ?: ChatGptProtocol.errorStatus(code)), status ?: ChatGptProtocol.errorStatus(code), code,
-        retryable = false.takeIf { code == ChatGptAutoSwitch.USAGE_LIMIT },
+        retryable = false.takeIf { code == ChatGptProtocol.USAGE_LIMIT },
     )
 }

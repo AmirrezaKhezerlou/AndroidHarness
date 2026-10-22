@@ -296,15 +296,12 @@
     <string name="settings_chatgpt_subtitle">连接你的账户并选择要使用哪一个。</string>
     <string name="settings_chatgpt_finish_signin">在浏览器中完成登录，然后回到这里。</string>
     <string name="settings_chatgpt_cancel_signin">取消登录</string>
-    <string name="settings_chatgpt_add_account_hint">添加或启用另一个账户即可自动切换。</string>
     <string name="settings_chatgpt_selected">已选中</string>
     <string name="settings_chatgpt_refresh_models">刷新模型</string>
     <string name="settings_chatgpt_check_new_models">检查更新的模型</string>
     <string name="settings_chatgpt_sign_out">退出登录</string>
     <string name="settings_chatgpt_checking_models">正在检查更新的模型。少量测试请求会使用此账户的订阅。</string>
     <string name="settings_chatgpt_limits_usage">在 ChatGPT 中查看额度与用量</string>
-    <string name="settings_chatgpt_fallback_model">回退模型</string>
-    <string name="settings_chatgpt_fallback_auto">自动</string>
     <string name="settings_restore_reconnect_title">重新连接已恢复的对话</string>
     <string name="settings_restore_reconnect_note">只读访问仍保持只读。使用过多个工作区的对话需要为每个工作区分别指定文件夹。</string>
     <string name="settings_accounts_using_plan">你正在使用 ChatGPT 订阅</string>
@@ -570,7 +567,6 @@
     <!-- Settings · formatted strings with counts and names. -->
     <string name="settings_accounts_models_available">可用 %1$s</string>
     <string name="settings_accounts_manage_cd">管理 %1$s</string>
-    <string name="settings_accounts_fallback_cd">%1$s 的回退模型</string>
     <string name="settings_restore_choose_workspace">为%1$s选择一个工作区。现有对话保持不变。备份中不包含文件和文件夹权限。</string>
     <string name="settings_restore_one_chat">这个已恢复的对话</string>
     <string name="settings_restore_many_chats">这 %1$s 个已恢复的对话</string>
@@ -602,8 +598,6 @@
     <string name="settings_provider_enable_cd">启用 %1$s</string>
     <string name="settings_chatgpt_checking_available">正在检查可用模型…</string>
     <string name="settings_chatgpt_signed_out">已退出登录</string>
-    <string name="settings_chatgpt_usage_limit">已达用量上限</string>
-    <string name="settings_chatgpt_usage_limit_chat">已达用量上限 · 请在对话中重试</string>
 
     <!-- Settings · provider list and headers. -->
     <string name="settings_provider_select_label">选择提供商</string>

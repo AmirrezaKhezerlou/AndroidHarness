@@ -43,7 +43,7 @@ class FallbackProviderTest {
     @Test fun `quota switches immediately with destination credentials and intact history`() = runBlocking(FallbackRun { policy }) {
         val requests = mutableListOf<Pair<String, String>>()
         val result = events(router({ cfg, key, options ->
-            requests += cfg.id to key; assertFalse(options.allowAccountSwitch)
+            requests += cfg.id to key
             if (cfg.id == a.id) listOf(quota, StreamEvent.ToolCallReady(ToolCallData("bad", "shell", "{}")))
             else listOf(StreamEvent.TextDelta("continued"), StreamEvent.Done())
         }))
@@ -158,12 +158,6 @@ class FallbackProviderTest {
         assertEquals(policy.targets, portable.fallbackPolicy.targets)
     }
 
-    @Test fun `explicit off disables legacy account rotation`() = runBlocking(FallbackRun { FallbackPolicy() }) {
-        var allow = true
-        events(router({ _, _, options -> allow = options.allowAccountSwitch; listOf(StreamEvent.Done()) }))
-        assertFalse(allow)
-    }
-
     @Test fun `real compat transport preserves quota categories and never leaks a credential across hosts`() = runBlocking(FallbackRun { policy }) {
         val requests = java.util.Collections.synchronizedList(mutableListOf<okhttp3.Request>())
         val client = OkHttpClient.Builder().addInterceptor { chain ->
@@ -235,7 +229,7 @@ class FallbackProviderTest {
             override fun streamChat(config: ProviderConfig, apiKey: String, systemPrompt: String, messages: List<ChatMessage>,
                 tools: List<ToolSchema>, options: RequestOptions): Flow<StreamEvent> = flow {
                 requested += config.id
-                assertTrue(tools.isEmpty()); assertFalse(options.allowAccountSwitch)
+                assertTrue(tools.isEmpty())
                 if (config.id == a.id) emit(quota) else { emit(StreamEvent.TextDelta("Saved work summary")); emit(StreamEvent.Done()) }
             }
         } }, { b }, { "key-${it.id}" }, sleep = {})

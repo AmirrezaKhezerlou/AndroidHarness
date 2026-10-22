@@ -82,11 +82,8 @@ class AppContainer(val appContext: Context) {
     val providers: ProviderRepository = ProviderRepository(appContext, keys, localModels, chatGpt, settings)
 
     init {
-        val chatGptProvider = com.androidharness.app.chatgpt.ChatGptProvider(chatGpt::accessToken,
+        ProviderFactory.chatGptProvider = com.androidharness.app.chatgpt.ChatGptProvider(chatGpt::accessToken,
             modelEntry = { id, model -> chatGpt.state.value.accounts.firstOrNull { it.providerId == id }?.models?.firstOrNull { it.id == model } })
-        ProviderFactory.chatGptProvider = com.androidharness.app.chatgpt.ChatGptAutoSwitch(chatGptProvider,
-            enabled = { chatGpt.state.value.autoSwitch }, nextAccount = chatGpt::nextAccount,
-            recordLimit = chatGpt::recordUsageLimit, recordSuccess = chatGpt::recordUsageSuccess)
         com.androidharness.app.llm.ModelCatalog.chatGptModels = { chatGpt.refreshModels(it) }
         ProviderFactory.localProvider = com.androidharness.app.local.LocalModelProvider(localModels) {
             settings.settings.first().localModelAgentContext

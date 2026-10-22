@@ -27,6 +27,7 @@ object ChatGptProtocol {
     const val TOKEN = "$ISSUER/api/accounts/oauth/token"
     const val DISCOVERY = "$ISSUER/.well-known/openid-configuration"
     const val PLAN_SCOPE = "chatgpt.tokens.use.direct"
+    const val USAGE_LIMIT = "subscription_sharing_usage_limit_exceeded"
     const val USAGE_URL = "https://chatgpt.com/settings/usage"
     const val SCOPES = "openid profile email offline_access resource.invoke $PLAN_SCOPE"
     const val NAMESPACE = "harness"
@@ -152,7 +153,7 @@ object ChatGptProtocol {
 
 @Serializable
 internal data class ChatGptStore(val hostId: String, val accounts: List<ChatGptRegistration> = emptyList(),
-    val welcomeSeen: Boolean = false, val autoSwitch: Boolean = false)
+    val welcomeSeen: Boolean = false)
 
 @Serializable
 data class ChatGptRegistration(
@@ -168,9 +169,6 @@ data class ChatGptRegistration(
     val scopes: Set<String> = emptySet(),
     val models: List<ModelEntry> = emptyList(),
     val verifiedModels: List<ModelEntry> = emptyList(),
-    val useForAutoSwitch: Boolean = true,
-    val fallbackModel: String? = null,
-    val usageLimitedAt: Long? = null,
 ) {
     val connected: Boolean get() = accessToken != null && ChatGptProtocol.PLAN_SCOPE in scopes
     override fun toString() = "ChatGptRegistration(clientId=$clientId, connected=$connected)"

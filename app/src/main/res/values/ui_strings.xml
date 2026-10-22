@@ -1007,10 +1007,7 @@
     <string name="ui_hide_report">"Hide report"</string>
     <string name="ui_show_report">"Show report"</string>
     <string name="ui_add_account">"Add account"</string>
-    <string name="ui_auto_switch_at_usage_limit">"Auto-switch at usage limit"</string>
-    <string name="ui_continue_with_another_account_keep_the_same">"Continue with another account. Keep the same model when available, otherwise use its fallback."</string>
     <string name="ui_sign_in_again">"Sign in again"</string>
-    <string name="ui_include_in_auto_switch">"Include in auto-switch"</string>
     <string name="ui_close_model_management">"Close model management"</string>
     <string name="ui_clear">"Clear"</string>
     <string name="ui_could_not_refresh_models_try_again">"Could not refresh models. Try again."</string>

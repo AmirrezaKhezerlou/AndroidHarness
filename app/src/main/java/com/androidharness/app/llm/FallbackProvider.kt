@@ -66,7 +66,6 @@ class FallbackProvider(
             emit(StreamEvent.Failure("${current.name} is outside this chat's allowed fallback routes. Review Fallbacks or the subagent model.", retryable = false))
             return@flow
         }
-        // Explicit Off prevents account switching; a never-configured default preserves the old opt-in.
         if (initialPolicy == null || !initialPolicy.enabled) {
             if (managedChanged && (current.id != original.id || current.model != original.model)) {
                 emit(StreamEvent.Failure("Fallback routing changed. Review the model before continuing.", retryable = false))
@@ -74,8 +73,7 @@ class FallbackProvider(
             }
             val key = apiKey
             if (key.isBlank()) emit(StreamEvent.Failure("${current.name}: credentials are unavailable. Reconnect this provider.", retryable = false))
-            else factory(current).streamChat(current, key, systemPrompt, messages, tools,
-                options.copy(allowAccountSwitch = initialPolicy == null)).collect { emit(it) }
+            else factory(current).streamChat(current, key, systemPrompt, messages, tools, options).collect { emit(it) }
             return@flow
         }
         while (true) {
@@ -110,7 +108,7 @@ class FallbackProvider(
             val timeout = if (com.androidharness.app.local.LocalModelCatalog.isLocal(current.id)) 600_000 else stallTimeoutMs
             flow {
                 factory(current).streamChat(current, key, systemPrompt, messages, tools,
-                    options.copy(allowAccountSwitch = false, thinking = ThinkingSpecs.resolvedForModel(current.model, options.thinking, ModelsDev.providerKeyFor(current.baseUrl)).level))
+                    options.copy(thinking = ThinkingSpecs.resolvedForModel(current.model, options.thinking, ModelsDev.providerKeyFor(current.baseUrl)).level))
                     .collect { emit(it) }
             }.flattenEvents().stallGuard(timeout).catch { e ->
                 when (e) {
