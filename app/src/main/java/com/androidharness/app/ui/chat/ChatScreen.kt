@@ -1024,8 +1024,8 @@ private fun ChatScreenContent(
         scrollPrevBusy = state.busy
         if (gestureActive.value) return@LaunchedEffect
         if (state.busy) {
-            // Working means the newest thinking or answer stays in view.
-            if (!pinnedToBottom) return@LaunchedEffect
+            // Working always starts by following the newest thinking or answer.
+            pinnedToBottom = true
             withFrameNanos { }
             listState.scrollToEnd()
             return@LaunchedEffect
@@ -1039,7 +1039,12 @@ private fun ChatScreenContent(
         withFrameNanos { }
         listState.scrollToItem(index)
     }
-    LaunchedEffect(state.streamingText?.length, pinnedToBottom) {
+    LaunchedEffect(
+        state.streamingText?.length,
+        state.streamingThinking?.length,
+        state.runningCalls,
+        pinnedToBottom,
+    ) {
         if (!pinnedToBottom || gestureActive.value) return@LaunchedEffect
         withFrameNanos { }
         listState.snapToEndIfDrifted()

@@ -60,7 +60,8 @@ internal fun ChatActivity(
         seconds > 0 -> stringResource(R.string.chat_thought_seconds, seconds)
         else -> stringResource(R.string.chat_thought)
     }
-    ChatActivityRow(title, if (live) active?.name else null, live, entries.isNotEmpty(), followLatest = true) {
+    ChatActivityRow(title, if (live) active?.name else null, live, entries.isNotEmpty(), followLatest = true,
+        followSignal = Triple(messages.size, runningCalls.size, streamingThinking.length + streamingCommentary.length)) {
         entries.forEach { entry -> key(entry.key) {
             when (entry) {
                 is ChatActivityPresentation.Entry.Thought -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -115,7 +116,16 @@ internal fun ChatToolActivity(call: ToolCallData, result: ChatMessage?, running:
 }
 
 @Composable
-private fun ChatActivityRow(title: String, tool: String?, live: Boolean, expandable: Boolean, followLatest: Boolean = false, details: @Composable ColumnScope.() -> Unit) {
+private fun ChatActivityRow(
+    title: String,
+    tool: String?,
+    live: Boolean,
+    expandable: Boolean,
+    followLatest: Boolean = false,
+    /** Changes whenever streamed details grow; forces the capped inner log to follow. */
+    followSignal: Any? = null,
+    details: @Composable ColumnScope.() -> Unit,
+) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     var autoOpened by remember { mutableStateOf(false) }
     // A live turn opens its working log so streamed commentary never disappears
@@ -145,6 +155,13 @@ private fun ChatActivityRow(title: String, tool: String?, live: Boolean, expanda
     LaunchedEffect(scroll, followLatest, expanded) {
         if (followLatest && expanded) snapshotFlow { !scroll.isScrollInProgress && !scroll.canScrollForward }.collect { atEnd ->
             if (atEnd) following = true
+        }
+    }
+    // maxValue alone can lag behind wrapped thinking text inside the capped log.
+    LaunchedEffect(followSignal, expanded, followLatest) {
+        if (expanded && followLatest && following) {
+            withFrameNanos { }
+            if (following) scroll.scrollTo(scroll.maxValue)
         }
     }
     LaunchedEffect(scroll, followLatest) {
