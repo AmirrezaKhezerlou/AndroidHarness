@@ -79,4 +79,10 @@ class ChatActivityPresentationTest {
         assertFalse(ChatActivityPresentation.savedMemory(listOf(assistant(call("s", "web_search")), result("s", "ok"))))
         assertFalse(ChatActivityPresentation.savedMemory(listOf(result("m", "orphan result"))))
     }
+
+    @Test fun toolWorkMarksStreamedProseAsCommentary() {
+        assertTrue(ChatActivityPresentation.hasToolWork(listOf(assistant(call("s", "web_search")))))
+        assertFalse(ChatActivityPresentation.hasToolWork(listOf(assistant(), ChatMessage(Role.ASSISTANT, "Answer"))))
+        assertFalse(ChatActivityPresentation.hasToolWork(listOf(result("s", "orphan result"))))
+    }
 }

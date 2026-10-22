@@ -28,6 +28,9 @@ internal object ChatActivityPresentation {
         return messages.any { it.role == Role.TOOL && it.toolCallId in rememberIds && !it.isError }
     }
 
+    /** Once a turn calls any tool, streamed prose is working commentary, not the answer. */
+    fun hasToolWork(messages: List<ChatMessage>): Boolean = calls(messages).isNotEmpty()
+
     fun activeCall(messages: List<ChatMessage>, running: List<ToolCallData>): ToolCallData? {
         val finished = messages.filter { it.role == Role.TOOL }.mapNotNull { it.toolCallId }.toSet()
         return running.lastOrNull { it.id !in finished } ?: calls(messages).lastOrNull { it.id !in finished }

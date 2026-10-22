@@ -15,6 +15,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -56,24 +57,45 @@ internal fun ChatActivity(
     val title = when {
         live && active != null -> activityLabel(active.name, true)
         live && writing -> stringResource(R.string.chat_writing_reply)
+        live && entries.any { it is ChatActivityPresentation.Entry.Commentary } -> stringResource(R.string.chat_working)
         live -> stringResource(R.string.chat_thinking)
         seconds > 0 -> stringResource(R.string.chat_thought_seconds, seconds)
         else -> stringResource(R.string.chat_thought)
     }
-    ChatActivityRow(title, if (live) active?.name else null, live, entries.isNotEmpty(), followLatest = true) {
-        entries.forEach { entry -> key(entry.key) {
-            when (entry) {
-                is ChatActivityPresentation.Entry.Thought -> Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(if (entry.milliseconds >= 1000) stringResource(R.string.chat_thought_seconds, entry.milliseconds / 1000)
-                        else stringResource(R.string.chat_thought), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (entry.text.isNotBlank()) Text(entry.text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                is ChatActivityPresentation.Entry.Commentary -> Text(com.androidharness.app.core.response.RichResponse.plainText(
-                    com.androidharness.app.core.response.ChatRichResponse.normalize(entry.text)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                is ChatActivityPresentation.Entry.Tool -> ChatToolActivity(entry.call, entry.result,
-                    running = live && entry.result == null, onOpenUrl)
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.55f),
+    ) {
+        Box(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            ChatActivityRow(title, if (live) active?.name else null, live, entries.isNotEmpty(), followLatest = true) {
+                entries.forEach { entry -> key(entry.key) {
+                    when (entry) {
+                        is ChatActivityPresentation.Entry.Thought -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Icon(Icons.Outlined.Psychology, null, Modifier.size(13.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(if (entry.milliseconds >= 1000) stringResource(R.string.chat_thought_seconds, entry.milliseconds / 1000)
+                                    else stringResource(R.string.chat_thought), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            if (entry.text.isNotBlank()) Text(entry.text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        is ChatActivityPresentation.Entry.Commentary -> Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f),
+                        ) {
+                            Text(
+                                com.androidharness.app.core.response.RichResponse.plainText(
+                                    com.androidharness.app.core.response.ChatRichResponse.normalize(entry.text)),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        is ChatActivityPresentation.Entry.Tool -> ChatToolActivity(entry.call, entry.result,
+                            running = live && entry.result == null, onOpenUrl)
+                    }
+                } }
             }
-        } }
+        }
     }
 }
 
@@ -110,6 +132,9 @@ internal fun ChatToolActivity(call: ToolCallData, result: ChatMessage?, running:
 @Composable
 private fun ChatActivityRow(title: String, tool: String?, live: Boolean, expandable: Boolean, followLatest: Boolean = false, details: @Composable ColumnScope.() -> Unit) {
     var expanded by rememberSaveable { mutableStateOf(false) }
+    // A live turn opens its working log so streamed commentary never disappears
+    // into a collapsed row. A manual collapse is respected for the rest of the turn.
+    LaunchedEffect(live, expandable) { if (live && expandable) expanded = true }
     val scroll = rememberScrollState()
     var following by remember { mutableStateOf(true) }
     // Follow measured content growth, including wrapped streamed text and newly completed tools.

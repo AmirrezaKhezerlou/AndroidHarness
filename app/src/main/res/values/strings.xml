@@ -734,6 +734,7 @@
     <string name="chat_switch_attachments">Send or remove attachments before switching sections. Your draft will be kept.</string>
     <string name="chat_file_requires_code">Use Code for this file. Chat can read images, text files, and PDFs with extractable text.</string>
     <string name="chat_thinking">Thinking</string>
+    <string name="chat_working">Working…</string>
     <string name="chat_thought">Thoughts</string>
     <string name="chat_thought_seconds">Thought for %1$ds</string>
     <string name="chat_writing_reply">Writing a reply</string>

@@ -732,6 +732,7 @@
     <string name="chat_switch_attachments">请先发送或移除附件，再切换区域。草稿将保留。</string>
     <string name="chat_file_requires_code">请在代码中使用此文件。聊天可以读取图片、文本文件以及可提取文本的 PDF。</string>
     <string name="chat_thinking">正在思考</string>
+    <string name="chat_working">处理中…</string>
     <string name="chat_thought">思考过程</string>
     <string name="chat_thought_seconds">思考了 %1$d 秒</string>
     <string name="chat_writing_reply">正在回复</string>
