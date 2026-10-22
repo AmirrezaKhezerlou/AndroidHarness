@@ -51,7 +51,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.interaction.DragInteraction
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -489,8 +493,16 @@ private fun ChatScreenContent(
     var findPosition by remember(state.sessionId) { mutableStateOf(0) }
     var findTargetId by remember(state.sessionId) { mutableStateOf<String?>(null) }
     val activeFindId = if (findOpen) findTargetId else searchMessageId
+    // While a turn runs the transcript follows the newest thinking and answer.
+    // When it finishes it parks on the question that started the turn. A real
+    // drag away pauses following until the user returns to the bottom.
+    var pinnedToBottom by remember(state.sessionId) { mutableStateOf(false) }
+    val gestureActive = remember { mutableStateOf(false) }
+    var mainListDragged by remember { mutableStateOf(false) }
+    val userScrollObserver = remember { UserScrollObserver { pinnedToBottom = false } }
     val density = LocalDensity.current
     val previewOffset = with(density) { 64.dp.roundToPx() }
+    val hideJumpAt = with(density) { 96.dp.toPx() }
     // Filled while the LazyColumn registers its items, so the newest question
     // can be anchored before it has ever been on screen.
     val userItemIndexes = remember(state.sessionId) { HashMap<String, Int>() }
@@ -523,6 +535,7 @@ private fun ChatScreenContent(
             return@LaunchedEffect
         }
         val index = snapshotFlow { searchItemIndex.value }.filterNotNull().first()
+        pinnedToBottom = false
         listState.scrollToItem(index)
         searchRevealDone = true
         // Keep the search result in place; a new message changes the turn id
@@ -967,7 +980,8 @@ private fun ChatScreenContent(
 
     // Top-anchored transcript: on open and after every send, park the newest
     // question near the top and leave the previous answer's tail visible above
-    // it. Nothing follows the bottom while the reply streams.
+    // it. While the run streams, the busy effect below follows the bottom;
+    // when it ends, the view parks on the question again.
     LaunchedEffect(state.isLoadingMessages, latestUserTurnId, searchMessageId) {
         if (state.isLoadingMessages) return@LaunchedEffect
         if (searchMessageId != null && !searchRevealDone) return@LaunchedEffect
@@ -997,8 +1011,97 @@ private fun ChatScreenContent(
         }
     }
 
+    // Track real finger drags so programmatic scrolls can be told apart.
+    LaunchedEffect(listState) {
+        listState.interactionSource.interactions.collect { interaction ->
+            when (interaction) {
+                is DragInteraction.Start -> {
+                    gestureActive.value = true
+                    mainListDragged = true
+                }
+                is DragInteraction.Stop, is DragInteraction.Cancel -> gestureActive.value = false
+            }
+        }
+    }
+
+    // Only a direct drag settling at the bottom may resume following.
+    LaunchedEffect(listState) {
+        snapshotFlow { Triple(listState.isScrollInProgress, gestureActive.value, mainListDragged) }
+            .distinctUntilChanged()
+            .collect { (inProgress, dragging, dragged) ->
+                if (inProgress || dragging || !dragged) return@collect
+                mainListDragged = false
+                if (isAtBottom(listState.layoutInfo, listState.canScrollForward, tolerance = hideJumpAt.toInt())) {
+                    pinnedToBottom = true
+                    listState.snapToEndIfDrifted()
+                }
+            }
+    }
+
+    // While pinned, keep the newest content in view with small exact deltas.
+    LaunchedEffect(pinnedToBottom, listState) {
+        if (!pinnedToBottom) return@LaunchedEffect
+        var lastFollowAt = 0L
+        snapshotFlow {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()
+            info.totalItemsCount to (last?.let { it.index to (it.offset + it.size) })
+        }.distinctUntilChanged().collect {
+            if (gestureActive.value || listState.isScrollInProgress) return@collect
+            val wait = lastFollowAt + FOLLOW_MIN_INTERVAL_MS - System.currentTimeMillis()
+            if (wait > 0) delay(wait)
+            lastFollowAt = System.currentTimeMillis()
+            if (!pinnedToBottom || gestureActive.value || listState.isScrollInProgress) return@collect
+            val info = listState.layoutInfo
+            val total = info.totalItemsCount
+            if (total == 0) return@collect
+            val last = info.visibleItemsInfo.lastOrNull()
+            if (last == null || last.index != total - 1) {
+                listState.scrollToEnd()
+            } else {
+                val delta = last.offset + last.size + info.afterContentPadding - info.viewportEndOffset
+                if (delta > 0) listState.scrollBy(delta.toFloat())
+            }
+        }
+    }
+
+    // While a turn runs, snap to the bottom so thinking and the answer stay in
+    // view. When it ends, park on the question so the answer reads from its
+    // start. A drag away pauses both until the user returns to the bottom.
+    var scrollPrevBusy by remember { mutableStateOf(false) }
+    LaunchedEffect(state.busy) {
+        val wasBusy = scrollPrevBusy
+        scrollPrevBusy = state.busy
+        if (state.busy) {
+            if (gestureActive.value) return@LaunchedEffect
+            pinnedToBottom = true
+            withFrameNanos { }
+            listState.scrollToEnd()
+            return@LaunchedEffect
+        }
+        if (!wasBusy || !pinnedToBottom) return@LaunchedEffect
+        if (findOpen && findTargetId != null) return@LaunchedEffect
+        val turnId = latestUserTurnId ?: return@LaunchedEffect
+        val index = userItemIndexes[turnId] ?: return@LaunchedEffect
+        if (index !in 0 until listState.layoutInfo.totalItemsCount) return@LaunchedEffect
+        pinnedToBottom = false
+        withFrameNanos { }
+        listState.scrollToItem(index, scrollOffset = -previewOffset)
+        lastAnchoredTurnId = turnId
+    }
+    LaunchedEffect(
+        state.streamingText?.length,
+        state.streamingThinking?.length,
+        state.runningCalls,
+        pinnedToBottom,
+    ) {
+        if (!pinnedToBottom || gestureActive.value) return@LaunchedEffect
+        withFrameNanos { }
+        listState.snapToEndIfDrifted()
+    }
+
     // The jump button appears only when the current question has left the
-    // screen, so a small scroll never covers the transcript with a button.
+    // screen and the list is not following a run.
     LaunchedEffect(listState, latestUserTurnId) {
         val turnId = latestUserTurnId
         if (turnId == null) {
@@ -1008,10 +1111,10 @@ private fun ChatScreenContent(
         snapshotFlow {
             val index = userItemIndexes[turnId]
             val info = listState.layoutInfo
-            lastAnchoredTurnId == turnId && index != null && info.visibleItemsInfo.none { it.index == index }
-        }.distinctUntilChanged().collect { away ->
-            showJumpToLatest = away
-            if (!away) unreadWhileAway = false
+            pinnedToBottom to (lastAnchoredTurnId == turnId && index != null && info.visibleItemsInfo.none { it.index == index })
+        }.distinctUntilChanged().collect { (pinned, away) ->
+            showJumpToLatest = away && !pinned
+            if (!showJumpToLatest) unreadWhileAway = false
         }
     }
 
@@ -1152,7 +1255,10 @@ private fun ChatScreenContent(
                 },
                 showWebPreviewShortcut = webPreviewAvailable,
                 onOpenWebPreview = { webPreviewUrl = null; showWebPreview = true },
-                onFind = { findOpen = true },
+                onFind = {
+                    findOpen = true
+                    pinnedToBottom = false
+                },
             )
             if (findOpen) {
                 com.androidharness.app.ui.chat.components.FindInChatBar(
@@ -1313,7 +1419,7 @@ private fun ChatScreenContent(
                     } else {
                         LazyColumn(
                             state = listState,
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxSize().nestedScroll(userScrollObserver),
                             contentPadding = PaddingValues(horizontal = 18.dp, vertical = 24.dp),
                             // Top-anchored: a sent question stays put while the
                             // answer grows below; short chats no longer sit at the bottom.
@@ -1854,11 +1960,16 @@ private fun ChatScreenContent(
                     onJump = {
                         showJumpToLatest = false
                         unreadWhileAway = false
-                        val turnId = state.messages.lastOrNull { it.role == Role.USER }?.turnId
-                        val index = turnId?.let { userItemIndexes[it] }
-                        if (index != null) scope.launch {
-                            if (index in 0 until listState.layoutInfo.totalItemsCount) {
-                                listState.animateScrollToItem(index, scrollOffset = -previewOffset)
+                        if (state.busy) {
+                            pinnedToBottom = true
+                            scope.launch { listState.scrollToEnd() }
+                        } else {
+                            val turnId = state.messages.lastOrNull { it.role == Role.USER }?.turnId
+                            val index = turnId?.let { userItemIndexes[it] }
+                            if (index != null) scope.launch {
+                                if (index in 0 until listState.layoutInfo.totalItemsCount) {
+                                    listState.animateScrollToItem(index, scrollOffset = -previewOffset)
+                                }
                             }
                         }
                     },
@@ -2240,6 +2351,42 @@ private fun FileEditsCard(
         }
     }
 }
+
+/** True when the last item's bottom edge sits within [tolerance]px of the viewport bottom. */
+private fun isAtBottom(info: LazyListLayoutInfo, canScrollForward: Boolean, tolerance: Int = 64): Boolean {
+    if (!canScrollForward) return true
+    val last = info.visibleItemsInfo.lastOrNull() ?: return false
+    if (last.index != info.totalItemsCount - 1) return false
+    return last.offset + last.size + info.afterContentPadding <= info.viewportEndOffset + tolerance
+}
+
+/**
+ * Instantly scrolls to the very end of the content, bottom padding included.
+ * `scrollToItem(last)` alone only aligns the last item's TOP with the viewport
+ * top when the item is taller than the viewport; the extra snap consumes
+ * whatever remains. Both steps avoid a synchronous remeasure mid-dispatch,
+ * which used to crash when items were removed in the same frame.
+ */
+private suspend fun LazyListState.scrollToEnd() {
+    val last = layoutInfo.totalItemsCount - 1
+    if (last < 0) return
+    requestScrollToItem(last)
+    withFrameNanos { }
+    snapToEndIfDrifted()
+}
+
+/** Cheap exact snap to the true bottom; a no-op unless the end is composed. */
+private suspend fun LazyListState.snapToEndIfDrifted() {
+    val info = layoutInfo
+    val last = info.visibleItemsInfo.lastOrNull() ?: return
+    if (last.index != info.totalItemsCount - 1) return
+    val delta = last.offset + last.size + info.afterContentPadding - info.viewportEndOffset
+    if (delta > 0) scrollBy(delta.toFloat())
+}
+
+// Follow-scroll coalescing: during a stream the list follows the newest
+// content with small scrollBy deltas at most this often (ms between scrolls).
+private const val FOLLOW_MIN_INTERVAL_MS = 64L
 
 /** Floating jump-to-latest button; pulses when content landed while away. */
 @Composable
