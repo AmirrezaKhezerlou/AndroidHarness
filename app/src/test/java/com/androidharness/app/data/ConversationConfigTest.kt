@@ -21,7 +21,7 @@ class ConversationConfigTest {
         assertEquals(com.androidharness.app.core.ChatExperience.tools, saved.allowedTools)
         assertEquals(saved.allowedTools, saved.copy(toolsEnabled = false).allowedTools)
         assertEquals(saved.allowedTools, saved.copy(selectedTools = emptySet()).allowedTools)
-        assertFalse(saved.allowedTools!!.any { it in setOf("shell", "read_file", "write_file", "task", "http_request") })
+        assertFalse(saved.allowedTools!!.any { it in setOf("shell", "read_file", "write_file", "task", "http_request", "create_artifact", "read_artifact") })
     }
 
     @Test fun restrictingRegistryBlocksBothAdvertisedAndExecutableToolsIncludingExtras() {

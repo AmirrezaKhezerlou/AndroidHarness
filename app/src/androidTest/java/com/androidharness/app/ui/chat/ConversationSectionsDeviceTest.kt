@@ -80,7 +80,8 @@ class ConversationSectionsDeviceTest {
                 if (policy.isChat) {
                     assertEquals(listOf("web_search"), advertised)
                     assertEquals(listOf("web_search"), executed)
-                    assertEquals(com.androidharness.app.core.ChatExperience.SYSTEM_PROMPT, prompt)
+                    assertTrue(prompt.startsWith(com.androidharness.app.core.ChatExperience.SYSTEM_PROMPT))
+                    assertTrue(prompt.contains("Current local date: ${java.time.LocalDate.now()}"))
                     assertFalse(prompt.contains(root.absolutePath))
                     assertTrue(events.filterIsInstance<AgentEvent.ToolMessageCommitted>().any {
                         it.message.toolName == "fixture_code_action" && it.message.isError

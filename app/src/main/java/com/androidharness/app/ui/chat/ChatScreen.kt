@@ -1315,6 +1315,8 @@ private fun ChatScreenContent(
                                 }
                             }
 
+                    val renderedChatActivities = HashSet<String>()
+                    val chatStreamCommitted = state.streamingMessageId != null && state.messages.any { it.id == state.streamingMessageId }
                     for ((messageIndex, message) in state.messages.withIndex()) {
                         // Inner subagent turns persist with the parent task's
                         // call id on the assistant row, they render on the
@@ -1383,26 +1385,37 @@ private fun ChatScreenContent(
                                 val isTurnRunning = state.busy && (message.turnId == state.currentTurnId ||
                                     (state.currentTurnId == null && message.turnId == state.messages.lastOrNull { it.turnId != null }?.turnId))
                                 if (state.conversation.isChat) {
-                                    if (!isTurnFinal && message.turnId != null) continue
                                     val conversationTurn = message.turnId?.let { chatTurns[it] }.orEmpty().ifEmpty { listOf(message) }
-                                    if (!isTurnRunning) indexedItem(key = "chat-$messageKey-activity", contentType = ChatListContentType.Thinking) {
-                                        com.androidharness.app.ui.chat.components.ChatActivity(conversationTurn)
+                                    val activityKey = message.turnId ?: messageKey
+                                    if (renderedChatActivities.add(activityKey)) indexedItem(key = "chat-turn-$activityKey-activity", contentType = ChatListContentType.Thinking) {
+                                        com.androidharness.app.ui.chat.components.ChatActivity(conversationTurn, live = isTurnRunning,
+                                            runningCalls = if (isTurnRunning) state.runningCalls else emptyList(),
+                                            streamingThinking = if (isTurnRunning && !chatStreamCommitted) state.streamingThinking.orEmpty() else "",
+                                            writing = isTurnRunning && !state.streamingText.isNullOrBlank(),
+                                            streamId = state.streamingMessageId ?: "live",
+                                            streamingCommentary = if (isTurnRunning && !chatStreamCommitted && state.runningCalls.isNotEmpty()) state.streamingText.orEmpty() else "",
+                                            onOpenUrl = { url -> webPreviewUrl = url; showWebPreview = true })
                                     }
-                                    if (message.text.isNotBlank() && message.toolCalls.isEmpty()) indexedItem(key = "chat-$messageKey-answer", contentType = ChatListContentType.AssistantText) {
+                                    // Progress prose stays in the chronological disclosure; only the answer renders here.
+                                    if (message.text.isNotBlank() && message.toolCalls.isEmpty() && (isTurnFinal || message.turnId == null)) indexedItem(key = "chat-$messageKey-answer", contentType = ChatListContentType.AssistantText) {
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            AssistantText(message.text, showPreviewChip = false,
+                                            val replyText = remember(message.text) { com.androidharness.app.core.response.ChatRichResponse.normalize(message.text) }
+                                            AssistantText(replyText, showPreviewChip = false,
                                                 onFollowUp = { action ->
                                                     attachedConceptJson = null
                                                     attachedResponseJson = ResponseAttachment(action.title, action.context).encode()
                                                     setComposerText(listOf(composerText.trim(), action.prompt).filter(String::isNotBlank).joinToString("\n\n"))
                                                 }, onOpenUrl = { url -> webPreviewUrl = url; showWebPreview = true })
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                CopyIconButton(message.text)
-                                                message.id?.let { id -> SpeakIconButton(
-                                                    active = ttsState.messageId == id,
-                                                    preparing = ttsState.messageId == id && ttsState.phase == TtsPhase.PREPARING,
-                                                    onClick = { viewModel.container.tts.toggle(id, message.text) }) }
-                                                ResponseActions(onFork = { viewModel.requestFork(message) { onNavigateToSession(it) } }, onUndo = null)
+                                            if (isTurnFinal && message.toolCalls.isEmpty() && !isTurnRunning) {
+                                                com.androidharness.app.ui.chat.components.ChatSources(conversationTurn) { url -> webPreviewUrl = url; showWebPreview = true }
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    CopyIconButton(replyText)
+                                                    message.id?.let { id -> SpeakIconButton(
+                                                        active = ttsState.messageId == id,
+                                                        preparing = ttsState.messageId == id && ttsState.phase == TtsPhase.PREPARING,
+                                                        onClick = { viewModel.container.tts.toggle(id, replyText) }) }
+                                                    ResponseActions(onFork = { viewModel.requestFork(message) { onNavigateToSession(it) } }, onUndo = null)
+                                                }
                                             }
                                         }
                                     }
@@ -1625,11 +1638,14 @@ private fun ChatScreenContent(
                     // Live streaming items are rendered only while not yet in the committed list.
                     val streamAlreadyCommitted = state.streamingMessageId != null &&
                         state.messages.any { it.id == state.streamingMessageId }
-                    if (state.conversation.isChat && state.busy) indexedItem(key = "chat-live-${state.currentTurnId}", contentType = ChatListContentType.Thinking) {
+                    if (state.conversation.isChat && state.busy && state.currentTurnId !in renderedChatActivities) indexedItem(key = "chat-turn-${state.currentTurnId}-activity", contentType = ChatListContentType.Thinking) {
                         com.androidharness.app.ui.chat.components.ChatActivity(
-                            chatTurns[state.currentTurnId].orEmpty(), live = true,
-                            runningCalls = state.runningCalls, streamingThinking = state.streamingThinking.orEmpty(),
-                            writing = !state.streamingText.isNullOrBlank())
+                            state.currentTurnId?.let { chatTurns[it] }.orEmpty(), live = true,
+                            runningCalls = state.runningCalls,
+                            streamingThinking = if (!streamAlreadyCommitted) state.streamingThinking.orEmpty() else "",
+                            writing = !state.streamingText.isNullOrBlank(), streamId = state.streamingMessageId ?: "live",
+                            streamingCommentary = if (!streamAlreadyCommitted && state.runningCalls.isNotEmpty()) state.streamingText.orEmpty() else "",
+                            onOpenUrl = { url -> webPreviewUrl = url; showWebPreview = true })
                     }
 
                     if (!streamAlreadyCommitted) {
@@ -1643,10 +1659,10 @@ private fun ChatScreenContent(
                                 }
                             }
                         }
-                        state.streamingText?.let { streaming ->
+                        state.streamingText?.takeUnless { state.conversation.isChat && state.runningCalls.isNotEmpty() }?.let { streaming ->
                             indexedItem(key = "streaming-$streamKey-text", contentType = ChatListContentType.AssistantText) {
                                 AssistantText(
-                                    streaming,
+                                    if (state.conversation.isChat) com.androidharness.app.core.response.ChatRichResponse.normalize(streaming, !state.streamingCommitted) else streaming,
                                     streaming = !state.streamingCommitted,
                                     onOpenUrl = { url ->
                                         webPreviewUrl = url

@@ -1700,7 +1700,7 @@ class AgentEngine(
         return hints.distinct()
     }
 
-    private fun chatSystemPrompt(): String = com.androidharness.app.core.ChatExperience.SYSTEM_PROMPT
+    private fun chatSystemPrompt(): String = com.androidharness.app.core.ChatExperience.systemPrompt()
 
     private suspend fun systemPrompt(
         workspace: WorkspaceFs,

@@ -65,12 +65,15 @@ class ChatExperienceDeviceTest {
                 FileFs(root), RequestOptions(), 100_000, AgentMode.ACT, pinnedInstructions = "CODE_ONLY_PINNED",
                 conversation = ConversationConfig(ConversationKind.CHAT)).toList()
             assertEquals(ChatExperience.tools, advertised.toSet())
-            assertEquals(ChatExperience.SYSTEM_PROMPT, prompt)
+            assertTrue(prompt.startsWith(ChatExperience.SYSTEM_PROMPT))
+            assertTrue(prompt.contains("Current local date: ${java.time.LocalDate.now()}"))
             assertFalse(prompt.contains(root.path)); assertFalse(prompt.contains("CODE_ONLY_PINNED"))
             assertFalse(events.any { it is AgentEvent.EnvironmentNeeded || it is AgentEvent.ApprovalNeeded || it is AgentEvent.Error })
             val results = events.filterIsInstance<AgentEvent.ToolMessageCommitted>().map { it.message }
             assertTrue(results.single { it.toolName == "read_chat_text" }.text.contains("Brainstorm a small garden"))
-            assertNotNull(results.single { it.toolName == "create_artifact" }.artifact)
+            assertTrue(results.single { it.toolName == "create_artifact" }.isError)
+            assertTrue(results.none { it.artifact != null })
+            assertFalse(advertised.any { it in setOf("create_artifact", "read_artifact") })
             assertTrue(results.single { it.toolName == "read_file" }.isError)
             assertTrue(results.single { it.toolName == "shell" }.isError)
         } finally { c.sessions.session(chat)?.let { c.sessions.deleteSession(it) }; root.deleteRecursively() }
@@ -110,7 +113,8 @@ class ChatExperienceDeviceTest {
                     } }
                 }
                 await("Start with one small idea you can test this week.")
-                await("Thought for 3s"); await("Searched the web")
+                await("Thought for 3s")
+                assertNull(find("Searched the web"))
                 assertNull(find("Work summary")); assertNull(find("RAW_PRIVATE_TOOL_OUTPUT"))
                 assertNull(find("Chat tools off")); assertNull(find("Continue in Code"))
                 screenshot("chat-reply")
@@ -162,26 +166,121 @@ class ChatExperienceDeviceTest {
         } finally { for (id in listOf(chat, custom, code)) c.sessions.session(id)?.let { c.sessions.deleteSession(it) } }
     }
 
-    @Test fun liveChatShowsReadableSearchActivityWithoutToolArguments(): Unit = runBlocking {
-        val call = mutableStateOf("web_search")
+    @Test fun expandedThinkingFollowsNewActivityAndReopensAtTheLatestEntry(): Unit = runBlocking {
+        val messages = mutableStateOf(emptyList<ChatMessage>())
+        val thought = mutableStateOf("Initial thought")
+        val live = mutableStateOf(true)
         ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
-            scenario.onActivity { activity -> activity.setContent { HarnessTheme {
+            scenario.onActivity { activity -> activity.setContent { HarnessTheme(dynamicColor = false) {
                 Column(Modifier.fillMaxSize().statusBarsPadding().padding(24.dp)) {
-                    com.androidharness.app.ui.chat.components.ChatActivity(emptyList(), live = true,
-                        runningCalls = if (call.value.isBlank()) emptyList() else listOf(ToolCallData("live", call.value, "RAW_ARGUMENTS")),
-                        streamingThinking = "Compare the sources before answering.")
+                    com.androidharness.app.ui.chat.components.ChatActivity(messages.value, live = live.value, streamingThinking = thought.value)
+                }
+            } } }
+            await("Thinking"); assertNull(find("Initial thought"))
+            tap("Thinking"); await("Initial thought")
+            for (index in 1..12) {
+                scenario.onActivity {
+                    val call = ToolCallData("search-$index", if (index % 2 == 0) "web_fetch" else "web_search", "RAW_ARGUMENTS")
+                    messages.value = messages.value + ChatMessage(Role.ASSISTANT, "Progress update $index", thinking = "Thinking round $index", toolCalls = listOf(call)) +
+                        ChatMessage(Role.TOOL, "RAW_RESULTS", toolCallId = call.id)
+                    thought.value = "Latest thought $index"
+                }
+                await("Latest thought $index")
+            }
+            await("Progress update 12")
+            assertNull(find("Initial thought")); assertNull(find("RAW_ARGUMENTS")); assertNull(find("RAW_RESULTS"))
+            val latest = android.graphics.Rect().also { await("Latest thought 12").getBoundsInScreen(it) }
+            assertTrue("The latest thought is within the visible inner viewport", latest.top > 0 && latest.bottom < instrumentation.targetContext.resources.displayMetrics.heightPixels)
+            screenshot("chat-nested-activity-auto-follow")
+            tap("Thinking"); awaitGone("Latest thought 12")
+            tap("Thinking"); await("Latest thought 12")
+            scenario.onActivity { live.value = false }
+            await("Thoughts"); await("Latest thought 12")
+            screenshot("chat-nested-completed-latest")
+        }
+    }
+
+    @Test fun commentarySurvivesEveryToolRoundAndSourcesOpenTheReturnedPage(): Unit = runBlocking {
+        val saved = c.settings.settings.first()
+        val project = c.workspace.currentProjectOnce()
+        val chat = c.sessions.createSession("New chat", project.id, ConversationConfig(ConversationKind.CHAT))
+        val store = ViewModelStore()
+        val turn = "news-commentary-turn"
+        val intro = "Let me look at the news today."
+        val followup = "I found the report. I will read it before summarizing."
+        val search = ToolCallData("news-search", "web_search", "{\"query\":\"news today\"}")
+        val fetch = ToolCallData("news-read", "web_fetch", "{\"url\":\"https://example.com/report\"}")
+        try {
+            c.sessions.addMessage(chat, ChatMessage(Role.USER, "What is the news today?"), turn)
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { activity ->
+                    val vm = ChatViewModel(c, chat); store.put("chat", vm)
+                    activity.setContent { HarnessTheme(dynamicColor = false) { ChatScreen(vm, {}, { _, _ -> }, {}, {}, onOpenSubagent = {}) } }
+                }
+                await("What is the news today?")
+                c.sessions.addMessage(chat, ChatMessage(Role.ASSISTANT, intro, thinking = "Check the date and use reliable sources.", thinkingMs = 1000, toolCalls = listOf(search)), turn)
+                await("Thought for 1s")
+                assertNull(find(intro))
+                tap("Thought for 1s"); await(intro)
+                c.sessions.addMessage(chat, ChatMessage(Role.TOOL, "1. Example report\n   https://example.com/report\n   RAW_SEARCH_SNIPPET", toolCallId = search.id, toolName = search.name), turn)
+                await("Searched the web"); await(intro)
+                c.sessions.addMessage(chat, ChatMessage(Role.ASSISTANT, followup, thinking = "Use the original report for detail.", thinkingMs = 2000, toolCalls = listOf(fetch)), turn)
+                await("Thought for 3s"); await(followup)
+                c.sessions.addMessage(chat, ChatMessage(Role.TOOL, "RAW_PAGE_CONTENT", toolCallId = fetch.id, toolName = fetch.name), turn)
+                c.sessions.addMessage(chat, ChatMessage(Role.ASSISTANT, "The report describes a new discovery.\n{\"type\":\"callout\",\"tone\":\"info\",\"title\":\"Today’s lead story\",\"text\":\"A new discovery was announced.\"}\n[Example report](https://example.com/report)"), turn)
+                await("Read web pages"); await(followup); await("Today’s lead story")
+                assertNull(find("{\"type\":\"callout\""))
+                screenshot("chat-nested-chronological-rich-reply")
+                tap("Thought for 3s")
+                awaitGone(intro); awaitGone(followup); awaitGone("Read web pages")
+                await("Today’s lead story")
+                var sourceNode = await("Sources · 1")
+                while (!sourceNode.isClickable && sourceNode.parent != null) sourceNode = sourceNode.parent
+                val sourceBounds = android.graphics.Rect().also { sourceNode.getBoundsInScreen(it) }
+                val answerBounds = android.graphics.Rect().also { await("The report describes a new discovery.").getBoundsInScreen(it) }
+                assertTrue("Sources align with the answer", sourceBounds.left <= answerBounds.left + 4)
+                assertEquals(1, nodes().count { it.isVisibleToUser && it.text?.toString() == "Sources · 1" })
+                assertNull(find("RAW_SEARCH_SNIPPET")); assertNull(find("RAW_PAGE_CONTENT")); assertNull(find("Work summary"))
+                screenshot("chat-nested-collapsed-reply")
+                tap("Sources · 1"); await("Example report"); await("Read page")
+                screenshot("chat-news-sources")
+                // Recreate the screen: commentary and source provenance survive persisted history.
+                instrumentation.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
+                scenario.recreate()
+                scenario.onActivity { activity ->
+                    val vm = ChatViewModel(c, chat); store.put("chat-recreated", vm)
+                    activity.setContent { HarnessTheme(dynamicColor = false) { ChatScreen(vm, {}, { _, _ -> }, {}, {}, onOpenSubagent = {}) } }
+                }
+                await("Thought for 3s"); await("Sources · 1")
+                assertNull(find(followup))
+                tap("Thought for 3s"); await(followup); await("Read web pages")
+            }
+        } finally {
+            instrumentation.runOnMainSync { store.clear() }
+            c.sessions.session(chat)?.let { c.sessions.deleteSession(it) }
+            c.settings.setLastActiveSessionId(saved.lastActiveSessionId)
+        }
+    }
+
+    @Test fun individualToolRowsFinishWithoutMovingAndSourcesAreCompact(): Unit = runBlocking {
+        val result = mutableStateOf<ChatMessage?>(null)
+        val search = ToolCallData("phase-search", "web_search", "RAW_ARGUMENTS")
+        var opened = ""
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            scenario.onActivity { activity -> activity.setContent { HarnessTheme(dynamicColor = false) {
+                Column(Modifier.fillMaxSize().statusBarsPadding().padding(24.dp)) {
+                    com.androidharness.app.ui.chat.components.ChatToolActivity(search, result.value, result.value == null) { opened = it }
+                    if (result.value != null) com.androidharness.app.ui.chat.components.ChatSources(listOf(ChatMessage(Role.ASSISTANT, toolCalls = listOf(search)), result.value!!)) { opened = it }
                 }
             } } }
             await("Searching the web")
-            assertNull(find("RAW_ARGUMENTS")); assertNull(find("Work summary"))
-            screenshot("chat-search-shimmer")
-            scenario.onActivity { call.value = "web_fetch" }
-            await("Reading a web page")
-            screenshot("chat-read-shimmer")
-            scenario.onActivity { call.value = "" }
-            await("Thinking")
-            tap("Thinking"); await("Compare the sources before answering.")
-            screenshot("chat-thinking-shimmer")
+            scenario.onActivity { result.value = ChatMessage(Role.TOOL, "1. Example report\n   https://example.com/report\n   RAW_SNIPPET", toolCallId = search.id) }
+            await("Searched the web"); await("Sources · 1")
+            assertNull(find("RAW_ARGUMENTS")); assertNull(find("RAW_SNIPPET")); assertNull(find("example.com"))
+            tap("Sources · 1"); await("Example report"); await("Found in search")
+            tap("Example report"); assertEquals("https://example.com/report", opened)
+            tap("Searched the web"); await("Example report")
+            screenshot("chat-compact-sources-and-tool-result")
         }
     }
 
@@ -195,6 +294,11 @@ class ChatExperienceDeviceTest {
         val deadline = SystemClock.uptimeMillis() + 15_000
         do { find(text)?.let { return it }; SystemClock.sleep(100) } while (SystemClock.uptimeMillis() < deadline)
         screenshot("failure"); throw AssertionError("Expected: $text; visible: ${nodes().mapNotNull { it.text?.toString() }}")
+    }
+    private fun awaitGone(text: String) {
+        val deadline = SystemClock.uptimeMillis() + 5_000
+        do { if (find(text) == null) return; SystemClock.sleep(50) } while (SystemClock.uptimeMillis() < deadline)
+        screenshot("failure"); throw AssertionError("Still visible after collapse: $text")
     }
     private fun tap(text: String) {
         var node = await(text)

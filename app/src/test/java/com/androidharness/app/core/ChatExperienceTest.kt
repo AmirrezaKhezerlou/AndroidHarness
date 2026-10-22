@@ -22,6 +22,14 @@ class ChatExperienceTest {
         assertFalse(ChatExperience.offersCode(turn + ChatMessage(Role.USER, "Just explain the idea for now")))
     }
 
+    @Test fun chatPromptUsesTheLocalCalendarDateAcrossTimezoneBoundaries() {
+        val instant = java.time.Instant.parse("2026-10-21T20:00:00Z")
+        val india = ChatExperience.systemPrompt(instant.atZone(java.time.ZoneId.of("Asia/Kolkata")))
+        val utc = ChatExperience.systemPrompt(instant.atZone(java.time.ZoneId.of("UTC")))
+        assertTrue(india.contains("Current local date: 2026-10-22 (Asia/Kolkata)"))
+        assertTrue(utc.contains("Current local date: 2026-10-21 (UTC)"))
+    }
+
     @Test fun titlesUseTheUsersWordsWithoutAttachmentBodies() {
         assertEquals("Help me brainstorm an idea", ChatExperience.title("  Help me\nbrainstorm an idea  "))
         assertEquals("Review this", ChatExperience.title("Review this\n\n[Attached file: notes.txt (text/plain, 12 B)]\n```\nprivate text\n```"))

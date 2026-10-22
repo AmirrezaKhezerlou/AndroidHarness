@@ -753,4 +753,15 @@
     <string name="chat_activity_unavailable">%1$s · unavailable</string>
     <string name="chat_response_interrupted">Response interrupted</string>
     <string name="chat_continue_reply">Continue reply</string>
+    <string name="chat_activity_interrupted">Activity stopped</string>
+    <string name="chat_sources">Sources</string>
+    <string name="chat_source_count">Sources · %1$d</string>
+    <string name="chat_sources_explanation">Pages found or read during this reply. Inline citations identify the source for each claim.</string>
+    <string name="chat_source_read">Read page</string>
+    <string name="chat_source_found">Found in search</string>
+    <string name="chat_search_failed">Search unavailable</string>
+    <string name="chat_page_failed">Could not read page</string>
+    <string name="chat_tool_failed">Activity unavailable</string>
+    <string name="chat_tool_result_failed">This request did not succeed. Other sources may still be available.</string>
+    <string name="chat_tool_result_empty">No source links were returned.</string>
 </resources>

@@ -751,4 +751,15 @@
     <string name="chat_activity_unavailable">%1$s · 暂不可用</string>
     <string name="chat_response_interrupted">回复已中断</string>
     <string name="chat_continue_reply">继续回复</string>
+    <string name="chat_activity_interrupted">活动已停止</string>
+    <string name="chat_sources">来源</string>
+    <string name="chat_source_count">来源 · %1$d</string>
+    <string name="chat_sources_explanation">回复期间搜索到或阅读过的网页。文中的引用标明每项陈述的来源。</string>
+    <string name="chat_source_read">已阅读网页</string>
+    <string name="chat_source_found">搜索结果</string>
+    <string name="chat_search_failed">搜索暂不可用</string>
+    <string name="chat_page_failed">无法阅读网页</string>
+    <string name="chat_tool_failed">活动暂不可用</string>
+    <string name="chat_tool_result_failed">此请求未成功。其他来源可能仍然可用。</string>
+    <string name="chat_tool_result_empty">未返回来源链接。</string>
 </resources>
