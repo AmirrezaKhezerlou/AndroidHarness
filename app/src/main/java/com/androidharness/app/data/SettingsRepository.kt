@@ -110,11 +110,13 @@ data class AppSettings(
     val ttsAlwaysSpeak: Boolean = false,
     /** The one-time voice configuration promo dialog was dismissed. */
     val voicePromoSeen: Boolean = false,
-    /** Resume the last opened chat session when app launches. */
+    /** Legacy Code resume toggle kept for old backups; codeStart is authoritative. */
     val resumeLastChat: Boolean = true,
     val startScreen: StartScreen = StartScreen.CODE,
     /** Chat opens a fresh conversation unless the user asks to continue the latest one. */
     val chatStart: ChatStartMode = ChatStartMode.NEW_CHAT,
+    /** Code opens a fresh conversation unless the user asks to continue the latest one. */
+    val codeStart: CodeStartMode = CodeStartMode.LAST_CODE,
     /** Web research effort for Chat turns. */
     val searchDepth: SearchDepth = SearchDepth.AUTO,
     /** Universal memory shared by Chat and Code. */
@@ -231,6 +233,7 @@ class SettingsRepository(private val context: Context) {
         val RESUME_LAST_CHAT = booleanPreferencesKey("resume_last_chat")
         val START_SCREEN = stringPreferencesKey("start_screen")
         val CHAT_START = stringPreferencesKey("chat_start")
+        val CODE_START = stringPreferencesKey("code_start")
         val SEARCH_DEPTH = stringPreferencesKey("search_depth")
         val MEMORY_ENABLED = booleanPreferencesKey("memory_enabled")
         val LAST_CONVERSATION_KIND = stringPreferencesKey("last_conversation_kind")
@@ -310,6 +313,8 @@ class SettingsRepository(private val context: Context) {
             resumeLastChat = prefs[Keys.RESUME_LAST_CHAT] ?: true,
             startScreen = StartScreen.fromStored(prefs[Keys.START_SCREEN]),
             chatStart = ChatStartMode.fromStored(prefs[Keys.CHAT_START]),
+            codeStart = prefs[Keys.CODE_START]?.let { CodeStartMode.fromStored(it) }
+                ?: if (prefs[Keys.RESUME_LAST_CHAT] ?: true) CodeStartMode.LAST_CODE else CodeStartMode.NEW_CODE,
             searchDepth = SearchDepth.fromStored(prefs[Keys.SEARCH_DEPTH]),
             memoryEnabled = prefs[Keys.MEMORY_ENABLED] ?: true,
             lastConversationKind = ConversationKind.entries.firstOrNull { it.name == prefs[Keys.LAST_CONVERSATION_KIND] } ?: ConversationKind.CODE,
@@ -359,6 +364,7 @@ class SettingsRepository(private val context: Context) {
             p[Keys.RESUME_LAST_CHAT] = s.resumeLastChat
             p[Keys.START_SCREEN] = s.startScreen.name
             p[Keys.CHAT_START] = s.chatStart.name
+            p[Keys.CODE_START] = s.codeStart.name
             p[Keys.SEARCH_DEPTH] = s.searchDepth.name
             p[Keys.MEMORY_ENABLED] = s.memoryEnabled
             p[Keys.SHOW_LIVE_CODE] = s.showLiveCode
@@ -701,6 +707,13 @@ class SettingsRepository(private val context: Context) {
         context.settingsStore.edit { it[Keys.CHAT_START] = value.name }
     }
 
+    suspend fun setCodeStart(value: CodeStartMode) {
+        context.settingsStore.edit {
+            it[Keys.CODE_START] = value.name
+            it[Keys.RESUME_LAST_CHAT] = value == CodeStartMode.LAST_CODE
+        }
+    }
+
     suspend fun setMemoryEnabled(enabled: Boolean) {
         context.settingsStore.edit { it[Keys.MEMORY_ENABLED] = enabled }
     }
@@ -714,7 +727,10 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setResumeLastChat(enabled: Boolean) {
-        context.settingsStore.edit { it[Keys.RESUME_LAST_CHAT] = enabled }
+        context.settingsStore.edit {
+            it[Keys.RESUME_LAST_CHAT] = enabled
+            it[Keys.CODE_START] = (if (enabled) CodeStartMode.LAST_CODE else CodeStartMode.NEW_CODE).name
+        }
     }
 
     suspend fun setLastActiveSessionId(sessionId: String?) {

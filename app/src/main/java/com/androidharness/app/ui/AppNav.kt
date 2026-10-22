@@ -336,13 +336,17 @@ fun AppNav(container: AppContainer) {
             if (origin.conversation.kind == com.androidharness.app.data.ConversationKind.CODE) codeRoute = here else plainRoute = here
         }
         val previous = if (kind == com.androidharness.app.data.ConversationKind.CODE) codeRoute else plainRoute
-        // Chat starts fresh on its first entry in this app session unless the user
-        // asked to continue the latest one. Returning to a Chat already open here
-        // still uses plainRoute, so drafts survive section switches.
-        val resumeChat = kind != com.androidharness.app.data.ConversationKind.CHAT ||
-            settings.chatStart == com.androidharness.app.data.ChatStartMode.LAST_CHAT
+        // Chat and Code each start fresh on their first entry in this app session
+        // unless the user asked to continue that section's latest conversation.
+        // Returning to a section already open here still uses its route, so drafts survive.
+        val resume = when (kind) {
+            com.androidharness.app.data.ConversationKind.CHAT ->
+                settings.chatStart == com.androidharness.app.data.ChatStartMode.LAST_CHAT
+            com.androidharness.app.data.ConversationKind.CODE ->
+                settings.codeStart == com.androidharness.app.data.CodeStartMode.LAST_CODE
+        }
         val last = sessions.firstOrNull { com.androidharness.app.data.ConversationConfig.decode(it.conversationJson).kind == kind && it.id !in settings.archivedSessions }
-            ?.takeIf { resumeChat }
+            ?.takeIf { resume }
         val availablePrevious = previous?.takeIf { route -> sessions.any { "chat/${it.id}" == route && it.id !in settings.archivedSessions } }
         val target = availablePrevious ?: last?.let { "chat/${it.id}" } ?: "chat?kind=${kind.name}"
         if (!nav.popBackStack(target, inclusive = false)) nav.navigate(target)

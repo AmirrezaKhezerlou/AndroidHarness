@@ -264,7 +264,13 @@ fun SettingsScreen(
                             )
                             MemoryManagerSection(container)
                         }
-                        SettingsPage.CODING -> CodingSection { page -> openPage(page) }
+                        SettingsPage.CODING -> {
+                            CodeStartOptionsSection(
+                                settings,
+                                onCodeStart = { value -> scope.launch { container.settings.setCodeStart(value) } },
+                            )
+                            CodingSection { page -> openPage(page) }
+                        }
                         SettingsPage.CONNECTED_ACCOUNTS -> ConnectedAccountsSection(container)
                         SettingsPage.MODELS -> {
                             SettingsPanel(Modifier.fillMaxWidth()) {
@@ -2539,27 +2545,6 @@ private fun ChatBehaviorSection(container: AppContainer, settings: AppSettings, 
                     }
                     Switch(checked = settings.showLiveCode,
                         onCheckedChange = { scope.launch { container.settings.setShowLiveCode(it) } })
-                }
-            }
-            HorizontalDivider()
-            SettingsAnchor(R.string.settings_anchor_resume_last_chat) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.weight(1f)) {
-                        Text(stringResource(R.string.settings_anchor_resume_last_chat), style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            if (settings.resumeLastChat) {
-                                uiContext.getString(R.string.ui_on_opens_your_most_recent_chat_when)
-                            } else {
-                                uiContext.getString(R.string.ui_off_starts_a_new_empty_chat_each)
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = settings.resumeLastChat,
-                        onCheckedChange = { scope.launch { container.settings.setResumeLastChat(it) } },
-                    )
                 }
             }
             HorizontalDivider()

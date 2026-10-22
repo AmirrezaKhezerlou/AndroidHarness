@@ -357,11 +357,11 @@ private val subSettingsEntries = listOfNotNull(
         anchor = R.string.settings_anchor_project_instructions,
     ),
     SettingsSearchEntry(
-        R.string.settings_search_resume_last_chat_title,
-        R.string.settings_search_resume_last_chat_desc,
-        SettingsPage.CHAT,
-        "startup launch chat resume",
-        anchor = R.string.settings_anchor_resume_last_chat,
+        R.string.settings_search_start_code_title,
+        R.string.settings_search_start_code_desc,
+        SettingsPage.CODING,
+        "startup launch chat resume continue code coding new last conversation",
+        anchor = R.string.settings_start_code,
     ),
     SettingsSearchEntry(
         R.string.settings_search_show_live_code_title,

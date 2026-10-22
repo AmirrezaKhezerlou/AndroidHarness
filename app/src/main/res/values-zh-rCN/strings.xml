@@ -98,8 +98,8 @@
     <string name="settings_search_tool_iterations_desc">代理行为 · 限制代理的工具调用轮数</string>
     <string name="settings_search_project_instructions_title">项目指令（AGENTS.md）</string>
     <string name="settings_search_project_instructions_desc">代理行为 · 编辑每轮都会注入的工作区指令</string>
-    <string name="settings_search_resume_last_chat_title">启动时恢复上次对话</string>
-    <string name="settings_search_resume_last_chat_desc">对话与命令 · 应用启动时打开最近的对话</string>
+    <string name="settings_search_start_code_title">代码对话启动方式</string>
+    <string name="settings_search_start_code_desc">编程 · 开始新的代码对话或继续最近一次</string>
     <string name="settings_search_show_live_code_title">显示实时代码</string>
     <string name="settings_search_show_live_code_desc">对话与命令 · 预览代码生成与行级改动</string>
     <string name="settings_search_repo_map_title">工作区代码索引（Repo map）</string>
@@ -781,6 +781,11 @@
     <string name="settings_chat_start_new_desc">每次打开聊天都开始新对话。</string>
     <string name="settings_chat_start_last">上次对话</string>
     <string name="settings_chat_start_last_desc">打开聊天时继续最近的对话。</string>
+    <string name="settings_start_code">开始编程</string>
+    <string name="settings_start_code_new">新代码对话</string>
+    <string name="settings_start_code_new_desc">每次打开代码版块都开始新的代码对话。</string>
+    <string name="settings_start_code_last">上次代码对话</string>
+    <string name="settings_start_code_last_desc">打开代码版块时继续最近的代码对话。</string>
     <string name="settings_page_memory_title">记忆</string>
     <string name="settings_page_memory_desc">查看并管理助手记住的内容</string>
     <string name="settings_page_coding_title">编程</string>

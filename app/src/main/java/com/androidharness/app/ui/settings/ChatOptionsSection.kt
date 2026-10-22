@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import com.androidharness.app.R
 import com.androidharness.app.data.AppSettings
 import com.androidharness.app.data.ChatStartMode
+import com.androidharness.app.data.CodeStartMode
 import com.androidharness.app.data.StartScreen
 
 @Composable
@@ -60,6 +61,33 @@ internal fun ChatOptionsSection(
                 when (it) {
                     ChatStartMode.NEW_CHAT -> R.string.settings_chat_start_new_desc
                     ChatStartMode.LAST_CHAT -> R.string.settings_chat_start_last_desc
+                }
+            },
+        )
+    }
+}
+
+@Composable
+internal fun CodeStartOptionsSection(
+    settings: AppSettings,
+    onCodeStart: (CodeStartMode) -> Unit,
+) {
+    SettingsAnchor(R.string.settings_start_code) {
+        ChoicePanel(
+            title = R.string.settings_start_code,
+            options = CodeStartMode.entries,
+            selected = settings.codeStart,
+            onSelect = onCodeStart,
+            label = {
+                when (it) {
+                    CodeStartMode.NEW_CODE -> R.string.settings_start_code_new
+                    CodeStartMode.LAST_CODE -> R.string.settings_start_code_last
+                }
+            },
+            description = {
+                when (it) {
+                    CodeStartMode.NEW_CODE -> R.string.settings_start_code_new_desc
+                    CodeStartMode.LAST_CODE -> R.string.settings_start_code_last_desc
                 }
             },
         )
