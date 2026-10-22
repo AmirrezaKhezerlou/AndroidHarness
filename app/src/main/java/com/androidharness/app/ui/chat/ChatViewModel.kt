@@ -571,6 +571,7 @@ class ChatViewModel(
                         _state.value.mode,
                         _state.value.permissionMode == PermissionMode.FULL_ACCESS,
                         conversation = _state.value.conversation,
+                        sessionId = initialSessionId,
                     )
                     _state.update { it.copy(estimate = fresh) }
                 }
@@ -1761,7 +1762,8 @@ class ChatViewModel(
                 c.runManager.controls.update(sid) { it.copy(summaryOverride = summary, contextAfter = before) }
                 val fresh = c.engine.estimateFor(com.androidharness.app.agent.ContextHygiene.forModel(
                     c.sessions.historyFor(sid).second), chatWorkspace(), current.mode,
-                    current.permissionMode == PermissionMode.FULL_ACCESS, conversation = current.conversation)
+                    current.permissionMode == PermissionMode.FULL_ACCESS, conversation = current.conversation,
+                    sessionId = sid)
                 if (sessionId == sid) _state.update { it.copy(estimate = fresh) }
             }
         } catch (e: kotlinx.coroutines.CancellationException) {

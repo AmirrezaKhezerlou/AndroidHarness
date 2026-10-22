@@ -161,7 +161,7 @@ class RequestedImprovementsDeviceTest {
             db.openHelper.writableDatabase.execSQL("DROP TABLE code_activity")
             db.openHelper.writableDatabase.execSQL("PRAGMA user_version = 18")
             db.close()
-            db = Room.databaseBuilder(c.appContext, AppDatabase::class.java, name).addMigrations(AppDatabase.MIGRATION_19_20, AppDatabase.MIGRATION_18_19).build()
+            db = Room.databaseBuilder(c.appContext, AppDatabase::class.java, name).addMigrations(AppDatabase.MIGRATION_20_21, AppDatabase.MIGRATION_19_20, AppDatabase.MIGRATION_18_19).build()
             val totals = db.dao().codeActivityBetween(0, Long.MAX_VALUE).first()
             assertEquals(12L, totals.added); assertEquals(3L, totals.removed); assertEquals(1L, totals.edits)
         } finally { db.close(); c.appContext.deleteDatabase(name) }

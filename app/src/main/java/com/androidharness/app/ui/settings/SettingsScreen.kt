@@ -249,7 +249,15 @@ fun SettingsScreen(
                         if (page != SettingsPage.LOCAL_MODELS && page != SettingsPage.AGENT && page != SettingsPage.TELEGRAM && page != SettingsPage.STORAGE) SettingsPageIntro(page)
                     when (page) {
                         SettingsPage.LANGUAGE -> LanguageSection()
-                        SettingsPage.CHAT_OPTIONS -> ChatOptionsSection(settings) { value -> scope.launch { container.settings.setStartScreen(value) } }
+                        SettingsPage.CHAT_OPTIONS -> ChatOptionsSection(
+                            container,
+                            settings,
+                            onStartScreen = { value -> scope.launch { container.settings.setStartScreen(value) } },
+                            onChatStart = { value -> scope.launch { container.settings.setChatStart(value) } },
+                            onMemoryEnabled = { value -> scope.launch { container.settings.setMemoryEnabled(value) } },
+                            onOpenMemory = { openPage(SettingsPage.MEMORY, null) },
+                        )
+                        SettingsPage.MEMORY -> MemoryManagerSection(container)
                         SettingsPage.CONNECTED_ACCOUNTS -> ConnectedAccountsSection(container)
                         SettingsPage.MODELS -> {
                             SettingsPanel(Modifier.fillMaxWidth()) {

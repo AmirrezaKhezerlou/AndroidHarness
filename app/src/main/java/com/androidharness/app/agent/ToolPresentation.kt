@@ -173,8 +173,8 @@ fun toolPresentation(call: ToolCallData, result: ChatMessage? = null): ToolPrese
             val title = arg("title")?.takeIf { it.isNotBlank() } ?: "research subagent"
             ToolPresentation("Delegated $title", "Delegating: $title…", kind = ToolActivityKind.SUBAGENT)
         }
-        "memory_write" -> ToolPresentation("Saved memory", "Saving to memory…", kind = ToolActivityKind.MEMORY)
-        "memory_read", "memory_search" -> ToolPresentation("Read memory", "Reading memory…", kind = ToolActivityKind.MEMORY)
+        "memory_write", "remember" -> ToolPresentation("Saved memory", "Saving to memory…", kind = ToolActivityKind.MEMORY)
+        "memory_read", "memory_search", "recall" -> ToolPresentation("Read memory", "Reading memory…", kind = ToolActivityKind.MEMORY)
         "todo_write" -> ToolPresentation("Updated task list", "Updating task list…", kind = ToolActivityKind.OTHER)
         "skill_view" -> {
             val name = arg("name") ?: "skill"

@@ -104,13 +104,13 @@ class ChatOptionsDeviceTest {
         } finally { restore(saved) }
     }
 
-    @Test fun resumeLastChatOnlyReopensTheChosenSection(): Unit = runBlocking {
+    @Test fun savedChatResumesOnlyWhenItsStartChoiceAllowsIt(): Unit = runBlocking {
         val saved = c.settings.settings.first()
         val project = c.workspace.currentProjectOnce()
         val chat = c.sessions.createSession("Saved startup Chat", project.id, ConversationConfig(ConversationKind.CHAT))
         val code = c.sessions.createSession("Saved startup Code", project.id)
         try {
-            prepare(); c.settings.setResumeLastChat(true)
+            prepare(); c.settings.setResumeLastChat(true); c.settings.setChatStart(ChatStartMode.LAST_CHAT)
             for ((preference, session, expected) in listOf(
                 Triple(StartScreen.CHAT, chat, ConversationKind.CHAT),
                 Triple(StartScreen.CODE, chat, ConversationKind.CODE),
@@ -125,6 +125,13 @@ class ChatOptionsDeviceTest {
                     else { assertNull(find("Saved startup Chat")); assertNull(find("Saved startup Code")) }
                 }
             }
+            c.settings.setChatStart(ChatStartMode.NEW_CHAT)
+            c.settings.setStartScreen(StartScreen.CHAT); c.settings.setLastActiveSessionId(chat)
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { activity -> activity.setContent { HarnessTheme { AppNav(c) } } }
+                awaitSection(ConversationKind.CHAT)
+                assertNull("New chat is the default", find("Saved startup Chat"))
+            }
         } finally {
             for (id in listOf(chat, code)) c.sessions.session(id)?.let { c.sessions.deleteSession(it) }
             restore(saved)
@@ -135,12 +142,14 @@ class ChatOptionsDeviceTest {
         c.settings.setOnboardingDone(true)
         c.settings.setWorkspaceLayout(WorkspaceLayoutMode.PHONE)
         c.settings.setResumeLastChat(false)
+        c.settings.setChatStart(ChatStartMode.NEW_CHAT)
         c.settings.setLastActiveSessionId(null)
     }
     private suspend fun restore(saved: AppSettings) {
         c.settings.setOnboardingDone(saved.onboardingDone)
         c.settings.setWorkspaceLayout(saved.workspaceLayout)
         c.settings.setResumeLastChat(saved.resumeLastChat)
+        c.settings.setChatStart(saved.chatStart)
         c.settings.setLastActiveSessionId(saved.lastActiveSessionId)
         c.settings.setStartScreen(saved.startScreen)
         c.settings.setLastConversationKind(saved.lastConversationKind)

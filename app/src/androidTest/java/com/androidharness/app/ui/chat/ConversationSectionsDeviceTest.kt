@@ -193,6 +193,7 @@ class ConversationSectionsDeviceTest {
         c.settings.setStartScreen(com.androidharness.app.data.StartScreen.CODE)
         c.settings.setOnboardingDone(true)
         c.settings.setResumeLastChat(true)
+        c.settings.setChatStart(com.androidharness.app.data.ChatStartMode.NEW_CHAT)
         c.settings.setWorkspaceLayout(WorkspaceLayoutMode.PHONE)
         c.settings.setLastActiveSessionId(chat)
         try {
@@ -242,6 +243,7 @@ class ConversationSectionsDeviceTest {
             c.sessions.sessions.first().filter { it.id !in before }.forEach { c.sessions.deleteSession(it) }
             c.settings.setOnboardingDone(saved.onboardingDone)
             c.settings.setResumeLastChat(saved.resumeLastChat)
+            c.settings.setChatStart(saved.chatStart)
             c.settings.setWorkspaceLayout(saved.workspaceLayout)
             c.settings.setLastActiveSessionId(saved.lastActiveSessionId)
             c.settings.setStartScreen(saved.startScreen)
@@ -256,6 +258,7 @@ class ConversationSectionsDeviceTest {
             ConversationConfig(ConversationKind.CHAT))
         c.settings.setOnboardingDone(true)
         c.settings.setResumeLastChat(true)
+        c.settings.setChatStart(com.androidharness.app.data.ChatStartMode.NEW_CHAT)
         c.settings.setWorkspaceLayout(WorkspaceLayoutMode.DESKTOP)
         c.settings.setLastActiveSessionId(chat)
         try {
@@ -286,6 +289,7 @@ class ConversationSectionsDeviceTest {
             c.sessions.sessions.first().filter { it.id !in before }.forEach { c.sessions.deleteSession(it) }
             c.settings.setOnboardingDone(saved.onboardingDone)
             c.settings.setResumeLastChat(saved.resumeLastChat)
+            c.settings.setChatStart(saved.chatStart)
             c.settings.setWorkspaceLayout(saved.workspaceLayout)
             c.settings.setLastActiveSessionId(saved.lastActiveSessionId)
         }

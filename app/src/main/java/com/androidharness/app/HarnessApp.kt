@@ -93,7 +93,7 @@ class AppContainer(val appContext: Context) {
 
     private val db = Room.databaseBuilder(appContext, AppDatabase::class.java, "harness.db")
         .addMigrations(
-            AppDatabase.MIGRATION_19_20, AppDatabase.MIGRATION_18_19, AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6,
+            AppDatabase.MIGRATION_20_21, AppDatabase.MIGRATION_19_20, AppDatabase.MIGRATION_18_19, AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6,
             AppDatabase.MIGRATION_6_7, AppDatabase.MIGRATION_7_8,
             AppDatabase.MIGRATION_8_9, AppDatabase.MIGRATION_9_10, AppDatabase.MIGRATION_10_11, AppDatabase.MIGRATION_11_12, AppDatabase.MIGRATION_12_13, AppDatabase.MIGRATION_13_14, AppDatabase.MIGRATION_14_15, AppDatabase.MIGRATION_15_16, AppDatabase.MIGRATION_16_17, AppDatabase.MIGRATION_17_18,
         )
@@ -103,6 +103,7 @@ class AppContainer(val appContext: Context) {
         .fallbackToDestructiveMigration(true)
         .build()
     val sessions = SessionRepository(db)
+    val memory = com.androidharness.app.data.MemoryRepository(db, settings)
     val chatModels = com.androidharness.app.data.ChatModelRepository(settings, providers, sessions)
     val chatBackup by lazy { ChatBackupManager(db, appContext, workspace) }
     val snippets = com.androidharness.app.data.SnippetRepository(db.dao())
@@ -175,6 +176,7 @@ class AppContainer(val appContext: Context) {
         artifactLoader = sessions::artifacts,
         toolOutputLoader = sessions::toolOutput,
         fileHistory = fileHistory,
+        memory = memory,
     )
     val mcp = com.androidharness.app.tools.mcp.McpManager(appContext, linuxEnv, keys, codeGraph)
     fun routedProvider(): com.androidharness.app.llm.LlmProvider =
@@ -222,6 +224,7 @@ class AppContainer(val appContext: Context) {
         },
         prepareGitHub = { github.refreshIfNeeded() },
         deviceAccess = deviceAccess,
+        universalMemory = memory,
         chatOnlyTools = listOf(com.androidharness.app.tools.ReadChatTextTool(sessions::messages),
             com.androidharness.app.tools.OfferCodeHandoffTool()),
     )

@@ -83,6 +83,23 @@ data class ProjectEntity(
     val lastUsedAt: Long,
 )
 
+/** One remembered fact, shared by Chat and Code. Scope is GLOBAL or PROJECT. */
+@Entity(tableName = "memories", indices = [Index("scope"), Index("projectId"), Index("enabled")])
+data class MemoryEntity(
+    @PrimaryKey val id: String,
+    val text: String,
+    val category: String = "FACT",
+    val scope: String = "GLOBAL",
+    val projectId: String? = null,
+    val sourceSessionId: String? = null,
+    val pinned: Boolean = false,
+    val enabled: Boolean = true,
+    val createdAt: Long,
+    val updatedAt: Long,
+    val lastUsedAt: Long = 0,
+    val useCount: Int = 0,
+)
+
 @Entity(tableName = "checkpoints", indices = [Index("sessionId")])
 data class CheckpointEntity(
     @PrimaryKey val id: String,
@@ -565,6 +582,46 @@ interface HarnessDao {
     @Query("DELETE FROM file_edits WHERE sessionId = :sessionId")
     suspend fun deleteFileEdits(sessionId: String)
 
+    // memories
+    @Query("SELECT * FROM memories ORDER BY pinned DESC, updatedAt DESC")
+    fun memoriesFlow(): Flow<List<MemoryEntity>>
+
+    @Query("SELECT * FROM memories WHERE enabled = 1 AND (scope = 'GLOBAL' OR (scope = 'PROJECT' AND projectId = :projectId)) ORDER BY pinned DESC, lastUsedAt DESC, updatedAt DESC")
+    suspend fun activeMemories(projectId: String?): List<MemoryEntity>
+
+    @Query("SELECT * FROM memories WHERE enabled = 1")
+    suspend fun enabledMemories(): List<MemoryEntity>
+
+    @Query("SELECT * FROM memories WHERE lower(text) = lower(:text) AND scope = :scope AND ((projectId IS NULL AND :projectId IS NULL) OR projectId = :projectId) LIMIT 1")
+    suspend fun findMemory(text: String, scope: String, projectId: String?): MemoryEntity?
+
+    @Query("SELECT * FROM memories WHERE id = :id")
+    suspend fun memory(id: String): MemoryEntity?
+
+    @Query("SELECT projectId FROM sessions WHERE id = :id")
+    suspend fun projectIdForSession(id: String): String?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertMemory(memory: MemoryEntity)
+
+    @Query("DELETE FROM memories WHERE id = :id")
+    suspend fun deleteMemory(id: String)
+
+    @Query("DELETE FROM memories")
+    suspend fun deleteAllMemories()
+
+    @Query("UPDATE memories SET enabled = :enabled, updatedAt = :now WHERE id = :id")
+    suspend fun setMemoryEnabled(id: String, enabled: Boolean, now: Long)
+
+    @Query("UPDATE memories SET pinned = :pinned, updatedAt = :now WHERE id = :id")
+    suspend fun setMemoryPinned(id: String, pinned: Boolean, now: Long)
+
+    @Query("UPDATE memories SET lastUsedAt = :now, useCount = useCount + 1 WHERE id IN (:ids)")
+    suspend fun markMemoriesUsed(ids: List<String>, now: Long)
+
+    @Query("UPDATE memories SET text = :text, category = :category, scope = :scope, projectId = :projectId, updatedAt = :now WHERE id = :id")
+    suspend fun updateMemory(id: String, text: String, category: String, scope: String, projectId: String?, now: Long)
+
     // session file changes (GitHub-style "Files changed" per chat)
     @Query(
         "SELECT * FROM session_file_changes WHERE sessionId = :sessionId " +
@@ -594,14 +651,30 @@ interface HarnessDao {
         CodeActivityEntity::class,
         SessionFileChangeEntity::class,
         MessageFtsEntity::class,
+        MemoryEntity::class,
     ],
-    version = 20,
+    version = 21,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun dao(): HarnessDao
 
     companion object {
+        val MIGRATION_20_21 = object : androidx.room.migration.Migration(20, 21) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS memories (" +
+                        "id TEXT NOT NULL PRIMARY KEY, text TEXT NOT NULL, category TEXT NOT NULL, " +
+                        "scope TEXT NOT NULL, projectId TEXT, sourceSessionId TEXT, " +
+                        "pinned INTEGER NOT NULL, enabled INTEGER NOT NULL, createdAt INTEGER NOT NULL, " +
+                        "updatedAt INTEGER NOT NULL, lastUsedAt INTEGER NOT NULL, useCount INTEGER NOT NULL)"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_memories_scope ON memories(scope)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_memories_projectId ON memories(projectId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_memories_enabled ON memories(enabled)")
+            }
+        }
+
         val MIGRATION_19_20 = object : androidx.room.migration.Migration(19, 20) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE sessions ADD COLUMN conversationJson TEXT")

@@ -53,7 +53,7 @@ class ModelLockingDeviceTest {
                 it.version = 14
             }
             db = Room.databaseBuilder(context, AppDatabase::class.java, name)
-                .addMigrations(AppDatabase.MIGRATION_14_15, AppDatabase.MIGRATION_15_16, AppDatabase.MIGRATION_16_17, AppDatabase.MIGRATION_17_18, AppDatabase.MIGRATION_19_20, AppDatabase.MIGRATION_18_19).build()
+                .addMigrations(AppDatabase.MIGRATION_20_21, AppDatabase.MIGRATION_14_15, AppDatabase.MIGRATION_15_16, AppDatabase.MIGRATION_16_17, AppDatabase.MIGRATION_17_18, AppDatabase.MIGRATION_19_20, AppDatabase.MIGRATION_18_19).build()
             sessions = SessionRepository(db)
             assertNull(sessions.session(sid)?.modelSelectionJson)
             assertEquals("Keep this history", sessions.messages(sid).single().text)

@@ -33,7 +33,13 @@ internal enum class SettingsPage(
         R.string.settings_page_chat_options_title,
         R.string.settings_page_chat_options_desc,
         R.string.settings_group_chat_options,
-        "chat option start screen default ui selection code chat last selected launch startup",
+        "chat option start screen default ui selection code chat last selected launch startup chat start new last resume",
+    ),
+    MEMORY(
+        R.string.settings_page_memory_title,
+        R.string.settings_page_memory_desc,
+        R.string.settings_group_chat_options,
+        "memory remember saved facts preferences projects decisions forget delete clear recall",
     ),
     GITHUB(
         R.string.settings_page_github_title,
@@ -213,6 +219,13 @@ private val subSettingsEntries = listOfNotNull(
         SettingsPage.CHAT_OPTIONS,
         "default ui selection code chat last selected start screen launch startup",
         anchor = R.string.settings_start_screen,
+    ),
+    SettingsSearchEntry(
+        R.string.settings_chat_start,
+        R.string.settings_page_chat_options_desc,
+        SettingsPage.CHAT_OPTIONS,
+        "chat start new last resume continue fresh blank conversation launch startup",
+        anchor = R.string.settings_chat_start,
     ),
     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.BAKLAVA) SettingsSearchEntry(
         R.string.settings_search_live_updates_title,

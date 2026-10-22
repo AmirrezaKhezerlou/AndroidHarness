@@ -10,6 +10,10 @@ class ConversationStartupTest {
         assertEquals(StartScreen.CODE, StartScreen.fromStored(null))
         assertEquals(StartScreen.CODE, StartScreen.fromStored("future"))
         assertEquals(StartScreen.CODE, Json.decodeFromString<AppSettings>("{}").startScreen)
+        assertEquals(ChatStartMode.NEW_CHAT, AppSettings().chatStart)
+        assertEquals(ChatStartMode.NEW_CHAT, ChatStartMode.fromStored(null))
+        assertEquals(ChatStartMode.NEW_CHAT, ChatStartMode.fromStored("future"))
+        assertEquals(ChatStartMode.NEW_CHAT, Json.decodeFromString<AppSettings>("{}").chatStart)
     }
 
     @Test fun eachPreferenceSelectsTheExpectedSectionIndependentlyOfResumeChat() {
@@ -20,22 +24,34 @@ class ConversationStartupTest {
         }
     }
 
-    @Test fun onlyExistingUnarchivedConversationsInTheSelectedSectionCanResume() {
+    @Test fun chatStartsNewByDefaultAndOnlyLastChatResumes() {
         val settings = AppSettings(startScreen = StartScreen.CHAT, lastActiveSessionId = "previous")
-        assertEquals("previous", ConversationStartup.resolve(settings, ConversationKind.CHAT).sessionId)
-        assertNull(ConversationStartup.resolve(settings, ConversationKind.CODE).sessionId)
-        assertNull(ConversationStartup.resolve(settings, null).sessionId)
-        assertNull(ConversationStartup.resolve(settings.copy(resumeLastChat = false), ConversationKind.CHAT).sessionId)
-        assertNull(ConversationStartup.resolve(settings.copy(archivedSessions = setOf("previous")), ConversationKind.CHAT).sessionId)
+        assertNull(ConversationStartup.resolve(settings, ConversationKind.CHAT).sessionId)
+        assertEquals("previous", ConversationStartup.resolve(settings.copy(chatStart = ChatStartMode.LAST_CHAT), ConversationKind.CHAT).sessionId)
+        assertNull(ConversationStartup.resolve(settings.copy(chatStart = ChatStartMode.LAST_CHAT), ConversationKind.CODE).sessionId)
+        assertNull(ConversationStartup.resolve(settings.copy(chatStart = ChatStartMode.LAST_CHAT), null).sessionId)
+        assertNull(ConversationStartup.resolve(settings.copy(chatStart = ChatStartMode.LAST_CHAT,
+            archivedSessions = setOf("previous")), ConversationKind.CHAT).sessionId)
     }
 
-    @Test fun backupsCarryThePreferenceButDoNotCarryDeviceLocalSelection() {
+    @Test fun codeKeepsUsingTheOlderResumeToggle() {
+        val settings = AppSettings(startScreen = StartScreen.CODE, lastActiveSessionId = "previous")
+        assertEquals("previous", ConversationStartup.resolve(settings, ConversationKind.CODE).sessionId)
+        assertNull(ConversationStartup.resolve(settings.copy(resumeLastChat = false), ConversationKind.CODE).sessionId)
+        assertEquals("previous", ConversationStartup.resolve(settings.copy(resumeLastChat = false,
+            startScreen = StartScreen.CHAT, chatStart = ChatStartMode.LAST_CHAT), ConversationKind.CHAT).sessionId)
+    }
+
+    @Test fun backupsCarryThePreferencesButDoNotCarryDeviceLocalSelection() {
         val exported = SettingsBackupPolicy.exportSettings(AppSettings(startScreen = StartScreen.LAST_SELECTED,
+            chatStart = ChatStartMode.LAST_CHAT,
             lastConversationKind = ConversationKind.CHAT, lastActiveSessionId = "device-chat"), emptySet())
         assertEquals(StartScreen.LAST_SELECTED, exported.startScreen)
+        assertEquals(ChatStartMode.LAST_CHAT, exported.chatStart)
         assertEquals(ConversationKind.CODE, exported.lastConversationKind)
         assertNull(exported.lastActiveSessionId)
         val decoded = Json.decodeFromString<AppSettings>(Json.encodeToString(AppSettings.serializer(), exported))
         assertEquals(StartScreen.LAST_SELECTED, decoded.startScreen)
+        assertEquals(ChatStartMode.LAST_CHAT, decoded.chatStart)
     }
 }

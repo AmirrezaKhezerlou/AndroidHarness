@@ -56,6 +56,9 @@ class ToolRegistry(private val tools: List<Tool>) {
     fun withExtra(extra: List<Tool>): ToolRegistry =
         if (extra.isEmpty()) this else ToolRegistry(tools + extra)
 
+    fun without(names: Set<String>): ToolRegistry =
+        if (names.isEmpty()) this else ToolRegistry(tools.filterNot { it.name in names })
+
     fun schemas(readOnlyOnly: Boolean = false, context: ToolContext? = null) = byName.values
         .filter { (!readOnlyOnly || it.isReadOnly) && (context == null || WorkspaceToolRouting.available(it, context)) }
         .sortedBy { it.name }
@@ -79,6 +82,7 @@ class ToolRegistry(private val tools: List<Tool>) {
             artifactLoader: ArtifactLoader? = null,
             toolOutputLoader: ToolOutputLoader? = null,
             fileHistory: com.androidharness.app.data.WorkspaceFileHistory? = null,
+            memory: com.androidharness.app.data.MemoryRepository? = null,
         ): ToolRegistry {
             val baseTools = mutableListOf<Tool>(
                 ListDirTool(),
@@ -139,6 +143,10 @@ class ToolRegistry(private val tools: List<Tool>) {
             if (fileHistory != null) {
                 baseTools.add(FileHistoryTool(fileHistory))
                 baseTools.add(FileRestoreTool(fileHistory))
+            }
+            if (memory != null) {
+                baseTools.add(RememberTool(memory))
+                baseTools.add(RecallTool(memory))
             }
             if (imageStore != null) {
                 baseTools.add(ReadImageTool(imageStore))

@@ -113,6 +113,10 @@ data class AppSettings(
     /** Resume the last opened chat session when app launches. */
     val resumeLastChat: Boolean = true,
     val startScreen: StartScreen = StartScreen.CODE,
+    /** Chat opens a fresh conversation unless the user asks to continue the latest one. */
+    val chatStart: ChatStartMode = ChatStartMode.NEW_CHAT,
+    /** Universal memory shared by Chat and Code. */
+    val memoryEnabled: Boolean = true,
     /** Device-local section selection, including an empty Chat or Code draft. */
     val lastConversationKind: ConversationKind = ConversationKind.CODE,
     val showLiveCode: Boolean = true,
@@ -224,6 +228,8 @@ class SettingsRepository(private val context: Context) {
         val VOICE_PROMO_SEEN = booleanPreferencesKey("voice_promo_seen")
         val RESUME_LAST_CHAT = booleanPreferencesKey("resume_last_chat")
         val START_SCREEN = stringPreferencesKey("start_screen")
+        val CHAT_START = stringPreferencesKey("chat_start")
+        val MEMORY_ENABLED = booleanPreferencesKey("memory_enabled")
         val LAST_CONVERSATION_KIND = stringPreferencesKey("last_conversation_kind")
         val SHOW_LIVE_CODE = booleanPreferencesKey("show_live_code")
         val LAST_ACTIVE_SESSION = stringPreferencesKey("last_active_session_id")
@@ -300,6 +306,8 @@ class SettingsRepository(private val context: Context) {
             voicePromoSeen = prefs[Keys.VOICE_PROMO_SEEN] ?: false,
             resumeLastChat = prefs[Keys.RESUME_LAST_CHAT] ?: true,
             startScreen = StartScreen.fromStored(prefs[Keys.START_SCREEN]),
+            chatStart = ChatStartMode.fromStored(prefs[Keys.CHAT_START]),
+            memoryEnabled = prefs[Keys.MEMORY_ENABLED] ?: true,
             lastConversationKind = ConversationKind.entries.firstOrNull { it.name == prefs[Keys.LAST_CONVERSATION_KIND] } ?: ConversationKind.CODE,
             showLiveCode = prefs[Keys.SHOW_LIVE_CODE] ?: true,
             lastActiveSessionId = prefs[Keys.LAST_ACTIVE_SESSION],
@@ -346,6 +354,8 @@ class SettingsRepository(private val context: Context) {
             p[Keys.TTS_ALWAYS_SPEAK] = s.ttsAlwaysSpeak
             p[Keys.RESUME_LAST_CHAT] = s.resumeLastChat
             p[Keys.START_SCREEN] = s.startScreen.name
+            p[Keys.CHAT_START] = s.chatStart.name
+            p[Keys.MEMORY_ENABLED] = s.memoryEnabled
             p[Keys.SHOW_LIVE_CODE] = s.showLiveCode
             p[Keys.REPO_MAP_ENABLED] = s.repoMapEnabled
             p[Keys.LOCAL_MODEL_AGENT_CONTEXT] = s.localModelAgentContext
@@ -680,6 +690,14 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setStartScreen(value: StartScreen) {
         context.settingsStore.edit { it[Keys.START_SCREEN] = value.name }
+    }
+
+    suspend fun setChatStart(value: ChatStartMode) {
+        context.settingsStore.edit { it[Keys.CHAT_START] = value.name }
+    }
+
+    suspend fun setMemoryEnabled(enabled: Boolean) {
+        context.settingsStore.edit { it[Keys.MEMORY_ENABLED] = enabled }
     }
 
     suspend fun setLastConversationKind(value: ConversationKind) {

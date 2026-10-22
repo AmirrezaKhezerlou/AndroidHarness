@@ -1110,8 +1110,8 @@
     <string name="ui_could_not_save">"无法保存：%1$s"</string>
     <string name="ui_match_your_wallpaper_android_12">"匹配壁纸（Android 12+）"</string>
     <string name="ui_chat_behavior">"聊天行为"</string>
-    <string name="ui_on_opens_your_most_recent_chat_when">"开启：启动应用时打开最近的聊天。"</string>
-    <string name="ui_off_starts_a_new_empty_chat_each">"关闭：每次打开应用时开始新的空白聊天。"</string>
+    <string name="ui_on_opens_your_most_recent_chat_when">"开启：启动应用时打开最近的代码对话。"</string>
+    <string name="ui_off_starts_a_new_empty_chat_each">"关闭：每次打开应用时开始新的空白代码对话。"</string>
     <string name="ui_on_injects_a_compact_project_symbol_map">"开启：将精简的项目符号图（类、函数、类型）注入上下文，帮助智能体了解代码库结构，减少额外搜索。"</string>
     <string name="ui_off_agent_explores_files_only_using_tool">"关闭：智能体仅使用工具命令探索文件。"</string>
     <string name="ui_privacy">"隐私"</string>

@@ -9,6 +9,9 @@ class SettingsNavigationTest {
         assertEquals(SettingsPage.LANGUAGE.ordinal + 1, SettingsPage.CHAT_OPTIONS.ordinal)
         assertTrue(SettingsPage.CHAT_OPTIONS in matchingSettingsPages("last selected", settingsTestStrings()))
         assertTrue(matchingSettingsEntries("start screen", settingsTestStrings()).any { it.page == SettingsPage.CHAT_OPTIONS && it.anchor == R.string.settings_start_screen })
+        assertTrue(matchingSettingsEntries("start chat", settingsTestStrings()).any { it.page == SettingsPage.CHAT_OPTIONS && it.anchor == R.string.settings_chat_start })
+        assertTrue(SettingsPage.MEMORY in matchingSettingsPages("forget saved facts", settingsTestStrings()))
+        assertTrue(matchingSettingsEntries("memory", settingsTestStrings()).any { it.page == SettingsPage.MEMORY })
     }
 
     @Test
@@ -61,7 +64,7 @@ class SettingsNavigationTest {
     fun `language is first and GitHub integration still supports a direct link`() {
         assertEquals(SettingsPage.LANGUAGE, matchingSettingsPages("", settingsTestStrings()).first())
         assertEquals(SettingsPage.CHAT_OPTIONS, matchingSettingsPages("", settingsTestStrings())[1])
-        assertEquals(SettingsPage.GITHUB, matchingSettingsPages("", settingsTestStrings())[2])
+        assertEquals(SettingsPage.GITHUB, matchingSettingsPages("", settingsTestStrings())[3])
         assertEquals(SettingsPage.LANGUAGE, settingsDeepLink("language"))
         assertEquals(SettingsPage.GITHUB, settingsDeepLink("github"))
         assertEquals(listOf(SettingsPage.GITHUB), matchingSettingsPages("commit push", settingsTestStrings()))

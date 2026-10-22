@@ -1110,8 +1110,8 @@
     <string name="ui_could_not_save">"Could not save: %1$s"</string>
     <string name="ui_match_your_wallpaper_android_12">"Match your wallpaper (Android 12+)"</string>
     <string name="ui_chat_behavior">"Chat behavior"</string>
-    <string name="ui_on_opens_your_most_recent_chat_when">"On: opens your most recent chat when launching the app."</string>
-    <string name="ui_off_starts_a_new_empty_chat_each">"Off: starts a new empty chat each time the app opens."</string>
+    <string name="ui_on_opens_your_most_recent_chat_when">"On: opens your most recent Code chat when launching the app."</string>
+    <string name="ui_off_starts_a_new_empty_chat_each">"Off: starts a new empty Code chat each time the app opens."</string>
     <string name="ui_on_injects_a_compact_project_symbol_map">"On: injects a compact project symbol map (classes, functions, types) into context so the agent understands codebase structure without extra searches."</string>
     <string name="ui_off_agent_explores_files_only_using_tool">"Off: agent explores files only using tool commands."</string>
     <string name="ui_privacy">"Privacy"</string>
