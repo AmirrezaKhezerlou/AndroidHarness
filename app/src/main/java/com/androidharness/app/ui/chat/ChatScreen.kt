@@ -498,12 +498,16 @@ private fun ChatScreenContent(
         if (searchMessageId == null || state.isLoadingMessages) return@LaunchedEffect
         if (!viewModel.revealMessage(searchMessageId)) {
             searchRevealDone = true
+            lastAnchoredTurnId = state.messages.lastOrNull { it.role == Role.USER }?.turnId
             snackbar.showSnackbar(uiContext.getString(R.string.ui_this_message_is_no_longer_in_the))
             return@LaunchedEffect
         }
         val index = snapshotFlow { searchItemIndex.value }.filterNotNull().first()
         listState.scrollToItem(index)
         searchRevealDone = true
+        // Keep the search result in place; a new message changes the turn id
+        // and anchors normally.
+        lastAnchoredTurnId = state.messages.lastOrNull { it.role == Role.USER }?.turnId
     }
 
     if (showContext) {
