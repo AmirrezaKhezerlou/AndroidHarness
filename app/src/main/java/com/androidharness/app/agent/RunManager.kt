@@ -490,6 +490,7 @@ class RunManager(
                     maxContextTokens = maxContextTokens,
                     mode = if (conversation.isChat) AgentMode.ACT else mode,
                     conversation = conversation,
+                    searchDepth = reasoningPrefs.searchDepth,
                     maxIterations = maxIterations,
                     // Connected MCP servers ride into this run; a failing
                     // server must never block the run itself.

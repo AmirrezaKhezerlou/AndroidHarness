@@ -109,6 +109,7 @@ data class ChatUiState(
     val error: String? = null,
     val permissionMode: PermissionMode = PermissionMode.CONFIRM_RISKY,
     val thinkingLevel: ThinkingLevel = ThinkingLevel.OFF,
+    val searchDepth: com.androidharness.app.data.SearchDepth = com.androidharness.app.data.SearchDepth.AUTO,
     val reasoningConfigs: Map<String, com.androidharness.app.agent.CustomReasoningConfig> = emptyMap(),
     val customThinkingLevels: Map<String, String> = emptyMap(),
     val mode: AgentMode = AgentMode.ACT,
@@ -572,6 +573,7 @@ class ChatViewModel(
                         _state.value.permissionMode == PermissionMode.FULL_ACCESS,
                         conversation = _state.value.conversation,
                         sessionId = initialSessionId,
+                        searchDepth = _state.value.searchDepth,
                     )
                     _state.update { it.copy(estimate = fresh) }
                 }
@@ -680,6 +682,7 @@ class ChatViewModel(
         _state.update { it.copy(
             permissionMode = settings.permissionMode,
             thinkingLevel = selection.thinking,
+            searchDepth = settings.searchDepth,
             reasoningConfigs = settings.reasoningConfigs,
             customThinkingLevels = selection.customThinkingLevels,
             maxContextTokens = settings.maxContextTokens,
@@ -1763,7 +1766,7 @@ class ChatViewModel(
                 val fresh = c.engine.estimateFor(com.androidharness.app.agent.ContextHygiene.forModel(
                     c.sessions.historyFor(sid).second), chatWorkspace(), current.mode,
                     current.permissionMode == PermissionMode.FULL_ACCESS, conversation = current.conversation,
-                    sessionId = sid)
+                    sessionId = sid, searchDepth = current.searchDepth)
                 if (sessionId == sid) _state.update { it.copy(estimate = fresh) }
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -1784,6 +1787,11 @@ class ChatViewModel(
     fun setPermissionMode(mode: PermissionMode) {
         _state.update { it.copy(permissionMode = mode) }
         viewModelScope.launch { c.settings.setPermissionMode(mode) }
+    }
+
+    fun setSearchDepth(depth: com.androidharness.app.data.SearchDepth) {
+        _state.update { it.copy(searchDepth = depth) }
+        viewModelScope.launch { c.settings.setSearchDepth(depth) }
     }
 
     fun saveReasoningConfig(config: ProviderConfig, custom: com.androidharness.app.agent.CustomReasoningConfig?) {

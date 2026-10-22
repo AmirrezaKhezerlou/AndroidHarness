@@ -1109,6 +1109,8 @@ private fun ChatScreenContent(
                     else -> headerModel ?: currentProvider.name
                 },
                 modelScopeLabel = if (state.sameModelAcrossChats) null else uiContext.getString(R.string.ui_this_chat),
+                searchDepth = state.searchDepth,
+                onSetSearchDepth = viewModel::setSearchDepth,
                 mode = state.mode,
                 dualPlanning = state.dualPlanning,
                 thinkingLevel = thinking?.level ?: state.thinkingLevel,

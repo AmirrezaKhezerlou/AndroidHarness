@@ -55,4 +55,22 @@ Use inline rich responses for visuals and documents in Chat. For a custom intera
 
     /** Header label: Chat shows the model name without the catalog's provider prefix. */
     fun modelLabel(model: String?): String? = model?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
+
+    /** Chat prompt guidance for the header's research depth control. */
+    fun researchDepthPrompt(depth: com.androidharness.app.data.SearchDepth): String {
+        val base = when (depth) {
+            com.androidharness.app.data.SearchDepth.INSTANT ->
+                "The user chose Instant: run one quick search, use at most 5 distinct sources this turn, and answer as soon as the question is covered."
+            com.androidharness.app.data.SearchDepth.DEEP ->
+                "The user chose Deep search: run a few focused searches and use at most 20 distinct sources this turn."
+            com.androidharness.app.data.SearchDepth.AUTO ->
+                "Research depth is Auto: no fixed source limit. Decide how much searching the question needs and keep it proportionate."
+            com.androidharness.app.data.SearchDepth.DEEP_RESEARCH ->
+                "The user chose Deep research: plan several queries across different angles, read the key pages, and use up to 50 distinct sources this turn."
+            com.androidharness.app.data.SearchDepth.MAX_RESEARCH ->
+                "The user chose Max research: research exhaustively across queries and angles, verify important claims across sources, and use up to 100 distinct sources this turn."
+        }
+        return if (depth.maxSources == null) base
+        else base + " web_search enforces this turn's source budget and reports how many sources remain; when it is used up, answer from the sources already collected instead of searching more."
+    }
 }

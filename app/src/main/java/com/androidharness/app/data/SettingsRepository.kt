@@ -115,6 +115,8 @@ data class AppSettings(
     val startScreen: StartScreen = StartScreen.CODE,
     /** Chat opens a fresh conversation unless the user asks to continue the latest one. */
     val chatStart: ChatStartMode = ChatStartMode.NEW_CHAT,
+    /** Web research effort for Chat turns. */
+    val searchDepth: SearchDepth = SearchDepth.AUTO,
     /** Universal memory shared by Chat and Code. */
     val memoryEnabled: Boolean = true,
     /** Device-local section selection, including an empty Chat or Code draft. */
@@ -229,6 +231,7 @@ class SettingsRepository(private val context: Context) {
         val RESUME_LAST_CHAT = booleanPreferencesKey("resume_last_chat")
         val START_SCREEN = stringPreferencesKey("start_screen")
         val CHAT_START = stringPreferencesKey("chat_start")
+        val SEARCH_DEPTH = stringPreferencesKey("search_depth")
         val MEMORY_ENABLED = booleanPreferencesKey("memory_enabled")
         val LAST_CONVERSATION_KIND = stringPreferencesKey("last_conversation_kind")
         val SHOW_LIVE_CODE = booleanPreferencesKey("show_live_code")
@@ -307,6 +310,7 @@ class SettingsRepository(private val context: Context) {
             resumeLastChat = prefs[Keys.RESUME_LAST_CHAT] ?: true,
             startScreen = StartScreen.fromStored(prefs[Keys.START_SCREEN]),
             chatStart = ChatStartMode.fromStored(prefs[Keys.CHAT_START]),
+            searchDepth = SearchDepth.fromStored(prefs[Keys.SEARCH_DEPTH]),
             memoryEnabled = prefs[Keys.MEMORY_ENABLED] ?: true,
             lastConversationKind = ConversationKind.entries.firstOrNull { it.name == prefs[Keys.LAST_CONVERSATION_KIND] } ?: ConversationKind.CODE,
             showLiveCode = prefs[Keys.SHOW_LIVE_CODE] ?: true,
@@ -355,6 +359,7 @@ class SettingsRepository(private val context: Context) {
             p[Keys.RESUME_LAST_CHAT] = s.resumeLastChat
             p[Keys.START_SCREEN] = s.startScreen.name
             p[Keys.CHAT_START] = s.chatStart.name
+            p[Keys.SEARCH_DEPTH] = s.searchDepth.name
             p[Keys.MEMORY_ENABLED] = s.memoryEnabled
             p[Keys.SHOW_LIVE_CODE] = s.showLiveCode
             p[Keys.REPO_MAP_ENABLED] = s.repoMapEnabled
@@ -698,6 +703,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setMemoryEnabled(enabled: Boolean) {
         context.settingsStore.edit { it[Keys.MEMORY_ENABLED] = enabled }
+    }
+
+    suspend fun setSearchDepth(depth: SearchDepth) {
+        context.settingsStore.edit { it[Keys.SEARCH_DEPTH] = depth.name }
     }
 
     suspend fun setLastConversationKind(value: ConversationKind) {

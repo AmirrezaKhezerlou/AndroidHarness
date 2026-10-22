@@ -7,6 +7,7 @@ import androidx.compose.material.icons.filled.Add
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -58,6 +60,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.selected
@@ -112,6 +115,8 @@ internal fun MainHeader(
     onAddThinkingLevel: (() -> Unit)? = null,
     onSetCustomThinking: (String) -> Unit = {},
     conversation: com.androidharness.app.data.ConversationConfig = com.androidharness.app.data.ConversationConfig(),
+    searchDepth: com.androidharness.app.data.SearchDepth = com.androidharness.app.data.SearchDepth.AUTO,
+    onSetSearchDepth: (com.androidharness.app.data.SearchDepth) -> Unit = {},
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     var menu by remember { mutableStateOf(false) }
@@ -126,7 +131,8 @@ internal fun MainHeader(
             permissionMode, onPickModel, onSetThinking, onSetMode, onSetPermission,
             onOpenContext, onOpenUndo, canUndo, onOpenGitHub, canOpenGitHub, onOpenWebPreview, thinkingResolved, onCustomizeThinking, onSetCustomThinking, onAddThinkingLevel,
             showPreviewShortcut = showWebPreviewShortcut, conversation = conversation,
-            workspaceName = workspaceName, onOpenDrawer = onOpenDrawer)
+            workspaceName = workspaceName, onOpenDrawer = onOpenDrawer,
+            searchDepth = searchDepth, onSetSearchDepth = onSetSearchDepth)
         }
         return
     }
@@ -170,6 +176,10 @@ internal fun MainHeader(
                             contentDescription = uiContext.getString(R.string.ui_workspace_files),
                             tint = scheme.onSurfaceVariant,
                         )
+                    }
+                    if (conversation.isChat) {
+                        SearchDepthControl(searchDepth, onSetSearchDepth)
+                        Spacer(Modifier.width(2.dp))
                     }
                     Box {
                         IconButton(onClick = { menu = true }) {
@@ -368,6 +378,8 @@ private fun DesktopConversationHeader(
     conversation: com.androidharness.app.data.ConversationConfig,
     workspaceName: String?,
     onOpenDrawer: () -> Unit,
+    searchDepth: com.androidharness.app.data.SearchDepth,
+    onSetSearchDepth: (com.androidharness.app.data.SearchDepth) -> Unit,
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
@@ -397,6 +409,10 @@ private fun DesktopConversationHeader(
             }
             if (!chatOnly && showPreviewShortcut) ExpressiveIconButton(onClick = onPreview, modifier = Modifier.size(36.dp)) {
                 Icon(Icons.Outlined.Language, uiContext.getString(R.string.ui_open_web_browser), Modifier.size(18.dp))
+            }
+            if (chatOnly) {
+                Spacer(Modifier.width(6.dp))
+                SearchDepthControl(searchDepth, onSetSearchDepth)
             }
             Box {
                 IconButton(onClick = { menu = true }, modifier = Modifier.size(36.dp)) {
@@ -451,6 +467,85 @@ private fun HeaderModelPicker(label: String, onPickModel: () -> Unit, modifier: 
         Icon(Icons.Filled.KeyboardArrowDown, contentDescription = uiContext.getString(R.string.ui_switch_model),
             tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
     }
+}
+
+/** Compact badge for Chat's research depth, next to the conversation menu. */
+@Composable
+private fun SearchDepthControl(
+    depth: com.androidharness.app.data.SearchDepth,
+    onSet: (com.androidharness.app.data.SearchDepth) -> Unit,
+) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
+    val scheme = MaterialTheme.colorScheme
+    var menu by remember { mutableStateOf(false) }
+    val auto = depth == com.androidharness.app.data.SearchDepth.AUTO
+    val label = uiContext.getString(searchDepthShort(depth))
+    Box {
+        Surface(
+            shape = RoundedCornerShape(50),
+            color = if (auto) scheme.surfaceContainerHigh else scheme.primaryContainer,
+            contentColor = if (auto) scheme.onSurfaceVariant else scheme.primary,
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .clickable { menu = true }
+                .semantics { contentDescription = uiContext.getString(R.string.ui_search_depth_current, label) },
+        ) {
+            Row(
+                Modifier.heightIn(min = 32.dp).padding(horizontal = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Outlined.TravelExplore, contentDescription = null, modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+            }
+        }
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            com.androidharness.app.data.SearchDepth.entries.forEach { option ->
+                DropdownMenuItem(
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                            Text(uiContext.getString(searchDepthLabel(option)), style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                uiContext.getString(searchDepthHint(option)),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = scheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                    trailingIcon = {
+                        if (option == depth) {
+                            Icon(Icons.Filled.Check, uiContext.getString(R.string.settings_selected), Modifier.size(16.dp))
+                        }
+                    },
+                    onClick = { menu = false; onSet(option) },
+                )
+            }
+        }
+    }
+}
+
+private fun searchDepthShort(depth: com.androidharness.app.data.SearchDepth): Int = when (depth) {
+    com.androidharness.app.data.SearchDepth.INSTANT -> R.string.ui_search_depth_instant_short
+    com.androidharness.app.data.SearchDepth.DEEP -> R.string.ui_search_depth_deep_short
+    com.androidharness.app.data.SearchDepth.AUTO -> R.string.ui_search_depth_auto_short
+    com.androidharness.app.data.SearchDepth.DEEP_RESEARCH -> R.string.ui_search_depth_research_short
+    com.androidharness.app.data.SearchDepth.MAX_RESEARCH -> R.string.ui_search_depth_max_short
+}
+
+private fun searchDepthLabel(depth: com.androidharness.app.data.SearchDepth): Int = when (depth) {
+    com.androidharness.app.data.SearchDepth.INSTANT -> R.string.ui_search_depth_instant
+    com.androidharness.app.data.SearchDepth.DEEP -> R.string.ui_search_depth_deep
+    com.androidharness.app.data.SearchDepth.AUTO -> R.string.ui_search_depth_auto
+    com.androidharness.app.data.SearchDepth.DEEP_RESEARCH -> R.string.ui_search_depth_research
+    com.androidharness.app.data.SearchDepth.MAX_RESEARCH -> R.string.ui_search_depth_max
+}
+
+private fun searchDepthHint(depth: com.androidharness.app.data.SearchDepth): Int = when (depth) {
+    com.androidharness.app.data.SearchDepth.INSTANT -> R.string.ui_search_depth_instant_hint
+    com.androidharness.app.data.SearchDepth.DEEP -> R.string.ui_search_depth_deep_hint
+    com.androidharness.app.data.SearchDepth.AUTO -> R.string.ui_search_depth_auto_hint
+    com.androidharness.app.data.SearchDepth.DEEP_RESEARCH -> R.string.ui_search_depth_research_hint
+    com.androidharness.app.data.SearchDepth.MAX_RESEARCH -> R.string.ui_search_depth_max_hint
 }
 
 @Composable

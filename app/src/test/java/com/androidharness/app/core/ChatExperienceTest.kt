@@ -43,4 +43,23 @@ class ChatExperienceTest {
         assertNull(ChatExperience.modelLabel(null))
         assertNull(ChatExperience.modelLabel("/"))
     }
+
+    @Test fun researchDepthPromptStatesTheTurnBudget() {
+        val instant = ChatExperience.researchDepthPrompt(com.androidharness.app.data.SearchDepth.INSTANT)
+        assertTrue(instant.contains("at most 5 distinct sources"))
+        assertTrue(instant.contains("enforces this turn's source budget"))
+
+        val deep = ChatExperience.researchDepthPrompt(com.androidharness.app.data.SearchDepth.DEEP)
+        assertTrue(deep.contains("at most 20 distinct sources"))
+
+        val research = ChatExperience.researchDepthPrompt(com.androidharness.app.data.SearchDepth.DEEP_RESEARCH)
+        assertTrue(research.contains("up to 50 distinct sources"))
+
+        val max = ChatExperience.researchDepthPrompt(com.androidharness.app.data.SearchDepth.MAX_RESEARCH)
+        assertTrue(max.contains("up to 100 distinct sources"))
+
+        val auto = ChatExperience.researchDepthPrompt(com.androidharness.app.data.SearchDepth.AUTO)
+        assertTrue(auto.contains("no fixed source limit"))
+        assertFalse(auto.contains("enforces this turn's source budget"))
+    }
 }

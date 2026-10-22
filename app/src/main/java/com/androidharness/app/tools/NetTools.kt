@@ -28,13 +28,21 @@ class WebSearchTool(
     private val client: OkHttpClient,
     /** User's search API config, read fresh per call (may be null = keyless). */
     private val searchApi: () -> SearchApiConfig? = { null },
+    /** Turn-scoped source allowance; null means the model decides. */
+    private val sourceBudget: SearchSourceBudget? = null,
 ) : Tool {
     override val name = "web_search"
-    override val description =
-        "Search the web and return top results (title, url, snippet). Uses the configured " +
-        "search API automatically when one is set in Settings; otherwise keyless engines " +
-        "run with automatic fallback. Choose an engine with the 'engine' parameter " +
-        "(duckduckgo, bing, brave, google; keyless mode only) or use 'auto'."
+    override val description: String get() = buildString {
+        append(
+            "Search the web and return top results (title, url, snippet). Uses the configured " +
+                "search API automatically when one is set in Settings; otherwise keyless engines " +
+                "run with automatic fallback. Choose an engine with the 'engine' parameter " +
+                "(duckduckgo, bing, brave, google; keyless mode only) or use 'auto'.",
+        )
+        sourceBudget?.let {
+            append(" This turn allows at most ${it.maxSources} distinct sources; the tool stops returning new sources when the budget is used.")
+        }
+    }
     override val parametersSchema = Schema.obj(
         mapOf(
             "query" to Schema.string("The search query."),
@@ -47,6 +55,10 @@ class WebSearchTool(
 
     private val keyless = KeylessSearchBackend()
 
+    /** A run-scoped copy that spends from this turn's source budget. */
+    fun forDepth(depth: com.androidharness.app.data.SearchDepth): WebSearchTool =
+        depth.maxSources?.let { WebSearchTool(client, searchApi, SearchSourceBudget(it)) } ?: this
+
     override suspend fun execute(args: JsonObject, ctx: ToolContext): ToolResult {
         val rawQuery = args["query"]?.jsonPrimitive?.content
             ?: throw ToolFailure("Missing required argument: query")
@@ -58,7 +70,13 @@ class WebSearchTool(
         if (rawCount != null && rawCount <= 0) {
             throw ToolFailure("count must be greater than 0.")
         }
-        val count = (rawCount ?: 8).coerceIn(1, 15)
+        val budget = sourceBudget
+        if (budget != null && budget.remaining == 0) {
+            return ToolResult(true, exhaustedText())
+        }
+        val count = (rawCount ?: 8).coerceIn(1, 15).let { wanted ->
+            if (budget != null) wanted.coerceAtMost(budget.remaining) else wanted
+        }
         val requested = args["engine"]?.jsonPrimitive?.contentOrNull?.trim()?.lowercase()
             ?: "auto"
         val validEngines = setOf("auto", "duckduckgo", "bing", "brave", "google")
@@ -75,14 +93,15 @@ class WebSearchTool(
             try {
                 val outcome = apiBackend.fetch(searchClient, query, count)
                 if (outcome.results.isNotEmpty()) {
-                    val text = StringBuilder(formatResults(outcome.results, count))
-                    if (requested != "auto") {
-                        // The engine selector is keyless-only; say so instead of
-                        // silently returning different results than asked for.
-                        text.append("\n[note: the engine parameter is ignored; ${apiBackend.label} is active]")
+                    val suffix = buildString {
+                        if (requested != "auto") {
+                            // The engine selector is keyless-only; say so instead of
+                            // silently returning different results than asked for.
+                            append("\n[note: the engine parameter is ignored; ${apiBackend.label} is active]")
+                        }
+                        append("\n[via ").append(outcome.via ?: apiBackend.label).append(']')
                     }
-                    text.append("\n[via ").append(outcome.via ?: apiBackend.label).append(']')
-                    return ToolResult(true, text.toString())
+                    return render(outcome.results, count, notes.toString(), suffix)
                 }
                 notes.append("[note: ${apiBackend.label} returned no results; falling back to keyless engines]\n")
             } catch (e: Exception) {
@@ -101,9 +120,34 @@ class WebSearchTool(
         } catch (e: Exception) {
             return ToolResult(false, notes.toString() + "Search failed: ${e.message}")
         }
-        val text = StringBuilder(notes).append(formatResults(outcome.results, count))
-        outcome.via?.let { text.append("\n[via ").append(it).append(']') }
-        return ToolResult(true, text.toString())
+        val suffix = outcome.via?.let { "\n[via $it]" } ?: ""
+        return render(outcome.results, count, notes.toString(), suffix)
+    }
+
+    private fun render(
+        results: List<WebSearchResult>,
+        count: Int,
+        prefix: String,
+        suffix: String,
+    ): ToolResult {
+        val budget = sourceBudget
+        if (budget == null) {
+            return ToolResult(true, prefix + formatResults(results, count) + suffix)
+        }
+        val claimed = budget.claim(results.take(count))
+        if (claimed.isEmpty()) {
+            val message = if (budget.remaining == 0) exhaustedText()
+            else "[No new sources found; ${budget.remaining} of ${budget.maxSources} sources remain this turn.]"
+            return ToolResult(true, prefix + message)
+        }
+        val note = "\n[sources this turn: ${budget.used}/${budget.maxSources}]"
+        return ToolResult(true, prefix + formatResults(claimed, claimed.size) + suffix + note)
+    }
+
+    private fun exhaustedText(): String {
+        val budget = sourceBudget ?: return ""
+        return "[Search source limit reached: ${budget.used}/${budget.maxSources} sources this turn. " +
+            "Do not search again; answer from the sources already collected.]"
     }
 
     private fun formatResults(results: List<WebSearchResult>, count: Int): String {
