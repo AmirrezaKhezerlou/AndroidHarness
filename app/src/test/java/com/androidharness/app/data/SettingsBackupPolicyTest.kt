@@ -110,7 +110,7 @@ class SettingsBackupPolicyTest {
 
     @Test fun olderBackupStillRejectsInvalidRemoteConnectionsAndVersions() {
         for (old in listOf(
-            SettingsBackupFile(version = 2, settings = AppSettings(), providers = listOf(BackupProvider(local("custom-import")))),
+            SettingsBackupFile(version = 3, settings = AppSettings(), providers = listOf(BackupProvider(local("custom-import")))),
             SettingsBackupFile(settings = AppSettings(), providers = listOf(BackupProvider(api().copy(baseUrl = "file:///secret")))),
             SettingsBackupFile(settings = AppSettings(planningProviderId = "missing-api")),
             SettingsBackupFile(settings = AppSettings(), providers = listOf(BackupProvider(api("chatgpt:test-account")))),

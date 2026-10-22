@@ -15,11 +15,11 @@ import kotlinx.serialization.json.Json
 class ChatBackupException(message: String) : Exception(message)
 
 /**
- * Chats-only backup file: sessions with their messages, nothing else. No API
- * keys, provider config, MCP servers, or settings ever enter the file, so it
- * is safe to keep anywhere. toolCallsJson and imagesJson ride along as the
- * exact strings stored in the database, lossless even if those payloads
- * evolve in later app versions.
+ * Chats-only backup file: sessions with their messages, the workspaces those
+ * chats used, saved memories, and prompt snippets. No API keys, provider
+ * config, MCP servers, or settings ever enter the file, so it is safe to keep
+ * anywhere. toolCallsJson and imagesJson ride along as the exact strings stored
+ * in the database, lossless even if those payloads evolve in later app versions.
  */
 @Serializable
 data class ChatBackupFile(
@@ -28,12 +28,20 @@ data class ChatBackupFile(
     val exportedAt: Long = 0,
     val sessions: List<BackupSession> = emptyList(),
     val workspaces: List<BackupWorkspace> = emptyList(),
+    val memories: List<BackupMemory> = emptyList(),
+    val snippets: List<BackupSnippet> = emptyList(),
 )
 
 @Serializable
 data class BackupWorkspace(val id: String, val name: String)
 
-data class ChatImportPreview(val sessions: List<BackupSession>, val missingWorkspaces: List<BackupWorkspace>, val skipped: Int)
+data class ChatImportPreview(
+    val sessions: List<BackupSession>,
+    val missingWorkspaces: List<BackupWorkspace>,
+    val skipped: Int,
+    val memories: List<BackupMemory> = emptyList(),
+    val snippets: List<BackupSnippet> = emptyList(),
+)
 
 internal object ChatRestoreMapping {
     const val UNASSIGNED = "legacy-unassigned-workspace"
@@ -103,9 +111,9 @@ data class BackupMessage(
 /** Pure encode/decode plus file validation; no Android types, so JVM-testable. */
 object ChatBackupCodec {
     const val FORMAT = "androidharness-chats"
-    const val VERSION = 3
+    const val VERSION = 4
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     fun encode(file: ChatBackupFile): String =
         json.encodeToString(ChatBackupFile.serializer(), file)
@@ -148,8 +156,8 @@ class ChatBackupManager(
     private val appContext: Context,
     private val workspace: com.androidharness.app.workspace.WorkspaceManager = com.androidharness.app.workspace.WorkspaceManager(appContext, db.dao()),
 ) {
-    data class ExportResult(val sessions: Int, val messages: Int)
-    data class ImportResult(val sessions: Int, val messages: Int, val skipped: Int)
+    data class ExportResult(val sessions: Int, val messages: Int, val memories: Int = 0, val snippets: Int = 0)
+    data class ImportResult(val sessions: Int, val messages: Int, val skipped: Int, val memories: Int = 0, val snippets: Int = 0)
 
     suspend fun exportTo(uri: Uri): ExportResult = withContext(Dispatchers.IO) {
         val sessions = db.dao().allSessions()
@@ -157,6 +165,8 @@ class ChatBackupManager(
         val file = ChatBackupFile(
             exportedAt = System.currentTimeMillis(),
             workspaces = db.dao().projectsFlow().first().map { BackupWorkspace(it.id, it.name) },
+            memories = db.dao().allMemories().map { it.toBackupMemory() },
+            snippets = db.dao().allSnippets().map { it.toBackupSnippet() },
             sessions = sessions.map { s ->
                 BackupSession(
                     id = s.id,
@@ -205,7 +215,7 @@ class ChatBackupManager(
         out.use { stream ->
             stream.buffered().writer(Charsets.UTF_8).use { it.write(ChatBackupCodec.encode(file)) }
         }
-        ExportResult(file.sessions.size, file.sessions.sumOf { it.messages.size })
+        ExportResult(file.sessions.size, file.sessions.sumOf { it.messages.size }, file.memories.size, file.snippets.size)
     }
 
     suspend fun prepareImport(uri: Uri): ChatImportPreview = withContext(Dispatchers.IO) {
@@ -215,11 +225,13 @@ class ChatBackupManager(
         val file = ChatBackupCodec.decode(text)
         val plan = ChatBackupMerge.plan(db.dao().allSessionIds().toSet(), file.sessions)
         val available = db.dao().projectsFlow().first().map { it.id }.toSet()
-        val missing = plan.toImport.flatMap { ChatRestoreMapping.referenced(it) }.distinct().filterNot { it in available }
+        val memoryProjects = file.memories.filter { it.scope == MemoryScope.PROJECT.name }
+            .mapNotNull { it.projectId?.takeIf(String::isNotBlank) }
+        val missing = (plan.toImport.flatMap { ChatRestoreMapping.referenced(it) } + memoryProjects).distinct().filterNot { it in available }
             .map { id -> BackupWorkspace(id, file.workspaces.firstOrNull { it.id == id }?.name
                 ?: if (id == ChatRestoreMapping.UNASSIGNED) "Chats without a workspace" else
                     plan.toImport.firstOrNull { it.projectId == id }?.title?.let { "Workspace for $it" } ?: "Restored workspace") }
-        ChatImportPreview(plan.toImport, missing, plan.skipped)
+        ChatImportPreview(plan.toImport, missing, plan.skipped, file.memories, file.snippets)
     }
 
     suspend fun importFrom(uri: Uri): ImportResult = importPrepared(prepareImport(uri), emptyMap())
@@ -229,6 +241,8 @@ class ChatBackupManager(
             "Choose a workspace for each restored project before importing."
         }
         var imported = emptyList<BackupSession>()
+        var importedMemories = 0
+        var importedSnippets = 0
         db.withTransaction {
             val available = db.dao().projectsFlow().first().map { it.id }.toSet()
             val fresh = ChatBackupMerge.plan(db.dao().allSessionIds().toSet(), preview.sessions)
@@ -289,7 +303,17 @@ class ChatBackupManager(
                     if (messages.isNotEmpty()) db.dao().insertImportedMessages(messages)
                 }
             }
+            val memoryPlan = MemoryBackupMerge.plan(db.dao().allMemories(), preview.memories) { id ->
+                id?.let { workspaceMapping[it] ?: it }
+            }
+            val now = System.currentTimeMillis()
+            memoryPlan.forEach { db.dao().upsertMemory(MemoryBackupMerge.entity(it, now)) }
+            importedMemories = memoryPlan.size
+            val snippetPlan = SnippetBackupMerge.plan(db.dao().allSnippets(), preview.snippets)
+            snippetPlan.forEach { db.dao().insertSnippet(SnippetBackupMerge.entity(it)) }
+            importedSnippets = snippetPlan.size
         }
-        ImportResult(imported.size, imported.sumOf { it.messages.size }, preview.skipped + preview.sessions.size - imported.size)
+        ImportResult(imported.size, imported.sumOf { it.messages.size }, preview.skipped + preview.sessions.size - imported.size,
+            importedMemories, importedSnippets)
     }
 }

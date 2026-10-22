@@ -3350,7 +3350,7 @@ private fun ChatsBackupSection(container: AppContainer) {
             statusText = null
             try {
                 val r = container.chatBackup.exportTo(uri)
-                report(uiContext.getString(R.string.ui_exported_chats_messages, (r.sessions).toString(), (r.messages).toString()))
+                report(uiContext.getString(R.string.ui_exported_chats_messages, (r.sessions).toString(), (r.messages).toString(), (r.memories).toString()))
             } catch (e: ChatBackupException) {
                 report(e.message ?: uiContext.getString(R.string.ui_export_failed), error = true)
             } catch (e: Exception) {
@@ -3376,7 +3376,7 @@ private fun ChatsBackupSection(container: AppContainer) {
                 }
                 val r = container.chatBackup.importPrepared(preview, emptyMap())
                 report(
-                    uiContext.getString(R.string.ui_imported_chats_messages, (r.sessions).toString(), (r.messages).toString()) +
+                    uiContext.getString(R.string.ui_imported_chats_messages, (r.sessions).toString(), (r.messages).toString(), (r.memories).toString()) +
                         if (r.skipped > 0) uiContext.getString(R.string.ui_already_present, (r.skipped).toString()) else ".",
                 )
             } catch (e: ChatBackupException) {
@@ -3392,7 +3392,7 @@ private fun ChatsBackupSection(container: AppContainer) {
     restorePreview?.let { preview -> ChatRestoreDialog(container, preview,
         onDismiss = { restorePreview = null }, onImported = { result ->
             restorePreview = null
-            report(uiContext.getString(R.string.ui_imported_chats_messages_already_present, (result.sessions).toString(), (result.messages).toString(), (result.skipped).toString()))
+            report(uiContext.getString(R.string.ui_imported_chats_messages_already_present, (result.sessions).toString(), (result.messages).toString(), (result.memories).toString(), (result.skipped).toString()))
         }) }
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -469,14 +469,14 @@
     <string name="settings_root_browser_save_title">保存 Root 文件？</string>
     <string name="settings_root_browser_save_confirm">保存更改</string>
     <string name="settings_backup_title">设置备份</string>
-    <string name="settings_backup_desc">以密码加密的 API 提供商与偏好设置，可选择包含 API 密钥和 MCP 配置。本地模型不在其中。对话有单独的备份。</string>
+    <string name="settings_backup_desc">以密码加密的 API 提供商、偏好设置和已保存的记忆，可选择包含 API 密钥和 MCP 配置。本地模型不在其中。对话有单独的备份。</string>
     <string name="settings_backup_password">密码</string>
     <string name="settings_backup_confirm_password">确认密码</string>
     <string name="settings_backup_include_credentials">包含凭据与 MCP 服务器</string>
     <string name="settings_backup_include_note">MCP 命令、URL 和请求头可能包含敏感信息，因此 MCP 服务器仅在包含凭据时才会一并导出。OAuth 会话、权限、应用锁和工作区访问权限永远不会被恢复。</string>
     <string name="settings_backup_exported">加密设置已导出。请单独保管密码。</string>
     <string name="settings_backup_restore_title">恢复设置？</string>
-    <string name="settings_backup_restore_note">提供商会作为新连接添加，不会覆盖现有连接。偏好设置和已选模型会改变。现有的应用锁、截屏策略和权限保持不变。MCP 服务器会以停用状态添加；启用前请先检查。</string>
+    <string name="settings_backup_restore_note">提供商会作为新连接添加，不会覆盖现有连接。偏好设置和已选模型会改变。记忆会合并添加，不会覆盖现有条目；缺失工作区的项目记忆会变为全局记忆。现有的应用锁、截屏策略和权限保持不变。MCP 服务器会以停用状态添加；启用前请先检查。</string>
     <string name="settings_backup_restore_trust">只恢复你信任的备份。导入的提供商端点将能接收到后续消息。恢复过程本身不会连接它们。</string>
     <string name="settings_backup_restore_keys">缺失的搜索和语音密钥会在包含时恢复。现有密钥会保留。GitHub 令牌和 OAuth 会话不在其中。</string>
     <string name="settings_backup_restored">设置已恢复。使用前请检查新增的连接。</string>
@@ -644,7 +644,7 @@
     <string name="settings_backup_unlock_title">解锁备份</string>
     <string name="settings_backup_export_note">至少使用 %1$s 个字符。密码一旦丢失将无法找回。应用不会上传任何内容；你选择的文件提供商可能会同步该加密文件。</string>
     <string name="settings_backup_import_note">输入备份密码。在你检查并确认之前，设置不会改变。</string>
-    <string name="settings_backup_contents">%1$s 个提供商 · %2$s 个 MCP 服务器</string>
+    <string name="settings_backup_contents">%1$s 个提供商 · %2$s 个 MCP 服务器 · %3$s 条记忆</string>
     <string name="settings_backup_hide_password">隐藏密码</string>
     <string name="settings_backup_show_password">显示密码</string>
     <string name="settings_skills_enabled_count">已启用 %1$s 个 · 内置 %2$s 个</string>

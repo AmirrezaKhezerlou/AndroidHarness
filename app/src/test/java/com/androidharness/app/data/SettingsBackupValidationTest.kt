@@ -3,6 +3,7 @@ package com.androidharness.app.data
 import com.androidharness.app.llm.ProviderConfig
 import com.androidharness.app.llm.ProviderType
 import com.androidharness.app.tools.mcp.McpServerConfig
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
 
@@ -24,7 +25,45 @@ class SettingsBackupValidationTest {
     }
 
     @Test fun unknownVersionRejected() {
-        assertThrows(IllegalArgumentException::class.java) { SettingsBackupValidation.validate(SettingsBackupFile(version = 2, settings = AppSettings())) }
+        assertThrows(IllegalArgumentException::class.java) { SettingsBackupValidation.validate(SettingsBackupFile(version = 3, settings = AppSettings())) }
+    }
+
+    @Test fun memoriesSurviveASettingsBackupAndOldVersionsStayReadable() {
+        val file = SettingsBackupFile(
+            version = 1,
+            settings = AppSettings(),
+            memories = listOf(
+                BackupMemory(id = "m1", text = "Prefers concise answers", category = "PREFERENCE", createdAt = 1, updatedAt = 2),
+                BackupMemory(id = "m2", text = "Ships on Fridays", scope = "PROJECT", projectId = "p1", createdAt = 1, updatedAt = 2),
+            ),
+        )
+        SettingsBackupValidation.validate(file)
+        val json = kotlinx.serialization.json.Json { encodeDefaults = true }
+        val restored = json.decodeFromString(SettingsBackupFile.serializer(), json.encodeToString(SettingsBackupFile.serializer(), file))
+        SettingsBackupValidation.validate(restored)
+        assertEquals(file.memories, restored.memories)
+        assertEquals(2, SettingsBackupFile.VERSION)
+    }
+
+    @Test fun invalidMemoriesRejected() {
+        for (memory in listOf(
+            BackupMemory(id = "", text = "Text", createdAt = 1),
+            BackupMemory(id = "m1", text = "   ", createdAt = 1),
+            BackupMemory(id = "m1", text = "Text", scope = "PROJECT", projectId = null, createdAt = 1),
+            BackupMemory(id = "m1", text = "Text", category = "UNKNOWN", createdAt = 1),
+            BackupMemory(id = "m1", text = "Text", scope = "UNKNOWN", createdAt = 1),
+        )) {
+            assertThrows(IllegalArgumentException::class.java) {
+                SettingsBackupValidation.validate(SettingsBackupFile(settings = AppSettings(), memories = listOf(memory)))
+            }
+        }
+    }
+
+    @Test fun duplicateMemoryIdsRejected() {
+        val memory = BackupMemory(id = "m1", text = "Text", createdAt = 1)
+        assertThrows(IllegalArgumentException::class.java) {
+            SettingsBackupValidation.validate(SettingsBackupFile(settings = AppSettings(), memories = listOf(memory, memory)))
+        }
     }
 
     @Test fun invalidLimitsRejected() {

@@ -165,6 +165,7 @@ internal fun SettingsBackupSection(container: AppContainer) {
                             R.string.settings_backup_contents,
                             file.providers.count { it.config.id != com.androidharness.app.llm.HarnessProvider.ID }.toString(),
                             file.servers.size.toString(),
+                            file.memories.size.toString(),
                         ),
                     )
                     Text(stringResource(R.string.settings_backup_restore_note))

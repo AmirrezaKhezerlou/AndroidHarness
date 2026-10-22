@@ -502,6 +502,9 @@ interface HarnessDao {
     @Query("SELECT * FROM snippets ORDER BY name ASC")
     fun snippetsFlow(): Flow<List<SnippetEntity>>
 
+    @Query("SELECT * FROM snippets ORDER BY name ASC")
+    suspend fun allSnippets(): List<SnippetEntity>
+
     @Insert
     suspend fun insertSnippet(snippet: SnippetEntity)
 
@@ -585,6 +588,9 @@ interface HarnessDao {
     // memories
     @Query("SELECT * FROM memories ORDER BY pinned DESC, updatedAt DESC")
     fun memoriesFlow(): Flow<List<MemoryEntity>>
+
+    @Query("SELECT * FROM memories ORDER BY pinned DESC, updatedAt DESC")
+    suspend fun allMemories(): List<MemoryEntity>
 
     @Query("SELECT * FROM memories WHERE enabled = 1 AND (scope = 'GLOBAL' OR (scope = 'PROJECT' AND projectId = :projectId)) ORDER BY pinned DESC, lastUsedAt DESC, updatedAt DESC")
     suspend fun activeMemories(projectId: String?): List<MemoryEntity>

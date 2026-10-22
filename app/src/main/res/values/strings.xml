@@ -471,14 +471,14 @@
     <string name="settings_root_browser_save_title">Save root file?</string>
     <string name="settings_root_browser_save_confirm">Save changes</string>
     <string name="settings_backup_title">Settings backup</string>
-    <string name="settings_backup_desc">Password-encrypted API providers and preferences, with optional API keys and MCP configuration. Local models are excluded. Chats have a separate backup.</string>
+    <string name="settings_backup_desc">Password-encrypted API providers, preferences, and saved memories, with optional API keys and MCP configuration. Local models are excluded. Chats have a separate backup.</string>
     <string name="settings_backup_password">Password</string>
     <string name="settings_backup_confirm_password">Confirm password</string>
     <string name="settings_backup_include_credentials">Include credentials and MCP servers</string>
     <string name="settings_backup_include_note">MCP commands, URLs and headers can contain secrets, so MCP servers are included only with credentials. OAuth sessions, permissions, app lock and workspace access are never restored.</string>
     <string name="settings_backup_exported">Encrypted settings exported. Keep the password separately.</string>
     <string name="settings_backup_restore_title">Restore settings?</string>
-    <string name="settings_backup_restore_note">Providers are added as new connections, not overwritten. Preferences and selected models will change. Existing app lock, screenshot policy and permissions stay unchanged. MCP servers are added disabled; review them before enabling.</string>
+    <string name="settings_backup_restore_note">Providers are added as new connections, not overwritten. Preferences and selected models will change. Memories are added without overwriting existing ones; project memories from missing workspaces become global. Existing app lock, screenshot policy and permissions stay unchanged. MCP servers are added disabled; review them before enabling.</string>
     <string name="settings_backup_restore_trust">Only restore a backup you trust. Imported provider endpoints can receive future messages. Restoring does not contact them.</string>
     <string name="settings_backup_restore_keys">Missing search and voice keys are restored when included. Existing keys are kept. GitHub tokens and OAuth sessions are excluded.</string>
     <string name="settings_backup_restored">Settings restored. Review new connections before use.</string>
@@ -646,7 +646,7 @@
     <string name="settings_backup_unlock_title">Unlock backup</string>
     <string name="settings_backup_export_note">Use at least %1$s characters. A lost password cannot be recovered. Nothing is uploaded by the app; your chosen file provider may sync the encrypted file.</string>
     <string name="settings_backup_import_note">Enter the backup password. Settings are not changed until you review and confirm.</string>
-    <string name="settings_backup_contents">%1$s providers · %2$s MCP servers</string>
+    <string name="settings_backup_contents">%1$s providers · %2$s MCP servers · %3$s memories</string>
     <string name="settings_backup_hide_password">Hide password</string>
     <string name="settings_backup_show_password">Show password</string>
     <string name="settings_skills_enabled_count">%1$s enabled · %2$s bundled</string>

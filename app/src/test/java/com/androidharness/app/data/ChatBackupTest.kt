@@ -66,6 +66,33 @@ class ChatBackupTest {
     }
 
     @Test
+    fun `encode then decode keeps memories and prompt snippets`() {
+        val file = ChatBackupFile(
+            exportedAt = 99,
+            sessions = listOf(session("a", message("m1"))),
+            memories = listOf(
+                BackupMemory(
+                    id = "memory-1",
+                    text = "Prefers concise answers",
+                    category = "PREFERENCE",
+                    scope = "PROJECT",
+                    projectId = "project-1",
+                    pinned = true,
+                    createdAt = 1_000,
+                    updatedAt = 2_000,
+                ),
+            ),
+            snippets = listOf(BackupSnippet("snippet-1", "review", "Review this diff")),
+        )
+        val encoded = ChatBackupCodec.encode(file)
+        val decoded = ChatBackupCodec.decode(encoded)
+        assertEquals(file.memories, decoded.memories)
+        assertEquals(file.snippets, decoded.snippets)
+        assertEquals(4, ChatBackupCodec.VERSION)
+        assertTrue(encoded.contains("\"version\":4"))
+    }
+
+    @Test
     fun `decode tolerates unknown keys and missing optional fields`() {
         val text = """
             {"format":"androidharness-chats","version":1,"exportedAt":5,

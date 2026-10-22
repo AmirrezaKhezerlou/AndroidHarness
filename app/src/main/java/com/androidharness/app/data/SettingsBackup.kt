@@ -15,14 +15,20 @@ import kotlinx.serialization.json.jsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 @Serializable
-class SettingsBackupFile(
-    val version: Int = 1,
+data class SettingsBackupFile(
+    val version: Int = VERSION,
     val settings: AppSettings,
     val providers: List<BackupProvider> = emptyList(),
     val servers: List<McpServerConfig> = emptyList(),
     val searchKeys: Map<String, String> = emptyMap(),
     val groqKey: String? = null,
-)
+    val memories: List<BackupMemory> = emptyList(),
+) {
+    companion object {
+        /** v1 carried only settings and connections; v2 adds saved memories. */
+        const val VERSION = 2
+    }
+}
 
 @Serializable
 class BackupProvider(val config: ProviderConfig, val customModels: List<String> = emptyList(), val apiKey: String? = null,
@@ -70,13 +76,9 @@ object SettingsBackupPolicy {
     /** Older v1 files can contain local references; ignore them before preview and restore. */
     fun withoutLocalModels(file: SettingsBackupFile): SettingsBackupFile {
         val removedIds = file.providers.filter { isLocal(it.config) }.map { it.config.id }.toSet()
-        return SettingsBackupFile(
-            version = file.version,
+        return file.copy(
             settings = filterSelections(file.settings) { !LocalModelCatalog.isLocal(it) && it !in removedIds },
             providers = file.providers.filterNot { isLocal(it.config) },
-            servers = file.servers,
-            searchKeys = file.searchKeys,
-            groqKey = file.groqKey,
         )
     }
 }
@@ -106,6 +108,7 @@ enum class SettingsBackupProblem(val hint: String) {
     CUSTOM_MODELS("A custom model ID is empty or too long. Review Manage providers in Models settings."),
     PROVIDER_HEADERS("A custom provider header is invalid. Review Manage providers in Models settings."),
     MCP("An MCP server name or transport is invalid, or names are duplicated. Review MCP servers settings."),
+    MEMORY("A saved memory is invalid or duplicated. Review Memory settings."),
 }
 
 class SettingsBackupValidationException(val problem: SettingsBackupProblem) : IllegalArgumentException(problem.hint)
@@ -117,7 +120,7 @@ object SettingsBackupValidation {
     }
 
     fun validate(file: SettingsBackupFile) {
-        check(file.version == 1, SettingsBackupProblem.VERSION)
+        check(file.version in 1..SettingsBackupFile.VERSION, SettingsBackupProblem.VERSION)
         check(file.providers.size <= 100 && file.servers.size <= 100, SettingsBackupProblem.CONNECTION_COUNT)
         check(file.settings.disabledSkills.size <= 1000 && file.settings.disabledSkills.all { it.length <= 500 }, SettingsBackupProblem.SKILLS)
         check(listOfNotNull(file.settings.activeModel, file.settings.planningModel, file.settings.executionModel).all { it.length <= 500 }, SettingsBackupProblem.MODEL_SELECTION)
@@ -149,6 +152,18 @@ object SettingsBackupValidation {
         }
         check(file.servers.map { it.name }.distinct().size == file.servers.size, SettingsBackupProblem.MCP)
         file.servers.forEach { check(it.name.length in 1..200 && it.type in setOf("stdio", "http", "sse"), SettingsBackupProblem.MCP) }
+        check(file.memories.size <= 1000, SettingsBackupProblem.MEMORY)
+        check(file.memories.map { it.id }.distinct().size == file.memories.size, SettingsBackupProblem.MEMORY)
+        val scopes = MemoryScope.entries.mapTo(mutableSetOf()) { it.name }
+        val categories = MemoryCategory.entries.mapTo(mutableSetOf()) { it.name }
+        file.memories.forEach { memory ->
+            check(memory.id.isNotBlank() && memory.id.length <= 200, SettingsBackupProblem.MEMORY)
+            check(memory.text.isNotBlank() && memory.text.length <= MemoryText.MAX_ENTRY_CHARS, SettingsBackupProblem.MEMORY)
+            check(memory.category in categories && memory.scope in scopes, SettingsBackupProblem.MEMORY)
+            check(memory.scope != MemoryScope.PROJECT.name || !memory.projectId.isNullOrBlank(), SettingsBackupProblem.MEMORY)
+            check((memory.projectId?.length ?: 0) <= 500 && (memory.sourceSessionId?.length ?: 0) <= 200, SettingsBackupProblem.MEMORY)
+            check(memory.useCount >= 0, SettingsBackupProblem.MEMORY)
+        }
     }
 }
 
@@ -159,12 +174,11 @@ internal fun legacyCodeStart(file: SettingsBackupFile, text: String): SettingsBa
     }.getOrDefault(true)
     if (hasCodeStart) return file
     val derived = if (file.settings.resumeLastChat) CodeStartMode.LAST_CODE else CodeStartMode.NEW_CODE
-    return SettingsBackupFile(file.version, file.settings.copy(codeStart = derived),
-        file.providers, file.servers, file.searchKeys, file.groqKey)
+    return file.copy(settings = file.settings.copy(codeStart = derived))
 }
 
 class SettingsBackup(private val c: AppContainer) {
-    private val json = Json { encodeDefaults = true }
+    private val json = Json { encodeDefaults = true; ignoreUnknownKeys = true }
 
     private fun credential(read: () -> String?): String? = try { read() }
         catch (e: Exception) { throw SettingsBackupCredentialsException(e) }
@@ -182,7 +196,8 @@ class SettingsBackup(private val c: AppContainer) {
             val file = SettingsBackupFile(settings = s, providers = providers,
                 servers = if (includeKeys) c.mcp.servers.value.map { it.copy(enabled = false) } else emptyList(),
                 searchKeys = if (includeKeys) listOf("brave", "tavily").mapNotNull { name -> credential { c.keys.searchApiKey(name) }?.let { name to it } }.toMap() else emptyMap(),
-                groqKey = if (includeKeys) credential { c.keys.groqApiKey() } else null)
+                groqKey = if (includeKeys) credential { c.keys.groqApiKey() } else null,
+                memories = c.memory.memories.first().map { it.toBackupMemory() })
             SettingsBackupValidation.validate(file)
             val plain = json.encodeToString(SettingsBackupFile.serializer(), file).toByteArray(Charsets.UTF_8)
             val encrypted = try { BackupEncryption.encrypt(plain, password) } finally { plain.fill(0) }
@@ -241,5 +256,9 @@ class SettingsBackup(private val c: AppContainer) {
             fallbackPolicy = s.fallbackPolicy.copy(targets = s.fallbackPolicy.targets.mapNotNull { target ->
                 ids[target.providerId]?.let { target.copy(providerId = it) }
             })))
+        // Memories merge instead of replacing. A project that is not on this
+        // device is kept as a global memory rather than dropped.
+        val availableProjects = c.workspace.projects.first().map { it.id }.toSet()
+        c.memory.importMissing(file.memories) { id -> id?.takeIf { it in availableProjects } }
     }
 }

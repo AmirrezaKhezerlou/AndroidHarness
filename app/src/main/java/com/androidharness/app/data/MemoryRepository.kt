@@ -160,6 +160,23 @@ class MemoryRepository(private val db: AppDatabase, private val settings: Settin
 
     suspend fun setPinned(id: String, pinned: Boolean) = dao.setMemoryPinned(id, pinned, System.currentTimeMillis())
 
+    /**
+     * Adds memories from a backup without touching entries already present.
+     * [remapProject] lets a chat restore point a project memory at its mapped
+     * workspace, and lets a settings restore drop a project that no longer
+     * exists (the entry is kept as global).
+     */
+    suspend fun importMissing(
+        incoming: List<BackupMemory>,
+        remapProject: (String?) -> String? = { it },
+    ): Int {
+        val plan = MemoryBackupMerge.plan(dao.allMemories(), incoming, remapProject)
+        if (plan.isEmpty()) return 0
+        val now = System.currentTimeMillis()
+        plan.forEach { dao.upsertMemory(MemoryBackupMerge.entity(it, now)) }
+        return plan.size
+    }
+
     /** Active memories only. Blank query returns the most recent entries. */
     suspend fun search(query: String, sessionId: String?): List<MemoryEntity> {
         if (!isEnabled()) return emptyList()
