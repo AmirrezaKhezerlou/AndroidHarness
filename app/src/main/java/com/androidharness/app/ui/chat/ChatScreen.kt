@@ -1293,7 +1293,7 @@ private fun ChatScreenContent(
                     } else {
                         LazyColumn(
                             state = listState,
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(horizontal = 18.dp, vertical = 24.dp),
                             verticalArrangement = if (state.messages.isNotEmpty() || state.streamingText != null || state.busy)
                                 Arrangement.spacedBy(12.dp, Alignment.Bottom) else Arrangement.spacedBy(12.dp),
