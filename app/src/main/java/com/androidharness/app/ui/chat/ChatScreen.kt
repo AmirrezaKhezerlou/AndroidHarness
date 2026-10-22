@@ -35,9 +35,6 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.animateScrollBy
-import androidx.compose.foundation.gestures.scrollBy
-import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,7 +51,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -98,7 +94,6 @@ import androidx.compose.ui.platform.LocalDensity
 import com.androidharness.app.agent.AgentMode
 import kotlinx.coroutines.flow.filterNotNull
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -108,7 +103,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -476,20 +470,19 @@ private fun ChatScreenContent(
     var confirmRewindTurn by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    // Bottom-pinning for the message list: true while the newest content
-    // should stay in view; only a real user drag away from the bottom clears
-    // it, programmatic scrolls (follow, jump) never touch the pin.
-    var pinnedToBottom by remember { mutableStateOf(searchMessageId == null) }
-    // The jump button only appears once the user is meaningfully above the
-    // newest content, not after every tiny drag.
-    var showJumpToBottom by remember(state.sessionId) { mutableStateOf(false) }
+    // The transcript is top-anchored. Sending a message parks that question near
+    // the top, leaving a sliver of the previous answer visible above it; nothing
+    // follows the bottom while the answer streams.
+    var showJumpToLatest by remember(state.sessionId) { mutableStateOf(false) }
+    var unreadWhileAway by remember(state.sessionId) { mutableStateOf(false) }
+    var lastAnchoredTurnId by remember(state.sessionId) { mutableStateOf<String?>(null) }
+    var anchoringTurnId by remember(state.sessionId) { mutableStateOf<String?>(null) }
+    var searchRevealDone by remember(state.sessionId, searchMessageId) { mutableStateOf(false) }
     val density = LocalDensity.current
-    val showJumpAt = with(density) { 180.dp.toPx() }
-    val hideJumpAt = with(density) { 96.dp.toPx() }
-    // LazyColumn index of each turn's question bubble, captured while it is
-    // visible at the start of the turn. Used to park the transcript there when
-    // the answer finishes instead of leaving the view at the bottom.
-    val userItemIndexes = remember(state.sessionId) { mutableStateMapOf<String, Int>() }
+    val previewOffset = with(density) { 64.dp.roundToPx() }
+    // Filled while the LazyColumn registers its items, so the newest question
+    // can be anchored before it has ever been on screen.
+    val userItemIndexes = remember(state.sessionId) { HashMap<String, Int>() }
     val searchItemIndex = remember(searchMessageId) { mutableStateOf<Int?>(null) }
     val searchTurnId = state.messages.firstOrNull { it.id == searchMessageId }?.turnId
     var diffFile by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -504,20 +497,13 @@ private fun ChatScreenContent(
     LaunchedEffect(searchMessageId, state.isLoadingMessages) {
         if (searchMessageId == null || state.isLoadingMessages) return@LaunchedEffect
         if (!viewModel.revealMessage(searchMessageId)) {
-            pinnedToBottom = true
+            searchRevealDone = true
             snackbar.showSnackbar(uiContext.getString(R.string.ui_this_message_is_no_longer_in_the))
             return@LaunchedEffect
         }
         val index = snapshotFlow { searchItemIndex.value }.filterNotNull().first()
-        pinnedToBottom = false
         listState.scrollToItem(index)
-    }
-
-    // True while a finger drag is driving the list (from interactionSource).
-    val gestureActive = remember { mutableStateOf(false) }
-    var mainListDragged by remember { mutableStateOf(false) }
-    val userScrollObserver = remember {
-        UserScrollObserver { pinnedToBottom = false }
+        searchRevealDone = true
     }
 
     if (showContext) {
@@ -621,7 +607,6 @@ private fun ChatScreenContent(
             agentRunning = state.busy,
             onStopAgent = viewModel::stop,
             onSendPrompt = { prompt ->
-                pinnedToBottom = true
                 viewModel.send(prompt)
             },
             onDismiss = {
@@ -934,135 +919,50 @@ private fun ChatScreenContent(
         }
     }
 
-    // Open sessions at the latest message: scroll to the true bottom once per
-    // session, after its messages are both loaded from the DB and composed.
-    var initialScrollDone by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(state.sessionId) {
-        val sid = state.sessionId ?: return@LaunchedEffect
-        if (searchMessageId != null || initialScrollDone == sid) return@LaunchedEffect
-        snapshotFlow { listState.layoutInfo.totalItemsCount to state.messages.size }
-            .first { (total, size) -> size > 0 && total > 0 }
-        if (initialScrollDone != sid) {
-            initialScrollDone = sid
-            // One extra frame so the async loads that flip conditional children
-            // (checkpoints, file edits, todos) land before the scroll's measure
-            // pass; a mid-pass flip is what crashed "measure on deactivated node".
+    // Top-anchored transcript: on open and after every send, park the newest
+    // question near the top and leave the previous answer's tail visible above
+    // it. Nothing follows the bottom while the reply streams.
+    LaunchedEffect(state.isLoadingMessages, state.messages.size, searchMessageId) {
+        if (state.isLoadingMessages) return@LaunchedEffect
+        if (searchMessageId != null && !searchRevealDone) return@LaunchedEffect
+        val turnId = state.messages.lastOrNull { it.role == Role.USER }?.turnId ?: return@LaunchedEffect
+        if (turnId == lastAnchoredTurnId || turnId == anchoringTurnId) return@LaunchedEffect
+        repeat(3) {
             withFrameNanos { }
-            listState.scrollToEnd()
-        }
-    }
-
-    // Track real finger drags so programmatic scrolls can be told apart.
-    LaunchedEffect(listState) {
-        listState.interactionSource.interactions.collect { interaction ->
-            when (interaction) {
-                is DragInteraction.Start -> {
-                    gestureActive.value = true
-                    mainListDragged = true
-                }
-                is DragInteraction.Stop, is DragInteraction.Cancel -> gestureActive.value = false
+            val index = userItemIndexes[turnId] ?: return@repeat
+            if (index !in 0 until listState.layoutInfo.totalItemsCount) return@repeat
+            anchoringTurnId = turnId
+            try {
+                listState.scrollToItem(index, scrollOffset = -previewOffset)
+                lastAnchoredTurnId = turnId
+            } finally {
+                anchoringTurnId = null
             }
-        }
-    }
-
-    // Only a direct list drag settling at the end may resume following. A child
-    // scroller or programmatic layout adjustment must never re-pin the chat.
-    LaunchedEffect(listState) {
-        snapshotFlow { Triple(listState.isScrollInProgress, gestureActive.value, mainListDragged) }
-            .distinctUntilChanged()
-            .collect { (inProgress, dragging, dragged) ->
-                if (inProgress || dragging || !dragged) return@collect
-                mainListDragged = false
-                // Re-pin once the finger settles inside the same distance the
-                // jump button hides at, so a small nudge never leaves the list
-                // silently detached from new content.
-                if (isAtBottom(listState.layoutInfo, listState.canScrollForward, tolerance = hideJumpAt.toInt())) {
-                    pinnedToBottom = true
-                    listState.snapToEndIfDrifted()
-                }
-            }
-    }
-
-    // While pinned, keep the newest content in view with small exact scrollBy
-    // deltas, cheap (no scrollToItem remeasure storm) and smooth (coalesced
-    // at frame-ish cadence instead of 250ms jumps).
-    LaunchedEffect(pinnedToBottom, listState) {
-        if (!pinnedToBottom) return@LaunchedEffect
-        var lastFollowAt = 0L
-        snapshotFlow {
-            val info = listState.layoutInfo
-            val last = info.visibleItemsInfo.lastOrNull()
-            info.totalItemsCount to (last?.let { it.index to (it.offset + it.size) })
-        }
-            .distinctUntilChanged()
-            .collect {
-                if (gestureActive.value || listState.isScrollInProgress) return@collect
-                val wait = lastFollowAt + FOLLOW_MIN_INTERVAL_MS - System.currentTimeMillis()
-                if (wait > 0) delay(wait)
-                lastFollowAt = System.currentTimeMillis()
-                if (!pinnedToBottom || gestureActive.value || listState.isScrollInProgress) return@collect
-                val info = listState.layoutInfo
-                val total = info.totalItemsCount
-                if (total == 0) return@collect
-                val last = info.visibleItemsInfo.lastOrNull()
-                if (last == null || last.index != total - 1) {
-                    // The end isn't composed yet (large burst): snap straight to it.
-                    listState.scrollToEnd()
-                } else {
-                    val delta = last.offset + last.size + info.afterContentPadding - info.viewportEndOffset
-                    if (delta > 0) listState.scrollBy(delta.toFloat())
-                }
-            }
-    }
-
-    // While a turn runs, keep the bottom in view. When it finishes, park the
-    // transcript at the question that started it so the answer is read from
-    // the top instead of leaving the view at its last line.
-    var scrollPrevBusy by remember { mutableStateOf(false) }
-    LaunchedEffect(state.busy) {
-        val wasBusy = scrollPrevBusy
-        scrollPrevBusy = state.busy
-        if (gestureActive.value) return@LaunchedEffect
-        if (state.busy) {
-            // Working always starts by following the newest thinking or answer.
-            pinnedToBottom = true
-            withFrameNanos { }
-            listState.scrollToEnd()
             return@LaunchedEffect
         }
-        if (!wasBusy || !pinnedToBottom) return@LaunchedEffect
-        val turnId = state.messages.lastOrNull { it.role == Role.USER }?.turnId ?: return@LaunchedEffect
-        val index = userItemIndexes[turnId] ?: return@LaunchedEffect
-        if (index !in 0 until listState.layoutInfo.totalItemsCount) return@LaunchedEffect
-        // Finished: park on the question so the answer reads from its start.
-        pinnedToBottom = false
-        withFrameNanos { }
-        listState.scrollToItem(index)
-    }
-    LaunchedEffect(
-        state.streamingText?.length,
-        state.streamingThinking?.length,
-        state.runningCalls,
-        pinnedToBottom,
-    ) {
-        if (!pinnedToBottom || gestureActive.value) return@LaunchedEffect
-        withFrameNanos { }
-        listState.snapToEndIfDrifted()
     }
 
-    // The floating jump button uses a distance threshold and hysteresis, so a
-    // small drag does not immediately cover the transcript with a button.
-    LaunchedEffect(listState) {
-        snapshotFlow {
-            val info = listState.layoutInfo
-            val last = info.visibleItemsInfo.lastOrNull()
-            val distance = if (last == null) 0f
-            else if (last.index != info.totalItemsCount - 1) Float.MAX_VALUE
-            else (last.offset + last.size + info.afterContentPadding - info.viewportEndOffset).toFloat()
-            pinnedToBottom to distance
-        }.collect { (pinned, distance) ->
-            showJumpToBottom = !pinned && if (showJumpToBottom) distance > hideJumpAt else distance > showJumpAt
+    // The jump button appears only when the current question has left the
+    // screen, so a small scroll never covers the transcript with a button.
+    LaunchedEffect(listState, state.messages.lastOrNull { it.role == Role.USER }?.turnId) {
+        val turnId = state.messages.lastOrNull { it.role == Role.USER }?.turnId
+        if (turnId == null) {
+            showJumpToLatest = false
+            return@LaunchedEffect
         }
+        snapshotFlow {
+            val index = userItemIndexes[turnId]
+            val info = listState.layoutInfo
+            lastAnchoredTurnId == turnId && index != null && info.visibleItemsInfo.none { it.index == index }
+        }.distinctUntilChanged().collect { away ->
+            showJumpToLatest = away
+            if (!away) unreadWhileAway = false
+        }
+    }
+
+    // New content landing while the question is off-screen pulses the button.
+    LaunchedEffect(state.messages.lastOrNull()?.id, state.streamingText?.length, state.streamingThinking?.length) {
+        if (showJumpToLatest) unreadWhileAway = true
     }
 
     // After a run that changed files finishes, offer a one-tap undo.
@@ -1213,8 +1113,7 @@ private fun ChatScreenContent(
                 modifier = Modifier
                     .then(if (desktopLayout) Modifier.widthIn(max = 880.dp) else Modifier)
                     .fillMaxSize()
-                    .imePadding()
-                    .nestedScroll(userScrollObserver),
+                    .imePadding(),
             ) {
                 val toolResults = remember(state.messages) {
                     val map = HashMap<String, ChatMessage>(state.messages.size)
@@ -1320,21 +1219,6 @@ private fun ChatScreenContent(
                     }
                 }
 
-                // FAB visibility tracks the pin (not the raw at-bottom check),
-                // so the brief off-bottom moments between follow scrolls don't
-                // flash the button during streaming. The badge pulses when new
-                // content landed while detached.
-                var unreadWhileAway by remember { mutableStateOf(false) }
-                LaunchedEffect(pinnedToBottom) { if (pinnedToBottom) unreadWhileAway = false }
-                LaunchedEffect(
-                    state.messages.lastOrNull()?.id,
-                    state.streamingText?.length,
-                    state.streamingThinking?.length,
-                    state.codeDrafts,
-                ) {
-                    if (!pinnedToBottom) unreadWhileAway = true
-                }
-
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -1351,9 +1235,14 @@ private fun ChatScreenContent(
                             state = listState,
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(horizontal = 18.dp, vertical = 24.dp),
-                            verticalArrangement = if (state.messages.isNotEmpty() || state.streamingText != null || state.busy)
-                                Arrangement.spacedBy(12.dp, Alignment.Bottom) else Arrangement.spacedBy(12.dp),
+                            // Top-anchored: a sent question stays put while the
+                            // answer grows below; short chats no longer sit at the bottom.
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
+                            // Indices are recorded while the item scope is built,
+                            // so a brand-new question can be anchored before it
+                            // has ever been composed on screen.
+                            userItemIndexes.clear()
                             var nextItemIndex = 0
                             fun indexedItem(
                                 key: Any,
@@ -1367,7 +1256,6 @@ private fun ChatScreenContent(
                             if (state.hasOlderMessages) {
                                 indexedItem(key = "older-messages", contentType = ChatListContentType.History) {
                                     TextButton(onClick = {
-                                        pinnedToBottom = false
                                         viewModel.loadOlderMessages()
                                     }, enabled = !state.isLoadingOlderMessages, modifier = Modifier.fillMaxWidth()) {
                                         Text(if (state.isLoadingOlderMessages) uiContext.getString(R.string.ui_loading_older_messages) else uiContext.getString(R.string.ui_load_older_messages))
@@ -1379,7 +1267,7 @@ private fun ChatScreenContent(
                                     EmptyState(
                                         hasProvider = state.activeProvider != null,
                                         chatOnly = state.conversation.isChat,
-                                        onSuggestion = { pinnedToBottom = true; viewModel.send(it) },
+                                        onSuggestion = { viewModel.send(it) },
                                         onAddProvider = { addProviderInitially = true; activeProviderManagerTarget = ModelSelectionTarget.ACTIVE },
                                     )
                                 }
@@ -1425,36 +1313,32 @@ private fun ChatScreenContent(
                             }
                         }
                         when (message.role) {
-                            Role.USER -> indexedItem(key = "message-$messageKey-user", contentType = ChatListContentType.User) {
-                                message.turnId?.let { turnId ->
-                                    LaunchedEffect(listState, messageKey) {
-                                        snapshotFlow {
-                                            listState.layoutInfo.visibleItemsInfo
-                                                .firstOrNull { it.key == "message-$messageKey-user" }?.index
-                                        }.filterNotNull().first().let { userItemIndexes[turnId] = it }
-                                    }
-                                }
-                                Box(Modifier.animateItem(fadeInSpec = fastEffectsSpec(), placementSpec = null, fadeOutSpec = null)) {
-                                    Column(horizontalAlignment = Alignment.End) {
-                                        val (visibleText, fileChips) = FileAttachments.splitForDisplay(
-                                            slashSkillInstruction(UserMessageContent.visibleText(message.text))
-                                                ?.ifBlank { "/${slashInvokedSkillName(UserMessageContent.visibleText(message.text))}" }
-                                                ?: UserMessageContent.visibleText(message.text),
-                                        )
-                                        slashInvokedSkillName(UserMessageContent.visibleText(message.text))?.let { skillName ->
-                                            SkillUsedBadge(skillName)
-                                        }
-                                        ArtifactAttachment.fromPrompt(message.text)?.let { SkillUsedBadge(uiContext.getString(R.string.ui_concept, (it.title).toString())) }
-                                        ResponseAttachment.fromPrompt(message.text)?.let { SkillUsedBadge(uiContext.getString(R.string.ui_response, (it.title).toString())) }
-                                        UserBubble(
-                                            visibleText,
-                                            message.images,
-                                            fileChips,
-                                            onLongPress = { actionsMessage = message },
-                                        )
+                            Role.USER -> {
+                                val userIndex = nextItemIndex
+                                indexedItem(key = "message-$messageKey-user", contentType = ChatListContentType.User) {
+                                    Box(Modifier.animateItem(fadeInSpec = fastEffectsSpec(), placementSpec = null, fadeOutSpec = null)) {
+                                        Column(horizontalAlignment = Alignment.End) {
+                                            val (visibleText, fileChips) = FileAttachments.splitForDisplay(
+                                                slashSkillInstruction(UserMessageContent.visibleText(message.text))
+                                                    ?.ifBlank { "/${slashInvokedSkillName(UserMessageContent.visibleText(message.text))}" }
+                                                    ?: UserMessageContent.visibleText(message.text),
+                                            )
+                                            slashInvokedSkillName(UserMessageContent.visibleText(message.text))?.let { skillName ->
+                                                SkillUsedBadge(skillName)
+                                            }
+                                            ArtifactAttachment.fromPrompt(message.text)?.let { SkillUsedBadge(uiContext.getString(R.string.ui_concept, (it.title).toString())) }
+                                            ResponseAttachment.fromPrompt(message.text)?.let { SkillUsedBadge(uiContext.getString(R.string.ui_response, (it.title).toString())) }
+                                            UserBubble(
+                                                visibleText,
+                                                message.images,
+                                                fileChips,
+                                                onLongPress = { actionsMessage = message },
+                                            )
 
+                                        }
                                     }
                                 }
+                                message.turnId?.let { userItemIndexes[it] = userIndex }
                             }
                             Role.ASSISTANT -> {
                                 val canRewind = message.turnId != null &&
@@ -1874,29 +1758,16 @@ private fun ChatScreenContent(
                     label = "fab-bottom-pad",
                 )
                 ScrollToBottomFab(
-                    visible = showJumpToBottom,
+                    visible = showJumpToLatest,
                     unread = unreadWhileAway,
                     onJump = {
-                        showJumpToBottom = false
-                        pinnedToBottom = true
+                        showJumpToLatest = false
                         unreadWhileAway = false
-                        scope.launch {
-                            val total = listState.layoutInfo.totalItemsCount
-                            if (total == 0) return@launch
-                            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()
-                            if (lastVisible == null || lastVisible.index < total - 1) {
-                                // Far from the end: animated scroll to the last
-                                // item, then a short glide to the exact bottom.
-                                listState.animateScrollToItem(total - 1)
-                            }
-                            val info = listState.layoutInfo
-                            val last = info.visibleItemsInfo.lastOrNull()
-                            if (last != null && last.index == info.totalItemsCount - 1) {
-                                val delta = (last.offset + last.size + info.afterContentPadding -
-                                    info.viewportEndOffset).toFloat()
-                                if (delta > 0f) {
-                                    listState.animateScrollBy(delta, tween(280, easing = FastOutSlowInEasing))
-                                }
+                        val turnId = state.messages.lastOrNull { it.role == Role.USER }?.turnId
+                        val index = turnId?.let { userItemIndexes[it] }
+                        if (index != null) scope.launch {
+                            if (index in 0 until listState.layoutInfo.totalItemsCount) {
+                                listState.animateScrollToItem(index, scrollOffset = -previewOffset)
                             }
                         }
                     },
@@ -2007,7 +1878,6 @@ private fun ChatScreenContent(
                         if (payload.isNotBlank() || state.fileAttachments.isNotEmpty()) {
                             // Keep the draft when a selection is still loading/saving or unavailable.
                             if (viewModel.send(payload)) {
-                                pinnedToBottom = true
                                 setComposerText("")
                                 attachedSkill = null
                                 attachedConceptJson = null
@@ -2279,45 +2149,6 @@ private fun FileEditsCard(
     }
 }
 
-/** True when the last item's bottom edge sits within [tolerance]px of the viewport bottom. */
-private fun isAtBottom(info: LazyListLayoutInfo, canScrollForward: Boolean, tolerance: Int = 64): Boolean {
-    // Not scrolled to the bottom at all, and nowhere left to scroll (short list).
-    if (!canScrollForward) return true
-    val last = info.visibleItemsInfo.lastOrNull() ?: return false
-    if (last.index != info.totalItemsCount - 1) return false
-    return last.offset + last.size + info.afterContentPadding <= info.viewportEndOffset + tolerance
-}
-
-/**
- * Instantly scrolls to the very end of the content, bottom padding included.
- * `scrollToItem(last)` alone only aligns the last item's TOP with the viewport
- * top when the item is taller than the viewport; the extra snap (clamped
- * by the list itself) consumes whatever remains.
- */
-private suspend fun LazyListState.scrollToEnd() {
-    val last = layoutInfo.totalItemsCount - 1
-    if (last < 0) return
-    // requestScrollToItem lands on the next measure pass instead of forcing a
-    // synchronous remeasure; the forced one crashed Compose when items were
-    // being removed in the same frame (LayoutNode.onChildRemoved NPE).
-    requestScrollToItem(last)
-    withFrameNanos { }
-    // Consume the remaining distance with the gentle snap instead of a raw
-    // 100k px scrollBy: the big one forced a remeasure during dispatchDraw and
-    // crashed "measure is called on a deactivated node" when a conditional
-    // child flipped mid-pass.
-    snapToEndIfDrifted()
-}
-
-/** Cheap exact snap to the true bottom; a no-op unless the end is composed. */
-private suspend fun LazyListState.snapToEndIfDrifted() {
-    val info = layoutInfo
-    val last = info.visibleItemsInfo.lastOrNull() ?: return
-    if (last.index != info.totalItemsCount - 1) return
-    val delta = last.offset + last.size + info.afterContentPadding - info.viewportEndOffset
-    if (delta > 0) scrollBy(delta.toFloat())
-}
-
 /** Floating jump-to-latest button; pulses when content landed while away. */
 @Composable
 private fun ScrollToBottomFab(
@@ -2447,10 +2278,6 @@ private fun CostDialog(
         },
     )
 }
-
-// Follow-scroll coalescing: during a stream the list follows the newest
-// content with small scrollBy deltas at most this often (ms between scrolls).
-private const val FOLLOW_MIN_INTERVAL_MS = 64L
 
 @Composable
 private fun ChatLoadingSkeleton(modifier: Modifier = Modifier) {
