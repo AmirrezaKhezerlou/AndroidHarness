@@ -46,6 +46,19 @@ class ConversationStartupTest {
             startScreen = StartScreen.CHAT, chatStart = ChatStartMode.LAST_CHAT), ConversationKind.CHAT).sessionId)
     }
 
+    @Test fun legacyBackupDerivesCodeStartFromTheResumeToggle() {
+        val json = Json { encodeDefaults = true }
+        val oldNew = """{"version":1,"settings":{"resumeLastChat":false}}"""
+        assertEquals(CodeStartMode.NEW_CODE,
+            legacyCodeStart(json.decodeFromString(SettingsBackupFile.serializer(), oldNew), oldNew).settings.codeStart)
+        val oldLast = """{"version":1,"settings":{"resumeLastChat":true}}"""
+        assertEquals(CodeStartMode.LAST_CODE,
+            legacyCodeStart(json.decodeFromString(SettingsBackupFile.serializer(), oldLast), oldLast).settings.codeStart)
+        val modern = """{"version":1,"settings":{"resumeLastChat":false,"codeStart":"LAST_CODE"}}"""
+        assertEquals(CodeStartMode.LAST_CODE,
+            legacyCodeStart(json.decodeFromString(SettingsBackupFile.serializer(), modern), modern).settings.codeStart)
+    }
+
     @Test fun backupsCarryThePreferencesButDoNotCarryDeviceLocalSelection() {
         val exported = SettingsBackupPolicy.exportSettings(AppSettings(startScreen = StartScreen.LAST_SELECTED,
             chatStart = ChatStartMode.LAST_CHAT, codeStart = CodeStartMode.NEW_CODE,

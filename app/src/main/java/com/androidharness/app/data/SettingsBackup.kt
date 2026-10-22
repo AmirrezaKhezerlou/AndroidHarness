@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 @Serializable
@@ -151,6 +152,17 @@ object SettingsBackupValidation {
     }
 }
 
+/** Backups written before codeStart existed carry only the legacy Code resume toggle. */
+internal fun legacyCodeStart(file: SettingsBackupFile, text: String): SettingsBackupFile {
+    val hasCodeStart = runCatching {
+        Json { encodeDefaults = true }.parseToJsonElement(text).jsonObject["settings"]?.jsonObject?.containsKey("codeStart") == true
+    }.getOrDefault(true)
+    if (hasCodeStart) return file
+    val derived = if (file.settings.resumeLastChat) CodeStartMode.LAST_CODE else CodeStartMode.NEW_CODE
+    return SettingsBackupFile(file.version, file.settings.copy(codeStart = derived),
+        file.providers, file.servers, file.searchKeys, file.groqKey)
+}
+
 class SettingsBackup(private val c: AppContainer) {
     private val json = Json { encodeDefaults = true }
 
@@ -193,8 +205,10 @@ class SettingsBackup(private val c: AppContainer) {
                 out.toByteArray()
             } ?: error("Cannot open backup.")
             val plain = BackupEncryption.decrypt(bytes, password)
+            val text = plain.toString(Charsets.UTF_8)
             try {
-                json.decodeFromString(SettingsBackupFile.serializer(), plain.toString(Charsets.UTF_8))
+                val decoded = json.decodeFromString(SettingsBackupFile.serializer(), text)
+                legacyCodeStart(decoded, text)
                     .let(SettingsBackupPolicy::withoutLocalModels)
                     .also(SettingsBackupValidation::validate)
             } finally { plain.fill(0) }
