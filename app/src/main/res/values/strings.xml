@@ -708,6 +708,10 @@
 
     <string name="conversation_code">Code</string>
     <string name="conversation_chat">Chat</string>
+    <string name="conversation_new_code_chat">New Code chat</string>
+    <string name="conversation_recent_code_chats">Recent Code chats</string>
+    <string name="chat_tools_status_on">Tools on</string>
+    <string name="chat_tools_status_off">Tools off</string>
     <string name="chat_tools_on">Chat tools on</string>
     <string name="chat_tools_off">Chat tools off</string>
     <string name="chat_tools_title">Optional Chat tools</string>

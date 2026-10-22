@@ -706,6 +706,10 @@
 
     <string name="conversation_code">代码</string>
     <string name="conversation_chat">聊天</string>
+    <string name="conversation_new_code_chat">新建代码聊天</string>
+    <string name="conversation_recent_code_chats">最近的代码聊天</string>
+    <string name="chat_tools_status_on">工具已开启</string>
+    <string name="chat_tools_status_off">工具已关闭</string>
     <string name="chat_tools_on">聊天工具已开启</string>
     <string name="chat_tools_off">聊天工具已关闭</string>
     <string name="chat_tools_title">可选聊天工具</string>

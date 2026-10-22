@@ -206,11 +206,7 @@ private fun ChatScreenContent(
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     // Lazy list content and its derived lookup maps must use the same snapshot.
     val state = viewModel.state.collectAsStateWithLifecycle().value
-    var showChatTools by remember { mutableStateOf(false) }
     var showCodeHandoff by remember { mutableStateOf(false) }
-    if (showChatTools) com.androidharness.app.ui.chat.components.ChatToolsSheet(
-        state.conversation, state.conversationReady && !state.busy && !state.conversationSaving && !state.taskControl.resumable,
-        viewModel::saveChatTools, { showChatTools = false })
     if (showCodeHandoff) {
         val projects by viewModel.container.workspace.projects.collectAsStateWithLifecycle(initialValue = emptyList())
         var selected by remember { mutableStateOf<String?>(null) }
@@ -910,11 +906,17 @@ private fun ChatScreenContent(
         }
     }
 
-    LaunchedEffect(Unit) {
+    val selectSection by androidx.compose.runtime.rememberUpdatedState(onSelectSection)
+    LaunchedEffect(viewModel) {
         viewModel.navEvents.collect { event ->
             when (event) {
                 is NavEvent.NewChat -> onNewChat()
                 is NavEvent.OpenSession -> onNavigateToSession(event.id)
+                is NavEvent.SelectSection -> viewModel.prepareSectionSwitch(composerValue.text) {
+                    sectionFocus.clearFocus(force = true)
+                    scheduleKeyboard?.hide()
+                    selectSection(event.kind)
+                }
             }
         }
     }
@@ -1079,13 +1081,6 @@ private fun ChatScreenContent(
             Column {
             MainHeader(
                 conversation = state.conversation,
-                conversationReady = state.conversationReady && !state.conversationSaving,
-                onSelectSection = { kind -> viewModel.prepareSectionSwitch(composerValue.text) {
-                    sectionFocus.clearFocus(force = true)
-                    scheduleKeyboard?.hide()
-                    onSelectSection(kind)
-                } },
-                onChatTools = { showChatTools = true },
                 sessionTitle = state.sessionTitle,
                 workspaceName = currentProject?.name,
                 busy = state.busy,

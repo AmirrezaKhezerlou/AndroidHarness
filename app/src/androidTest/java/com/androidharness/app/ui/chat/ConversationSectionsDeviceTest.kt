@@ -124,7 +124,7 @@ class ConversationSectionsDeviceTest {
         }
     }
 
-    @Test fun topSwitchReusesExistingHeaderAndChatToolsAtPhoneDesktopAndLargeText() = runBlocking {
+    @Test fun modeLabelPreservesExistingHeaderAtPhoneDesktopAndLargeText() = runBlocking {
         val saved = c.settings.settings.first()
         val project = c.workspace.currentProjectOnce()
         val code = c.sessions.createSession("Code section fixture", project.id)
@@ -155,33 +155,25 @@ class ConversationSectionsDeviceTest {
                         }
                     } }
                 }
-                await("Code"); await("Chat"); await("Workspace files")
+                await("Code · ${project.name}"); await("Workspace files")
+                assertNull("No standalone Chat switch in the header", find(instrumentation.uiAutomation.rootInActiveWindow, "Chat"))
                 screenshot("code-phone")
-                tap("Chat"); await("Chat tools off")
+                scenario.onActivity { section.value = ConversationKind.CHAT }
+                await("Chat · Tools off")
                 assertNull(find(instrumentation.uiAutomation.rootInActiveWindow, "Workspace files"))
-                tap("Chat tools off"); await("Optional Chat tools")
-                tap("Enable tools for this Chat"); tap("Save tools"); await("Chat tools on")
-                assertTrue(ConversationConfig.decode(c.sessions.session(chat)?.conversationJson).toolsEnabled)
+                assertNull("Chat tools live in the sidebar", find(instrumentation.uiAutomation.rootInActiveWindow, "Chat tools off"))
                 screenshot("chat-phone")
                 scenario.onActivity { scale.value = 1.5f; theme.value = ThemeMode.DARK }
-                await("Chat tools on"); tap("Chat tools on"); await("Optional Chat tools")
-                await("Web search"); await("Read web pages")
-                val deadline = SystemClock.uptimeMillis() + 4_000
-                var separated = false
-                while (SystemClock.uptimeMillis() < deadline) {
-                    val tree = instrumentation.uiAutomation.rootInActiveWindow
-                    val search = find(tree, "Web search"); val pages = find(tree, "Read web pages")
-                    if (search != null && pages != null && bounds(search).bottom <= bounds(pages).top) { separated = true; break }
-                    SystemClock.sleep(100)
-                }
-                assertTrue("Tool rows remain separate after sheet animation", separated)
-                screenshot("chat-tools-large-dark")
-                tap("Save tools"); tap("Code"); await("Workspace files")
+                await("Chat · Tools off")
+                screenshot("chat-large-dark")
+                scenario.onActivity { section.value = ConversationKind.CODE }
+                await("Workspace files"); await("Code · ${project.name}")
                 screenshot("code-large-dark")
-                scenario.onActivity { scale.value = 1f; desktop.value = true }
-                await("Code"); tap("Chat"); await("Chat tools on")
+                scenario.onActivity { scale.value = 1f; desktop.value = true; section.value = ConversationKind.CHAT }
+                await("Chat · Tools off"); await("Open navigation")
                 screenshot("chat-desktop")
-                tap("Code"); await("Conversation actions")
+                scenario.onActivity { section.value = ConversationKind.CODE }
+                await("Conversation actions"); await("Code · ${project.name}")
                 screenshot("code-desktop")
             }
         } finally {
@@ -192,7 +184,7 @@ class ConversationSectionsDeviceTest {
         }
     }
 
-    @Test fun appNavigationStartsInCodeAndRetainsDraftWhenSwitchingSections() = runBlocking {
+    @Test fun appNavigationStartsInCodeAndRetainsDraftWhenSwitchingSections(): Unit = runBlocking {
         val saved = c.settings.settings.first()
         val before = c.sessions.sessions.first().map { it.id }.toSet()
         val project = c.workspace.currentProjectOnce()
@@ -203,17 +195,25 @@ class ConversationSectionsDeviceTest {
         c.settings.setLastActiveSessionId(chat)
         try {
             ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
-                scenario.onActivity { activity -> activity.setContent { HarnessTheme { AppNav(c) } } }
+                val scale = mutableStateOf(1f)
+                scenario.onActivity { activity -> activity.setContent { HarnessTheme {
+                    val density = LocalDensity.current
+                    CompositionLocalProvider(LocalDensity provides Density(density.density, scale.value)) { AppNav(c) }
+                } } }
                 // Even a previously active normal Chat does not change the default section.
-                await("Workspace files"); await("Code")
+                await("Workspace files"); await("Code · ${project.name}")
                 await("Message input")
                 val input = nodes().last { it.isEditable && it.isVisibleToUser }
                 assertTrue(input.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, android.os.Bundle().apply {
                     putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "Keep my unsent Code draft")
                 }))
                 repeat(3) {
+                    tap("Open navigation"); await("New Code chat")
                     tap("Chat"); await("Chat tools off")
-                    tap("Code"); await("Workspace files")
+                    assertNull("Code histories are filtered from Chat", find(instrumentation.uiAutomation.rootInActiveWindow, "Recent Code chats"))
+                    tap("Collapse sidebar"); await("Chat · Tools off")
+                    tap("Open navigation"); tap("Code"); await("New Code chat")
+                    tap("Collapse sidebar"); await("Workspace files")
                 }
                 val deadline = SystemClock.uptimeMillis() + 10_000
                 var restored = false
@@ -224,6 +224,71 @@ class ConversationSectionsDeviceTest {
                 }
                 assertTrue("Section switching preserves the Code draft", restored)
                 screenshot("app-navigation-code")
+                tap("Open navigation"); tap("Chat"); await("Chat tools off")
+                screenshot("sidebar-chat")
+                tap("Chat tools off"); await("Optional Chat tools")
+                scenario.onActivity { scale.value = 1.5f }
+                await("Enable tools for this Chat"); await("Web search"); await("Read web pages")
+                val deadlineTools = SystemClock.uptimeMillis() + 4_000
+                var separated = false
+                while (SystemClock.uptimeMillis() < deadlineTools) {
+                    val tree = instrumentation.uiAutomation.rootInActiveWindow
+                    val search = find(tree, "Web search"); val pages = find(tree, "Read web pages")
+                    if (search != null && pages != null && bounds(search).bottom <= bounds(pages).top) { separated = true; break }
+                    SystemClock.sleep(100)
+                }
+                assertTrue("Tool rows stay separate at 150 percent text", separated)
+                screenshot("chat-tools-large")
+                tap("Enable tools for this Chat"); tap("Save tools"); await("Chat · Tools on")
+                assertTrue(ConversationConfig.decode(c.sessions.session(chat)?.conversationJson).toolsEnabled)
+                tap("Open navigation"); await("Chat tools on")
+                screenshot("sidebar-chat-tools-on")
+                tap("Code"); await("New Code chat")
+                screenshot("sidebar-code-large")
+                tap("Collapse sidebar"); await("Workspace files")
+            }
+        } finally {
+            c.sessions.sessions.first().filter { it.id !in before }.forEach { c.sessions.deleteSession(it) }
+            c.settings.setOnboardingDone(saved.onboardingDone)
+            c.settings.setResumeLastChat(saved.resumeLastChat)
+            c.settings.setWorkspaceLayout(saved.workspaceLayout)
+            c.settings.setLastActiveSessionId(saved.lastActiveSessionId)
+        }
+    }
+
+    @Test fun desktopSidebarKeepsChatSelectedOnOtherPagesAndReopensTools(): Unit = runBlocking {
+        val saved = c.settings.settings.first()
+        val before = c.sessions.sessions.first().map { it.id }.toSet()
+        val chat = c.sessions.createSession("Desktop sidebar Chat fixture", c.workspace.currentProjectOnce().id,
+            ConversationConfig(ConversationKind.CHAT))
+        c.settings.setOnboardingDone(true)
+        c.settings.setResumeLastChat(true)
+        c.settings.setWorkspaceLayout(WorkspaceLayoutMode.DESKTOP)
+        c.settings.setLastActiveSessionId(chat)
+        try {
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { activity -> activity.setContent { HarnessTheme { AppNav(c) } } }
+                await("New Code chat")
+                tap("Chat"); await("Chat tools off")
+                tap("Providers")
+                val deadline = SystemClock.uptimeMillis() + 10_000
+                var selected = false
+                while (SystemClock.uptimeMillis() < deadline) {
+                    var node = find(instrumentation.uiAutomation.rootInActiveWindow, "Chat")
+                    while (node != null) {
+                        if (node.isSelected) { selected = true; break }
+                        node = node.parent
+                    }
+                    if (selected) break
+                    SystemClock.sleep(100)
+                }
+                screenshot("desktop-sidebar-providers")
+                assertTrue("Chat stays selected when opening Providers", selected)
+                tap("Chat tools off"); await("Optional Chat tools")
+                tap("Save tools"); await("Chat · Tools off")
+                screenshot("desktop-sidebar-chat")
+                tap("Collapse sidebar"); await("Open navigation")
+                tap("Open navigation"); await("Chat tools off")
             }
         } finally {
             c.sessions.sessions.first().filter { it.id !in before }.forEach { c.sessions.deleteSession(it) }

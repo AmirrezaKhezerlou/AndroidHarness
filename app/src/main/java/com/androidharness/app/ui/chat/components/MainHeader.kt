@@ -112,9 +112,6 @@ internal fun MainHeader(
     onAddThinkingLevel: (() -> Unit)? = null,
     onSetCustomThinking: (String) -> Unit = {},
     conversation: com.androidharness.app.data.ConversationConfig = com.androidharness.app.data.ConversationConfig(),
-    conversationReady: Boolean = true,
-    onSelectSection: (com.androidharness.app.data.ConversationKind) -> Unit = {},
-    onChatTools: () -> Unit = {},
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     var menu by remember { mutableStateOf(false) }
@@ -124,12 +121,12 @@ internal fun MainHeader(
     val thinkingOn = thinkingLevel != ThinkingLevel.OFF
 
     if (com.androidharness.app.ui.LocalDesktopLayout.current) {
-        Column(Modifier.then(if (conversation.isChat) Modifier.statusBarsPadding() else Modifier)) {
-            ConversationSectionRow(conversation, conversationReady, onSelectSection, onChatTools)
+        Column {
             DesktopConversationHeader(sessionTitle, busy, pickerLabel, thinkingLevel, thinkingLevels, mode,
             permissionMode, onPickModel, onSetThinking, onSetMode, onSetPermission,
             onOpenContext, onOpenUndo, canUndo, onOpenGitHub, canOpenGitHub, onOpenWebPreview, thinkingResolved, onCustomizeThinking, onSetCustomThinking, onAddThinkingLevel,
-            showPreviewShortcut = showWebPreviewShortcut, chatOnly = conversation.isChat)
+            showPreviewShortcut = showWebPreviewShortcut, conversation = conversation,
+            workspaceName = workspaceName, onOpenDrawer = onOpenDrawer)
         }
         return
     }
@@ -139,7 +136,6 @@ internal fun MainHeader(
             .background(scheme.surface)
             .statusBarsPadding(),
     ) {
-        ConversationSectionRow(conversation, conversationReady, onSelectSection, onChatTools)
         Column(Modifier.fillMaxWidth()) {
             Column {
                 Row(
@@ -162,10 +158,7 @@ internal fun MainHeader(
                             Text(sessionTitle, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
                         }
-                        workspaceName?.takeUnless { conversation.isChat }?.let {
-                            Text(it, style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
+                        ConversationModeLabel(conversation, workspaceName)
                     }
 
                     // Workspace files explorer, migrated here from the drawer;
@@ -372,17 +365,26 @@ private fun DesktopConversationHeader(
     onSetCustomThinking: (String) -> Unit,
     onAddThinkingLevel: (() -> Unit)?,
     showPreviewShortcut: Boolean,
-    chatOnly: Boolean = false,
+    conversation: com.androidharness.app.data.ConversationConfig,
+    workspaceName: String?,
+    onOpenDrawer: () -> Unit,
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     var menu by remember { mutableStateOf(false) }
     var thinkingMenu by remember { mutableStateOf(false) }
+    val chatOnly = conversation.isChat
     Column {
         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            Text(title, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (chatOnly) IconButton(onClick = onOpenDrawer, modifier = Modifier.size(36.dp)) {
+                Icon(painterResource(R.drawable.ic_chat_menu), uiContext.getString(R.string.ui_open_navigation), Modifier.size(18.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                ConversationModeLabel(conversation, workspaceName)
+            }
             if (busy) androidx.compose.material3.CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 1.5.dp)
             HeaderModelPicker(model, onModel, Modifier.widthIn(max = 180.dp))
             if (thinkingResolved?.customConfig != null || levels.isNotEmpty() || thinkingResolved?.spec?.style == com.androidharness.app.agent.ThinkingSpecs.Style.AUTOMATIC)

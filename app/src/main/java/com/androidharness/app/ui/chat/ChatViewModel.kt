@@ -72,6 +72,7 @@ data class UsageStats(
 sealed interface NavEvent {
     data object NewChat : NavEvent
     data class OpenSession(val id: String) : NavEvent
+    data class SelectSection(val kind: com.androidharness.app.data.ConversationKind) : NavEvent
 }
 
 enum class ModelSelectionTarget {
@@ -1348,6 +1349,16 @@ class ChatViewModel(
         compactionJob?.cancel()
         val sid = sessionId ?: return
         c.runManager.stop(sid)
+    }
+
+    fun requestSectionSwitch(kind: com.androidharness.app.data.ConversationKind): String? {
+        if (kind == _state.value.conversation.kind) return null
+        // The drawer covers the conversation's snackbar, so report this guard
+        // back to the navigation surface before dispatching the switch.
+        if (pendingAttachments.isNotEmpty() || pendingFileAttachments.isNotEmpty())
+            return c.appContext.getString(R.string.chat_switch_attachments)
+        _navEvents.tryEmit(NavEvent.SelectSection(kind))
+        return null
     }
 
     fun prepareSectionSwitch(draft: String, onReady: () -> Unit) {

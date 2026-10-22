@@ -98,12 +98,16 @@ internal fun ProjectNavigationSidebar(
     projectPins: Set<String> = emptySet(), projectArchives: Set<String> = emptySet(),
     onProjectAction: (ProjectEntity, SidebarProjectAction) -> Unit = { _, _ -> },
     chatOnly: Boolean = false,
+    chatToolsEnabled: Boolean = false,
+    sectionSwitchEnabled: Boolean = true,
+    onSelectSection: (com.androidharness.app.data.ConversationKind) -> Unit = {},
+    onChatTools: () -> Unit = {},
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     var expandedProjects by rememberSaveable { mutableStateOf(emptyList<String>()) }
     var showArchived by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(projectsView) { showArchived = false }
+    LaunchedEffect(projectsView, chatOnly) { showArchived = false }
     var toolsOpen by rememberSaveable { mutableStateOf(false) }
     val density = LocalDensity.current
     var footerHeight by remember { mutableStateOf(0.dp) }
@@ -126,6 +130,8 @@ internal fun ProjectNavigationSidebar(
         Column(Modifier.fillMaxWidth().onSizeChanged { footerHeight = with(density) { it.height.toDp() } }
             .padding(horizontal = 10.dp, vertical = 8.dp)) {
             if (!chatOnly) SidebarNavRow(uiContext.getString(R.string.ui_tools), Icons.Outlined.Widgets, expanded = toolsOpen, onClick = { toolsOpen = !toolsOpen })
+            if (chatOnly) SidebarNavRow(uiContext.getString(if (chatToolsEnabled) R.string.chat_tools_on else R.string.chat_tools_off),
+                Icons.Outlined.Tune, onClick = onChatTools)
             if (toolsOpen && !chatOnly) Column(Modifier.padding(start = 16.dp)) {
                 SidebarNavRow("Terminal", Icons.Outlined.Terminal, currentRoute?.startsWith("terminal") == true, onClick = onTerminal)
                 SidebarNavRow("Build & test", Icons.Outlined.Build, currentRoute?.startsWith("build-test") == true, onClick = onBuild)
@@ -152,10 +158,14 @@ internal fun ProjectNavigationSidebar(
                             fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         IconButton(onClick = onCollapse) { Icon(Icons.AutoMirrored.Outlined.MenuOpen, uiContext.getString(R.string.ui_collapse_sidebar), Modifier.size(19.dp)) }
                     }
+                    com.androidharness.app.ui.chat.components.ConversationSectionSwitcher(
+                        com.androidharness.app.data.ConversationConfig(
+                            if (chatOnly) com.androidharness.app.data.ConversationKind.CHAT else com.androidharness.app.data.ConversationKind.CODE),
+                        sectionSwitchEnabled, onSelectSection)
                     Button(onClick = onNewChat, enabled = projectCreationEnabled, shape = RoundedCornerShape(11.dp),
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp).heightIn(min = 44.dp)) {
                         Icon(Icons.Outlined.EditNote, null, Modifier.size(19.dp)); Spacer(Modifier.width(8.dp))
-                        Text(uiContext.getString(R.string.settings_telegram_new_chat), style = MaterialTheme.typography.labelLarge)
+                        Text(uiContext.getString(if (chatOnly) R.string.settings_telegram_new_chat else R.string.conversation_new_code_chat), style = MaterialTheme.typography.labelLarge)
                     }
                     BasicTextField(query, onQueryChange, singleLine = true, textStyle = MaterialTheme.typography.bodyMedium.copy(color = scheme.onSurface),
                         cursorBrush = SolidColor(scheme.primary), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -164,7 +174,7 @@ internal fun ProjectNavigationSidebar(
                             .semantics { contentDescription = uiContext.getString(R.string.ui_search_chats_and_messages) },
                         decorationBox = { field ->
                             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).background(scheme.surfaceContainerHigh, RoundedCornerShape(10.dp))
-                                .padding(start = 12.dp, end = if (query.isBlank()) 12.dp else 0.dp, top = 4.dp, bottom = 4.dp),
+                                .padding(start = 12.dp, end = if (query.isBlank() && !chatOnly) 12.dp else 0.dp, top = 4.dp, bottom = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Outlined.Search, null, Modifier.size(18.dp), tint = scheme.onSurfaceVariant)
                                 Spacer(Modifier.width(8.dp))
@@ -173,15 +183,20 @@ internal fun ProjectNavigationSidebar(
                                         style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant, maxLines = 1)
                                     field()
                                 }
+                                if (chatOnly) IconButton(onClick = { onQueryChange(""); showArchived = !showArchived }) {
+                                    Icon(if (showArchived) Icons.AutoMirrored.Outlined.ArrowBack else Icons.Outlined.Archive,
+                                        uiContext.getString(if (showArchived) R.string.ui_back_to_active else R.string.ui_show_archived, "chats"),
+                                        Modifier.size(19.dp), tint = if (showArchived) scheme.primary else scheme.onSurfaceVariant)
+                                }
                                 if (query.isNotEmpty()) IconButton(onClick = { onQueryChange("") }) {
                                     Icon(Icons.Outlined.Close, uiContext.getString(R.string.settings_search_clear), Modifier.size(17.dp))
                                 }
                             }
                         })
-                    Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, top = 2.dp, bottom = 4.dp),
+                    if (!chatOnly) Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, top = 2.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         Row(Modifier.weight(1f).background(scheme.surfaceContainer, RoundedCornerShape(12.dp)).padding(3.dp)) {
-                            (if (chatOnly) listOf(false to uiContext.getString(R.string.conversation_chat)) else listOf(false to uiContext.getString(R.string.ui_chats), true to uiContext.getString(R.string.ui_projects))).forEach { (projectTab, label) ->
+                            listOf(false to uiContext.getString(R.string.ui_chats), true to uiContext.getString(R.string.ui_projects)).forEach { (projectTab, label) ->
                                 val selectedTab = projectsView == projectTab
                                 val tabColor by animateColorAsState(
                                     if (selectedTab) scheme.secondaryContainer else scheme.surfaceContainer,
@@ -281,7 +296,7 @@ internal fun ProjectNavigationSidebar(
                         }
                         val recent = sessions.filter { it.id !in pinned && it.id !in archived }
                         if (recent.isNotEmpty()) {
-                            item { SidebarSectionHeader(uiContext.getString(R.string.ui_recent_chats), true, null) }
+                            item { SidebarSectionHeader(uiContext.getString(if (chatOnly) R.string.ui_recent_chats else R.string.conversation_recent_code_chats), true, null) }
                             items(recent, key = { "chat:${it.id}" }) { Chat(it, showProject = true) }
                         }
                         if (recent.isEmpty() && grouped.pinned.isEmpty()) item {
