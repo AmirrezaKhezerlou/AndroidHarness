@@ -409,6 +409,9 @@ private fun SidebarChatRow(chat: SessionEntity, selected: Boolean, pinned: Boole
     val statusColors = LocalStatusColors.current
     var menu by remember { mutableStateOf(false) }
     var focused by remember { mutableStateOf(false) }
+    val hasDraft = remember(chat.conversationJson) {
+        com.androidharness.app.data.ConversationConfig.decode(chat.conversationJson).draftText.isNotBlank()
+    }
     Row(Modifier.fillMaxWidth().padding(start = if (indented) 30.dp else 10.dp, end = 10.dp, top = 2.dp, bottom = 2.dp)) {
         if (indented) Box(Modifier.width(1.dp).height(56.dp).background(scheme.outlineVariant))
         Row(Modifier.weight(1f).padding(start = if (indented) 5.dp else 0.dp)
@@ -423,8 +426,12 @@ private fun SidebarChatRow(chat: SessionEntity, selected: Boolean, pinned: Boole
                 .semantics { this.selected = selected; contentDescription = uiContext.getString(R.string.ui_open_1656, (chat.title).toString()) }
                 .heightIn(min = 56.dp).padding(start = 10.dp, end = 2.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(chat.title, style = MaterialTheme.typography.bodyMedium, fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
-                        maxLines = if (LocalDensity.current.fontScale > 1.3f) 2 else 1, overflow = TextOverflow.Ellipsis)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(chat.title, style = MaterialTheme.typography.bodyMedium, fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+                            maxLines = if (LocalDensity.current.fontScale > 1.3f) 2 else 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false))
+                        if (hasDraft) Icon(Icons.Outlined.Edit, uiContext.getString(R.string.ui_draft), Modifier.size(12.dp), tint = scheme.primary)
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         val color = when (activity) { SidebarActivity.WORKING -> statusColors.success; SidebarActivity.NEEDS_YOU -> statusColors.warning; null -> scheme.onSurfaceVariant }
                         if (activity == SidebarActivity.WORKING) Box(Modifier.size(6.dp).background(color, CircleShape))

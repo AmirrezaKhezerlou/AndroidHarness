@@ -1613,4 +1613,12 @@
     <string name="ui_needs_you">"需要你处理"</string>
     <string name="ui_archived">"已归档"</string>
     <string name="ui_current_chat">"当前聊天"</string>
+    <string name="ui_find_in_chat">"在聊天中查找"</string>
+    <string name="ui_find_in_this_chat">"在当前聊天中查找"</string>
+    <string name="ui_find_position">"%1$s / %2$s"</string>
+    <string name="ui_regenerate">"重新生成"</string>
+    <string name="ui_draft">"草稿"</string>
+    <string name="ui_close_image">"关闭图片"</string>
+    <string name="ui_open_image">"打开图片"</string>
+    <string name="ui_image_not_available">"此图片已不在设备上。"</string>
 </resources>

@@ -1699,6 +1699,35 @@ class ChatViewModel(
         startRun(newText, replacement = message)
     }
 
+    /** Re-runs the question behind [message], replacing its answer in place. */
+    fun regenerate(message: ChatMessage) {
+        if (_state.value.busy || message.role != Role.ASSISTANT) return
+        val question = com.androidharness.app.core.ChatTurnActions
+            .userMessageFor(_state.value.messages, message.turnId) ?: return
+        editAndResend(question, question.text)
+    }
+
+    private var draftSaveJob: kotlinx.coroutines.Job? = null
+
+    /** Stores the composer text so the chat list can mark unsent drafts. */
+    fun saveDraft(text: String, immediate: Boolean = false) {
+        val sid = sessionId ?: return
+        draftSaveJob?.cancel()
+        draftSaveJob = viewModelScope.launch {
+            if (!immediate) kotlinx.coroutines.delay(400)
+            val session = c.sessions.session(sid) ?: return@launch
+            val config = com.androidharness.app.data.ConversationConfig.decode(session.conversationJson)
+            if (config.draftText == text) return@launch
+            runCatching { c.sessions.saveConversation(sid, config.copy(draftText = text)) }
+        }
+    }
+
+    /** Find-in-conversation hits, oldest first, for the in-chat search bar. */
+    suspend fun findInConversation(query: String): List<com.androidharness.app.data.MessageHit> {
+        val sid = sessionId ?: return emptyList()
+        return runCatching { c.sessions.searchMessagesInSession(sid, query) }.getOrDefault(emptyList())
+    }
+
     // ------------------------------------------------------------------
     // Misc
     // ------------------------------------------------------------------

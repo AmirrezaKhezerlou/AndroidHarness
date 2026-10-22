@@ -429,6 +429,15 @@ interface HarnessDao {
     @Query("SELECT * FROM messages WHERE text LIKE :pattern ESCAPE '\\' ORDER BY createdAt DESC LIMIT :limit")
     suspend fun searchLike(pattern: String, limit: Int): List<MessageEntity>
 
+    @Query(
+        "SELECT m.* FROM message_fts f JOIN messages m ON m.rowid = f.docid " +
+            "WHERE f.text MATCH :match AND m.sessionId = :sessionId ORDER BY m.createdAt ASC LIMIT :limit"
+    )
+    suspend fun searchFtsInSession(match: String, sessionId: String, limit: Int): List<MessageEntity>
+
+    @Query("SELECT * FROM messages WHERE text LIKE :pattern ESCAPE '\\' AND sessionId = :sessionId ORDER BY createdAt ASC LIMIT :limit")
+    suspend fun searchLikeInSession(pattern: String, sessionId: String, limit: Int): List<MessageEntity>
+
     @Query("SELECT * FROM sessions WHERE id IN (:ids)")
     suspend fun sessionsByIds(ids: List<String>): List<SessionEntity>
 

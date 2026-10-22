@@ -1613,4 +1613,12 @@
     <string name="ui_needs_you">"Needs you"</string>
     <string name="ui_archived">"Archived"</string>
     <string name="ui_current_chat">"Current chat"</string>
+    <string name="ui_find_in_chat">"Find in chat"</string>
+    <string name="ui_find_in_this_chat">"Find in this chat"</string>
+    <string name="ui_find_position">"%1$s of %2$s"</string>
+    <string name="ui_regenerate">"Regenerate"</string>
+    <string name="ui_draft">"Draft"</string>
+    <string name="ui_close_image">"Close image"</string>
+    <string name="ui_open_image">"Open image"</string>
+    <string name="ui_image_not_available">"This image is no longer on the device."</string>
 </resources>

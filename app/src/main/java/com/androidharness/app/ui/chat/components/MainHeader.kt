@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.ForkRight
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.QueryStats
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.Terminal
@@ -108,6 +109,7 @@ internal fun MainHeader(
     canOpenGitHub: Boolean = true,
     onOpenWebPreview: () -> Unit = {},
     showWebPreviewShortcut: Boolean = false,
+    onFind: (() -> Unit)? = null,
     modelScopeLabel: String? = null,
     workspaceName: String? = null,
     thinkingResolved: com.androidharness.app.agent.ThinkingSpecs.ResolvedThinking? = null,
@@ -132,7 +134,7 @@ internal fun MainHeader(
             onOpenContext, onOpenUndo, canUndo, onOpenGitHub, canOpenGitHub, onOpenWebPreview, thinkingResolved, onCustomizeThinking, onSetCustomThinking, onAddThinkingLevel,
             showPreviewShortcut = showWebPreviewShortcut, conversation = conversation,
             workspaceName = workspaceName, onOpenDrawer = onOpenDrawer,
-            searchDepth = searchDepth, onSetSearchDepth = onSetSearchDepth)
+            searchDepth = searchDepth, onSetSearchDepth = onSetSearchDepth, onFind = onFind)
         }
         return
     }
@@ -274,6 +276,12 @@ internal fun MainHeader(
                                 onClick = { menu = false; permissionMenu = true },
                             )
                             DropdownMenuItem(
+                                text = { Text(uiContext.getString(R.string.ui_find_in_chat)) },
+                                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                                enabled = onFind != null,
+                                onClick = { menu = false; onFind?.invoke() },
+                            )
+                            DropdownMenuItem(
                                 text = { Text(uiContext.getString(R.string.ui_context_limits)) },
                                 leadingIcon = {
                                     Icon(Icons.Outlined.QueryStats, contentDescription = null)
@@ -380,6 +388,7 @@ private fun DesktopConversationHeader(
     onOpenDrawer: () -> Unit,
     searchDepth: com.androidharness.app.data.SearchDepth,
     onSetSearchDepth: (com.androidharness.app.data.SearchDepth) -> Unit,
+    onFind: (() -> Unit)? = null,
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
@@ -420,6 +429,11 @@ private fun DesktopConversationHeader(
                 }
                 DropdownMenu(menu, { menu = false }) {
                     if (!chatOnly) WorkspaceMenuEntries { menu = false }
+                    DropdownMenuItem(
+                        text = { Text(uiContext.getString(R.string.ui_find_in_chat)) },
+                        enabled = onFind != null,
+                        onClick = { menu = false; onFind?.invoke() },
+                    )
                     DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_context_limits)) }, onClick = { menu = false; onContext() })
                     if (!chatOnly) DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_web_preview)) }, onClick = { menu = false; onPreview() })
                     if (!chatOnly) DropdownMenuItem(text = { Text("GitHub") }, enabled = canGitHub, onClick = { menu = false; onGitHub() })

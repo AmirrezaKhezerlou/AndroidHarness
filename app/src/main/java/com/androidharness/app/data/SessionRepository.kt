@@ -499,6 +499,33 @@ class SessionRepository(
         }
     }
 
+    /**
+     * Find-in-conversation. Oldest hit first so next/previous walk forward
+     * through the chat. Word search hits FTS; a query with no FTS tokens or no
+     * hits falls back to a substring match for partial words and punctuation.
+     */
+    suspend fun searchMessagesInSession(sessionId: String, rawQuery: String, limit: Int = 200): List<MessageHit> {
+        val q = rawQuery.trim()
+        if (q.isEmpty()) return emptyList()
+        val match = ChatSearch.ftsMatchQuery(q)
+        val rows = (if (match == null) emptyList() else db.dao().searchFtsInSession(match, sessionId, limit))
+            .ifEmpty { db.dao().searchLikeInSession(ChatSearch.likePattern(q), sessionId, limit) }
+            .filterNot { it.role == Role.ASSISTANT.name && it.toolCallId != null }
+        if (rows.isEmpty()) return emptyList()
+        val session = db.dao().session(sessionId) ?: return emptyList()
+        return rows.filter { row ->
+            !ConversationConfig.decode(session.conversationJson).isChat || row.role in setOf("USER", "ASSISTANT")
+        }.map { row ->
+            MessageHit(
+                messageId = row.id,
+                sessionId = row.sessionId,
+                sessionTitle = session.title,
+                text = if (row.role == Role.ASSISTANT.name) com.androidharness.app.core.response.RichResponse.plainText(row.text) else com.androidharness.app.core.response.UserMessageContent.visibleText(row.text),
+                createdAt = row.createdAt,
+            )
+        }
+    }
+
     suspend fun addUsage(id: String, input: Long, output: Long, cached: Long, cacheWrite: Long = 0) {
         db.dao().addUsage(id, input, output, cached, cacheWrite)
     }

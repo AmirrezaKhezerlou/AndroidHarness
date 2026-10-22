@@ -66,6 +66,7 @@ import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -284,6 +285,10 @@ private fun ChatScreenContent(
             draftRestored = true
         }
     }
+    LaunchedEffect(composerText, state.conversationReady, draftRestored, state.sessionId) {
+        if (!state.conversationReady || !draftRestored) return@LaunchedEffect
+        viewModel.saveDraft(composerText)
+    }
     var attachedConceptJson by rememberSaveable(state.sessionId) { mutableStateOf<String?>(null) }
     val attachedConcept = remember(attachedConceptJson) { ArtifactAttachment.decode(attachedConceptJson) }
     var attachedResponseJson by rememberSaveable(state.sessionId) { mutableStateOf<String?>(null) }
@@ -478,21 +483,35 @@ private fun ChatScreenContent(
     var lastAnchoredTurnId by remember(state.sessionId) { mutableStateOf<String?>(null) }
     var anchoringTurnId by remember(state.sessionId) { mutableStateOf<String?>(null) }
     var searchRevealDone by remember(state.sessionId, searchMessageId) { mutableStateOf(false) }
+    var findOpen by remember(state.sessionId) { mutableStateOf(false) }
+    var findQuery by remember(state.sessionId) { mutableStateOf("") }
+    var findHits by remember(state.sessionId) { mutableStateOf<List<com.androidharness.app.data.MessageHit>>(emptyList()) }
+    var findPosition by remember(state.sessionId) { mutableStateOf(0) }
+    var findTargetId by remember(state.sessionId) { mutableStateOf<String?>(null) }
+    val activeFindId = if (findOpen) findTargetId else searchMessageId
     val density = LocalDensity.current
     val previewOffset = with(density) { 64.dp.roundToPx() }
     // Filled while the LazyColumn registers its items, so the newest question
     // can be anchored before it has ever been on screen.
     val userItemIndexes = remember(state.sessionId) { HashMap<String, Int>() }
-    val searchItemIndex = remember(searchMessageId) { mutableStateOf<Int?>(null) }
-    val searchTurnId = state.messages.firstOrNull { it.id == searchMessageId }?.turnId
+    val searchItemIndex = remember(activeFindId) { mutableStateOf<Int?>(null) }
+    val searchTurnId = state.messages.firstOrNull { it.id == activeFindId }?.turnId
     val latestUserTurnId = state.messages.lastOrNull { it.role == Role.USER }?.turnId
     var diffFile by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var imagePreview by remember { mutableStateOf<com.androidharness.app.core.ImageRef?>(null) }
     diffFile?.let { (turnId, path) ->
         ChatFileDiffSheet(
             path = path,
             loadDiff = { viewModel.fileDiff(turnId, path) },
             onOpenFile = { diffFile = null; onOpenFile(path, null) },
             onDismiss = { diffFile = null },
+        )
+    }
+    imagePreview?.let { ref ->
+        com.androidharness.app.ui.chat.components.ImagePreviewDialog(
+            ref = ref,
+            dir = viewModel.container.images.imagesDir,
+            onDismiss = { imagePreview = null },
         )
     }
     LaunchedEffect(searchMessageId, state.isLoadingMessages) {
@@ -509,6 +528,28 @@ private fun ChatScreenContent(
         // Keep the search result in place; a new message changes the turn id
         // and anchors normally.
         lastAnchoredTurnId = state.messages.lastOrNull { it.role == Role.USER }?.turnId
+    }
+    LaunchedEffect(findOpen, findQuery, state.sessionId) {
+        if (!findOpen) return@LaunchedEffect
+        if (findQuery.isBlank()) {
+            findHits = emptyList()
+            findPosition = 0
+            findTargetId = null
+            return@LaunchedEffect
+        }
+        delay(250)
+        val hits = viewModel.findInConversation(findQuery)
+        findHits = hits
+        findPosition = 0
+        findTargetId = hits.firstOrNull()?.messageId
+    }
+    LaunchedEffect(findOpen, findTargetId, state.isLoadingMessages) {
+        if (!findOpen) return@LaunchedEffect
+        val target = findTargetId ?: return@LaunchedEffect
+        if (state.isLoadingMessages) return@LaunchedEffect
+        if (!viewModel.revealMessage(target)) return@LaunchedEffect
+        val index = snapshotFlow { searchItemIndex.value }.filterNotNull().first()
+        if (index in 0 until listState.layoutInfo.totalItemsCount) listState.animateScrollToItem(index)
     }
 
     if (showContext) {
@@ -1111,7 +1152,32 @@ private fun ChatScreenContent(
                 },
                 showWebPreviewShortcut = webPreviewAvailable,
                 onOpenWebPreview = { webPreviewUrl = null; showWebPreview = true },
+                onFind = { findOpen = true },
             )
+            if (findOpen) {
+                com.androidharness.app.ui.chat.components.FindInChatBar(
+                    query = findQuery,
+                    onQueryChange = { findQuery = it },
+                    position = findPosition,
+                    total = findHits.size,
+                    onPrevious = {
+                        if (findHits.isNotEmpty()) {
+                            findPosition = (findPosition - 1 + findHits.size) % findHits.size
+                            findTargetId = findHits[findPosition].messageId
+                        }
+                    },
+                    onNext = {
+                        if (findHits.isNotEmpty()) {
+                            findPosition = (findPosition + 1) % findHits.size
+                            findTargetId = findHits[findPosition].messageId
+                        }
+                    },
+                    onClose = {
+                        findOpen = false
+                        findTargetId = null
+                    },
+                )
+            }
             }
         },
         snackbarHost = {},
@@ -1295,7 +1361,7 @@ private fun ChatScreenContent(
                         // subagent's own page, never in the main list.
                         if (message.role == Role.ASSISTANT && message.toolCallId != null) continue
                         val messageKey = message.id ?: "${message.role.name}-${message.createdAt}-$messageIndex"
-                        if (searchMessageId != null && message.id == searchMessageId) {
+                        if (activeFindId != null && message.id == activeFindId) {
                             indexedItem(key = "search-target", contentType = ChatListContentType.SearchTarget) {
                                 Surface(
                                     color = MaterialTheme.colorScheme.primaryContainer,
@@ -1346,6 +1412,8 @@ private fun ChatScreenContent(
                                                 visibleText,
                                                 message.images,
                                                 fileChips,
+                                                imageDir = viewModel.container.images.imagesDir,
+                                                onOpenImage = { imagePreview = it },
                                                 onLongPress = { actionsMessage = message },
                                             )
 
@@ -1392,6 +1460,15 @@ private fun ChatScreenContent(
                                                         active = ttsState.messageId == id,
                                                         preparing = ttsState.messageId == id && ttsState.phase == TtsPhase.PREPARING,
                                                         onClick = { viewModel.container.tts.toggle(id, replyText) }) }
+                                                    if (message.turnId != null && message.turnId == latestUserTurnId) {
+                                                        IconButton(
+                                                            onClick = { viewModel.regenerate(message) },
+                                                            enabled = !state.busy && !state.conversationSaving,
+                                                        ) {
+                                                            Icon(Icons.Outlined.Refresh, uiContext.getString(R.string.ui_regenerate),
+                                                                Modifier.size(17.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                        }
+                                                    }
                                                     ResponseActions(onFork = { viewModel.requestFork(message) { onNavigateToSession(it) } }, onUndo = null)
                                                 }
                                                 if (com.androidharness.app.core.ChatActivityPresentation.savedMemory(conversationTurn)) {
@@ -1403,7 +1480,7 @@ private fun ChatScreenContent(
                                     continue
                                 }
                                 val activity = turnActivities[message.turnId].orEmpty()
-                                val isSearchTurn = searchMessageId != null && message.turnId == searchTurnId
+                                val isSearchTurn = activeFindId != null && message.turnId == searchTurnId
                                 val hasFinishedActivity = !isTurnRunning && !isSearchTurn && activity.isNotEmpty()
                                 if (hasFinishedActivity && !isTurnFinal) continue
                                 if (!hasFinishedActivity && (message.thinking.isNotBlank() || (message.generation.reasoningTokens ?: 0) > 0)) {
@@ -1893,6 +1970,7 @@ private fun ChatScreenContent(
                             // Keep the draft when a selection is still loading/saving or unavailable.
                             if (viewModel.send(payload)) {
                                 setComposerText("")
+                                viewModel.saveDraft("", immediate = true)
                                 attachedSkill = null
                                 attachedConceptJson = null
                                 attachedResponseJson = null

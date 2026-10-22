@@ -68,6 +68,8 @@ internal fun UserBubble(
     text: String,
     images: List<ImageRef> = emptyList(),
     fileChips: List<com.androidharness.app.ui.chat.FileAttachments.Block> = emptyList(),
+    imageDir: java.io.File? = null,
+    onOpenImage: ((ImageRef) -> Unit)? = null,
     onLongPress: (() -> Unit)? = null,
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
@@ -90,11 +92,15 @@ internal fun UserBubble(
                     modifier = Modifier.padding(horizontal = 15.dp, vertical = 10.dp),
                 ) {
                     images.forEach { img ->
-                        AttachmentChip(
-                            name = img.name,
-                            detail = uiContext.getString(R.string.ui_image),
-                            icon = Icons.Outlined.Image,
-                        )
+                        if (imageDir != null) {
+                            ImageThumbnail(img, imageDir) { onOpenImage?.invoke(img) }
+                        } else {
+                            AttachmentChip(
+                                name = img.name,
+                                detail = uiContext.getString(R.string.ui_image),
+                                icon = Icons.Outlined.Image,
+                            )
+                        }
                     }
                     fileChips.forEach { chip ->
                         AttachmentChip(
@@ -113,7 +119,7 @@ internal fun UserBubble(
 }
 
 @Composable
-private fun AttachmentChip(
+internal fun AttachmentChip(
     name: String,
     detail: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
