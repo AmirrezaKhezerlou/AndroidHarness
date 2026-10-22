@@ -23,13 +23,8 @@ data class ConversationConfig(
 ) {
     val isChat: Boolean get() = kind == ConversationKind.CHAT
 
-    /** Null leaves Code's registry unchanged; an empty set prevents every Chat tool. */
-    val allowedTools: Set<String>? get() = if (!isChat) null else if (!toolsEnabled) emptySet() else buildSet {
-        if (ChatTool.WEB_SEARCH in selectedTools) add("web_search")
-        if (ChatTool.WEB_PAGES in selectedTools) add("web_fetch")
-        if (ChatTool.ARTIFACTS in selectedTools) addAll(setOf("create_artifact", "read_artifact"))
-        if (isNotEmpty()) add("read_tool_output")
-    }
+    /** Legacy toggle fields remain readable in backups; Chat now has a fixed conversation-only tool set. */
+    val allowedTools: Set<String>? get() = if (!isChat) null else com.androidharness.app.core.ChatExperience.tools
 
     companion object {
         private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }

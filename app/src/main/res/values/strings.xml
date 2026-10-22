@@ -733,4 +733,24 @@
     <string name="chat_suggestion_draft">Help me write a clear message</string>
     <string name="chat_switch_attachments">Send or remove attachments before switching sections. Your draft will be kept.</string>
     <string name="chat_file_requires_code">Use Code for this file. Chat can read images, text files, and PDFs with extractable text.</string>
+    <string name="chat_thinking">Thinking</string>
+    <string name="chat_thought">Thoughts</string>
+    <string name="chat_thought_seconds">Thought for %1$ds</string>
+    <string name="chat_writing_reply">Writing a reply</string>
+    <string name="chat_searching">Searching the web</string>
+    <string name="chat_searched">Searched the web</string>
+    <string name="chat_reading_page">Reading a web page</string>
+    <string name="chat_read_page">Read web pages</string>
+    <string name="chat_creating_artifact">Creating a visual</string>
+    <string name="chat_created_artifact">Created a visual</string>
+    <string name="chat_reading_artifact">Reading a saved visual</string>
+    <string name="chat_read_artifact">Read a saved visual</string>
+    <string name="chat_reading_text">Reading your text</string>
+    <string name="chat_read_text">Read your text</string>
+    <string name="chat_preparing_code_option">Preparing a Code option</string>
+    <string name="chat_reviewing_sources">Reviewing results</string>
+    <string name="chat_reviewed_sources">Reviewed results</string>
+    <string name="chat_activity_unavailable">%1$s · unavailable</string>
+    <string name="chat_response_interrupted">Response interrupted</string>
+    <string name="chat_continue_reply">Continue reply</string>
 </resources>

@@ -219,7 +219,12 @@ class SessionRepository(
     suspend fun artifacts(sessionId: String): List<com.androidharness.app.artifacts.ChatArtifact> =
         db.dao().artifactMessages(sessionId).mapNotNull { com.androidharness.app.artifacts.ChatArtifact.decode(it.artifactJson) }
 
-    suspend fun addMessage(sessionId: String, message: ChatMessage, turnId: String? = null): String {
+    suspend fun addMessage(sessionId: String, message: ChatMessage, turnId: String? = null): String = db.withTransaction {
+        val firstChatTitle = if (message.role == Role.USER && !db.dao().hasUserMessage(sessionId)) {
+            db.dao().session(sessionId)?.takeIf { ConversationConfig.decode(it.conversationJson).isChat &&
+                it.title.trim() in setOf("New chat", "Chat", "新建对话") }
+                ?.let { com.androidharness.app.core.ChatExperience.title(message.text).takeIf(String::isNotBlank) }
+        } else null
         val id = message.id ?: UUID.randomUUID().toString()
         val safeText = clampForStorage(message.text)
         val safeThinking = clampForStorage(message.thinking)
@@ -258,11 +263,21 @@ class SessionRepository(
             )
         )
         db.dao().touchSession(sessionId, System.currentTimeMillis())
-        return id
+        if (firstChatTitle != null) db.dao().updateSession(sessionId, firstChatTitle, System.currentTimeMillis())
+        id
     }
 
     suspend fun renameSession(id: String, title: String) {
         db.dao().updateSession(id, title, System.currentTimeMillis())
+    }
+
+    /** Repair placeholders left by drafts created before their first Chat message. */
+    suspend fun repairChatTitles() = db.withTransaction {
+        db.dao().allSessions().filter { ConversationConfig.decode(it.conversationJson).isChat &&
+            it.title.trim() in setOf("New chat", "Chat", "新建对话") }.forEach { session ->
+            val title = db.dao().firstUserMessage(session.id)?.text?.let(com.androidharness.app.core.ChatExperience::title)
+            if (!title.isNullOrBlank()) db.dao().updateSession(session.id, title, session.updatedAt)
+        }
     }
 
     /**
@@ -470,13 +485,14 @@ class SessionRepository(
             db.dao().searchFts(match, limit)
         }.filterNot { it.role == Role.ASSISTANT.name && it.toolCallId != null }
         if (rows.isEmpty()) return emptyList()
-        val titles = db.dao().sessionsByIds(rows.map { it.sessionId }.distinct())
-            .associate { it.id to it.title }
-        return rows.map { row ->
+        val matches = db.dao().sessionsByIds(rows.map { it.sessionId }.distinct()).associateBy { it.id }
+        return rows.filter { row ->
+            !ConversationConfig.decode(matches[row.sessionId]?.conversationJson).isChat || row.role in setOf("USER", "ASSISTANT")
+        }.map { row ->
             MessageHit(
                 messageId = row.id,
                 sessionId = row.sessionId,
-                sessionTitle = titles[row.sessionId].orEmpty(),
+                sessionTitle = matches[row.sessionId]?.title.orEmpty(),
                 text = if (row.role == Role.ASSISTANT.name) com.androidharness.app.core.response.RichResponse.plainText(row.text) else com.androidharness.app.core.response.UserMessageContent.visibleText(row.text),
                 createdAt = row.createdAt,
             )

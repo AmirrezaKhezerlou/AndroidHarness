@@ -78,9 +78,9 @@ class ConversationSectionsDeviceTest {
                     extraTools = listOf(tool("mcp_fixture")), repoMapEnabled = false, conversation = policy).toList()
                 assertFalse(events.any { it is AgentEvent.ApprovalNeeded || it is AgentEvent.Error })
                 if (policy.isChat) {
-                    assertEquals(if (policy.toolsEnabled) listOf("web_search") else emptyList<String>(), advertised)
-                    assertEquals(if (policy.toolsEnabled) listOf("web_search") else emptyList<String>(), executed)
-                    assertTrue(prompt.contains("in Chat"))
+                    assertEquals(listOf("web_search"), advertised)
+                    assertEquals(listOf("web_search"), executed)
+                    assertEquals(com.androidharness.app.core.ChatExperience.SYSTEM_PROMPT, prompt)
                     assertFalse(prompt.contains(root.absolutePath))
                     assertTrue(events.filterIsInstance<AgentEvent.ToolMessageCommitted>().any {
                         it.message.toolName == "fixture_code_action" && it.message.isError
@@ -159,18 +159,18 @@ class ConversationSectionsDeviceTest {
                 assertNull("No standalone Chat switch in the header", find(instrumentation.uiAutomation.rootInActiveWindow, "Chat"))
                 screenshot("code-phone")
                 scenario.onActivity { section.value = ConversationKind.CHAT }
-                await("Chat · Tools off")
+                await("Chat")
                 assertNull(find(instrumentation.uiAutomation.rootInActiveWindow, "Workspace files"))
-                assertNull("Chat tools live in the sidebar", find(instrumentation.uiAutomation.rootInActiveWindow, "Chat tools off"))
+                assertNull("No tools toggle in Chat", find(instrumentation.uiAutomation.rootInActiveWindow, "Chat tools off"))
                 screenshot("chat-phone")
                 scenario.onActivity { scale.value = 1.5f; theme.value = ThemeMode.DARK }
-                await("Chat · Tools off")
+                await("Chat")
                 screenshot("chat-large-dark")
                 scenario.onActivity { section.value = ConversationKind.CODE }
                 await("Workspace files"); await("Code · ${project.name}")
                 screenshot("code-large-dark")
                 scenario.onActivity { scale.value = 1f; desktop.value = true; section.value = ConversationKind.CHAT }
-                await("Chat · Tools off"); await("Open navigation")
+                await("Chat"); await("Open navigation")
                 screenshot("chat-desktop")
                 scenario.onActivity { section.value = ConversationKind.CODE }
                 await("Conversation actions"); await("Code · ${project.name}")
@@ -209,9 +209,9 @@ class ConversationSectionsDeviceTest {
                 }))
                 repeat(3) {
                     tap("Open navigation"); await("New Code chat")
-                    tap("Chat"); await("Chat tools off")
+                    tap("Chat"); awaitSelected("Chat"); await("New chat")
                     assertNull("Code histories are filtered from Chat", find(instrumentation.uiAutomation.rootInActiveWindow, "Recent Code chats"))
-                    tap("Collapse sidebar"); await("Chat · Tools off")
+                    tap("Collapse sidebar"); await("Chat")
                     tap("Open navigation"); tap("Code"); await("New Code chat")
                     tap("Collapse sidebar"); await("Workspace files")
                 }
@@ -224,26 +224,15 @@ class ConversationSectionsDeviceTest {
                 }
                 assertTrue("Section switching preserves the Code draft", restored)
                 screenshot("app-navigation-code")
-                tap("Open navigation"); tap("Chat"); await("Chat tools off")
+                tap("Open navigation"); tap("Chat"); awaitSelected("Chat"); await("New chat")
+                assertNull(find(instrumentation.uiAutomation.rootInActiveWindow, "Chat tools off"))
                 screenshot("sidebar-chat")
-                tap("Chat tools off"); await("Optional Chat tools")
+                tap("Collapse sidebar"); await("Chat")
+                assertNull(find(instrumentation.uiAutomation.rootInActiveWindow, "Continue in Code"))
                 scenario.onActivity { scale.value = 1.5f }
-                await("Enable tools for this Chat"); await("Web search"); await("Read web pages")
-                val deadlineTools = SystemClock.uptimeMillis() + 4_000
-                var separated = false
-                while (SystemClock.uptimeMillis() < deadlineTools) {
-                    val tree = instrumentation.uiAutomation.rootInActiveWindow
-                    val search = find(tree, "Web search"); val pages = find(tree, "Read web pages")
-                    if (search != null && pages != null && bounds(search).bottom <= bounds(pages).top) { separated = true; break }
-                    SystemClock.sleep(100)
-                }
-                assertTrue("Tool rows stay separate at 150 percent text", separated)
-                screenshot("chat-tools-large")
-                tap("Enable tools for this Chat"); tap("Save tools"); await("Chat · Tools on")
-                assertTrue(ConversationConfig.decode(c.sessions.session(chat)?.conversationJson).toolsEnabled)
-                tap("Open navigation"); await("Chat tools on")
-                screenshot("sidebar-chat-tools-on")
-                tap("Code"); await("New Code chat")
+                await("Message input")
+                screenshot("chat-large")
+                tap("Open navigation"); tap("Code"); await("New Code chat")
                 screenshot("sidebar-code-large")
                 tap("Collapse sidebar"); await("Workspace files")
             }
@@ -256,7 +245,7 @@ class ConversationSectionsDeviceTest {
         }
     }
 
-    @Test fun desktopSidebarKeepsChatSelectedOnOtherPagesAndReopensTools(): Unit = runBlocking {
+    @Test fun desktopSidebarKeepsChatSelectedOnOtherPagesAndCanReopenChat(): Unit = runBlocking {
         val saved = c.settings.settings.first()
         val before = c.sessions.sessions.first().map { it.id }.toSet()
         val chat = c.sessions.createSession("Desktop sidebar Chat fixture", c.workspace.currentProjectOnce().id,
@@ -269,7 +258,7 @@ class ConversationSectionsDeviceTest {
             ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
                 scenario.onActivity { activity -> activity.setContent { HarnessTheme { AppNav(c) } } }
                 await("New Code chat")
-                tap("Chat"); await("Chat tools off")
+                tap("Chat"); awaitSelected("Chat"); await("New chat")
                 tap("Providers")
                 val deadline = SystemClock.uptimeMillis() + 10_000
                 var selected = false
@@ -284,11 +273,10 @@ class ConversationSectionsDeviceTest {
                 }
                 screenshot("desktop-sidebar-providers")
                 assertTrue("Chat stays selected when opening Providers", selected)
-                tap("Chat tools off"); await("Optional Chat tools")
-                tap("Save tools"); await("Chat · Tools off")
+                tap("Open Desktop sidebar Chat fixture"); await("Message input"); await("Chat")
                 screenshot("desktop-sidebar-chat")
                 tap("Collapse sidebar"); await("Open navigation")
-                tap("Open navigation"); await("Chat tools off")
+                tap("Open navigation"); await("New chat")
             }
         } finally {
             c.sessions.sessions.first().filter { it.id !in before }.forEach { c.sessions.deleteSession(it) }
@@ -339,6 +327,19 @@ class ConversationSectionsDeviceTest {
         do { find(instrumentation.uiAutomation.rootInActiveWindow, text)?.let { return it }; SystemClock.sleep(100) }
         while (SystemClock.uptimeMillis() < deadline)
         throw AssertionError("Expected visible: $text")
+    }
+    private fun awaitSelected(text: String) {
+        val deadline = SystemClock.uptimeMillis() + 15_000
+        while (SystemClock.uptimeMillis() < deadline) {
+            if (android.os.Build.VERSION.SDK_INT >= 33) instrumentation.uiAutomation.clearCache()
+            var node = find(instrumentation.uiAutomation.rootInActiveWindow, text)
+            while (node != null) {
+                if (node.isSelected) return
+                node = node.parent
+            }
+            SystemClock.sleep(100)
+        }
+        throw AssertionError("Expected selected: $text")
     }
     private fun tap(text: String) {
         await(text)

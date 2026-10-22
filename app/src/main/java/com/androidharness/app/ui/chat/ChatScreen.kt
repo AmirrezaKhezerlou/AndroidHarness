@@ -1190,6 +1190,9 @@ private fun ChatScreenContent(
                 val turnActivities = remember(state.messages) {
                     completedTurnActivities(state.messages)
                 }
+                val chatTurns = remember(state.messages, state.conversation.isChat) {
+                    if (state.conversation.isChat) state.messages.groupBy { it.turnId } else emptyMap()
+                }
                 val turnVerification = remember(state.messages) {
                     state.messages.filter { it.turnId != null }.groupBy { it.turnId }
                         .mapValues { (_, messages) -> com.androidharness.app.agent.VerificationEvidence.collect(messages) }
@@ -1327,7 +1330,7 @@ private fun ChatScreenContent(
                                 ) {
                                     Column(Modifier.padding(12.dp)) {
                                         Text(uiContext.getString(R.string.ui_search_result), style = MaterialTheme.typography.labelMedium)
-                                        if (message.role == Role.TOOL || message.role == Role.SYSTEM) {
+                                        if (!state.conversation.isChat && (message.role == Role.TOOL || message.role == Role.SYSTEM)) {
                                             Spacer(Modifier.height(8.dp))
                                             MarkdownText(message.text)
                                         }
@@ -1379,6 +1382,32 @@ private fun ChatScreenContent(
                                 val isTurnFinal = message.id == turnFinalAssistantIds[message.turnId]
                                 val isTurnRunning = state.busy && (message.turnId == state.currentTurnId ||
                                     (state.currentTurnId == null && message.turnId == state.messages.lastOrNull { it.turnId != null }?.turnId))
+                                if (state.conversation.isChat) {
+                                    if (!isTurnFinal && message.turnId != null) continue
+                                    val conversationTurn = message.turnId?.let { chatTurns[it] }.orEmpty().ifEmpty { listOf(message) }
+                                    if (!isTurnRunning) indexedItem(key = "chat-$messageKey-activity", contentType = ChatListContentType.Thinking) {
+                                        com.androidharness.app.ui.chat.components.ChatActivity(conversationTurn)
+                                    }
+                                    if (message.text.isNotBlank() && message.toolCalls.isEmpty()) indexedItem(key = "chat-$messageKey-answer", contentType = ChatListContentType.AssistantText) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            AssistantText(message.text, showPreviewChip = false,
+                                                onFollowUp = { action ->
+                                                    attachedConceptJson = null
+                                                    attachedResponseJson = ResponseAttachment(action.title, action.context).encode()
+                                                    setComposerText(listOf(composerText.trim(), action.prompt).filter(String::isNotBlank).joinToString("\n\n"))
+                                                }, onOpenUrl = { url -> webPreviewUrl = url; showWebPreview = true })
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                CopyIconButton(message.text)
+                                                message.id?.let { id -> SpeakIconButton(
+                                                    active = ttsState.messageId == id,
+                                                    preparing = ttsState.messageId == id && ttsState.phase == TtsPhase.PREPARING,
+                                                    onClick = { viewModel.container.tts.toggle(id, message.text) }) }
+                                                ResponseActions(onFork = { viewModel.requestFork(message) { onNavigateToSession(it) } }, onUndo = null)
+                                            }
+                                        }
+                                    }
+                                    continue
+                                }
                                 val activity = turnActivities[message.turnId].orEmpty()
                                 val isSearchTurn = searchMessageId != null && message.turnId == searchTurnId
                                 val hasFinishedActivity = !isTurnRunning && !isSearchTurn && activity.isNotEmpty()
@@ -1571,6 +1600,7 @@ private fun ChatScreenContent(
                             }
                             Role.TOOL -> Unit
                             Role.SYSTEM -> {
+                                if (state.conversation.isChat) continue
                                 if (message.text.startsWith("Compaction failed:") || message.text.startsWith("Compaction stopped.") ||
                                     message.text.startsWith("Chat compacted, but")) {
                                     indexedItem(key = "message-$messageKey-system", contentType = ChatListContentType.System) {
@@ -1595,9 +1625,16 @@ private fun ChatScreenContent(
                     // Live streaming items are rendered only while not yet in the committed list.
                     val streamAlreadyCommitted = state.streamingMessageId != null &&
                         state.messages.any { it.id == state.streamingMessageId }
+                    if (state.conversation.isChat && state.busy) indexedItem(key = "chat-live-${state.currentTurnId}", contentType = ChatListContentType.Thinking) {
+                        com.androidharness.app.ui.chat.components.ChatActivity(
+                            chatTurns[state.currentTurnId].orEmpty(), live = true,
+                            runningCalls = state.runningCalls, streamingThinking = state.streamingThinking.orEmpty(),
+                            writing = !state.streamingText.isNullOrBlank())
+                    }
+
                     if (!streamAlreadyCommitted) {
                         val streamKey = state.streamingMessageId ?: state.currentTurnId ?: "idle"
-                        state.streamingThinking?.let { thinking ->
+                        if (!state.conversation.isChat) state.streamingThinking?.let { thinking ->
                             if (thinking.isNotBlank()) {
                                 indexedItem(key = "streaming-$streamKey-thinking", contentType = ChatListContentType.Thinking) {
                                     ThinkingBlock(thinking,
@@ -1620,7 +1657,7 @@ private fun ChatScreenContent(
                         }
                     }
 
-                    if (state.showLiveCode) {
+                    if (!state.conversation.isChat && state.showLiveCode) {
                         state.codeDrafts.values.filter { it.id !in committedCallIds }.forEach { draft ->
                             indexedItem(key = "draft-code-${state.currentTurnId}-${draft.id}", contentType = ChatListContentType.Tool) {
                                 com.androidharness.app.ui.chat.components.LiveCodeCard(
@@ -1644,7 +1681,7 @@ private fun ChatScreenContent(
                         }
                     }
 
-                    (state.pendingEnvironment ?: state.installingEnvironment)?.let { request ->
+                    (state.pendingEnvironment ?: state.installingEnvironment)?.takeUnless { state.conversation.isChat }?.let { request ->
                         indexedItem(key = "env-install", contentType = ChatListContentType.Environment) {
                             Box(Modifier.animateItem(fadeInSpec = fastEffectsSpec(), placementSpec = null, fadeOutSpec = null)) {
                                 EnvironmentInstallCard(
@@ -1701,7 +1738,7 @@ private fun ChatScreenContent(
                             .align(Alignment.BottomCenter)
                             .padding(bottom = 8.dp),
                     )
-                } else {
+                } else if (!state.conversation.isChat) {
                     SlashSuggestions(
                         state = state,
                         query = composerText,
@@ -1781,20 +1818,26 @@ private fun ChatScreenContent(
                 )
                 }
 
-                if (state.todos.isNotEmpty()) {
+                if (!state.conversation.isChat && state.todos.isNotEmpty()) {
                     TodoCard(state.todos)
                 }
 
-                if (state.busy) {
+                if (!state.conversation.isChat && state.busy) {
                     Box(Modifier.padding(horizontal = 12.dp)) {
                         CacheUsageFooter(state.turnCacheUsage[state.currentTurnId].orEmpty(), running = true)
                     }
                 }
-                TaskProgressCard(
+                if (!state.conversation.isChat) TaskProgressCard(
                     record = state.taskControl, busy = state.busy,
                     onResume = viewModel::resumeInterruptedTask,
                     onSettings = { showContext = true },
                 )
+                if (state.conversation.isChat && !state.busy && state.taskControl.resumable) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(uiContext.getString(R.string.chat_response_interrupted), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = viewModel::resumeInterruptedTask) { Text(uiContext.getString(R.string.chat_continue_reply)) }
+                    }
+                }
                 MessageQueueCard(
                     queue = state.taskControl.queue,
                     onEdit = viewModel::editQueued, onMove = viewModel::moveQueued,
@@ -1814,8 +1857,8 @@ private fun ChatScreenContent(
                     CompactionBanner(note, Modifier.padding(bottom = 6.dp))
                 }
 
-                if (!state.conversation.isChat || state.busy) AgentStatusBar(action = state.currentAction, busy = state.busy)
-                if (state.conversation.isChat && state.messages.isNotEmpty()) {
+                if (!state.conversation.isChat) AgentStatusBar(action = state.currentAction, busy = state.busy)
+                if (state.conversation.isChat && !state.busy && com.androidharness.app.core.ChatExperience.offersCode(state.messages)) {
                     TextButton(onClick = { showCodeHandoff = true }, enabled = !state.busy && !state.conversationSaving,
                         modifier = Modifier.align(Alignment.End)) { Text(uiContext.getString(R.string.chat_continue_code)) }
                 }

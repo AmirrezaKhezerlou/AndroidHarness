@@ -1380,21 +1380,6 @@ class ChatViewModel(
         }
     }
 
-    fun saveChatTools(config: com.androidharness.app.data.ConversationConfig) {
-        val current = _state.value
-        if (!current.conversation.isChat || current.busy || startingRun || current.conversationSaving || current.taskControl.resumable) return
-        _state.update { it.copy(conversationSaving = true) }
-        viewModelScope.launch {
-            try {
-                val sid = ensureSession()
-                c.sessions.saveConversation(sid, config.copy(kind = com.androidharness.app.data.ConversationKind.CHAT))
-                _state.update { it.copy(conversation = config.copy(kind = com.androidharness.app.data.ConversationKind.CHAT)) }
-            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-            catch (e: Exception) { _state.update { it.copy(error = e.message) } }
-            finally { _state.update { it.copy(conversationSaving = false) } }
-        }
-    }
-
     fun continueInCode(projectId: String) {
         if (_state.value.busy || startingRun || _state.value.conversationSaving) return
         _state.update { it.copy(conversationSaving = true) }

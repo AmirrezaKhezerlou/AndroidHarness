@@ -211,6 +211,7 @@ class AgentEngine(
     private val configuredSubagent: suspend () -> SubagentConnection? = { null },
     private val prepareGitHub: suspend () -> Unit = {},
     private val deviceAccess: com.androidharness.app.data.env.DeviceAccessManager? = null,
+    private val chatOnlyTools: List<com.androidharness.app.tools.Tool> = emptyList(),
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -262,12 +263,12 @@ class AgentEngine(
         val localChat = com.androidharness.app.local.LocalModelCatalog.isLocal(config.id)
         val agentContextEnabled = !localChat || replySettings.localModelAgentContext
         suspend fun runSystemPrompt(fullAccess: Boolean): String =
-            if (conversation.isChat) chatSystemPrompt(conversation) else if (!agentContextEnabled) "" else systemPrompt(workspace, mode, fullAccess = fullAccess, repoMapEnabled = repoMapEnabled, sessionId = sessionId) +
+            if (conversation.isChat) chatSystemPrompt() else if (!agentContextEnabled) "" else systemPrompt(workspace, mode, fullAccess = fullAccess, repoMapEnabled = repoMapEnabled, sessionId = sessionId) +
                 if (pinnedInstructions.isBlank()) "" else "\n\nPinned user instructions:\n$pinnedInstructions"
         var systemPrompt = runSystemPrompt(false)
-        var promptShizukuStatus = deviceAccess?.statusForAgent(workspace, sessionId) ?: shizukuAgentStatus(shizuku.state.value, shizuku.serviceState.value, shizuku.isServiceReady())
+        var promptShizukuStatus = if (conversation.isChat) "" else deviceAccess?.statusForAgent(workspace, sessionId) ?: shizukuAgentStatus(shizuku.state.value, shizuku.serviceState.value, shizuku.isServiceReady())
         var promptSandboxOff = false
-        val runRegistry = (if (conversation.isChat) registry else registry.withExtra(extraTools)).restrictedTo(conversation.allowedTools)
+        val runRegistry = (if (conversation.isChat) registry.withExtra(chatOnlyTools) else registry.withExtra(extraTools)).restrictedTo(conversation.allowedTools)
         val tools = if (!agentContextEnabled && !conversation.isChat) emptyList() else runRegistry.schemas(
             readOnlyOnly = mode == AgentMode.PLAN,
             context = ToolContext(workspace = workspace, sessionId = sessionId),
@@ -320,7 +321,7 @@ class AgentEngine(
             val effectiveMode = permissionMode()
             val sandboxOff = !conversation.isChat && effectiveMode == PermissionMode.FULL_ACCESS
             val nextReplySettings = cavemanSettings()
-            val nextShizukuStatus = deviceAccess?.statusForAgent(workspace, sessionId) ?: shizukuAgentStatus(shizuku.state.value, shizuku.serviceState.value, shizuku.isServiceReady())
+            val nextShizukuStatus = if (conversation.isChat) "" else deviceAccess?.statusForAgent(workspace, sessionId) ?: shizukuAgentStatus(shizuku.state.value, shizuku.serviceState.value, shizuku.isServiceReady())
             if (sandboxOff != promptSandboxOff || replySettings != nextReplySettings || promptShizukuStatus != nextShizukuStatus) {
                 replySettings = nextReplySettings
                 promptSandboxOff = sandboxOff
@@ -336,7 +337,7 @@ class AgentEngine(
                     workspace
                 }
 
-            val requestSystemPrompt = if (!agentContextEnabled && !conversation.isChat) "" else com.androidharness.app.caveman.CavemanPolicy.apply(
+            val requestSystemPrompt = if (conversation.isChat) systemPrompt else if (!agentContextEnabled) "" else com.androidharness.app.caveman.CavemanPolicy.apply(
                 systemPrompt + TodoPrompt.format(
                     todoStore?.takeIf { !conversation.isChat && it.owner.value == sessionId }?.todos?.value.orEmpty(),
                     roundsWithoutTodoUpdate,
@@ -1583,13 +1584,13 @@ class AgentEngine(
         val caveman = cavemanSettings()
         return estimateContext(
             history,
-            com.androidharness.app.caveman.CavemanPolicy.apply(
-                if (conversation.isChat) chatSystemPrompt(conversation) else systemPrompt(workspace, mode, fullAccess, repoMapEnabled),
+            if (conversation.isChat) chatSystemPrompt() else com.androidharness.app.caveman.CavemanPolicy.apply(
+                systemPrompt(workspace, mode, fullAccess, repoMapEnabled),
                 installed = caveman.cavemanInstalled,
                 intensity = caveman.cavemanIntensity,
                 wenyan = caveman.cavemanWenyan,
             ),
-            tools = registry.restrictedTo(conversation.allowedTools).schemas(),
+            tools = (if (conversation.isChat) registry.withExtra(chatOnlyTools) else registry).restrictedTo(conversation.allowedTools).schemas(),
         )
     }
 
@@ -1699,12 +1700,7 @@ class AgentEngine(
         return hints.distinct()
     }
 
-    private fun chatSystemPrompt(config: com.androidharness.app.data.ConversationConfig): String =
-        "You are Android Harness in Chat. Help with questions, explanations, ideas, and everyday conversations. " +
-            "Be direct and useful. Use only the tools supplied with this request when they help. " +
-            "You do not have coding, filesystem, terminal, or workspace access in Chat. " +
-            "When the user wants to edit or run a project, suggest Continue in Code. " +
-            (if (config.allowedTools.orEmpty().isEmpty()) "Tools are off. Answer directly without tool calls." else "Tools were explicitly enabled for this conversation.")
+    private fun chatSystemPrompt(): String = com.androidharness.app.core.ChatExperience.SYSTEM_PROMPT
 
     private suspend fun systemPrompt(
         workspace: WorkspaceFs,

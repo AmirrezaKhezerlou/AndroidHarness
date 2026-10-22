@@ -9,18 +9,19 @@ class ConversationConfigTest {
     @Test fun legacySessionsKeepCodeAndMalformedPreferencesDoNotUnlockCodeTools() {
         assertEquals(ConversationKind.CODE, ConversationConfig.decode(null).kind)
         assertNull(ConversationConfig.decode(null).allowedTools)
-        assertEquals(emptySet<String>(), ConversationConfig.decode("broken").allowedTools)
-        assertEquals(emptySet<String>(), ConversationConfig.decode("{}").allowedTools)
-        assertEquals(emptySet<String>(), ConversationConfig.decode("{\"kind\":\"FUTURE\"}").allowedTools)
+        assertEquals(com.androidharness.app.core.ChatExperience.tools, ConversationConfig.decode("broken").allowedTools)
+        assertEquals(com.androidharness.app.core.ChatExperience.tools, ConversationConfig.decode("{}").allowedTools)
+        assertEquals(com.androidharness.app.core.ChatExperience.tools, ConversationConfig.decode("{\"kind\":\"FUTURE\"}").allowedTools)
     }
 
-    @Test fun optionalToolsSurviveSerializationAndNeverIncludeWorkspaceTools() {
+    @Test fun legacyPreferencesStayReadableWhileChatToolsAreAlwaysAvailable() {
         val saved = ConversationConfig(ConversationKind.CHAT, toolsEnabled = true,
             selectedTools = setOf(ChatTool.WEB_SEARCH, ChatTool.ARTIFACTS), draftText = "An unsent idea")
         assertEquals(saved, ConversationConfig.decode(ConversationConfig.encode(saved)))
-        assertEquals(setOf("web_search", "create_artifact", "read_artifact", "read_tool_output"), saved.allowedTools)
-        assertEquals(emptySet<String>(), saved.copy(toolsEnabled = false).allowedTools)
-        assertEquals(emptySet<String>(), saved.copy(selectedTools = emptySet()).allowedTools)
+        assertEquals(com.androidharness.app.core.ChatExperience.tools, saved.allowedTools)
+        assertEquals(saved.allowedTools, saved.copy(toolsEnabled = false).allowedTools)
+        assertEquals(saved.allowedTools, saved.copy(selectedTools = emptySet()).allowedTools)
+        assertFalse(saved.allowedTools!!.any { it in setOf("shell", "read_file", "write_file", "task", "http_request") })
     }
 
     @Test fun restrictingRegistryBlocksBothAdvertisedAndExecutableToolsIncludingExtras() {

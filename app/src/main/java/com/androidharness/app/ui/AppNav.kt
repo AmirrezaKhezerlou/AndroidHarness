@@ -101,6 +101,7 @@ import java.nio.charset.StandardCharsets
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AppNav(container: AppContainer) {
+    androidx.compose.runtime.LaunchedEffect(container) { container.sessions.repairChatTitles() }
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     com.androidharness.app.ui.settings.LocalModelWarningDialog(container.localModels)
     val nav = rememberNavController()
@@ -185,8 +186,6 @@ fun AppNav(container: AppContainer) {
     val currentEntry by nav.currentBackStackEntryFlow.collectAsStateWithLifecycle(initialValue = null)
     var draftSessionId by remember { mutableStateOf<String?>(null) }
     var workspaceChatViewModel by remember { mutableStateOf<ChatViewModel?>(null) }
-    var chatToolsViewModel by remember { mutableStateOf<ChatViewModel?>(null) }
-    var pendingChatTools by remember { mutableStateOf(false) }
     var lastConversation by remember { mutableStateOf(com.androidharness.app.data.ConversationConfig()) }
     val currentSessionId = when (currentEntry?.destination?.route) {
         "chat/{sessionId}?messageId={messageId}" -> currentEntry?.arguments?.getString("sessionId")
@@ -200,13 +199,6 @@ fun AppNav(container: AppContainer) {
         ?: lastConversation
     androidx.compose.runtime.SideEffect {
         if (activeChatState?.conversationReady == true) lastConversation = activeConversation
-    }
-    androidx.compose.runtime.LaunchedEffect(pendingChatTools, workspaceChatViewModel, activeChatState?.conversationReady, isConversationRoute) {
-        if (pendingChatTools && isConversationRoute && activeChatState?.conversationReady == true && activeConversation.isChat) {
-            drawerState.close()
-            chatToolsViewModel = workspaceChatViewModel
-            pendingChatTools = false
-        }
     }
     val activeKind = activeConversation.kind
     var codeRoute by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
@@ -341,12 +333,6 @@ fun AppNav(container: AppContainer) {
         val target = availablePrevious ?: last?.let { "chat/${it.id}" } ?: "chat?kind=${kind.name}"
         if (!nav.popBackStack(target, inclusive = false)) nav.navigate(target)
     }
-    chatToolsViewModel?.let { vm ->
-        val state by vm.state.collectAsStateWithLifecycle()
-        com.androidharness.app.ui.chat.components.ChatToolsSheet(state.conversation,
-            state.conversationReady && !state.busy && !state.conversationSaving && !state.taskControl.resumable,
-            vm::saveChatTools, { chatToolsViewModel = null })
-    }
     @Composable fun Sidebar(onCollapse: () -> Unit) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
         val changes by remember(currentSessionId) {
@@ -393,7 +379,6 @@ fun AppNav(container: AppContainer) {
             onChanges = { currentSessionId?.let { sid -> navigateFromSidebar { nav.navigate("changes/${encode(sid)}") } } },
             snackbar = sidebarSnackbar,
             chatOnly = activeConversation.isChat,
-            chatToolsEnabled = activeConversation.toolsEnabled,
             sectionSwitchEnabled = workspaceChatViewModel?.state?.value?.let { it.conversationReady && !it.conversationSaving } ?: true,
             onSelectSection = { kind ->
                 searchQuery = ""
@@ -401,15 +386,6 @@ fun AppNav(container: AppContainer) {
                 if (source != null && isConversationRoute) {
                     source.requestSectionSwitch(kind)?.let { error -> scope.launch { sidebarSnackbar.showSnackbar(error) } }
                 } else navigateFromSidebar { selectSection(kind) }
-            },
-            onChatTools = {
-                val vm = workspaceChatViewModel?.takeIf { isConversationRoute && it.state.value.conversation.isChat }
-                if (vm != null) {
-                    scope.launch { drawerState.close(); chatToolsViewModel = vm }
-                } else navigateFromSidebar {
-                    pendingChatTools = true
-                    selectSection(com.androidharness.app.data.ConversationKind.CHAT)
-                }
             },
             projectsView = settings.sidebarProjects && !activeConversation.isChat,
             onProjectsViewChange = { scope.launch { container.settings.setSidebarProjects(it) } },

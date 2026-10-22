@@ -385,7 +385,7 @@ class RunManager(
         val live = stateOf(sid)
         // A fresh user prompt starts a fresh task list; the store is
         // session-owned so nothing leaks across chats.
-        if (!resume) todoStore.beginRun(sid)
+        if (!resume && !conversation.isChat) todoStore.beginRun(sid)
         val recoveryMessages = if (resume) sessions.messages(sid).filter { it.turnId == turnId } else emptyList()
         RunRecovery.missingResults(sessions.messages(sid)).forEach { sessions.addMessage(sid, it, turnId) }
         val initialId = record.initialPromptId.ifEmpty { "$turnId-user" }

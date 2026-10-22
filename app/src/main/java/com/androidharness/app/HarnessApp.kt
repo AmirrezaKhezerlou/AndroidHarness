@@ -222,6 +222,8 @@ class AppContainer(val appContext: Context) {
         },
         prepareGitHub = { github.refreshIfNeeded() },
         deviceAccess = deviceAccess,
+        chatOnlyTools = listOf(com.androidharness.app.tools.ReadChatTextTool(sessions::messages),
+            com.androidharness.app.tools.OfferCodeHandoffTool()),
     )
     val runManager = com.androidharness.app.agent.RunManager(
         context = appContext,

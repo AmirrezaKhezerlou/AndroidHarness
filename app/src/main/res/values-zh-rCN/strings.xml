@@ -731,4 +731,24 @@
     <string name="chat_suggestion_draft">帮我写一条清晰的消息</string>
     <string name="chat_switch_attachments">请先发送或移除附件，再切换区域。草稿将保留。</string>
     <string name="chat_file_requires_code">请在代码中使用此文件。聊天可以读取图片、文本文件以及可提取文本的 PDF。</string>
+    <string name="chat_thinking">正在思考</string>
+    <string name="chat_thought">思考过程</string>
+    <string name="chat_thought_seconds">思考了 %1$d 秒</string>
+    <string name="chat_writing_reply">正在回复</string>
+    <string name="chat_searching">正在搜索网页</string>
+    <string name="chat_searched">已搜索网页</string>
+    <string name="chat_reading_page">正在阅读网页</string>
+    <string name="chat_read_page">已阅读网页</string>
+    <string name="chat_creating_artifact">正在创建可视内容</string>
+    <string name="chat_created_artifact">已创建可视内容</string>
+    <string name="chat_reading_artifact">正在读取已保存内容</string>
+    <string name="chat_read_artifact">已读取保存的内容</string>
+    <string name="chat_reading_text">正在阅读你的文本</string>
+    <string name="chat_read_text">已阅读你的文本</string>
+    <string name="chat_preparing_code_option">正在准备代码选项</string>
+    <string name="chat_reviewing_sources">正在查看结果</string>
+    <string name="chat_reviewed_sources">已查看结果</string>
+    <string name="chat_activity_unavailable">%1$s · 暂不可用</string>
+    <string name="chat_response_interrupted">回复已中断</string>
+    <string name="chat_continue_reply">继续回复</string>
 </resources>

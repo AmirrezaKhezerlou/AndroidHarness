@@ -98,10 +98,8 @@ internal fun ProjectNavigationSidebar(
     projectPins: Set<String> = emptySet(), projectArchives: Set<String> = emptySet(),
     onProjectAction: (ProjectEntity, SidebarProjectAction) -> Unit = { _, _ -> },
     chatOnly: Boolean = false,
-    chatToolsEnabled: Boolean = false,
     sectionSwitchEnabled: Boolean = true,
     onSelectSection: (com.androidharness.app.data.ConversationKind) -> Unit = {},
-    onChatTools: () -> Unit = {},
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
@@ -130,8 +128,6 @@ internal fun ProjectNavigationSidebar(
         Column(Modifier.fillMaxWidth().onSizeChanged { footerHeight = with(density) { it.height.toDp() } }
             .padding(horizontal = 10.dp, vertical = 8.dp)) {
             if (!chatOnly) SidebarNavRow(uiContext.getString(R.string.ui_tools), Icons.Outlined.Widgets, expanded = toolsOpen, onClick = { toolsOpen = !toolsOpen })
-            if (chatOnly) SidebarNavRow(uiContext.getString(if (chatToolsEnabled) R.string.chat_tools_on else R.string.chat_tools_off),
-                Icons.Outlined.Tune, onClick = onChatTools)
             if (toolsOpen && !chatOnly) Column(Modifier.padding(start = 16.dp)) {
                 SidebarNavRow("Terminal", Icons.Outlined.Terminal, currentRoute?.startsWith("terminal") == true, onClick = onTerminal)
                 SidebarNavRow("Build & test", Icons.Outlined.Build, currentRoute?.startsWith("build-test") == true, onClick = onBuild)
