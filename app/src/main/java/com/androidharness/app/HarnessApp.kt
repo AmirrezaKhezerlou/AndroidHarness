@@ -179,6 +179,8 @@ class AppContainer(val appContext: Context) {
         memory = memory,
     )
     val mcp = com.androidharness.app.tools.mcp.McpManager(appContext, linuxEnv, keys, codeGraph)
+    val github = com.androidharness.app.github.GitHubAuth(BuildConfig.GITHUB_CLIENT_ID,
+        keys::githubCredential, keys::putGitHubCredential, { refreshGitHubAuth() })
     fun routedProvider(): com.androidharness.app.llm.LlmProvider =
         com.androidharness.app.llm.FallbackProvider(
                 factory = ProviderFactory::create,
@@ -226,7 +228,10 @@ class AppContainer(val appContext: Context) {
         deviceAccess = deviceAccess,
         universalMemory = memory,
         chatOnlyTools = listOf(com.androidharness.app.tools.ReadChatTextTool(sessions::messages),
-            com.androidharness.app.tools.OfferCodeHandoffTool()),
+            com.androidharness.app.tools.OfferCodeHandoffTool(),
+            com.androidharness.app.tools.GitHubApiTool(fetchClient) { github.accessToken() },
+            com.androidharness.app.tools.GitHubSearchTool(fetchClient) { github.accessToken() },
+            com.androidharness.app.tools.GitHubFileTool(fetchClient) { github.accessToken() }),
     )
     val runManager = com.androidharness.app.agent.RunManager(
         context = appContext,
@@ -242,8 +247,6 @@ class AppContainer(val appContext: Context) {
         repoMap = repoMap,
         chatModels = chatModels,
     )
-    val github = com.androidharness.app.github.GitHubAuth(BuildConfig.GITHUB_CLIENT_ID,
-        keys::githubCredential, keys::putGitHubCredential, { refreshGitHubAuth() })
     val githubRepositories = com.androidharness.app.github.GitHubWorkspaces(this)
     val automation = com.androidharness.app.automation.AutomationManager(this)
     val projectDeletion = com.androidharness.app.workspace.ProjectDeletion(this)

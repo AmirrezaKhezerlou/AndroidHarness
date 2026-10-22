@@ -737,6 +737,8 @@
     <string name="chat_writing_reply">正在回复</string>
     <string name="chat_searching">正在搜索网页</string>
     <string name="chat_searched">已搜索网页</string>
+    <string name="chat_reading_github">正在读取 GitHub</string>
+    <string name="chat_read_github">已读取 GitHub</string>
     <string name="chat_reading_page">正在阅读网页</string>
     <string name="chat_read_page">已阅读网页</string>
     <string name="chat_creating_artifact">正在创建可视内容</string>
@@ -759,6 +761,7 @@
     <string name="chat_source_found">搜索结果</string>
     <string name="chat_search_failed">搜索暂不可用</string>
     <string name="chat_page_failed">无法阅读网页</string>
+    <string name="chat_github_failed">GitHub 读取失败</string>
     <string name="chat_tool_failed">活动暂不可用</string>
     <string name="chat_tool_result_failed">此请求未成功。其他来源可能仍然可用。</string>
     <string name="chat_tool_result_empty">未返回来源链接。</string>

@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Public
@@ -94,6 +95,7 @@ internal fun ChatToolActivity(call: ToolCallData, result: ChatMessage?, running:
         result?.isError == true -> stringResource(when (call.name) {
             "web_search" -> R.string.chat_search_failed
             "web_fetch" -> R.string.chat_page_failed
+            "github_api", "github_search", "github_file" -> R.string.chat_github_failed
             else -> R.string.chat_tool_failed
         })
         result != null -> activityLabel(call.name, false)
@@ -266,6 +268,7 @@ private fun ChatActivityGlyph(name: String?, live: Boolean, motion: Boolean) {
             when (phase) {
                 "web_search" -> Icon(Icons.Outlined.Search, null, Modifier.size(15.dp), tint = scheme.onSurfaceVariant)
                 "web_fetch" -> Icon(Icons.Outlined.Public, null, Modifier.size(15.dp), tint = scheme.onSurfaceVariant)
+                "github_api", "github_search", "github_file" -> Icon(Icons.Outlined.Code, null, Modifier.size(15.dp), tint = scheme.onSurfaceVariant)
                 else -> Icon(painterResource(R.drawable.ic_chat_sparkles), null, Modifier.size(15.dp), tint = scheme.onSurfaceVariant)
             }
         }
@@ -276,6 +279,7 @@ private fun ChatActivityGlyph(name: String?, live: Boolean, motion: Boolean) {
 private fun activityLabel(name: String, running: Boolean): String = stringResource(when (name) {
     "web_search" -> if (running) R.string.chat_searching else R.string.chat_searched
     "web_fetch" -> if (running) R.string.chat_reading_page else R.string.chat_read_page
+    "github_api", "github_search", "github_file" -> if (running) R.string.chat_reading_github else R.string.chat_read_github
     "create_artifact" -> if (running) R.string.chat_creating_artifact else R.string.chat_created_artifact
     "read_artifact" -> if (running) R.string.chat_reading_artifact else R.string.chat_read_artifact
     "read_chat_text" -> if (running) R.string.chat_reading_text else R.string.chat_read_text

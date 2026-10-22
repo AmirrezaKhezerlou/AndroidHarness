@@ -17,6 +17,7 @@ import androidx.compose.material.icons.outlined.Article
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Difference
@@ -57,6 +58,7 @@ internal fun toolIcon(name: String): ImageVector = when (name) {
     "delete_file" -> Icons.Outlined.Delete
     "move_file" -> Icons.Outlined.DriveFileMove
     "web_fetch", "web_search", "http_request" -> Icons.Outlined.Public
+    "github_api", "github_search", "github_file" -> Icons.Outlined.Code
     "todo_write" -> Icons.Outlined.Checklist
     "memory_write" -> Icons.Outlined.EditNote
     "bg_list", "bg_kill" -> Icons.Outlined.Terminal

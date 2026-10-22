@@ -739,6 +739,8 @@
     <string name="chat_writing_reply">Writing a reply</string>
     <string name="chat_searching">Searching the web</string>
     <string name="chat_searched">Searched the web</string>
+    <string name="chat_reading_github">Reading GitHub</string>
+    <string name="chat_read_github">Read GitHub</string>
     <string name="chat_reading_page">Reading a web page</string>
     <string name="chat_read_page">Read web pages</string>
     <string name="chat_creating_artifact">Creating a visual</string>
@@ -761,6 +763,7 @@
     <string name="chat_source_found">Found in search</string>
     <string name="chat_search_failed">Search unavailable</string>
     <string name="chat_page_failed">Could not read page</string>
+    <string name="chat_github_failed">GitHub read failed</string>
     <string name="chat_tool_failed">Activity unavailable</string>
     <string name="chat_tool_result_failed">This request did not succeed. Other sources may still be available.</string>
     <string name="chat_tool_result_empty">No source links were returned.</string>

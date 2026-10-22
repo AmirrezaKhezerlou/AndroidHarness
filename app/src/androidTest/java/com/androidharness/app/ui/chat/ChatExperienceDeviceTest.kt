@@ -57,10 +57,12 @@ class ChatExperienceDeviceTest {
         }
         try {
             c.sessions.addMessage(chat, ChatMessage(Role.USER, "Brainstorm a small garden"))
+            val githubClient = okhttp3.OkHttpClient()
             val engine = AgentEngine({ provider }, c.registry, c.checkpoints, c.images, c.linuxEnv, c.shizuku, c.skills,
                 cavemanSettings = { AppSettings(cavemanInstalled = true) },
                 universalMemory = c.memory,
-                chatOnlyTools = listOf(ReadChatTextTool(c.sessions::messages), OfferCodeHandoffTool()))
+                chatOnlyTools = listOf(ReadChatTextTool(c.sessions::messages), OfferCodeHandoffTool(),
+                    GitHubApiTool(githubClient) { null }, GitHubSearchTool(githubClient) { null }, GitHubFileTool(githubClient) { null }))
             val events = engine.run(chat, "chat-engine-turn", ProviderConfig("fixture", "Fixture", ProviderType.OPENAI_COMPAT,
                 "http://localhost", "fixture"), "", c.sessions.messages(chat), { PermissionMode.FULL_ACCESS }, mutableSetOf("read_file", "shell"),
                 FileFs(root), RequestOptions(), 100_000, AgentMode.ACT, pinnedInstructions = "CODE_ONLY_PINNED",
