@@ -485,6 +485,7 @@ private fun ChatScreenContent(
     val userItemIndexes = remember(state.sessionId) { HashMap<String, Int>() }
     val searchItemIndex = remember(searchMessageId) { mutableStateOf<Int?>(null) }
     val searchTurnId = state.messages.firstOrNull { it.id == searchMessageId }?.turnId
+    val latestUserTurnId = state.messages.lastOrNull { it.role == Role.USER }?.turnId
     var diffFile by remember { mutableStateOf<Pair<String, String>?>(null) }
     diffFile?.let { (turnId, path) ->
         ChatFileDiffSheet(
@@ -926,14 +927,23 @@ private fun ChatScreenContent(
     // Top-anchored transcript: on open and after every send, park the newest
     // question near the top and leave the previous answer's tail visible above
     // it. Nothing follows the bottom while the reply streams.
-    LaunchedEffect(state.isLoadingMessages, state.messages.size, searchMessageId) {
+    LaunchedEffect(state.isLoadingMessages, latestUserTurnId, searchMessageId) {
         if (state.isLoadingMessages) return@LaunchedEffect
         if (searchMessageId != null && !searchRevealDone) return@LaunchedEffect
-        val turnId = state.messages.lastOrNull { it.role == Role.USER }?.turnId ?: return@LaunchedEffect
+        val turnId = latestUserTurnId ?: return@LaunchedEffect
         if (turnId == lastAnchoredTurnId || turnId == anchoringTurnId) return@LaunchedEffect
         repeat(3) {
             withFrameNanos { }
-            val index = userItemIndexes[turnId] ?: return@repeat
+            var index = userItemIndexes[turnId]
+            if (index == null) {
+                // The item scope has not registered the new question yet. Force
+                // the newest rows to compose, then retry with the real index.
+                val last = listState.layoutInfo.totalItemsCount - 1
+                if (last >= 0) listState.scrollToItem(last)
+                withFrameNanos { }
+                index = userItemIndexes[turnId]
+            }
+            if (index == null) return@repeat
             if (index !in 0 until listState.layoutInfo.totalItemsCount) return@repeat
             anchoringTurnId = turnId
             try {
@@ -948,8 +958,8 @@ private fun ChatScreenContent(
 
     // The jump button appears only when the current question has left the
     // screen, so a small scroll never covers the transcript with a button.
-    LaunchedEffect(listState, state.messages.lastOrNull { it.role == Role.USER }?.turnId) {
-        val turnId = state.messages.lastOrNull { it.role == Role.USER }?.turnId
+    LaunchedEffect(listState, latestUserTurnId) {
+        val turnId = latestUserTurnId
         if (turnId == null) {
             showJumpToLatest = false
             return@LaunchedEffect
