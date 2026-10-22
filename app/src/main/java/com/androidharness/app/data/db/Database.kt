@@ -34,6 +34,7 @@ data class SessionEntity(
     val pendingPlan: String? = null,
     val modelSelectionJson: String? = null,
     val workspaceSelectionJson: String? = null,
+    val conversationJson: String? = null,
 )
 
 @Entity(tableName = "messages", indices = [Index("sessionId")])
@@ -226,6 +227,9 @@ private const val PEAK_WINDOW_SQL =
 interface HarnessDao {
     @Query("SELECT * FROM messages WHERE sessionId = :sessionId AND artifactJson IS NOT NULL ORDER BY createdAt, rowid")
     suspend fun artifactMessages(sessionId: String): List<MessageEntity>
+
+    @Query("UPDATE sessions SET conversationJson = :config WHERE id = :id")
+    suspend fun setConversation(id: String, config: String)
 
     // sessions
     @Query("SELECT * FROM sessions ORDER BY updatedAt DESC")
@@ -585,13 +589,19 @@ interface HarnessDao {
         SessionFileChangeEntity::class,
         MessageFtsEntity::class,
     ],
-    version = 19,
+    version = 20,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun dao(): HarnessDao
 
     companion object {
+        val MIGRATION_19_20 = object : androidx.room.migration.Migration(19, 20) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE sessions ADD COLUMN conversationJson TEXT")
+            }
+        }
+
         val MIGRATION_18_19 = object : androidx.room.migration.Migration(18, 19) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE IF NOT EXISTS code_activity (id TEXT NOT NULL PRIMARY KEY, fileKey TEXT NOT NULL, added INTEGER NOT NULL, removed INTEGER NOT NULL, createdAt INTEGER NOT NULL)")

@@ -71,6 +71,7 @@ data class UsageStats(
 
 sealed interface NavEvent {
     data object NewChat : NavEvent
+    data class OpenSession(val id: String) : NavEvent
 }
 
 enum class ModelSelectionTarget {
@@ -82,6 +83,9 @@ enum class ModelSelectionTarget {
 data class ChatUiState(
     val sessionId: String? = null,
     val sessionTitle: String = "New chat",
+    val conversation: com.androidharness.app.data.ConversationConfig = com.androidharness.app.data.ConversationConfig(),
+    val conversationReady: Boolean = true,
+    val conversationSaving: Boolean = false,
     val messages: List<ChatMessage> = emptyList(),
     /** True while messages are being initially loaded from Room for this session. */
     val isLoadingMessages: Boolean = false,
@@ -255,11 +259,14 @@ data class ChatUiState(
 class ChatViewModel(
     private val c: AppContainer,
     initialSessionId: String?,
+    initialKind: com.androidharness.app.data.ConversationKind = com.androidharness.app.data.ConversationKind.CODE,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(
         ChatUiState(
             sessionId = initialSessionId,
+            conversation = com.androidharness.app.data.ConversationConfig(kind = initialKind),
+            conversationReady = initialSessionId == null,
             isLoadingMessages = initialSessionId != null,
         )
     )
@@ -286,7 +293,7 @@ class ChatViewModel(
     private val sessionCreation = Mutex()
 
     private suspend fun ensureSession(title: String = c.appContext.getString(R.string.settings_telegram_new_chat)): String = sessionCreation.withLock {
-        sessionId ?: c.sessions.createSession(title, c.workspace.currentProjectOnce().id).also { sid ->
+        sessionId ?: c.sessions.createSession(title, c.workspace.currentProjectOnce().id, _state.value.conversation).also { sid ->
             c.chatModels.initialize(sid)
             sessionId = sid
             sessionIdFlow.value = sid
@@ -503,7 +510,8 @@ class ChatViewModel(
             }.collect { s ->
                 if (s != null) {
                     _state.update {
-                        it.copy(sessionTitle = s.title, usage = s.toUsageStats())
+                        it.copy(sessionTitle = s.title, usage = s.toUsageStats(),
+                            conversation = com.androidharness.app.data.ConversationConfig.decode(s.conversationJson), conversationReady = true)
                     }
                 }
             }
@@ -545,6 +553,8 @@ class ChatViewModel(
                     it.copy(
                         sessionId = initialSessionId,
                         sessionTitle = sess?.title ?: "Chat",
+                        conversation = com.androidharness.app.data.ConversationConfig.decode(sess?.conversationJson),
+                        conversationReady = true,
                         turnsWithCheckpoints = refreshCheckpoints(initialSessionId),
                     )
                 }
@@ -559,6 +569,7 @@ class ChatViewModel(
                         chatWorkspace(),
                         _state.value.mode,
                         _state.value.permissionMode == PermissionMode.FULL_ACCESS,
+                        conversation = _state.value.conversation,
                     )
                     _state.update { it.copy(estimate = fresh) }
                 }
@@ -754,7 +765,7 @@ class ChatViewModel(
         // File-only sends are legitimate: the attachments carry the message.
         if (trimmed.isEmpty() && _state.value.fileAttachments.isEmpty()) return false
 
-        val resolved = if (trimmed.startsWith("/")) {
+        val resolved = if (trimmed.startsWith("/") && !_state.value.conversation.isChat) {
             SlashCommands.resolve(
                 input = trimmed,
                 skillNames = chatSkills().slashNames(),
@@ -1012,6 +1023,7 @@ class ChatViewModel(
                         return@launch
                     }
                 }
+                check(!_state.value.conversation.isChat) { c.appContext.getString(R.string.chat_file_requires_code) }
                 copyAttachmentToWorkspace(resolver, uri, name, mime, size)
             }.onFailure {
                 _state.update { st -> st.copy(error = c.appContext.getString(R.string.ui_could_not_attach_that_file, (it.message).toString())) }
@@ -1122,7 +1134,7 @@ class ChatViewModel(
     // ------------------------------------------------------------------
 
     private fun startRun(text: String, workspaceMcpGate: Boolean = true, queuedPromptId: String? = null, replacement: ChatMessage? = null): Boolean {
-        if (startingRun || compactionJob?.isActive == true) return false
+        if (startingRun || compactionJob?.isActive == true || !_state.value.conversationReady || _state.value.conversationSaving) return false
         val targetSession = sessionId
         val s0 = _state.value
         if (!s0.modelSelectionReady || s0.modelSelectionBusy) {
@@ -1224,7 +1236,7 @@ class ChatViewModel(
                 // Security gate (battery D1): a workspace .harness/mcp.json never
                 // spawns commands until this exact file content was approved. The
                 // dialog offers approve (and continue) or run without those servers.
-                if (workspaceMcpGate) {
+                if (workspaceMcpGate && !s0.conversation.isChat) {
                     val unapproved = runCatching {
                         c.mcp.unapprovedWorkspaceServers(runWorkspace)
                     }.getOrDefault(emptyList())
@@ -1266,7 +1278,7 @@ class ChatViewModel(
                     config = effectiveConfig,
                     apiKey = apiKey,
                     permissionMode = s0.permissionMode,
-                    mode = s0.mode,
+                    mode = if (s0.conversation.isChat) AgentMode.ACT else s0.mode,
                     maxOutputTokens = localLimits?.output ?: s0.maxOutputTokens,
                     maxContextTokens = localLimits?.context ?: s0.maxContextTokens,
                     thinking = s0.thinkingLevel,
@@ -1336,6 +1348,51 @@ class ChatViewModel(
         compactionJob?.cancel()
         val sid = sessionId ?: return
         c.runManager.stop(sid)
+    }
+
+    fun prepareSectionSwitch(draft: String, onReady: () -> Unit) {
+        if (!_state.value.conversationReady || _state.value.conversationSaving || startingRun) return
+        if (pendingAttachments.isNotEmpty() || pendingFileAttachments.isNotEmpty()) {
+            _state.update { it.copy(error = c.appContext.getString(R.string.chat_switch_attachments)) }
+            return
+        }
+        _state.update { it.copy(conversationSaving = true) }
+        viewModelScope.launch {
+            try {
+                val sid = ensureSession()
+                val config = com.androidharness.app.data.ConversationConfig.decode(c.sessions.session(sid)?.conversationJson)
+                c.sessions.saveConversation(sid, config.copy(draftText = draft))
+                onReady()
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { _state.update { it.copy(error = e.message) } }
+            finally { _state.update { it.copy(conversationSaving = false) } }
+        }
+    }
+
+    fun saveChatTools(config: com.androidharness.app.data.ConversationConfig) {
+        val current = _state.value
+        if (!current.conversation.isChat || current.busy || startingRun || current.conversationSaving || current.taskControl.resumable) return
+        _state.update { it.copy(conversationSaving = true) }
+        viewModelScope.launch {
+            try {
+                val sid = ensureSession()
+                c.sessions.saveConversation(sid, config.copy(kind = com.androidharness.app.data.ConversationKind.CHAT))
+                _state.update { it.copy(conversation = config.copy(kind = com.androidharness.app.data.ConversationKind.CHAT)) }
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { _state.update { it.copy(error = e.message) } }
+            finally { _state.update { it.copy(conversationSaving = false) } }
+        }
+    }
+
+    fun continueInCode(projectId: String) {
+        if (_state.value.busy || startingRun || _state.value.conversationSaving) return
+        _state.update { it.copy(conversationSaving = true) }
+        viewModelScope.launch {
+            try { _navEvents.emit(NavEvent.OpenSession(c.sessions.continueInCode(ensureSession(), projectId))) }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { _state.update { it.copy(error = e.message) } }
+            finally { _state.update { it.copy(conversationSaving = false) } }
+        }
     }
 
     fun setMode(mode: AgentMode) {
@@ -1708,7 +1765,7 @@ class ChatViewModel(
                 c.runManager.controls.update(sid) { it.copy(summaryOverride = summary, contextAfter = before) }
                 val fresh = c.engine.estimateFor(com.androidharness.app.agent.ContextHygiene.forModel(
                     c.sessions.historyFor(sid).second), chatWorkspace(), current.mode,
-                    current.permissionMode == PermissionMode.FULL_ACCESS)
+                    current.permissionMode == PermissionMode.FULL_ACCESS, conversation = current.conversation)
                 if (sessionId == sid) _state.update { it.copy(estimate = fresh) }
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -1877,8 +1934,8 @@ class ChatViewModel(
         /** Max time a just-committed stream may be held while Room delivers the row. */
         private const val HOLD_TIMEOUT_MS = 2_000L
 
-        fun factory(container: AppContainer, sessionId: String?) = viewModelFactory {
-            initializer { ChatViewModel(container, sessionId) }
+        fun factory(container: AppContainer, sessionId: String?, kind: com.androidharness.app.data.ConversationKind = com.androidharness.app.data.ConversationKind.CODE) = viewModelFactory {
+            initializer { ChatViewModel(container, sessionId, kind) }
         }
     }
 }

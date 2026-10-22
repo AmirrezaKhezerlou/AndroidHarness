@@ -111,6 +111,10 @@ internal fun MainHeader(
     onCustomizeThinking: (() -> Unit)? = null,
     onAddThinkingLevel: (() -> Unit)? = null,
     onSetCustomThinking: (String) -> Unit = {},
+    conversation: com.androidharness.app.data.ConversationConfig = com.androidharness.app.data.ConversationConfig(),
+    conversationReady: Boolean = true,
+    onSelectSection: (com.androidharness.app.data.ConversationKind) -> Unit = {},
+    onChatTools: () -> Unit = {},
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     var menu by remember { mutableStateOf(false) }
@@ -120,10 +124,13 @@ internal fun MainHeader(
     val thinkingOn = thinkingLevel != ThinkingLevel.OFF
 
     if (com.androidharness.app.ui.LocalDesktopLayout.current) {
-        DesktopConversationHeader(sessionTitle, busy, pickerLabel, thinkingLevel, thinkingLevels, mode,
+        Column(Modifier.then(if (conversation.isChat) Modifier.statusBarsPadding() else Modifier)) {
+            ConversationSectionRow(conversation, conversationReady, onSelectSection, onChatTools)
+            DesktopConversationHeader(sessionTitle, busy, pickerLabel, thinkingLevel, thinkingLevels, mode,
             permissionMode, onPickModel, onSetThinking, onSetMode, onSetPermission,
             onOpenContext, onOpenUndo, canUndo, onOpenGitHub, canOpenGitHub, onOpenWebPreview, thinkingResolved, onCustomizeThinking, onSetCustomThinking, onAddThinkingLevel,
-            showPreviewShortcut = showWebPreviewShortcut)
+            showPreviewShortcut = showWebPreviewShortcut, chatOnly = conversation.isChat)
+        }
         return
     }
 
@@ -132,6 +139,7 @@ internal fun MainHeader(
             .background(scheme.surface)
             .statusBarsPadding(),
     ) {
+        ConversationSectionRow(conversation, conversationReady, onSelectSection, onChatTools)
         Column(Modifier.fillMaxWidth()) {
             Column {
                 Row(
@@ -154,7 +162,7 @@ internal fun MainHeader(
                             Text(sessionTitle, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
                         }
-                        workspaceName?.let {
+                        workspaceName?.takeUnless { conversation.isChat }?.let {
                             Text(it, style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
@@ -162,7 +170,7 @@ internal fun MainHeader(
 
                     // Workspace files explorer, migrated here from the drawer;
                     // workspace switching itself lives inside the file manager.
-                    IconButton(onClick = onOpenFiles) {
+                    if (!conversation.isChat) IconButton(onClick = onOpenFiles) {
                         Icon(
                             painterResource(R.drawable.ic_chat_folder),
                             modifier = Modifier.size(18.dp),
@@ -175,50 +183,52 @@ internal fun MainHeader(
                             Icon(painterResource(R.drawable.ic_chat_ellipsis_vertical), contentDescription = uiContext.getString(R.string.ui_more_options), modifier = Modifier.size(18.dp))
                         }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                            WorkspaceMenuEntries { menu = false }
-                            DropdownMenuItem(
-                                text = { Text("GitHub") }, enabled = canOpenGitHub,
-                                leadingIcon = { Icon(painterResource(R.drawable.ic_github), null, Modifier.size(18.dp)) },
-                                onClick = { menu = false; onOpenGitHub() },
-                            )
-                            DropdownMenuItem(
-                                text = { Text(if (mode == AgentMode.PLAN && !dualPlanning) uiContext.getString(R.string.ui_act_mode) else uiContext.getString(R.string.ui_plan_mode)) },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Outlined.EditNote,
-                                        contentDescription = null,
-                                        tint = if (mode == AgentMode.PLAN && !dualPlanning) scheme.primary else scheme.onSurfaceVariant,
-                                    )
-                                },
-                                trailingIcon = {
-                                    if (mode == AgentMode.PLAN && !dualPlanning) {
-                                        Icon(Icons.Filled.Check, contentDescription = uiContext.getString(R.string.settings_headers_enabled), tint = scheme.primary)
-                                    }
-                                },
-                                onClick = {
-                                    menu = false
-                                    onSetMode(if (mode == AgentMode.PLAN && !dualPlanning) AgentMode.ACT else AgentMode.PLAN)
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text(uiContext.getString(R.string.ui_dual_planning)) },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Outlined.ForkRight,
-                                        contentDescription = null,
-                                        tint = if (dualPlanning) scheme.primary else scheme.onSurfaceVariant,
-                                    )
-                                },
-                                trailingIcon = {
-                                    if (dualPlanning) {
-                                        Icon(Icons.Filled.Check, contentDescription = uiContext.getString(R.string.settings_headers_enabled), tint = scheme.primary)
-                                    }
-                                },
-                                onClick = {
-                                    menu = false
-                                    onToggleDualPlanning()
-                                },
-                            )
+                            if (!conversation.isChat) {
+                                WorkspaceMenuEntries { menu = false }
+                                DropdownMenuItem(
+                                    text = { Text("GitHub") }, enabled = canOpenGitHub,
+                                    leadingIcon = { Icon(painterResource(R.drawable.ic_github), null, Modifier.size(18.dp)) },
+                                    onClick = { menu = false; onOpenGitHub() },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(if (mode == AgentMode.PLAN && !dualPlanning) uiContext.getString(R.string.ui_act_mode) else uiContext.getString(R.string.ui_plan_mode)) },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Outlined.EditNote,
+                                            contentDescription = null,
+                                            tint = if (mode == AgentMode.PLAN && !dualPlanning) scheme.primary else scheme.onSurfaceVariant,
+                                        )
+                                    },
+                                    trailingIcon = {
+                                        if (mode == AgentMode.PLAN && !dualPlanning) {
+                                            Icon(Icons.Filled.Check, contentDescription = uiContext.getString(R.string.settings_headers_enabled), tint = scheme.primary)
+                                        }
+                                    },
+                                    onClick = {
+                                        menu = false
+                                        onSetMode(if (mode == AgentMode.PLAN && !dualPlanning) AgentMode.ACT else AgentMode.PLAN)
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(uiContext.getString(R.string.ui_dual_planning)) },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Outlined.ForkRight,
+                                            contentDescription = null,
+                                            tint = if (dualPlanning) scheme.primary else scheme.onSurfaceVariant,
+                                        )
+                                    },
+                                    trailingIcon = {
+                                        if (dualPlanning) {
+                                            Icon(Icons.Filled.Check, contentDescription = uiContext.getString(R.string.settings_headers_enabled), tint = scheme.primary)
+                                        }
+                                    },
+                                    onClick = {
+                                        menu = false
+                                        onToggleDualPlanning()
+                                    },
+                                )
+                            }
                             DropdownMenuItem(
                                 text = { Text(uiContext.getString(R.string.ui_thinking_152, (localizedThinkingOption(thinkingResolved?.label ?: thinkingLevel.label)).toString())) },
                                 leadingIcon = {
@@ -237,7 +247,7 @@ internal fun MainHeader(
                                 },
                                 onClick = { menu = false; thinkingMenu = true },
                             )
-                            DropdownMenuItem(
+                            if (!conversation.isChat) DropdownMenuItem(
                                 text = { Text(uiContext.getString(R.string.ui_permission, (localizedOption(permissionMode.label)).toString())) },
                                 leadingIcon = {
                                     Icon(
@@ -267,23 +277,25 @@ internal fun MainHeader(
                                 },
                                 onClick = { menu = false; onOpenContext() },
                             )
-                            HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                            DropdownMenuItem(
-                                text = { Text(uiContext.getString(R.string.ui_terminal)) },
-                                leadingIcon = { Icon(Icons.Outlined.Terminal, contentDescription = null) },
-                                onClick = { menu = false; onOpenTerminal() },
-                            )
-                            DropdownMenuItem(
-                                text = { Text(uiContext.getString(R.string.ui_web_preview_localhost)) },
-                                leadingIcon = { Icon(Icons.Outlined.Language, contentDescription = null) },
-                                onClick = { menu = false; onOpenWebPreview() },
-                            )
-                            DropdownMenuItem(
-                                text = { Text(uiContext.getString(R.string.ui_undo_file_changes)) },
-                                leadingIcon = { Icon(Icons.Outlined.History, contentDescription = null) },
-                                enabled = canUndo,
-                                onClick = { menu = false; onOpenUndo() },
-                            )
+                            if (!conversation.isChat) {
+                                HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                                DropdownMenuItem(
+                                    text = { Text(uiContext.getString(R.string.ui_terminal)) },
+                                    leadingIcon = { Icon(Icons.Outlined.Terminal, contentDescription = null) },
+                                    onClick = { menu = false; onOpenTerminal() },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(uiContext.getString(R.string.ui_web_preview_localhost)) },
+                                    leadingIcon = { Icon(Icons.Outlined.Language, contentDescription = null) },
+                                    onClick = { menu = false; onOpenWebPreview() },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(uiContext.getString(R.string.ui_undo_file_changes)) },
+                                    leadingIcon = { Icon(Icons.Outlined.History, contentDescription = null) },
+                                    enabled = canUndo,
+                                    onClick = { menu = false; onOpenUndo() },
+                                )
+                            }
                         }
                         DropdownMenu(expanded = permissionMenu, onDismissRequest = { permissionMenu = false }) {
                             PermissionMode.entries.forEach { entry ->
@@ -334,11 +346,11 @@ internal fun MainHeader(
                         }
                     }
                     Spacer(Modifier.width(8.dp))
-                    ExpressiveIconButton(onClick = onOpenGitHub, enabled = canOpenGitHub) {
+                    if (!conversation.isChat) ExpressiveIconButton(onClick = onOpenGitHub, enabled = canOpenGitHub) {
                         Icon(painterResource(R.drawable.ic_github), contentDescription = uiContext.getString(R.string.ui_open_github),
                             modifier = Modifier.size(18.dp))
                     }
-                    if (showWebPreviewShortcut) ExpressiveIconButton(onClick = onOpenWebPreview) {
+                    if (!conversation.isChat && showWebPreviewShortcut) ExpressiveIconButton(onClick = onOpenWebPreview) {
                         Icon(Icons.Outlined.Language, contentDescription = uiContext.getString(R.string.ui_open_web_browser), modifier = Modifier.size(18.dp))
                     }
                 }
@@ -360,6 +372,7 @@ private fun DesktopConversationHeader(
     onSetCustomThinking: (String) -> Unit,
     onAddThinkingLevel: (() -> Unit)?,
     showPreviewShortcut: Boolean,
+    chatOnly: Boolean = false,
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
@@ -374,13 +387,13 @@ private fun DesktopConversationHeader(
             HeaderModelPicker(model, onModel, Modifier.widthIn(max = 180.dp))
             if (thinkingResolved?.customConfig != null || levels.isNotEmpty() || thinkingResolved?.spec?.style == com.androidharness.app.agent.ThinkingSpecs.Style.AUTOMATIC)
                 HeaderThinkingControl(thinking, levels, thinkingMenu, { thinkingMenu = it }, onThinking, onModel, thinkingResolved, busy, onCustomizeThinking, onSetCustomThinking, onAddThinkingLevel)
-            TextButton(onClick = { onMode(if (mode == AgentMode.PLAN) AgentMode.ACT else AgentMode.PLAN) }) {
+            if (!chatOnly) TextButton(onClick = { onMode(if (mode == AgentMode.PLAN) AgentMode.ACT else AgentMode.PLAN) }) {
                 Text(if (mode == AgentMode.PLAN) uiContext.getString(R.string.settings_telegram_plan) else uiContext.getString(R.string.settings_telegram_act), style = MaterialTheme.typography.labelMedium)
             }
-            ExpressiveIconButton(onClick = onGitHub, enabled = canGitHub, modifier = Modifier.size(36.dp)) {
+            if (!chatOnly) ExpressiveIconButton(onClick = onGitHub, enabled = canGitHub, modifier = Modifier.size(36.dp)) {
                 Icon(painterResource(R.drawable.ic_github), uiContext.getString(R.string.ui_open_github), Modifier.size(18.dp))
             }
-            if (showPreviewShortcut) ExpressiveIconButton(onClick = onPreview, modifier = Modifier.size(36.dp)) {
+            if (!chatOnly && showPreviewShortcut) ExpressiveIconButton(onClick = onPreview, modifier = Modifier.size(36.dp)) {
                 Icon(Icons.Outlined.Language, uiContext.getString(R.string.ui_open_web_browser), Modifier.size(18.dp))
             }
             Box {
@@ -388,13 +401,13 @@ private fun DesktopConversationHeader(
                     Icon(Icons.Filled.MoreVert, uiContext.getString(R.string.ui_conversation_actions), Modifier.size(18.dp))
                 }
                 DropdownMenu(menu, { menu = false }) {
-                    WorkspaceMenuEntries { menu = false }
+                    if (!chatOnly) WorkspaceMenuEntries { menu = false }
                     DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_context_limits)) }, onClick = { menu = false; onContext() })
-                    DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_web_preview)) }, onClick = { menu = false; onPreview() })
-                    DropdownMenuItem(text = { Text("GitHub") }, enabled = canGitHub, onClick = { menu = false; onGitHub() })
-                    DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_undo_file_changes_165)) }, enabled = canUndo, onClick = { menu = false; onUndo() })
+                    if (!chatOnly) DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_web_preview)) }, onClick = { menu = false; onPreview() })
+                    if (!chatOnly) DropdownMenuItem(text = { Text("GitHub") }, enabled = canGitHub, onClick = { menu = false; onGitHub() })
+                    if (!chatOnly) DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_undo_file_changes_165)) }, enabled = canUndo, onClick = { menu = false; onUndo() })
                     HorizontalDivider()
-                    PermissionMode.entries.forEach { option ->
+                    if (!chatOnly) PermissionMode.entries.forEach { option ->
                         DropdownMenuItem(text = { Text(localizedOption(option.label)) }, onClick = {
                             menu = false
                             if (option == PermissionMode.FULL_ACCESS) {

@@ -1,6 +1,8 @@
 package com.androidharness.app.ui.chat
 
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.verticalScroll
 import com.androidharness.app.artifacts.ArtifactAttachment
 import com.androidharness.app.core.response.ResponseAttachment
 import com.androidharness.app.core.response.UserMessageContent
@@ -178,10 +180,11 @@ fun ChatScreen(
     onOpenSettings: () -> Unit = {},
     onNavigateToSession: (sessionId: String) -> Unit = {},
     searchMessageId: String? = null,
+    onSelectSection: (com.androidharness.app.data.ConversationKind) -> Unit = {},
 ) {
     ChatAppearance {
         ChatScreenContent(viewModel, onOpenDrawer, onOpenFile, onNewChat, onOpenTerminal,
-            onOpenFiles, onOpenSubagent, onOpenSettings, onNavigateToSession, searchMessageId)
+            onOpenFiles, onOpenSubagent, onOpenSettings, onNavigateToSession, searchMessageId, onSelectSection)
     }
 }
 
@@ -198,10 +201,35 @@ private fun ChatScreenContent(
     onOpenSettings: () -> Unit = {},
     onNavigateToSession: (sessionId: String) -> Unit = {},
     searchMessageId: String? = null,
+    onSelectSection: (com.androidharness.app.data.ConversationKind) -> Unit = {},
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     // Lazy list content and its derived lookup maps must use the same snapshot.
     val state = viewModel.state.collectAsStateWithLifecycle().value
+    var showChatTools by remember { mutableStateOf(false) }
+    var showCodeHandoff by remember { mutableStateOf(false) }
+    if (showChatTools) com.androidharness.app.ui.chat.components.ChatToolsSheet(
+        state.conversation, state.conversationReady && !state.busy && !state.conversationSaving && !state.taskControl.resumable,
+        viewModel::saveChatTools, { showChatTools = false })
+    if (showCodeHandoff) {
+        val projects by viewModel.container.workspace.projects.collectAsStateWithLifecycle(initialValue = emptyList())
+        var selected by remember { mutableStateOf<String?>(null) }
+        val projectId = selected ?: viewModel.activeWorkspace.value?.id?.takeIf { id -> projects.any { it.id == id } } ?: projects.firstOrNull()?.id
+        androidx.compose.material3.AlertDialog(onDismissRequest = { showCodeHandoff = false },
+            title = { Text(uiContext.getString(R.string.chat_continue_code)) },
+            text = { Column(Modifier.heightIn(max = 360.dp).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+                Text(uiContext.getString(R.string.chat_handoff_description))
+                projects.forEach { project ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.RadioButton(selected = project.id == projectId, onClick = { selected = project.id })
+                        Text(project.name, Modifier.weight(1f))
+                    }
+                }
+            } },
+            confirmButton = { TextButton(enabled = projectId != null && !state.busy && !state.conversationSaving,
+                onClick = { projectId?.let(viewModel::continueInCode); showCodeHandoff = false }) { Text(uiContext.getString(R.string.chat_create_code)) } },
+            dismissButton = { TextButton(onClick = { showCodeHandoff = false }) { Text(uiContext.getString(android.R.string.cancel)) } })
+    }
     val ttsState by viewModel.container.tts.state.collectAsStateWithLifecycle()
     var ttsTermsError by remember { mutableStateOf<TtsError?>(null) }
     LaunchedEffect(Unit) {
@@ -257,11 +285,19 @@ private fun ChatScreenContent(
     // user last typed. composerText mirrors value.text for the readers.
     var composerValue by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
     val composerText = composerValue.text
+    var draftRestored by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(state.conversationReady) {
+        if (state.conversationReady && !draftRestored) {
+            if (composerValue.text.isBlank()) composerValue = TextFieldValue(state.conversation.draftText)
+            draftRestored = true
+        }
+    }
     var attachedConceptJson by rememberSaveable(state.sessionId) { mutableStateOf<String?>(null) }
     val attachedConcept = remember(attachedConceptJson) { ArtifactAttachment.decode(attachedConceptJson) }
     var attachedResponseJson by rememberSaveable(state.sessionId) { mutableStateOf<String?>(null) }
     val attachedResponse = remember(attachedResponseJson) { ResponseAttachment.decode(attachedResponseJson) }
     val scheduleKeyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val sectionFocus = androidx.compose.ui.platform.LocalFocusManager.current
     var scheduleDraft by remember { mutableStateOf<com.androidharness.app.automation.AutomationTask?>(null) }
     var scheduledComposerText by remember { mutableStateOf<String?>(null) }
     var showScheduledList by remember { mutableStateOf(false) }
@@ -878,6 +914,7 @@ private fun ChatScreenContent(
         viewModel.navEvents.collect { event ->
             when (event) {
                 is NavEvent.NewChat -> onNewChat()
+                is NavEvent.OpenSession -> onNavigateToSession(event.id)
             }
         }
     }
@@ -1041,6 +1078,14 @@ private fun ChatScreenContent(
 
             Column {
             MainHeader(
+                conversation = state.conversation,
+                conversationReady = state.conversationReady && !state.conversationSaving,
+                onSelectSection = { kind -> viewModel.prepareSectionSwitch(composerValue.text) {
+                    sectionFocus.clearFocus(force = true)
+                    scheduleKeyboard?.hide()
+                    onSelectSection(kind)
+                } },
+                onChatTools = { showChatTools = true },
                 sessionTitle = state.sessionTitle,
                 workspaceName = currentProject?.name,
                 busy = state.busy,
@@ -1265,6 +1310,7 @@ private fun ChatScreenContent(
                                 indexedItem(key = "empty-state", contentType = ChatListContentType.Empty) {
                                     EmptyState(
                                         hasProvider = state.activeProvider != null,
+                                        chatOnly = state.conversation.isChat,
                                         onSuggestion = { viewModel.send(it) },
                                         onAddProvider = { addProviderInitially = true; activeProviderManagerTarget = ModelSelectionTarget.ACTIVE },
                                     )
@@ -1647,7 +1693,7 @@ private fun ChatScreenContent(
                 // @-mention file picker: a trailing @path token opens the
                 // workspace file list; picking rewrites the token in place.
                 val mention = remember(composerText) { MentionToken.parse(composerText) }
-                if (mention != null && attachedSkill == null) {
+                if (!state.conversation.isChat && mention != null && attachedSkill == null) {
                     LaunchedEffect(mention != null) { viewModel.loadMentionFiles() }
                     MentionSuggestions(
                         files = state.mentionFiles,
@@ -1773,11 +1819,19 @@ private fun ChatScreenContent(
                     CompactionBanner(note, Modifier.padding(bottom = 6.dp))
                 }
 
-                AgentStatusBar(action = state.currentAction, busy = state.busy)
+                if (!state.conversation.isChat || state.busy) AgentStatusBar(action = state.currentAction, busy = state.busy)
+                if (state.conversation.isChat && state.messages.isNotEmpty()) {
+                    TextButton(onClick = { showCodeHandoff = true }, enabled = !state.busy && !state.conversationSaving,
+                        modifier = Modifier.align(Alignment.End)) { Text(uiContext.getString(R.string.chat_continue_code)) }
+                }
+                state.conversation.sourceChatId?.let { source ->
+                    TextButton(onClick = { onNavigateToSession(source) }) { Text(uiContext.getString(R.string.chat_from_chat)) }
+                }
                 com.androidharness.app.ui.automation.ScheduledMessageRow(chatSchedules, scheduleConnection, scheduleNow) {
                     if (chatSchedules.size == 1) scheduleDraft = chatSchedules.first() else showScheduledList = true
                 }
                 MessageComposer(
+                    chatOnly = state.conversation.isChat,
                     attachments = {
                         attachedResponse?.let { ref -> com.androidharness.app.ui.chat.rich.ResponseContextChip(ref.title) { attachedResponseJson = null } }
                         attachedConcept?.let { concept ->
@@ -1803,7 +1857,7 @@ private fun ChatScreenContent(
                     attachedSkill = attachedSkill,
                     onValueChange = { input ->
                         composerValue = input
-                        slashExpanded = attachedSkill == null && input.text.startsWith("/")
+                        slashExpanded = !state.conversation.isChat && attachedSkill == null && input.text.startsWith("/")
                     },
                     onClearSkill = { attachedSkill = null },
                     onSend = {
@@ -1820,7 +1874,7 @@ private fun ChatScreenContent(
                             }
                         }
                     },
-                    onSchedule = {
+                    onSchedule = if (state.conversation.isChat) null else fun() {
                         currentProject?.let { project ->
                             scheduleDraft = com.androidharness.app.automation.AutomationTask(
                                 title = composerText.trim().lineSequence().first().take(64), prompt = composerText.trim(),

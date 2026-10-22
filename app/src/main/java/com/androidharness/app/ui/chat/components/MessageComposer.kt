@@ -156,6 +156,7 @@ internal fun MessageComposer(
     hasAttachments: Boolean = false,
     onSchedule: (() -> Unit)? = null,
     scheduleUnavailableReason: String? = null,
+    chatOnly: Boolean = false,
     modifier: Modifier = Modifier,
     attachments: @Composable () -> Unit = {},
 ) {
@@ -379,7 +380,7 @@ internal fun MessageComposer(
                                         isInbuiltListening -> uiContext.getString(R.string.ui_listening)
                                         !attachedSkill.isNullOrBlank() -> uiContext.getString(R.string.ui_add_a_note_or_send)
                                         busy -> uiContext.getString(R.string.ui_queue_message)
-                                        desktop -> uiContext.getString(R.string.ui_describe_a_task)
+                                        desktop && !chatOnly -> uiContext.getString(R.string.ui_describe_a_task)
                                         else -> uiContext.getString(R.string.ui_message)
                                     },
                                     maxLines = 1,

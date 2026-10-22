@@ -49,6 +49,9 @@ class ToolRegistry(private val tools: List<Tool>) {
 
     fun get(name: String): Tool? = byName[name]
 
+    fun restrictedTo(names: Set<String>?): ToolRegistry =
+        if (names == null) this else ToolRegistry(tools.filter { it.name in names })
+
     /** Run-scoped extras (MCP tools) merge on top of the static set. */
     fun withExtra(extra: List<Tool>): ToolRegistry =
         if (extra.isEmpty()) this else ToolRegistry(tools + extra)

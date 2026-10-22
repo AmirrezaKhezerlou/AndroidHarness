@@ -323,7 +323,7 @@ class ReasoningDeviceTest {
                 it.execSQL("ALTER TABLE messages DROP COLUMN generationJson")
                 it.version = 17
             }
-            db = Room.databaseBuilder(context, AppDatabase::class.java, name).addMigrations(AppDatabase.MIGRATION_17_18, AppDatabase.MIGRATION_18_19).build()
+            db = Room.databaseBuilder(context, AppDatabase::class.java, name).addMigrations(AppDatabase.MIGRATION_17_18, AppDatabase.MIGRATION_19_20, AppDatabase.MIGRATION_18_19).build()
             sessions = SessionRepository(db)
             assertEquals("Existing question", sessions.messages(sid).single().text)
             assertNull(sessions.messages(sid).single().generation.state)

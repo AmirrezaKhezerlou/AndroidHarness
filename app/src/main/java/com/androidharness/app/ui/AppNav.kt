@@ -128,10 +128,16 @@ fun AppNav(container: AppContainer) {
     // to flip this and remount NavHost onto chat mid-flow.
     val needsSetup = !settings.onboardingDone
     val lastSession = settings.lastActiveSessionId?.takeIf { settings.resumeLastChat }
+    val resumeKind by androidx.compose.runtime.produceState<com.androidharness.app.data.ConversationKind?>(
+        initialValue = if (lastSession == null) com.androidharness.app.data.ConversationKind.CODE else null, key1 = lastSession) {
+        value = lastSession?.let { com.androidharness.app.data.ConversationConfig.decode(container.sessions.session(it)?.conversationJson).kind }
+            ?: com.androidharness.app.data.ConversationKind.CODE
+    }
+    if (resumeKind == null) { Box(Modifier.fillMaxSize()); return }
     val startDestination = remember {
         when {
             needsSetup -> "setup"
-            !lastSession.isNullOrBlank() -> "chat/$lastSession"
+            !lastSession.isNullOrBlank() && resumeKind == com.androidharness.app.data.ConversationKind.CODE -> "chat/$lastSession"
             else -> "chat"
         }
     }
@@ -181,9 +187,14 @@ fun AppNav(container: AppContainer) {
     var workspaceChatViewModel by remember { mutableStateOf<ChatViewModel?>(null) }
     val currentSessionId = when (currentEntry?.destination?.route) {
         "chat/{sessionId}?messageId={messageId}" -> currentEntry?.arguments?.getString("sessionId")
-        "chat" -> draftSessionId
+        "chat?kind={kind}" -> draftSessionId
         else -> null
     }
+    val activeConversation = workspaceChatViewModel?.state?.collectAsStateWithLifecycle()?.value?.conversation
+        ?: com.androidharness.app.data.ConversationConfig.decode(sessions.firstOrNull { it.id == currentSessionId }?.conversationJson)
+    val activeKind = activeConversation.kind
+    var codeRoute by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
+    var plainRoute by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
     val workspaceSessionId = currentSessionId
         ?: currentEntry?.arguments?.getString("sessionId")
         ?: currentEntry?.arguments?.getString("session")?.takeIf { it.isNotBlank() }
@@ -271,12 +282,12 @@ fun AppNav(container: AppContainer) {
         }
     }
 
-    fun openChat(sessionId: String?, messageId: String? = null) {
+    fun openChat(sessionId: String?, messageId: String? = null, kind: com.androidharness.app.data.ConversationKind = activeKind) {
         scope.launch { drawerState.close() }
         if (sessionId == null) {
             draftSessionId = null
             scope.launch { container.settings.setLastActiveSessionId(null) }
-            nav.navigate("chat") { popUpTo("chat") { inclusive = true } }
+            nav.navigate("chat?kind=${kind.name}")
         } else {
             val target = messageId?.let { "?messageId=${encode(it)}" }.orEmpty()
             nav.navigate("chat/$sessionId$target")
@@ -301,15 +312,26 @@ fun AppNav(container: AppContainer) {
             }
         }
     }
+    fun selectSection(kind: com.androidharness.app.data.ConversationKind, source: ChatViewModel) {
+        val origin = source.state.value
+        if (kind == origin.conversation.kind) return
+        val here = origin.sessionId?.let { "chat/$it" } ?: "chat?kind=${origin.conversation.kind.name}"
+        if (origin.conversation.kind == com.androidharness.app.data.ConversationKind.CODE) codeRoute = here else plainRoute = here
+        val previous = if (kind == com.androidharness.app.data.ConversationKind.CODE) codeRoute else plainRoute
+        val last = sessions.firstOrNull { com.androidharness.app.data.ConversationConfig.decode(it.conversationJson).kind == kind && it.id !in settings.archivedSessions }
+        val availablePrevious = previous?.takeIf { route -> sessions.any { "chat/${it.id}" == route && it.id !in settings.archivedSessions } }
+        val target = availablePrevious ?: last?.let { "chat/${it.id}" } ?: "chat?kind=${kind.name}"
+        if (!nav.popBackStack(target, inclusive = false)) nav.navigate(target)
+    }
     @Composable fun Sidebar(onCollapse: () -> Unit) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
         val changes by remember(currentSessionId) {
             currentSessionId?.let(container.sessions::fileChangesFor) ?: kotlinx.coroutines.flow.flowOf(emptyList())
         }.collectAsStateWithLifecycle(initialValue = emptyList())
         ProjectNavigationSidebar(
-            projects = allWorkspaces, sessions = sessions, selectedSession = currentSessionId, selectedProject = currentWorkspace?.id,
+            projects = if (activeConversation.isChat) emptyList() else allWorkspaces, sessions = sessions.filter { com.androidharness.app.data.ConversationConfig.decode(it.conversationJson).kind == activeKind }, selectedSession = currentSessionId, selectedProject = currentWorkspace?.id,
             pinned = settings.pinnedSessions.toSet(), archived = settings.archivedSessions.toSet(), query = searchQuery,
-            onQueryChange = { searchQuery = it }, messageHits = messageHits, fuzzy = fuzzySearch, onFuzzyChange = { fuzzySearch = !fuzzySearch },
+            onQueryChange = { searchQuery = it }, messageHits = messageHits.filter { hit -> sessions.any { it.id == hit.sessionId && com.androidharness.app.data.ConversationConfig.decode(it.conversationJson).kind == activeKind } }, fuzzy = fuzzySearch, onFuzzyChange = { fuzzySearch = !fuzzySearch },
             activity = { session ->
                 if (session.id in runningSessionIds) {
                     val live by remember(session.id) { container.runManager.live(session.id) }.collectAsStateWithLifecycle()
@@ -346,7 +368,8 @@ fun AppNav(container: AppContainer) {
             changesSummary = changes.takeIf { it.isNotEmpty() }?.let { uiContext.getString(R.string.ui_files_changed_758, (it.size).toString()) },
             onChanges = { currentSessionId?.let { sid -> navigateFromSidebar { nav.navigate("changes/${encode(sid)}") } } },
             snackbar = sidebarSnackbar,
-            projectsView = settings.sidebarProjects,
+            chatOnly = activeConversation.isChat,
+            projectsView = settings.sidebarProjects && !activeConversation.isChat,
             onProjectsViewChange = { scope.launch { container.settings.setSidebarProjects(it) } },
             projectPins = settings.pinnedProjects, projectArchives = settings.archivedProjects,
             onProjectAction = { project, action -> when (action) {
@@ -419,8 +442,10 @@ fun AppNav(container: AppContainer) {
                     slideOutVertically(tween(200, easing = FastOutSlowInEasing)) { it / 28 }
             },
         ) {
-            composable("chat") {
-                val vm: ChatViewModel = viewModel(factory = ChatViewModel.factory(container, null))
+            composable("chat?kind={kind}", arguments = listOf(navArgument("kind") { defaultValue = "CODE" })) { entry ->
+                val kind = runCatching { com.androidharness.app.data.ConversationKind.valueOf(entry.arguments?.getString("kind").orEmpty()) }
+                    .getOrDefault(com.androidharness.app.data.ConversationKind.CODE)
+                val vm: ChatViewModel = viewModel(factory = ChatViewModel.factory(container, null, kind))
                 androidx.compose.runtime.DisposableEffect(vm) {
                     workspaceChatViewModel = vm
                     onDispose { if (workspaceChatViewModel === vm) workspaceChatViewModel = null }
@@ -429,6 +454,7 @@ fun AppNav(container: AppContainer) {
                 androidx.compose.runtime.LaunchedEffect(draftState.sessionId) { draftSessionId = draftState.sessionId }
                 ChatWorkspaceScreen(
                     viewModel = vm,
+                    onSelectSection = { kind -> selectSection(kind, vm) },
                     onOpenDrawer = {
                         focusManager.clearFocus(force = true)
                         if (desktopNavigation) sidebarVisible = !sidebarVisible else scope.launch { drawerState.open() }
@@ -439,7 +465,7 @@ fun AppNav(container: AppContainer) {
                     onNewChat = {
                         draftSessionId = null
                         scope.launch { container.settings.setLastActiveSessionId(null) }
-                        nav.navigate("chat") { popUpTo("chat") { inclusive = true } }
+                        openChat(null, kind = vm.state.value.conversation.kind)
                     },
                     onOpenTerminal = { nav.navigate("terminal?session=${encode(vm.state.value.sessionId.orEmpty())}") },
                     onOpenFiles = { nav.navigate("files?session=${encode(vm.state.value.sessionId.orEmpty())}") },
@@ -471,6 +497,7 @@ fun AppNav(container: AppContainer) {
                 }
                 ChatWorkspaceScreen(
                     viewModel = vm,
+                    onSelectSection = { kind -> selectSection(kind, vm) },
                     searchMessageId = searchMessageId,
                     onOpenDrawer = {
                         focusManager.clearFocus(force = true)
@@ -483,7 +510,7 @@ fun AppNav(container: AppContainer) {
                     onNewChat = {
                         draftSessionId = null
                         scope.launch { container.settings.setLastActiveSessionId(null) }
-                        nav.navigate("chat") { popUpTo("chat") { inclusive = true } }
+                        openChat(null, kind = vm.state.value.conversation.kind)
                     },
                     onOpenTerminal = { nav.navigate("terminal?session=${encode(vm.state.value.sessionId.orEmpty())}") },
                     onOpenFiles = { nav.navigate("files?session=${encode(vm.state.value.sessionId.orEmpty())}") },

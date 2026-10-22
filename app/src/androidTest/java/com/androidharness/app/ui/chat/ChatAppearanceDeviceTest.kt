@@ -124,7 +124,7 @@ class ChatAppearanceDeviceTest {
                     assertTrue("Answer precedes file receipt", answer.top < file.top)
                     assertTrue("File receipt precedes work summary", file.top < activity.top)
                 }
-                await("High"); await("Thinking level"); await("Message actions"); await("Voice input")
+                await("Thinking level"); await("Message actions"); await(voiceLabel)
                 reveal("50 tk/s"); reveal("Cache hit · 40%")
                 if (find(instrumentation.uiAutomation.rootInActiveWindow, "Scroll to latest", false) != null) {
                     tap("Scroll to latest")
@@ -151,7 +151,7 @@ class ChatAppearanceDeviceTest {
                 scenario.onActivity { theme.value = ThemeMode.DARK }
                 SystemClock.sleep(350)
                 screenshot("workspace-dark")
-                tap("Thinking level"); await("High")
+                tap("Thinking level"); await("Thinking options")
                 instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
             }
         } finally {
@@ -179,7 +179,7 @@ class ChatAppearanceDeviceTest {
                 }
             } } } }
             await("sample.kt")
-            tap("Voice input"); assertEquals(1, voice.get())
+            tap(voiceLabel); assertEquals(1, voice.get())
             tap("Send message"); assertEquals(1, sent.get())
             tap("Message actions"); tap("Photo or image"); assertEquals(1, images.get())
             scenario.onActivity { busy.value = true }
@@ -187,7 +187,7 @@ class ChatAppearanceDeviceTest {
             scenario.onActivity { value.value = TextFieldValue("") }
             tap("Stop"); assertEquals(1, stopped.get())
             scenario.onActivity { busy.value = false }
-            await("Voice input")
+            await(voiceLabel)
             val send = await("Send message")
             var action = send
             while (action.parent != null && !action.isClickable) action = action.parent
@@ -213,9 +213,12 @@ class ChatAppearanceDeviceTest {
         throw AssertionError(message)
     }
 
+    private val voiceLabel get() = c.appContext.getString(com.androidharness.app.R.string.settings_page_voice_title)
+
     private fun find(node: AccessibilityNodeInfo?, text: String, contains: Boolean): AccessibilityNodeInfo? {
         if (node == null) return null
-        val labels = listOfNotNull(node.text?.toString(), node.contentDescription?.toString())
+        val labels = listOfNotNull(node.text?.toString(), node.contentDescription?.toString(),
+            if (android.os.Build.VERSION.SDK_INT >= 28) node.paneTitle?.toString() else null)
         if (labels.any { if (contains) it.contains(text) else it == text }) return node
         for (i in 0 until node.childCount) find(node.getChild(i), text, contains)?.let { return it }
         return null

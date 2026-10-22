@@ -705,4 +705,28 @@
         <item quantity="one">%1$d available model</item>
         <item quantity="other">%1$d available models</item>
     </plurals>
+
+    <string name="conversation_code">Code</string>
+    <string name="conversation_chat">Chat</string>
+    <string name="chat_tools_on">Chat tools on</string>
+    <string name="chat_tools_off">Chat tools off</string>
+    <string name="chat_tools_title">Optional Chat tools</string>
+    <string name="chat_tools_description">Choose what Chat can use. Files, terminal, and project actions stay in Code.</string>
+    <string name="chat_tools_enable">Enable tools for this Chat</string>
+    <string name="chat_tool_search">Web search</string>
+    <string name="chat_tool_pages">Read web pages</string>
+    <string name="chat_tool_artifacts">Create and read artifacts</string>
+    <string name="chat_tools_wait">Finish or stop the current task before changing tools.</string>
+    <string name="chat_tools_save">Save tools</string>
+    <string name="chat_continue_code">Continue in Code</string>
+    <string name="chat_handoff_description">Choose a workspace for a new Code conversation. Your discussion stays in Chat and its context carries over. Nothing runs until you send a message.</string>
+    <string name="chat_create_code">Create Code conversation</string>
+    <string name="chat_from_chat">From Chat</string>
+    <string name="chat_empty_title">What is on your mind?</string>
+    <string name="chat_empty_description">Ask a question, explore an idea, or talk it through.</string>
+    <string name="chat_suggestion_explain">Explain a tricky topic simply</string>
+    <string name="chat_suggestion_ideas">Help me brainstorm an idea</string>
+    <string name="chat_suggestion_draft">Help me write a clear message</string>
+    <string name="chat_switch_attachments">Send or remove attachments before switching sections. Your draft will be kept.</string>
+    <string name="chat_file_requires_code">Use Code for this file. Chat can read images, text files, and PDFs with extractable text.</string>
 </resources>

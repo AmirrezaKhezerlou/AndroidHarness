@@ -97,6 +97,7 @@ internal fun ProjectNavigationSidebar(
     projectsView: Boolean = false, onProjectsViewChange: (Boolean) -> Unit = {},
     projectPins: Set<String> = emptySet(), projectArchives: Set<String> = emptySet(),
     onProjectAction: (ProjectEntity, SidebarProjectAction) -> Unit = { _, _ -> },
+    chatOnly: Boolean = false,
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
@@ -124,8 +125,8 @@ internal fun ProjectNavigationSidebar(
     val uiContext = androidx.compose.ui.platform.LocalContext.current
         Column(Modifier.fillMaxWidth().onSizeChanged { footerHeight = with(density) { it.height.toDp() } }
             .padding(horizontal = 10.dp, vertical = 8.dp)) {
-            SidebarNavRow(uiContext.getString(R.string.ui_tools), Icons.Outlined.Widgets, expanded = toolsOpen, onClick = { toolsOpen = !toolsOpen })
-            if (toolsOpen) Column(Modifier.padding(start = 16.dp)) {
+            if (!chatOnly) SidebarNavRow(uiContext.getString(R.string.ui_tools), Icons.Outlined.Widgets, expanded = toolsOpen, onClick = { toolsOpen = !toolsOpen })
+            if (toolsOpen && !chatOnly) Column(Modifier.padding(start = 16.dp)) {
                 SidebarNavRow("Terminal", Icons.Outlined.Terminal, currentRoute?.startsWith("terminal") == true, onClick = onTerminal)
                 SidebarNavRow("Build & test", Icons.Outlined.Build, currentRoute?.startsWith("build-test") == true, onClick = onBuild)
                 SidebarNavRow(uiContext.getString(R.string.ui_scheduled_tasks), Icons.Outlined.Schedule, currentRoute == "automation", onClick = onAutomation)
@@ -180,7 +181,7 @@ internal fun ProjectNavigationSidebar(
                     Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, top = 2.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         Row(Modifier.weight(1f).background(scheme.surfaceContainer, RoundedCornerShape(12.dp)).padding(3.dp)) {
-                            listOf(false to uiContext.getString(R.string.ui_chats), true to uiContext.getString(R.string.ui_projects)).forEach { (projectTab, label) ->
+                            (if (chatOnly) listOf(false to uiContext.getString(R.string.conversation_chat)) else listOf(false to uiContext.getString(R.string.ui_chats), true to uiContext.getString(R.string.ui_projects))).forEach { (projectTab, label) ->
                                 val selectedTab = projectsView == projectTab
                                 val tabColor by animateColorAsState(
                                     if (selectedTab) scheme.secondaryContainer else scheme.surfaceContainer,

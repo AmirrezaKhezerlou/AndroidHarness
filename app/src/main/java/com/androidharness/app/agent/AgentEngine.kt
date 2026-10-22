@@ -244,6 +244,7 @@ class AgentEngine(
         repoMapEnabled: Boolean = true,
         pinnedInstructions: String = "",
         durableEvent: (suspend (AgentEvent) -> Unit)? = null,
+        conversation: com.androidharness.app.data.ConversationConfig = com.androidharness.app.data.ConversationConfig(),
     ): Flow<AgentEvent> = channelFlow {
         var config = config
         // Parallel subagents emit from async children, plain flow{} forbids
@@ -261,17 +262,17 @@ class AgentEngine(
         val localChat = com.androidharness.app.local.LocalModelCatalog.isLocal(config.id)
         val agentContextEnabled = !localChat || replySettings.localModelAgentContext
         suspend fun runSystemPrompt(fullAccess: Boolean): String =
-            if (!agentContextEnabled) "" else systemPrompt(workspace, mode, fullAccess = fullAccess, repoMapEnabled = repoMapEnabled, sessionId = sessionId) +
+            if (conversation.isChat) chatSystemPrompt(conversation) else if (!agentContextEnabled) "" else systemPrompt(workspace, mode, fullAccess = fullAccess, repoMapEnabled = repoMapEnabled, sessionId = sessionId) +
                 if (pinnedInstructions.isBlank()) "" else "\n\nPinned user instructions:\n$pinnedInstructions"
         var systemPrompt = runSystemPrompt(false)
         var promptShizukuStatus = deviceAccess?.statusForAgent(workspace, sessionId) ?: shizukuAgentStatus(shizuku.state.value, shizuku.serviceState.value, shizuku.isServiceReady())
         var promptSandboxOff = false
-        val runRegistry = registry.withExtra(extraTools)
-        val tools = if (!agentContextEnabled) emptyList() else runRegistry.schemas(
+        val runRegistry = (if (conversation.isChat) registry else registry.withExtra(extraTools)).restrictedTo(conversation.allowedTools)
+        val tools = if (!agentContextEnabled && !conversation.isChat) emptyList() else runRegistry.schemas(
             readOnlyOnly = mode == AgentMode.PLAN,
             context = ToolContext(workspace = workspace, sessionId = sessionId),
         )
-        val chatHistory = if (agentContextEnabled) history else com.androidharness.app.local.LocalChatCodec.plainChatMessages(history)
+        val chatHistory = if (agentContextEnabled || conversation.isChat) history else com.androidharness.app.local.LocalChatCodec.plainChatMessages(history)
         val working = (if (localChat) chatHistory else ContextHygiene.shrinkToolResults(chatHistory))
             .map { it.withImagesResolved() }.toMutableList()
         // If active model is known to be text-only, strip image data upfront
@@ -317,7 +318,7 @@ class AgentEngine(
             // Full access additionally lifts every sandbox layer for the
             // tools this round executes.
             val effectiveMode = permissionMode()
-            val sandboxOff = effectiveMode == PermissionMode.FULL_ACCESS
+            val sandboxOff = !conversation.isChat && effectiveMode == PermissionMode.FULL_ACCESS
             val nextReplySettings = cavemanSettings()
             val nextShizukuStatus = deviceAccess?.statusForAgent(workspace, sessionId) ?: shizukuAgentStatus(shizuku.state.value, shizuku.serviceState.value, shizuku.isServiceReady())
             if (sandboxOff != promptSandboxOff || replySettings != nextReplySettings || promptShizukuStatus != nextShizukuStatus) {
@@ -335,9 +336,9 @@ class AgentEngine(
                     workspace
                 }
 
-            val requestSystemPrompt = if (!agentContextEnabled) "" else com.androidharness.app.caveman.CavemanPolicy.apply(
+            val requestSystemPrompt = if (!agentContextEnabled && !conversation.isChat) "" else com.androidharness.app.caveman.CavemanPolicy.apply(
                 systemPrompt + TodoPrompt.format(
-                    todoStore?.takeIf { it.owner.value == sessionId }?.todos?.value.orEmpty(),
+                    todoStore?.takeIf { !conversation.isChat && it.owner.value == sessionId }?.todos?.value.orEmpty(),
                     roundsWithoutTodoUpdate,
                 ).let { if (it.isBlank()) "" else "\n\n$it" },
                 installed = replySettings.cavemanInstalled,
@@ -378,9 +379,9 @@ class AgentEngine(
             emit(AgentEvent.CodeDraftsCleared)
 
             suspend fun codeReady(call: ToolCallData) {
-                val labeled = workspaceCall(call, execWorkspace)
+                val labeled = if (conversation.isChat) call else workspaceCall(call, execWorkspace)
                 calls += labeled
-                codeTracker.ready(labeled, execWorkspace)?.let { emit(AgentEvent.CodeDraft(it)) }
+                if (!conversation.isChat) codeTracker.ready(labeled, execWorkspace)?.let { emit(AgentEvent.CodeDraft(it)) }
             }
 
             suspend fun codeDelta(event: StreamEvent.ToolCallDelta) {
@@ -389,7 +390,7 @@ class AgentEngine(
                     if (firstTokenNs == 0L) firstTokenNs = now
                     lastTokenNs = now
                 }
-                codeTracker.delta(event, execWorkspace)?.let { emit(AgentEvent.CodeDraft(it)) }
+                if (!conversation.isChat) codeTracker.delta(event, execWorkspace)?.let { emit(AgentEvent.CodeDraft(it)) }
             }
 
             val streamEventHandler: suspend (StreamEvent) -> Unit = { event ->
@@ -1577,16 +1578,18 @@ class AgentEngine(
         mode: AgentMode,
         fullAccess: Boolean,
         repoMapEnabled: Boolean = true,
+        conversation: com.androidharness.app.data.ConversationConfig = com.androidharness.app.data.ConversationConfig(),
     ): ContextEstimate {
         val caveman = cavemanSettings()
         return estimateContext(
             history,
             com.androidharness.app.caveman.CavemanPolicy.apply(
-                systemPrompt(workspace, mode, fullAccess, repoMapEnabled),
+                if (conversation.isChat) chatSystemPrompt(conversation) else systemPrompt(workspace, mode, fullAccess, repoMapEnabled),
                 installed = caveman.cavemanInstalled,
                 intensity = caveman.cavemanIntensity,
                 wenyan = caveman.cavemanWenyan,
             ),
+            tools = registry.restrictedTo(conversation.allowedTools).schemas(),
         )
     }
 
@@ -1695,6 +1698,13 @@ class AgentEngine(
         if (Regex("\\b(curl|wget|ssh|scp|rsync|jq)\\b").containsMatchIn(command)) hints += "core-tools"
         return hints.distinct()
     }
+
+    private fun chatSystemPrompt(config: com.androidharness.app.data.ConversationConfig): String =
+        "You are Android Harness in Chat. Help with questions, explanations, ideas, and everyday conversations. " +
+            "Be direct and useful. Use only the tools supplied with this request when they help. " +
+            "You do not have coding, filesystem, terminal, or workspace access in Chat. " +
+            "When the user wants to edit or run a project, suggest Continue in Code. " +
+            (if (config.allowedTools.orEmpty().isEmpty()) "Tools are off. Answer directly without tool calls." else "Tools were explicitly enabled for this conversation.")
 
     private suspend fun systemPrompt(
         workspace: WorkspaceFs,

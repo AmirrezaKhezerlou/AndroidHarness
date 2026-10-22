@@ -333,12 +333,13 @@ class RunManager(
         check(allowModelFallback || runConfig.model == config.model) {
             "This chat's model is no longer available. Choose another model in the picker."
         }
+        val conversation = com.androidharness.app.data.ConversationConfig.decode(sessions.session(sid)?.conversationJson)
         val assignedWorkspace = workspace.forSession(sid)
         require(workspaceOverride == null || workspaceOverride.displayPath == assignedWorkspace.displayPath) {
             "This chat's workspace changed while preparing the request. Send the message again."
         }
         val runWorkspace = workspaceOverride ?: assignedWorkspace
-        checkpoints.history?.missingFiles(sid, runWorkspace)?.takeIf { it.isNotEmpty() }?.let { missing ->
+        checkpoints.history?.takeUnless { conversation.isChat }?.missingFiles(sid, runWorkspace)?.takeIf { it.isNotEmpty() }?.let { missing ->
             sessions.addMessage(sid, ChatMessage(role = Role.SYSTEM,
                 text = "Saved workspace files are missing: ${missing.take(20).joinToString()}. " +
                     "Durable copies are available through file_history and file_restore. Inspect prior tool results and recover saved versions if the deletion was unintended. Do not replay completed edits.",
@@ -396,6 +397,7 @@ class RunManager(
             role = Role.ASSISTANT,
             text = "${config.model} is no longer available in Harness. Using ${runConfig.model}.",
         ), turnId)
+        if (!resume && conversation.draftText.isNotBlank()) sessions.saveConversation(sid, conversation.copy(draftText = ""))
         controls.update(sid) { it.copy(queue = it.queue.filterNot { q -> q.id == initialId }) }
         if (resume) sessions.addMessage(sid, ChatMessage(role = Role.USER,
             text = RunRecovery.CONTINUE_PROMPT), turnId)
@@ -486,11 +488,12 @@ class RunManager(
                         modelCatalogs = providers.catalogs.first(), customReasoning = reasoningPrefs.reasoningConfigs,
                         customThinkingLevels = customLevels),
                     maxContextTokens = maxContextTokens,
-                    mode = mode,
+                    mode = if (conversation.isChat) AgentMode.ACT else mode,
+                    conversation = conversation,
                     maxIterations = maxIterations,
                     // Connected MCP servers ride into this run; a failing
                     // server must never block the run itself.
-                    extraTools = if (runWorkspace is ChatWorkspaceFs) emptyList() else runCatching { mcp?.activeTools(runWorkspace) }.getOrNull().orEmpty(),
+                    extraTools = if (conversation.isChat || runWorkspace is ChatWorkspaceFs) emptyList() else runCatching { mcp?.activeTools(runWorkspace) }.getOrNull().orEmpty(),
                     resolveSubagentModel = modelResolver::resolve,
                     repoMapEnabled = repoMapOn,
                     pinnedInstructions = record.pins,

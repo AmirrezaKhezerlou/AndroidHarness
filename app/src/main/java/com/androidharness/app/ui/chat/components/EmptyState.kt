@@ -37,6 +37,9 @@ import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.material.icons.outlined.School
+import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -75,11 +78,16 @@ internal fun EmptyState(
     hasProvider: Boolean,
     onSuggestion: (String) -> Unit,
     onAddProvider: () -> Unit,
+    chatOnly: Boolean = false,
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val desktop = com.androidharness.app.ui.LocalDesktopLayout.current
-    val suggestions = listOf(
+    val suggestions = if (chatOnly) listOf(
+        Icons.Outlined.School to uiContext.getString(R.string.chat_suggestion_explain),
+        Icons.Outlined.Lightbulb to uiContext.getString(R.string.chat_suggestion_ideas),
+        Icons.Outlined.EditNote to uiContext.getString(R.string.chat_suggestion_draft),
+    ) else listOf(
         Icons.Outlined.Terminal to "Create a Python hello world and run it",
         Icons.Outlined.Folder to "Explore my workspace and summarize it",
         Icons.Outlined.Code to "Build a simple HTML landing page",
@@ -102,13 +110,13 @@ internal fun EmptyState(
         HarnessMark(size = if (desktop) 40.dp else 52.dp)
         Spacer(Modifier.height(20.dp))
         Text(
-            if (hasProvider) uiContext.getString(R.string.ui_what_do_you_want_to_build) else uiContext.getString(R.string.ui_connect_a_provider),
+            if (hasProvider) uiContext.getString(if (chatOnly) R.string.chat_empty_title else R.string.ui_what_do_you_want_to_build) else uiContext.getString(R.string.ui_connect_a_provider),
             style = MaterialTheme.typography.headlineSmallEmphasized,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(10.dp))
         Text(
-            if (hasProvider) uiContext.getString(R.string.ui_start_with_an_idea_or_create_a)
+            if (hasProvider) uiContext.getString(if (chatOnly) R.string.chat_empty_description else R.string.ui_start_with_an_idea_or_create_a)
             else uiContext.getString(R.string.ui_add_an_api_key_for_openai_anthropic),
             style = MaterialTheme.typography.bodyMedium,
             color = scheme.onSurfaceVariant,
