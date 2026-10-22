@@ -999,6 +999,19 @@ private fun ChatScreenContent(
             }
     }
 
+    // A committed turn can add a tall answer in one frame, and streamed text can
+    // grow inside an existing item. Keep the true bottom in view while pinned.
+    LaunchedEffect(state.busy, state.messages.size, pinnedToBottom) {
+        if (!pinnedToBottom || gestureActive.value) return@LaunchedEffect
+        withFrameNanos { }
+        listState.scrollToEnd()
+    }
+    LaunchedEffect(state.streamingText?.length, pinnedToBottom) {
+        if (!pinnedToBottom || gestureActive.value) return@LaunchedEffect
+        withFrameNanos { }
+        listState.snapToEndIfDrifted()
+    }
+
     // After a run that changed files finishes, offer a one-tap undo.
     var prevBusy by remember { mutableStateOf(false) }
     LaunchedEffect(state.busy) {
@@ -1282,7 +1295,8 @@ private fun ChatScreenContent(
                             state = listState,
                             modifier = Modifier.fillMaxWidth(),
                             contentPadding = PaddingValues(horizontal = 18.dp, vertical = 24.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = if (state.messages.isNotEmpty() || state.streamingText != null || state.busy)
+                                Arrangement.spacedBy(12.dp, Alignment.Bottom) else Arrangement.spacedBy(12.dp),
                         ) {
                             var nextItemIndex = 0
                             fun indexedItem(

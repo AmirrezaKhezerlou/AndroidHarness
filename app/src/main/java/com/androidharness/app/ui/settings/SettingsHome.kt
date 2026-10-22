@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -94,7 +95,9 @@ internal fun SettingsHome(
                                     Modifier.size(40.dp).background(colors.surfaceContainerHigh, RoundedCornerShape(12.dp)),
                                     contentAlignment = Alignment.Center,
                                 ) {
-                                    Icon(settingsIcon(entry.page), null, tint = colors.primary, modifier = Modifier.size(21.dp))
+                                    if (entry.page == SettingsPage.MEMORY)
+                                        Icon(painterResource(R.drawable.ic_brain), null, tint = colors.primary, modifier = Modifier.size(21.dp))
+                                    else Icon(settingsIcon(entry.page), null, tint = colors.primary, modifier = Modifier.size(21.dp))
                                 }
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                     Text(stringResource(entry.title), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
@@ -160,7 +163,9 @@ internal fun DesktopSettingsNavigation(
                             shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
                             Row(Modifier.heightIn(min = 44.dp).padding(horizontal = 12.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Icon(settingsIcon(entry.page), null, Modifier.size(18.dp))
+                                if (entry.page == SettingsPage.MEMORY)
+                                    Icon(painterResource(R.drawable.ic_brain), null, Modifier.size(18.dp))
+                                else Icon(settingsIcon(entry.page), null, Modifier.size(18.dp))
                                 Text(stringResource(entry.title), style = MaterialTheme.typography.labelLarge, maxLines = 2,
                                     overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                             }
@@ -209,7 +214,7 @@ internal fun SettingsPanel(modifier: Modifier = Modifier, content: @Composable C
 private fun settingsIcon(page: SettingsPage): ImageVector = when (page) {
     SettingsPage.LANGUAGE -> Icons.Outlined.Translate
     SettingsPage.CHAT_OPTIONS -> Icons.Outlined.ChatBubbleOutline
-    SettingsPage.MEMORY -> Icons.Outlined.Psychology
+    SettingsPage.MEMORY -> Icons.Outlined.Memory
     SettingsPage.CONNECTED_ACCOUNTS -> Icons.Outlined.AccountCircle
     SettingsPage.MODELS -> ProviderGlyph
     SettingsPage.SUBAGENT -> Icons.Outlined.AccountTree
