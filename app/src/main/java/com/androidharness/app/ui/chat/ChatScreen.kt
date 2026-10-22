@@ -94,6 +94,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.LaunchedEffect
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import com.androidharness.app.agent.AgentMode
 import kotlinx.coroutines.flow.filterNotNull
 import androidx.compose.runtime.getValue
@@ -479,6 +480,12 @@ private fun ChatScreenContent(
     // should stay in view; only a real user drag away from the bottom clears
     // it, programmatic scrolls (follow, jump) never touch the pin.
     var pinnedToBottom by remember { mutableStateOf(searchMessageId == null) }
+    // The jump button only appears once the user is meaningfully above the
+    // newest content, not after every tiny drag.
+    var showJumpToBottom by remember(state.sessionId) { mutableStateOf(false) }
+    val density = LocalDensity.current
+    val showJumpAt = with(density) { 180.dp.toPx() }
+    val hideJumpAt = with(density) { 96.dp.toPx() }
     // LazyColumn index of each turn's question bubble, captured while it is
     // visible at the start of the turn. Used to park the transcript there when
     // the answer finishes instead of leaving the view at the bottom.
@@ -966,7 +973,10 @@ private fun ChatScreenContent(
             .collect { (inProgress, dragging, dragged) ->
                 if (inProgress || dragging || !dragged) return@collect
                 mainListDragged = false
-                if (isAtBottom(listState.layoutInfo, listState.canScrollForward, tolerance = PIN_TOLERANCE_PX)) {
+                // Re-pin once the finger settles inside the same distance the
+                // jump button hides at, so a small nudge never leaves the list
+                // silently detached from new content.
+                if (isAtBottom(listState.layoutInfo, listState.canScrollForward, tolerance = hideJumpAt.toInt())) {
                     pinnedToBottom = true
                     listState.snapToEndIfDrifted()
                 }
@@ -1014,6 +1024,7 @@ private fun ChatScreenContent(
         scrollPrevBusy = state.busy
         if (gestureActive.value) return@LaunchedEffect
         if (state.busy) {
+            // Working means the newest thinking or answer stays in view.
             if (!pinnedToBottom) return@LaunchedEffect
             withFrameNanos { }
             listState.scrollToEnd()
@@ -1023,7 +1034,7 @@ private fun ChatScreenContent(
         val turnId = state.messages.lastOrNull { it.role == Role.USER }?.turnId ?: return@LaunchedEffect
         val index = userItemIndexes[turnId] ?: return@LaunchedEffect
         if (index !in 0 until listState.layoutInfo.totalItemsCount) return@LaunchedEffect
-        // Unpin first so the follow effects do not race the anchor back down.
+        // Finished: park on the question so the answer reads from its start.
         pinnedToBottom = false
         withFrameNanos { }
         listState.scrollToItem(index)
@@ -1032,6 +1043,21 @@ private fun ChatScreenContent(
         if (!pinnedToBottom || gestureActive.value) return@LaunchedEffect
         withFrameNanos { }
         listState.snapToEndIfDrifted()
+    }
+
+    // The floating jump button uses a distance threshold and hysteresis, so a
+    // small drag does not immediately cover the transcript with a button.
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()
+            val distance = if (last == null) 0f
+            else if (last.index != info.totalItemsCount - 1) Float.MAX_VALUE
+            else (last.offset + last.size + info.afterContentPadding - info.viewportEndOffset).toFloat()
+            pinnedToBottom to distance
+        }.collect { (pinned, distance) ->
+            showJumpToBottom = !pinned && if (showJumpToBottom) distance > hideJumpAt else distance > showJumpAt
+        }
     }
 
     // After a run that changed files finishes, offer a one-tap undo.
@@ -1843,9 +1869,10 @@ private fun ChatScreenContent(
                     label = "fab-bottom-pad",
                 )
                 ScrollToBottomFab(
-                    visible = !pinnedToBottom,
+                    visible = showJumpToBottom,
                     unread = unreadWhileAway,
                     onJump = {
+                        showJumpToBottom = false
                         pinnedToBottom = true
                         unreadWhileAway = false
                         scope.launch {
@@ -2253,7 +2280,7 @@ private fun isAtBottom(info: LazyListLayoutInfo, canScrollForward: Boolean, tole
     if (!canScrollForward) return true
     val last = info.visibleItemsInfo.lastOrNull() ?: return false
     if (last.index != info.totalItemsCount - 1) return false
-    return last.offset + last.size <= info.viewportEndOffset + tolerance
+    return last.offset + last.size + info.afterContentPadding <= info.viewportEndOffset + tolerance
 }
 
 /**
@@ -2419,9 +2446,6 @@ private fun CostDialog(
 // Follow-scroll coalescing: during a stream the list follows the newest
 // content with small scrollBy deltas at most this often (ms between scrolls).
 private const val FOLLOW_MIN_INTERVAL_MS = 64L
-// How far off the bottom (px) a drag must go to detach the pin, and how close
-// a settle must land to re-attach it.
-private const val PIN_TOLERANCE_PX = 96
 
 @Composable
 private fun ChatLoadingSkeleton(modifier: Modifier = Modifier) {

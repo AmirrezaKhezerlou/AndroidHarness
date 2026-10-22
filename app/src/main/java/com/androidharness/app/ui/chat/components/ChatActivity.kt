@@ -56,7 +56,6 @@ internal fun ChatActivity(
     val title = when {
         live && active != null -> activityLabel(active.name, true)
         live && writing -> stringResource(R.string.chat_writing_reply)
-        live && entries.any { it is ChatActivityPresentation.Entry.Commentary } -> stringResource(R.string.chat_working)
         live -> stringResource(R.string.chat_thinking)
         seconds > 0 -> stringResource(R.string.chat_thought_seconds, seconds)
         else -> stringResource(R.string.chat_thought)
