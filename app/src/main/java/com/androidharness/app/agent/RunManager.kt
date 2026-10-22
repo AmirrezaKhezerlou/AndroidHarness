@@ -197,7 +197,7 @@ class RunManager(
 
     /**
      * Publishes buffered stream deltas into [LiveRunState]; a no-op when nothing
-     * is pending. Batching deltas here keeps the UI at ~30 updates/sec no matter
+     * is pending. Batching deltas here keeps the UI near display cadence no matter
      * how fast the model streams.
      */
     private fun flushDeltas(sessionId: String) {
@@ -350,6 +350,13 @@ class RunManager(
             check(!workspaceBusy(runWorkspace, except = sid)) {
                 "Pause other tasks in this workspace before editing or retrying a message"
             }
+            if (conversation.isChat) {
+                val rows = sessions.messages(sid)
+                val question = rows.lastOrNull { it.role == Role.USER }
+                if (question?.id == replacementMessageId && question.text == text) {
+                    sessions.archiveChatAnswer(sid, replacementMessageId)
+                }
+            }
             rewindAndTruncate(sid, replacementMessageId)
         }
         val runId = if (followUpRunId == null) followUps.begin(sid)
@@ -430,6 +437,7 @@ class RunManager(
         val job = appScope.launch(budget + RecoveryLedger(recoveryMessages) + fallback, start = kotlinx.coroutines.CoroutineStart.ATOMIC) {
             var promptJob: Job? = null
             var flushJob: Job? = null
+            var usageJob: Job? = null
             var completed = false
             var finishedNormally = false
             var recoverableInterruption = false
@@ -439,14 +447,17 @@ class RunManager(
                 // SSE chunks arrive far faster than frames render; batch them so
                 // the UI updates at a steady cadence regardless of model speed.
                 flushJob = launch {
-                    var ticks = 0
                     while (isActive) {
                         delay(STREAM_FLUSH_MS)
                         flushDeltas(sid)
-                        if (++ticks % 75 == 0) {
-                            val usage = budget.usage()
-                            controls.update(sid) { it.copy(usedTokens = usage.first, usedCost = usage.second, elapsedMs = usage.third) }
-                        }
+                    }
+                }
+                // Disk persistence must never stall publication of incoming text.
+                usageJob = launch {
+                    while (isActive) {
+                        delay(2_500)
+                        val usage = budget.usage()
+                        controls.update(sid) { it.copy(usedTokens = usage.first, usedCost = usage.second, elapsedMs = usage.third) }
                     }
                 }
                 // Mirror blocking prompts into RuntimeNotifier so the foreground
@@ -533,6 +544,7 @@ class RunManager(
                 kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
                 compactionSnapshots.remove(sid)
                 flushJob?.cancel()
+                usageJob?.cancel()
                 promptJob?.cancel()
                 val usage = budget.usage()
                 val cancelled = live.value.cancelled
@@ -1261,7 +1273,7 @@ class RunManager(
 
     companion object {
         /** UI refreshes at ~30 fps; network chunks are consumed independently. */
-        private const val STREAM_FLUSH_MS = 33L
+        private const val STREAM_FLUSH_MS = 16L
 
         /**
          * The blocking prompts of [state] as answerable notification payloads.

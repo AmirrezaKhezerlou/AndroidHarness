@@ -750,7 +750,48 @@ class SessionRepository(
         db.dao().setCompaction(sessionId, summary, before)
     }
 
+    fun answerVersions(sessionId: String) = db.dao().chatAnswerVersions(sessionId)
+
+    fun latestAnswerVersions(sessionId: String) = combine(db.dao().messagesFlow(sessionId), answerVersions(sessionId)) { rows, versions ->
+        val index = rows.indexOfLast { it.role == Role.USER.name }
+        if (index < 0) emptyList() else {
+            val group = com.androidharness.app.core.ChatTurnActions.answerVersionKey(rows.getOrNull(index - 1)?.id, rows[index].text)
+            versions.filter { it.groupKey == group }
+        }
+    }
+
+    /** Called under RunManager's workspace gate before a Chat retry removes the current answer. */
+    suspend fun archiveChatAnswer(sessionId: String, userMessageId: String) = db.withTransaction {
+        val session = requireNotNull(db.dao().session(sessionId))
+        check(ConversationConfig.decode(session.conversationJson).isChat)
+        val rows = db.dao().messages(sessionId)
+        val index = rows.indexOfLast { it.role == Role.USER.name }
+        check(index >= 0 && rows[index].id == userMessageId) { "Only the latest answer can be versioned." }
+        val tail = rows.drop(index)
+        if (tail.none { it.role == Role.ASSISTANT.name && it.text.isNotBlank() }) return@withTransaction
+        val group = com.androidharness.app.core.ChatTurnActions.answerVersionKey(rows.getOrNull(index - 1)?.id, rows[index].text)
+        db.dao().insertChatAnswerVersion(com.androidharness.app.data.db.ChatAnswerVersionEntity(
+            id = userMessageId, sessionId = sessionId, groupKey = group,
+            messagesJson = json.encodeToString(ListSerializer(MessageEntity.serializer()), tail), createdAt = rows[index].createdAt,
+        ))
+    }
+
+    suspend fun selectChatAnswer(sessionId: String, expectedUserId: String, versionId: String) = db.withTransaction {
+        val rows = db.dao().messages(sessionId)
+        val index = rows.indexOfLast { it.role == Role.USER.name }
+        check(index >= 0 && rows[index].id == expectedUserId) { "The conversation changed. Try again." }
+        val group = com.androidharness.app.core.ChatTurnActions.answerVersionKey(rows.getOrNull(index - 1)?.id, rows[index].text)
+        val version = requireNotNull(db.dao().chatAnswerVersion(sessionId, versionId)) { "This answer version is unavailable." }
+        check(version.groupKey == group)
+        val restored = json.decodeFromString(ListSerializer(MessageEntity.serializer()), version.messagesJson)
+        check(restored.isNotEmpty() && restored.first().role == Role.USER.name && restored.all { it.sessionId == sessionId })
+        archiveChatAnswer(sessionId, expectedUserId)
+        check(db.dao().deleteMessagesFrom(sessionId, expectedUserId) > 0)
+        restored.forEach { db.dao().insertMessage(it) }
+    }
+
     suspend fun clearMessages(sessionId: String) {
+        db.dao().deleteChatAnswerVersions(sessionId)
         db.dao().deleteMessages(sessionId)
         db.dao().deleteCheckpoints(sessionId)
         db.dao().setCompaction(sessionId, "", 0)
@@ -767,6 +808,7 @@ class SessionRepository(
     }
 
     suspend fun deleteSession(session: SessionEntity) {
+        db.dao().deleteChatAnswerVersions(session.id)
         db.dao().deleteMessages(session.id)
         db.dao().deleteCheckpoints(session.id)
         db.dao().deleteUsageEvents(session.id)

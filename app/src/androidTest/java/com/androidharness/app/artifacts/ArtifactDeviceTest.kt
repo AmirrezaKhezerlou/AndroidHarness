@@ -200,7 +200,7 @@ class ArtifactDeviceTest {
             SQLiteDatabase.openDatabase(context.getDatabasePath(name).path, null, 0).use {
                 it.execSQL("ALTER TABLE messages DROP COLUMN artifactJson"); it.execSQL("ALTER TABLE messages DROP COLUMN generationJson"); it.version = 16
             }
-            db = Room.databaseBuilder(context, AppDatabase::class.java, name).addMigrations(AppDatabase.MIGRATION_20_21, AppDatabase.MIGRATION_16_17, AppDatabase.MIGRATION_17_18, AppDatabase.MIGRATION_19_20, AppDatabase.MIGRATION_18_19).build()
+            db = Room.databaseBuilder(context, AppDatabase::class.java, name).addMigrations(AppDatabase.MIGRATION_21_22, AppDatabase.MIGRATION_20_21, AppDatabase.MIGRATION_16_17, AppDatabase.MIGRATION_17_18, AppDatabase.MIGRATION_19_20, AppDatabase.MIGRATION_18_19).build()
             repo = SessionRepository(db)
             assertEquals("Keep this old message", repo.messages(sid).single().text)
             val concept = ChatArtifact.create("Saved counter", "<button>Saved offline</button><!--" + "x".repeat(251_000) + "-->")

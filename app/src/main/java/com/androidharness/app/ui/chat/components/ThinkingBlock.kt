@@ -74,13 +74,17 @@ internal fun ThinkingBlock(
 ) {
     if (thinking.isBlank() && !live && (reasoningTokens ?: 0) <= 0) return
     ChatActivity(
-        messages = listOf(com.androidharness.app.core.ChatMessage(
+        messages = if (live) emptyList() else listOf(com.androidharness.app.core.ChatMessage(
             role = com.androidharness.app.core.Role.ASSISTANT,
-            text = "",
             thinking = thinking,
             thinkingMs = timing?.durationMs(ThinkingTiming.now()) ?: thinkingMs,
+            generation = com.androidharness.app.core.GenerationMetadata(reasoningTokens = reasoningTokens),
         )),
         live = live,
+        streamingThinking = if (live) thinking else "",
+        showThinkingMetrics = true,
+        thinkingTiming = timing.takeIf { live },
+        reasoningTokens = reasoningTokens.takeIf { live },
     )
 }
 

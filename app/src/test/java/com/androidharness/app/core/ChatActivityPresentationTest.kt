@@ -85,4 +85,11 @@ class ChatActivityPresentationTest {
         assertFalse(ChatActivityPresentation.hasToolWork(listOf(assistant(), ChatMessage(Role.ASSISTANT, "Answer"))))
         assertFalse(ChatActivityPresentation.hasToolWork(listOf(result("s", "orphan result"))))
     }
+    @Test fun memoryReceiptsOnlyExposeIdsFromSuccessfulMatchingRememberCalls() {
+        val messages = listOf(assistant(call("m", "remember")), result("m", "Saved.\n[memory_id:abc-123]"),
+            assistant(call("f", "remember")), result("f", "[memory_id:failed]", true),
+            result("orphan", "[memory_id:orphan]"), assistant(call("s", "web_search")), result("s", "[memory_id:search]"))
+        assertEquals(setOf("abc-123"), ChatActivityPresentation.savedMemoryIds(messages))
+        assertTrue(ChatActivityPresentation.savedMemoryIds(listOf(assistant(call("old", "remember")), result("old", "Saved to global memory."))).isEmpty())
+    }
 }

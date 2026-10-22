@@ -51,8 +51,9 @@ class RememberTool(private val memory: MemoryRepository) : Tool {
         val downgraded = requested == MemoryScope.PROJECT && actual == "global"
         return ToolResult(
             true,
-            if (downgraded) "This conversation has no project, so the memory was saved globally."
-            else "Saved to $actual memory.",
+            (if (downgraded) "This conversation has no project, so the memory was saved globally."
+            else "Saved to $actual memory.") + "\n[memory_id:${saved.id}]",
+
         )
     }
 }

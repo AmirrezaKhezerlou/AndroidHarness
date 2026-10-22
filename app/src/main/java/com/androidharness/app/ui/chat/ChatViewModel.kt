@@ -312,6 +312,7 @@ class ChatViewModel(
     /** Workspace key the @-mention file list was built for (empty until loaded). */
     private var mentionCacheKey: String? = null
     private var steering = false
+    private var selectingAnswerVersion = false
     /** Text of a run paused on the workspace-MCP approval dialog. */
     private var pendingRunText: String? = null
     private var pendingReplacement: ChatMessage? = null
@@ -855,7 +856,7 @@ class ChatViewModel(
 
     fun sendQueuedNow(id: String) {
         val sid = sessionId ?: return
-        if (steering) return
+        if (steering || selectingAnswerVersion) return
         steering = true
         viewModelScope.launch {
             try {
@@ -894,7 +895,7 @@ class ChatViewModel(
 
     fun resumeInterruptedTask() {
         val sid = sessionId ?: return
-        if (steering || compactionJob?.isActive == true || c.runManager.isRunning(sid)) return
+        if (selectingAnswerVersion || steering || compactionJob?.isActive == true || c.runManager.isRunning(sid)) return
         steering = true
         viewModelScope.launch {
             try { resumeTaskNow(sid) }
@@ -1139,7 +1140,7 @@ class ChatViewModel(
     // ------------------------------------------------------------------
 
     private fun startRun(text: String, workspaceMcpGate: Boolean = true, queuedPromptId: String? = null, replacement: ChatMessage? = null): Boolean {
-        if (startingRun || compactionJob?.isActive == true || !_state.value.conversationReady || _state.value.conversationSaving) return false
+        if (selectingAnswerVersion || startingRun || compactionJob?.isActive == true || !_state.value.conversationReady || _state.value.conversationSaving) return false
         val targetSession = sessionId
         val s0 = _state.value
         if (!s0.modelSelectionReady || s0.modelSelectionBusy) {
@@ -1697,6 +1698,31 @@ class ChatViewModel(
     fun editAndResend(message: ChatMessage, newText: String) {
         if (sessionId == null || message.id == null || message.role != Role.USER || newText.isBlank()) return
         startRun(newText, replacement = message)
+    }
+
+    fun retryLatestResponse() {
+        if (_state.value.busy || !_state.value.conversation.isChat) return
+        val question = _state.value.messages.lastOrNull { it.role == Role.USER } ?: return
+        editAndResend(question, question.text)
+    }
+
+    fun selectAnswerVersion(expectedUserId: String, versionId: String) {
+        val sid = sessionId ?: return
+        if (selectingAnswerVersion || _state.value.busy || startingRun || steering || compactionJob?.isActive == true) return
+        selectingAnswerVersion = true
+        viewModelScope.launch {
+            try {
+                val fs = c.workspace.forSession(sid)
+                c.runManager.withIdleWorkspace(fs) {
+                    check(sessionId == sid && !startingRun)
+                    c.sessions.selectChatAnswer(sid, expectedUserId, versionId)
+                    messageWindowStart.value = c.sessions.messageWindowStart(sid)
+                    _state.update { it.copy(error = null) }
+                    c.runManager.controls.update(sid) { it.copy(status = "idle", reason = null, completed = true) }
+                }
+            } catch (e: Exception) { _state.update { it.copy(error = e.message) } }
+            finally { selectingAnswerVersion = false }
+        }
     }
 
     /** Re-runs the question behind [message], replacing its answer in place. */

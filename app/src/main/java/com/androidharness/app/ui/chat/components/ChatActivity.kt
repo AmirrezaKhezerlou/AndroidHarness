@@ -6,6 +6,10 @@ import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -46,6 +50,10 @@ internal fun ChatActivity(
     runningCalls: List<ToolCallData> = emptyList(),
     streamId: String = "live",
     streamingCommentary: String = "",
+    autoExpand: Boolean = true,
+    showThinkingMetrics: Boolean = false,
+    thinkingTiming: com.androidharness.app.agent.ThinkingTiming? = null,
+    reasoningTokens: Int? = null,
     onOpenUrl: (String) -> Unit = {},
 ) {
     val entries = remember(messages, runningCalls, streamingThinking, streamId, streamingCommentary) {
@@ -58,31 +66,37 @@ internal fun ChatActivity(
         live && active != null -> activityLabel(active.name, true)
         live && writing -> stringResource(R.string.chat_writing_reply)
         live -> stringResource(R.string.chat_thinking)
-        seconds > 0 -> stringResource(R.string.chat_thought_seconds, seconds)
+        seconds > 0 && !showThinkingMetrics -> stringResource(R.string.chat_thought_seconds, seconds)
         else -> stringResource(R.string.chat_thought)
     }
-    ChatActivityRow(title, if (live) active?.name else null, live, entries.isNotEmpty(), followLatest = true,
-        followSignal = Triple(messages.size, runningCalls.size, streamingThinking.length + streamingCommentary.length)) {
-        entries.forEach { entry -> key(entry.key) {
+    ChatActivityRow(title, if (live) active?.name else null, live, entries.isNotEmpty(), followLatest = true, autoExpand = autoExpand,
+        trailing = if (showThinkingMetrics) ({ ChatThinkingMetrics(messages, streamingThinking, thinkingTiming, reasoningTokens, live) }) else null) {
+        entries.forEach { entry ->
             when (entry) {
-                is ChatActivityPresentation.Entry.Thought -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                is ChatActivityPresentation.Entry.Thought -> {
+                    item(key = entry.key + "-heading") {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                         Icon(painterResource(R.drawable.ic_brain), null, Modifier.size(13.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(if (entry.milliseconds >= 1000) stringResource(R.string.chat_thought_seconds, entry.milliseconds / 1000)
                             else stringResource(R.string.chat_thought), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    if (entry.text.isNotBlank()) Text(entry.text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    com.androidharness.app.core.ReasoningTextChunks.split(entry.text).forEachIndexed { index, chunk ->
+                        item(key = entry.key + "-text-" + index) {
+                            Text(chunk, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                 }
-                is ChatActivityPresentation.Entry.Commentary -> Text(
+                is ChatActivityPresentation.Entry.Commentary -> item(key = entry.key) { Text(
                     com.androidharness.app.core.response.RichResponse.plainText(
                         com.androidharness.app.core.response.ChatRichResponse.normalize(entry.text)),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                is ChatActivityPresentation.Entry.Tool -> ChatToolActivity(entry.call, entry.result,
-                    running = live && entry.result == null, onOpenUrl)
+                ) }
+                is ChatActivityPresentation.Entry.Tool -> item(key = entry.key) { ChatToolActivity(entry.call, entry.result,
+                    running = live && entry.result == null, onOpenUrl) }
             }
-        } }
+        }
     }
 }
 
@@ -103,17 +117,23 @@ internal fun ChatToolActivity(call: ToolCallData, result: ChatMessage?, running:
     }
     val sources = remember(call, result) { ChatActivityPresentation.sources(listOfNotNull(ChatMessage(Role.ASSISTANT, toolCalls = listOf(call)), result)) }
     ChatActivityRow(title, call.name, running, result != null || sources.isNotEmpty()) {
+        item {
         if (sources.isNotEmpty()) {
             sources.take(4).forEach { source ->
-                TextButton(onClick = { onOpenUrl(source.url) }, contentPadding = PaddingValues(0.dp)) {
-                    Text(source.title, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                TextButton(onClick = { onOpenUrl(source.url) }, shape = RoundedCornerShape(12.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)) {
+                    Column {
+                        Text(source.title, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(source.host + " · " + stringResource(if (source.read) R.string.chat_source_read else R.string.chat_source_found), style = MaterialTheme.typography.labelSmall)
+                    }
                 }
             }
+            ChatSources(listOfNotNull(ChatMessage(Role.ASSISTANT, toolCalls = listOf(call)), result), onOpenUrl)
         } else Text(stringResource(when {
             result?.isError == true -> R.string.chat_tool_result_failed
             result != null -> R.string.chat_tool_result_empty
             else -> R.string.chat_activity_interrupted
         }), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
@@ -124,16 +144,16 @@ private fun ChatActivityRow(
     live: Boolean,
     expandable: Boolean,
     followLatest: Boolean = false,
-    /** Changes whenever streamed details grow; forces the capped inner log to follow. */
-    followSignal: Any? = null,
-    details: @Composable ColumnScope.() -> Unit,
+    autoExpand: Boolean = true,
+    trailing: (@Composable () -> Unit)? = null,
+    details: LazyListScope.() -> Unit,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     var autoOpened by remember { mutableStateOf(false) }
     // A live turn opens its working log so streamed commentary never disappears
     // into a collapsed row, then folds away when the turn finishes.
-    LaunchedEffect(live, expandable) {
-        if (live && expandable && !autoOpened) {
+    LaunchedEffect(live, expandable, autoExpand) {
+        if (autoExpand && live && expandable && !autoOpened) {
             expanded = true
             autoOpened = true
         }
@@ -142,60 +162,80 @@ private fun ChatActivityRow(
             autoOpened = false
         }
     }
-    val scroll = rememberScrollState()
+    val scroll = rememberLazyListState()
     var following by remember { mutableStateOf(true) }
-    // Follow measured content growth, including wrapped streamed text and newly completed tools.
-    // Reopening starts at the newest entry; dragging back pauses following until the bottom is reached.
+    var userDragged by remember { mutableStateOf(false) }
+    // One layout-driven follower. Stream updates never restart/cancel an in-flight scroll.
     LaunchedEffect(expanded, followLatest) {
-        if (expanded && followLatest) {
-            following = true
-            snapshotFlow { scroll.maxValue }.collect { end ->
-                if (following) scroll.scrollTo(end)
+        if (!expanded || !followLatest) return@LaunchedEffect
+        following = true
+        snapshotFlow {
+            val info = scroll.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()
+            Triple(info.totalItemsCount, last?.let { it.index to (it.offset + it.size) }, scroll.isScrollInProgress)
+        }.collect {
+            if (!following || scroll.isScrollInProgress) return@collect
+            withFrameNanos { }
+            if (!following || scroll.isScrollInProgress) return@collect
+            var info = scroll.layoutInfo
+            val lastIndex = info.totalItemsCount - 1
+            if (lastIndex < 0) return@collect
+            if (info.visibleItemsInfo.lastOrNull()?.index != lastIndex) {
+                scroll.requestScrollToItem(lastIndex)
+                withFrameNanos { }
+                if (!following || scroll.isScrollInProgress) return@collect
+                info = scroll.layoutInfo
+            }
+            val last = info.visibleItemsInfo.lastOrNull() ?: return@collect
+            if (last.index == info.totalItemsCount - 1) {
+                val overflow = last.offset + last.size + info.afterContentPadding - info.viewportEndOffset
+                if (overflow > 0) scroll.scrollBy(overflow.toFloat())
             }
         }
     }
-    LaunchedEffect(scroll, followLatest, expanded) {
-        if (followLatest && expanded) snapshotFlow { !scroll.isScrollInProgress && !scroll.canScrollForward }.collect { atEnd ->
-            if (atEnd) following = true
+    LaunchedEffect(scroll) {
+        scroll.interactionSource.interactions.collect { interaction ->
+            if (interaction is DragInteraction.Start) {
+                userDragged = true
+                following = false
+            }
         }
     }
-    // maxValue alone can lag behind wrapped thinking text inside the capped log.
-    LaunchedEffect(followSignal, expanded, followLatest) {
-        if (expanded && followLatest && following) {
-            withFrameNanos { }
-            if (following) scroll.scrollTo(scroll.maxValue)
-        }
-    }
-    LaunchedEffect(scroll, followLatest) {
-        if (followLatest) scroll.interactionSource.interactions.collect { interaction ->
-            when (interaction) {
-                is DragInteraction.Start -> following = false
-                is DragInteraction.Stop, is DragInteraction.Cancel -> following = !scroll.canScrollForward
+    LaunchedEffect(scroll) {
+        snapshotFlow { scroll.isScrollInProgress to scroll.canScrollForward }.collect { (moving, canScroll) ->
+            if (userDragged && !moving && !canScroll) {
+                userDragged = false
+                following = true
             }
         }
     }
     val scheme = MaterialTheme.colorScheme
     val motion = android.provider.Settings.Global.getFloat(androidx.compose.ui.platform.LocalContext.current.contentResolver,
         android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
-    Column(Modifier.fillMaxWidth().animateContentSize(tween(if (motion) 180 else 0))) {
+    Column(Modifier.fillMaxWidth()) {
         val header: @Composable () -> Unit = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ChatActivityGlyph(tool, live, motion)
-                AnimatedContent(title, transitionSpec = {
-                    (fadeIn(tween(if (motion) 180 else 0)) + slideInVertically { if (motion) it / 3 else 0 }) togetherWith
-                        fadeOut(tween(if (motion) 100 else 0))
-                }, label = "Chat activity phase", modifier = Modifier.weight(1f, fill = false)) { label -> ChatShimmerText(label, live && motion) }
-                if (expandable) Icon(if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
-                    null, Modifier.size(16.dp), tint = scheme.onSurfaceVariant)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ChatActivityGlyph(tool, live, motion)
+                    AnimatedContent(title, transitionSpec = {
+                        (fadeIn(tween(if (motion) 180 else 0)) + slideInVertically { if (motion) it / 3 else 0 }) togetherWith
+                            fadeOut(tween(if (motion) 100 else 0))
+                    }, label = "Chat activity phase", modifier = Modifier.weight(1f, fill = false)) { label -> ChatShimmerText(label, live && motion) }
+                    if (expandable) Icon(if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
+                        null, Modifier.size(16.dp), tint = scheme.onSurfaceVariant)
+                }
+                trailing?.invoke()
             }
         }
         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
-            if (expandable) TextButton(onClick = { expanded = !expanded }, contentPadding = PaddingValues(0.dp)) { header() }
-            else Box(Modifier.heightIn(min = 36.dp), contentAlignment = Alignment.CenterStart) { header() }
+            if (expandable) TextButton(onClick = { expanded = !expanded }, modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp), contentPadding = PaddingValues(horizontal = 4.dp)) { header() }
+            else Box(Modifier.fillMaxWidth().heightIn(min = 36.dp).padding(horizontal = 4.dp), contentAlignment = Alignment.CenterStart) { header() }
         }
         AnimatedVisibility(expanded && expandable) {
-            Column(Modifier.heightIn(max = 240.dp).verticalScroll(scroll).padding(start = 36.dp, top = 4.dp, bottom = 6.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp), content = details)
+            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 240.dp), state = scroll,
+                contentPadding = PaddingValues(start = 36.dp, top = 4.dp, bottom = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp), content = details)
         }
     }
 }
@@ -220,7 +260,7 @@ internal fun ChatSources(messages: List<ChatMessage>, onOpenUrl: (String) -> Uni
             Text(stringResource(R.string.chat_sources), style = MaterialTheme.typography.titleLarge)
             Text(stringResource(R.string.chat_sources_explanation), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp, bottom = 12.dp))
             sources.forEach { source ->
-                TextButton(onClick = { open = false; onOpenUrl(source.url) }, contentPadding = PaddingValues(vertical = 10.dp, horizontal = 0.dp), modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = { open = false; onOpenUrl(source.url) }, shape = RoundedCornerShape(12.dp), contentPadding = PaddingValues(vertical = 10.dp, horizontal = 8.dp), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(source.title, style = MaterialTheme.typography.titleSmall)
                         Text(source.host, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
@@ -235,9 +275,9 @@ internal fun ChatSources(messages: List<ChatMessage>, onOpenUrl: (String) -> Uni
 
 /** Quiet confirmation below a reply that saved something to memory. */
 @Composable
-internal fun ChatMemorySaved() {
+internal fun ChatMemorySaved(onClick: () -> Unit = {}) {
     val scheme = MaterialTheme.colorScheme
-    Surface(shape = RoundedCornerShape(50), color = scheme.secondaryContainer.copy(alpha = 0.65f)) {
+    Surface(onClick = onClick, shape = RoundedCornerShape(50), color = scheme.secondaryContainer.copy(alpha = 0.65f)) {
         Row(
             Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -283,8 +323,11 @@ private fun activityLabel(name: String, running: Boolean): String = stringResour
     "create_artifact" -> if (running) R.string.chat_creating_artifact else R.string.chat_created_artifact
     "read_artifact" -> if (running) R.string.chat_reading_artifact else R.string.chat_read_artifact
     "read_chat_text" -> if (running) R.string.chat_reading_text else R.string.chat_read_text
+    "remember" -> if (running) R.string.chat_saving_memory else R.string.chat_memory_saved
+    "recall" -> if (running) R.string.chat_searching_memory else R.string.chat_searched_memory
+    "read_tool_output" -> if (running) R.string.chat_reading_results else R.string.chat_read_results
     "offer_code_handoff" -> R.string.chat_preparing_code_option
-    else -> if (running) R.string.chat_reviewing_sources else R.string.chat_reviewed_sources
+    else -> if (running) R.string.chat_working else R.string.chat_finished_activity
 })
 
 @Composable

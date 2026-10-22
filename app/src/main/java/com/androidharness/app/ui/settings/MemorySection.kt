@@ -266,12 +266,13 @@ private fun MemoryRow(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun MemoryEditDialog(
+internal fun MemoryEditDialog(
     initial: MemoryEntity?,
     projects: List<ProjectEntity>,
     onDismiss: () -> Unit,
     onSave: (String, MemoryCategory, MemoryScope, String?) -> Unit,
     onDelete: () -> Unit,
+    enabled: Boolean = true,
 ) {
     var text by remember(initial?.id) { mutableStateOf(initial?.text.orEmpty()) }
     var category by remember(initial?.id) { mutableStateOf(MemoryCategory.fromStored(initial?.category)) }
@@ -326,14 +327,14 @@ private fun MemoryEditDialog(
         },
         confirmButton = {
             TextButton(
-                enabled = text.isNotBlank(),
+                enabled = enabled && text.isNotBlank(),
                 onClick = { onSave(text, category, scope, if (scope == MemoryScope.PROJECT) projectId else null) },
             ) { Text(stringResource(R.string.settings_memory_save)) }
         },
         dismissButton = {
             Row {
                 if (initial != null) {
-                    TextButton(onClick = onDelete) {
+                    TextButton(enabled = enabled, onClick = onDelete) {
                         Text(stringResource(R.string.settings_memory_delete), color = MaterialTheme.colorScheme.error)
                     }
                 }

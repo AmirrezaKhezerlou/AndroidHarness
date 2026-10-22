@@ -821,4 +821,22 @@
     <string name="settings_memory_category_project">项目</string>
     <string name="settings_memory_category_decision">决定</string>
     <string name="settings_memory_category_fact">事实</string>
+    <string name="chat_keep_thinking_collapsed">保持思考内容折叠</string>
+    <string name="chat_keep_thinking_collapsed_desc">仅在点按时展开思考详情，活动动画保持可见。</string>
+    <string name="chat_saving_memory">正在保存记忆</string>
+    <string name="chat_searching_memory">正在搜索记忆</string>
+    <string name="chat_searched_memory">已搜索记忆</string>
+    <string name="chat_reading_results">正在读取结果</string>
+    <string name="chat_read_results">已读取结果</string>
+    <string name="chat_working">正在处理</string>
+    <string name="chat_finished_activity">已完成活动</string>
+    <string name="chat_memory_unavailable">这条已保存的记忆在这里不可用。较早的记忆记录可在“设置 → 记忆”中管理。</string>
+    <string name="chat_memory_wait">请等待回复结束后再修改这条记忆。</string>
+    <string name="chat_previous_answer">上一个回答</string>
+    <string name="chat_next_answer">下一个回答</string>
+    <string name="chat_answer_version">%1$d / %2$d</string>
+    <string name="chat_recovery_explanation">回复在完成前中断。可以从已保存的回复继续，或重新回答这个问题。</string>
+    <string name="chat_retry_reply">重试回答</string>
+    <string name="chat_thinking_estimated_tokens">约 %1$d 个 token</string>
+    <string name="chat_thinking_tokens_compact">%1$s 个 token</string>
 </resources>

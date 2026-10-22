@@ -37,6 +37,7 @@ data class SessionEntity(
     val conversationJson: String? = null,
 )
 
+@kotlinx.serialization.Serializable
 @Entity(tableName = "messages", indices = [Index("sessionId")])
 data class MessageEntity(
     @PrimaryKey val id: String,
@@ -58,6 +59,15 @@ data class MessageEntity(
     val createdAt: Long,
     val artifactJson: String? = null,
     val generationJson: String? = null,
+)
+
+@Entity(tableName = "chat_answer_versions", indices = [Index("sessionId")])
+data class ChatAnswerVersionEntity(
+    @PrimaryKey val id: String,
+    val sessionId: String,
+    val groupKey: String,
+    val messagesJson: String,
+    val createdAt: Long,
 )
 
 /** Stable ordering even when several messages share a millisecond. No schema change. */
@@ -404,6 +414,18 @@ interface HarnessDao {
     @Insert
     suspend fun insertMessage(message: MessageEntity)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertChatAnswerVersion(version: ChatAnswerVersionEntity)
+
+    @Query("SELECT * FROM chat_answer_versions WHERE sessionId = :sessionId ORDER BY createdAt, id")
+    fun chatAnswerVersions(sessionId: String): Flow<List<ChatAnswerVersionEntity>>
+
+    @Query("SELECT * FROM chat_answer_versions WHERE sessionId = :sessionId AND id = :id")
+    suspend fun chatAnswerVersion(sessionId: String, id: String): ChatAnswerVersionEntity?
+
+    @Query("DELETE FROM chat_answer_versions WHERE sessionId = :sessionId")
+    suspend fun deleteChatAnswerVersions(sessionId: String)
+
     @Query("SELECT * FROM messages WHERE sessionId = :sessionId AND turnId = :turnId AND role = 'ASSISTANT' AND toolCallsJson != '[]'")
     suspend fun toolMessagesForTurn(sessionId: String, turnId: String): List<MessageEntity>
 
@@ -667,14 +689,22 @@ interface HarnessDao {
         SessionFileChangeEntity::class,
         MessageFtsEntity::class,
         MemoryEntity::class,
+        ChatAnswerVersionEntity::class,
     ],
-    version = 21,
+    version = 22,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun dao(): HarnessDao
 
     companion object {
+        val MIGRATION_21_22 = object : androidx.room.migration.Migration(21, 22) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS chat_answer_versions (id TEXT NOT NULL PRIMARY KEY, sessionId TEXT NOT NULL, groupKey TEXT NOT NULL, messagesJson TEXT NOT NULL, createdAt INTEGER NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_chat_answer_versions_sessionId ON chat_answer_versions(sessionId)")
+            }
+        }
+
         val MIGRATION_20_21 = object : androidx.room.migration.Migration(20, 21) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                 db.execSQL(

@@ -1541,6 +1541,10 @@ private fun ChatScreenContent(
                                     val activityKey = message.turnId ?: messageKey
                                     if (renderedChatActivities.add(activityKey)) indexedItem(key = "chat-turn-$activityKey-activity", contentType = ChatListContentType.Thinking) {
                                         com.androidharness.app.ui.chat.components.ChatActivity(conversationTurn, live = isTurnRunning,
+                                            showThinkingMetrics = true,
+                                            thinkingTiming = state.thinkingTiming.takeIf { isTurnRunning && !chatStreamCommitted },
+                                            reasoningTokens = state.reasoningTokens.takeIf { isTurnRunning && !chatStreamCommitted },
+                                            autoExpand = !appSettings.chatKeepThinkingCollapsed,
                                             runningCalls = if (isTurnRunning) state.runningCalls else emptyList(),
                                             streamingThinking = if (isTurnRunning && !chatStreamCommitted) state.streamingThinking.orEmpty() else "",
                                             writing = isTurnRunning && !state.streamingText.isNullOrBlank() && !turnHasTools,
@@ -1577,8 +1581,14 @@ private fun ChatScreenContent(
                                                     }
                                                     ResponseActions(onFork = { viewModel.requestFork(message) { onNavigateToSession(it) } }, onUndo = null)
                                                 }
+                                                if (message.turnId == latestUserTurnId) state.sessionId?.let { sid ->
+                                                    com.androidharness.app.ui.chat.components.ChatAnswerVersions(
+                                                        sid, state.messages, viewModel.container.sessions,
+                                                        enabled = !state.busy && !state.conversationSaving,
+                                                        onSelect = viewModel::selectAnswerVersion)
+                                                }
                                                 if (com.androidharness.app.core.ChatActivityPresentation.savedMemory(conversationTurn)) {
-                                                    com.androidharness.app.ui.chat.components.ChatMemorySaved()
+                                                    com.androidharness.app.ui.chat.components.ChatMemoryReceipt(conversationTurn, viewModel.container, state.busy)
                                                 }
                                             }
                                         }
@@ -1799,6 +1809,20 @@ private fun ChatScreenContent(
                         }
                     }
 
+                    if (state.conversation.isChat && !state.busy && state.taskControl.resumable) {
+                        indexedItem(key = "chat-recovery", contentType = ChatListContentType.AssistantText) {
+                            com.androidharness.app.ui.chat.components.ChatRecovery(
+                                state.taskControl.reason,
+                                onContinue = viewModel::resumeInterruptedTask,
+                                onRetry = viewModel::retryLatestResponse)
+                            state.sessionId?.let { sid ->
+                                com.androidharness.app.ui.chat.components.ChatAnswerVersions(
+                                    sid, state.messages, viewModel.container.sessions, enabled = true,
+                                    onSelect = viewModel::selectAnswerVersion)
+                            }
+                        }
+                    }
+
                     // Live streaming items are rendered only while not yet in the committed list.
                     val streamAlreadyCommitted = state.streamingMessageId != null &&
                         state.messages.any { it.id == state.streamingMessageId }
@@ -1808,6 +1832,10 @@ private fun ChatScreenContent(
                     if (state.conversation.isChat && state.busy && state.currentTurnId !in renderedChatActivities) indexedItem(key = "chat-turn-${state.currentTurnId}-activity", contentType = ChatListContentType.Thinking) {
                         com.androidharness.app.ui.chat.components.ChatActivity(
                             liveTurn, live = true,
+                            showThinkingMetrics = true,
+                            thinkingTiming = state.thinkingTiming.takeUnless { streamAlreadyCommitted },
+                            reasoningTokens = state.reasoningTokens.takeUnless { streamAlreadyCommitted },
+                            autoExpand = !appSettings.chatKeepThinkingCollapsed,
                             runningCalls = state.runningCalls,
                             streamingThinking = if (!streamAlreadyCommitted) state.streamingThinking.orEmpty() else "",
                             writing = !state.streamingText.isNullOrBlank() && !liveHasTools, streamId = state.streamingMessageId ?: "live",
@@ -2008,12 +2036,6 @@ private fun ChatScreenContent(
                     onResume = viewModel::resumeInterruptedTask,
                     onSettings = { showContext = true },
                 )
-                if (state.conversation.isChat && !state.busy && state.taskControl.resumable) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(uiContext.getString(R.string.chat_response_interrupted), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                        TextButton(onClick = viewModel::resumeInterruptedTask) { Text(uiContext.getString(R.string.chat_continue_reply)) }
-                    }
-                }
                 MessageQueueCard(
                     queue = state.taskControl.queue,
                     onEdit = viewModel::editQueued, onMove = viewModel::moveQueued,
@@ -2386,7 +2408,7 @@ private suspend fun LazyListState.snapToEndIfDrifted() {
 
 // Follow-scroll coalescing: during a stream the list follows the newest
 // content with small scrollBy deltas at most this often (ms between scrolls).
-private const val FOLLOW_MIN_INTERVAL_MS = 64L
+private const val FOLLOW_MIN_INTERVAL_MS = 16L
 
 /** Floating jump-to-latest button; pulses when content landed while away. */
 @Composable

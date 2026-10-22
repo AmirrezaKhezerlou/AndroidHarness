@@ -5,11 +5,11 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ConversationStartupTest {
-    @Test fun oldSettingsAndUnknownStoredChoicesStartInCode() {
-        assertEquals(StartScreen.CODE, AppSettings().startScreen)
-        assertEquals(StartScreen.CODE, StartScreen.fromStored(null))
-        assertEquals(StartScreen.CODE, StartScreen.fromStored("future"))
-        assertEquals(StartScreen.CODE, Json.decodeFromString<AppSettings>("{}").startScreen)
+    @Test fun oldSettingsAndUnknownStoredChoicesRememberTheLastSection() {
+        assertEquals(StartScreen.LAST_SELECTED, AppSettings().startScreen)
+        assertEquals(StartScreen.LAST_SELECTED, StartScreen.fromStored(null))
+        assertEquals(StartScreen.LAST_SELECTED, StartScreen.fromStored("future"))
+        assertEquals(StartScreen.LAST_SELECTED, Json.decodeFromString<AppSettings>("{}").startScreen)
         assertEquals(ChatStartMode.NEW_CHAT, AppSettings().chatStart)
         assertEquals(ChatStartMode.NEW_CHAT, ChatStartMode.fromStored(null))
         assertEquals(ChatStartMode.NEW_CHAT, ChatStartMode.fromStored("future"))

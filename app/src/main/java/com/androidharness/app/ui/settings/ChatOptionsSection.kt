@@ -2,6 +2,7 @@ package com.androidharness.app.ui.settings
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.*
@@ -22,7 +23,17 @@ internal fun ChatOptionsSection(
     settings: AppSettings,
     onStartScreen: (StartScreen) -> Unit,
     onChatStart: (ChatStartMode) -> Unit,
+    onKeepThinkingCollapsed: (Boolean) -> Unit,
 ) {
+    SettingsPanel(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth().toggleable(value = settings.chatKeepThinkingCollapsed, role = Role.Switch, onValueChange = onKeepThinkingCollapsed).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                Text(stringResource(R.string.chat_keep_thinking_collapsed), style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.chat_keep_thinking_collapsed_desc), style = MaterialTheme.typography.bodySmall)
+            }
+            Switch(checked = settings.chatKeepThinkingCollapsed, onCheckedChange = null)
+        }
+    }
     SettingsAnchor(R.string.settings_start_screen) {
         ChoicePanel(
             title = R.string.settings_start_screen,

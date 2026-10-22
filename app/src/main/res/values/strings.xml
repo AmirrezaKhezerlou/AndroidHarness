@@ -823,4 +823,22 @@
     <string name="settings_memory_category_project">Project</string>
     <string name="settings_memory_category_decision">Decision</string>
     <string name="settings_memory_category_fact">Fact</string>
+    <string name="chat_keep_thinking_collapsed">Keep thinking collapsed</string>
+    <string name="chat_keep_thinking_collapsed_desc">Open thinking details only when you tap them. The activity animation stays visible.</string>
+    <string name="chat_saving_memory">Saving a memory</string>
+    <string name="chat_searching_memory">Searching memories</string>
+    <string name="chat_searched_memory">Searched memories</string>
+    <string name="chat_reading_results">Reading results</string>
+    <string name="chat_read_results">Read results</string>
+    <string name="chat_working">Working</string>
+    <string name="chat_finished_activity">Finished activity</string>
+    <string name="chat_memory_unavailable">This saved memory is no longer available here. Older receipts can be managed in Settings → Memory.</string>
+    <string name="chat_memory_wait">Wait for the reply to finish before changing this memory.</string>
+    <string name="chat_previous_answer">Previous answer</string>
+    <string name="chat_next_answer">Next answer</string>
+    <string name="chat_answer_version">%1$d of %2$d</string>
+    <string name="chat_recovery_explanation">The reply stopped before finishing. Continue from the saved response, or retry the question with a new answer.</string>
+    <string name="chat_retry_reply">Retry answer</string>
+    <string name="chat_thinking_estimated_tokens">~%1$d tokens</string>
+    <string name="chat_thinking_tokens_compact">%1$s tokens</string>
 </resources>

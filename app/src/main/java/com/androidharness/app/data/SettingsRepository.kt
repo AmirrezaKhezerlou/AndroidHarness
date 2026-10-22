@@ -112,9 +112,10 @@ data class AppSettings(
     val voicePromoSeen: Boolean = false,
     /** Legacy Code resume toggle kept for old backups; codeStart is authoritative. */
     val resumeLastChat: Boolean = true,
-    val startScreen: StartScreen = StartScreen.CODE,
+    val startScreen: StartScreen = StartScreen.LAST_SELECTED,
     /** Chat opens a fresh conversation unless the user asks to continue the latest one. */
     val chatStart: ChatStartMode = ChatStartMode.NEW_CHAT,
+    val chatKeepThinkingCollapsed: Boolean = true,
     /** Code opens a fresh conversation unless the user asks to continue the latest one. */
     val codeStart: CodeStartMode = CodeStartMode.LAST_CODE,
     /** Web research effort for Chat turns. */
@@ -232,6 +233,7 @@ class SettingsRepository(private val context: Context) {
         val VOICE_PROMO_SEEN = booleanPreferencesKey("voice_promo_seen")
         val RESUME_LAST_CHAT = booleanPreferencesKey("resume_last_chat")
         val START_SCREEN = stringPreferencesKey("start_screen")
+        val CHAT_KEEP_THINKING_COLLAPSED = booleanPreferencesKey("chat_keep_thinking_collapsed")
         val CHAT_START = stringPreferencesKey("chat_start")
         val CODE_START = stringPreferencesKey("code_start")
         val SEARCH_DEPTH = stringPreferencesKey("search_depth")
@@ -313,6 +315,7 @@ class SettingsRepository(private val context: Context) {
             resumeLastChat = prefs[Keys.RESUME_LAST_CHAT] ?: true,
             startScreen = StartScreen.fromStored(prefs[Keys.START_SCREEN]),
             chatStart = ChatStartMode.fromStored(prefs[Keys.CHAT_START]),
+            chatKeepThinkingCollapsed = prefs[Keys.CHAT_KEEP_THINKING_COLLAPSED] ?: true,
             codeStart = prefs[Keys.CODE_START]?.let { CodeStartMode.fromStored(it) }
                 ?: if (prefs[Keys.RESUME_LAST_CHAT] ?: true) CodeStartMode.LAST_CODE else CodeStartMode.NEW_CODE,
             searchDepth = SearchDepth.fromStored(prefs[Keys.SEARCH_DEPTH]),
@@ -364,6 +367,7 @@ class SettingsRepository(private val context: Context) {
             p[Keys.RESUME_LAST_CHAT] = s.resumeLastChat
             p[Keys.START_SCREEN] = s.startScreen.name
             p[Keys.CHAT_START] = s.chatStart.name
+            p[Keys.CHAT_KEEP_THINKING_COLLAPSED] = s.chatKeepThinkingCollapsed
             p[Keys.CODE_START] = s.codeStart.name
             p[Keys.SEARCH_DEPTH] = s.searchDepth.name
             p[Keys.MEMORY_ENABLED] = s.memoryEnabled
@@ -701,6 +705,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setStartScreen(value: StartScreen) {
         context.settingsStore.edit { it[Keys.START_SCREEN] = value.name }
+    }
+
+    suspend fun setChatKeepThinkingCollapsed(value: Boolean) {
+        context.settingsStore.edit { it[Keys.CHAT_KEEP_THINKING_COLLAPSED] = value }
     }
 
     suspend fun setChatStart(value: ChatStartMode) {

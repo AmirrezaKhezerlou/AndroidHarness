@@ -28,6 +28,12 @@ internal object ChatActivityPresentation {
         return messages.any { it.role == Role.TOOL && it.toolCallId in rememberIds && !it.isError }
     }
 
+    fun savedMemoryIds(messages: List<ChatMessage>): Set<String> {
+        val ids = calls(messages).filter { it.name == "remember" }.map { it.id }.toSet()
+        return messages.filter { it.role == Role.TOOL && !it.isError && it.toolCallId in ids }
+            .mapNotNull { Regex("\\[memory_id:([a-zA-Z0-9-]+)]").find(it.text)?.groupValues?.get(1) }.toSet()
+    }
+
     /** Once a turn calls any tool, streamed prose is working commentary, not the answer. */
     fun hasToolWork(messages: List<ChatMessage>): Boolean = calls(messages).isNotEmpty()
 

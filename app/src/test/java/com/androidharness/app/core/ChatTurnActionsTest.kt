@@ -1,6 +1,7 @@
 package com.androidharness.app.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -26,5 +27,10 @@ class ChatTurnActionsTest {
     @Test fun nullTurnIdHasNoQuestion() {
         val messages = listOf(ChatMessage(role = Role.USER, text = "no turn", id = "u"))
         assertNull(ChatTurnActions.userMessageFor(messages, null))
+    }
+    @Test fun versionGroupsKeepRetriesTogetherButSeparateDifferentConversationPrefixes() {
+        assertEquals(ChatTurnActions.answerVersionKey("prefix", "Question"), ChatTurnActions.answerVersionKey("prefix", "Question"))
+        assertNotEquals(ChatTurnActions.answerVersionKey("prefix", "Question"), ChatTurnActions.answerVersionKey("other-prefix", "Question"))
+        assertNotEquals(ChatTurnActions.answerVersionKey(null, "Question"), ChatTurnActions.answerVersionKey(null, "Edited question"))
     }
 }

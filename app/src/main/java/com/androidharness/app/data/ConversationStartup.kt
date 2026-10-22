@@ -13,7 +13,7 @@ enum class StartScreen {
     }
 
     companion object {
-        fun fromStored(value: String?): StartScreen = entries.firstOrNull { it.name == value } ?: CODE
+        fun fromStored(value: String?): StartScreen = entries.firstOrNull { it.name == value } ?: LAST_SELECTED
     }
 }
 

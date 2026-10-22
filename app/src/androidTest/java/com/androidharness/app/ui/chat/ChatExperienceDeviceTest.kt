@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.serialization.json.JsonObject
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -176,7 +177,7 @@ class ChatExperienceDeviceTest {
         ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
             scenario.onActivity { activity -> activity.setContent { HarnessTheme(dynamicColor = false) {
                 Column(Modifier.fillMaxSize().statusBarsPadding().padding(24.dp)) {
-                    com.androidharness.app.ui.chat.components.ChatActivity(messages.value, live = live.value, streamingThinking = thought.value)
+                    com.androidharness.app.ui.chat.components.ChatActivity(messages.value, live = live.value, streamingThinking = thought.value, autoExpand = false)
                 }
             } } }
             await("Thinking"); assertNull(find("Initial thought"))
@@ -222,19 +223,19 @@ class ChatExperienceDeviceTest {
                 }
                 await("What is the news today?")
                 c.sessions.addMessage(chat, ChatMessage(Role.ASSISTANT, intro, thinking = "Check the date and use reliable sources.", thinkingMs = 1000, toolCalls = listOf(search)), turn)
-                await("Thought for 1s")
+                await("Thoughts")
                 assertNull(find(intro))
-                tap("Thought for 1s"); await(intro)
+                tap("Thoughts"); await(intro)
                 c.sessions.addMessage(chat, ChatMessage(Role.TOOL, "1. Example report\n   https://example.com/report\n   RAW_SEARCH_SNIPPET", toolCallId = search.id, toolName = search.name), turn)
                 await("Searched the web"); await(intro)
                 c.sessions.addMessage(chat, ChatMessage(Role.ASSISTANT, followup, thinking = "Use the original report for detail.", thinkingMs = 2000, toolCalls = listOf(fetch)), turn)
-                await("Thought for 3s"); await(followup)
+                await("Thoughts"); await(followup)
                 c.sessions.addMessage(chat, ChatMessage(Role.TOOL, "RAW_PAGE_CONTENT", toolCallId = fetch.id, toolName = fetch.name), turn)
                 c.sessions.addMessage(chat, ChatMessage(Role.ASSISTANT, "The report describes a new discovery.\n{\"type\":\"callout\",\"tone\":\"info\",\"title\":\"Today’s lead story\",\"text\":\"A new discovery was announced.\"}\n[Example report](https://example.com/report)"), turn)
                 await("Read web pages"); await(followup); await("Today’s lead story")
                 assertNull(find("{\"type\":\"callout\""))
                 screenshot("chat-nested-chronological-rich-reply")
-                tap("Thought for 3s")
+                tap("Thoughts")
                 awaitGone(intro); awaitGone(followup); awaitGone("Read web pages")
                 await("Today’s lead story")
                 var sourceNode = await("Sources · 1")
@@ -254,9 +255,9 @@ class ChatExperienceDeviceTest {
                     val vm = ChatViewModel(c, chat); store.put("chat-recreated", vm)
                     activity.setContent { HarnessTheme(dynamicColor = false) { ChatScreen(vm, {}, { _, _ -> }, {}, {}, onOpenSubagent = {}) } }
                 }
-                await("Thought for 3s"); await("Sources · 1")
+                await("Thoughts"); await("Sources · 1")
                 assertNull(find(followup))
-                tap("Thought for 3s"); await(followup); await("Read web pages")
+                tap("Thoughts"); await(followup); await("Read web pages")
             }
         } finally {
             instrumentation.runOnMainSync { store.clear() }
@@ -284,6 +285,253 @@ class ChatExperienceDeviceTest {
             tap("Example report"); assertEquals("https://example.com/report", opened)
             tap("Searched the web"); await("Example report")
             screenshot("chat-compact-sources-and-tool-result")
+        }
+    }
+
+    @Test fun thinkingPreferencePersistsAndManualExpansionSurvivesCompletion(): Unit = runBlocking {
+        val original = c.settings.settings.first().chatKeepThinkingCollapsed
+        val live = mutableStateOf(true)
+        val font = mutableStateOf(1f)
+        try {
+            c.settings.setChatKeepThinkingCollapsed(true)
+            assertTrue(SettingsRepository(c.appContext).settings.first().chatKeepThinkingCollapsed)
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { activity -> activity.setContent { HarnessTheme(dynamicColor = false) {
+                    val prefs by c.settings.settings.collectAsState(initial = AppSettings())
+                    val density = LocalDensity.current
+                    CompositionLocalProvider(LocalDensity provides Density(density.density, font.value)) {
+                        Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
+                            com.androidharness.app.ui.chat.components.ChatActivity(emptyList(), live = live.value,
+                                streamingThinking = "A private reasoning detail", autoExpand = !prefs.chatKeepThinkingCollapsed)
+                            com.androidharness.app.ui.settings.ChatOptionsSection(prefs, {}, {},
+                                onKeepThinkingCollapsed = { value -> runBlocking { c.settings.setChatKeepThinkingCollapsed(value) } })
+                        }
+                    }
+                } } }
+                await("Keep thinking collapsed"); await("Thinking")
+                assertNull(find("A private reasoning detail"))
+                tap("Thinking"); await("A private reasoning detail")
+                scenario.onActivity { live.value = false; font.value = 1.5f }
+                await("A private reasoning detail")
+                screenshot("chat-thinking-setting-large-text")
+                scenario.onActivity { live.value = true }
+                tap("Keep thinking collapsed")
+                assertFalse(c.settings.settings.first().chatKeepThinkingCollapsed)
+                await("A private reasoning detail")
+            }
+        } finally { c.settings.setChatKeepThinkingCollapsed(original) }
+    }
+
+    @Test fun answerVersionsPersistAndRestoreTheSelectedToolHistory(): Unit = runBlocking {
+        val name = "chat-versions-${System.nanoTime()}.db"
+        fun open() = androidx.room.Room.databaseBuilder(c.appContext, com.androidharness.app.data.db.AppDatabase::class.java, name).addMigrations(com.androidharness.app.data.db.AppDatabase.MIGRATION_21_22).build()
+        var database = open()
+        try {
+            var repo = SessionRepository(database)
+            val sid = repo.createSession("Versions", conversation = ConversationConfig(ConversationKind.CHAT))
+            val firstQuestion = repo.addMessage(sid, ChatMessage(Role.USER, "Explain this"), "turn-one")
+            database.close()
+            android.database.sqlite.SQLiteDatabase.openDatabase(c.appContext.getDatabasePath(name).path, null,
+                android.database.sqlite.SQLiteDatabase.OPEN_READWRITE).use {
+                it.execSQL("DROP TABLE chat_answer_versions")
+                it.version = 21
+            }
+            database = open(); repo = SessionRepository(database)
+            assertEquals("Explain this", repo.messages(sid).single().text)
+            val search = ToolCallData("saved-source", "web_search", "{}")
+            repo.addMessage(sid, ChatMessage(Role.ASSISTANT, thinking = "Original thought", toolCalls = listOf(search)), "turn-one")
+            repo.addMessage(sid, ChatMessage(Role.TOOL, "1. Original source\nhttps://example.com", toolCallId = search.id), "turn-one")
+            repo.addMessage(sid, ChatMessage(Role.ASSISTANT, "Original answer", thinkingMs = 1200), "turn-one")
+            repo.archiveChatAnswer(sid, firstQuestion)
+            repo.truncateFrom(sid, firstQuestion)
+            val secondQuestion = repo.addMessage(sid, ChatMessage(Role.USER, "Explain this"), "turn-two")
+            repo.addMessage(sid, ChatMessage(Role.ASSISTANT, "Alternative answer"), "turn-two")
+            database.close(); database = open(); repo = SessionRepository(database)
+            assertEquals(1, repo.answerVersions(sid).first().size)
+            val versionRepo = repo
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { activity -> activity.setContent { HarnessTheme(dynamicColor = false) {
+                    val messages by versionRepo.messagesFlow(sid).collectAsState(initial = emptyList())
+                    val scope = rememberCoroutineScope()
+                    Column(Modifier.fillMaxSize().statusBarsPadding().padding(24.dp)) {
+                        androidx.compose.material3.Text(messages.lastOrNull()?.text.orEmpty())
+                        com.androidharness.app.ui.chat.components.ChatAnswerVersions(sid, messages, versionRepo, true) { expected, version ->
+                            scope.launch { versionRepo.selectChatAnswer(sid, expected, version) }
+                        }
+                    }
+                } } }
+                await("Alternative answer"); await("2 of 2")
+                tap("Previous answer"); await("Original answer"); await("1 of 2")
+                screenshot("chat-answer-version-switcher")
+                tap("Next answer"); await("Alternative answer"); await("2 of 2")
+            }
+            repo.selectChatAnswer(sid, secondQuestion, firstQuestion)
+            assertEquals("Original answer", repo.messages(sid).last().text)
+            assertEquals("example.com", ChatActivityPresentation.sources(repo.messages(sid)).single().host)
+            assertEquals(2, repo.answerVersions(sid).first().size)
+            val before = repo.messages(sid)
+            assertTrue(runCatching { repo.selectChatAnswer(sid, "stale-id", secondQuestion) }.isFailure)
+            assertEquals(before, repo.messages(sid))
+            val other = repo.createSession("Other", conversation = ConversationConfig(ConversationKind.CHAT))
+            val otherQuestion = repo.addMessage(other, ChatMessage(Role.USER, "Explain this"), "other")
+            assertTrue(runCatching { repo.selectChatAnswer(other, otherQuestion, firstQuestion) }.isFailure)
+            assertEquals(1, repo.messages(other).size)
+            repo.clearMessages(sid)
+            assertTrue(repo.answerVersions(sid).first().isEmpty())
+        } finally { database.close(); c.appContext.deleteDatabase(name) }
+    }
+
+    @Test fun memoryReceiptEditsAndDeletesOnlyItsSavedEntry(): Unit = runBlocking {
+        val originalEnabled = c.settings.settings.first().memoryEnabled
+        val root = File(c.appContext.cacheDir, "chat-receipt-${System.nanoTime()}").apply { mkdirs() }
+        val text = "Receipt preference ${System.nanoTime()}"
+        val changed = "Updated $text"
+        var memoryId: String? = null
+        try {
+            c.settings.setMemoryEnabled(true)
+            val result = RememberTool(c.memory).execute(kotlinx.serialization.json.buildJsonObject {
+                put("text", kotlinx.serialization.json.JsonPrimitive(text))
+                put("scope", kotlinx.serialization.json.JsonPrimitive("global"))
+            }, ToolContext(FileFs(root)))
+            val messages = listOf(ChatMessage(Role.ASSISTANT, toolCalls = listOf(ToolCallData("receipt", "remember", "{}"))),
+                ChatMessage(Role.TOOL, result.output, toolCallId = "receipt"))
+            memoryId = ChatActivityPresentation.savedMemoryIds(messages).single()
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { activity -> activity.setContent { HarnessTheme(dynamicColor = false) {
+                    Column(Modifier.fillMaxSize().statusBarsPadding().padding(24.dp)) {
+                        com.androidharness.app.ui.chat.components.ChatMemoryReceipt(messages, c, false)
+                    }
+                } } }
+                tap("Memory saved"); tap(text)
+                val input = await(text)
+                assertTrue(input.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, android.os.Bundle().apply {
+                    putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, changed)
+                }))
+                tap("Save"); awaitGone("Edit memory"); await(changed)
+                assertEquals(changed, c.memory.memories.first().single { it.id == memoryId }.text)
+                screenshot("chat-memory-receipt-edited")
+                tap(changed); tap("Delete"); await("Delete this memory?"); tap("Delete")
+                await("This saved memory is no longer available here. Older receipts can be managed in Settings → Memory.")
+                assertFalse(c.memory.memories.first().any { it.id == memoryId })
+            }
+        } finally {
+            memoryId?.let { c.memory.remove(it) }
+            c.settings.setMemoryEnabled(originalEnabled)
+            root.deleteRecursively()
+        }
+    }
+
+    @Test fun toolSourcesExposeAllResultsAndRecoveryKeepsActionsReachable(): Unit = runBlocking {
+        val search = ToolCallData("all-sources", "web_search", "{}")
+        val result = ChatMessage(Role.TOOL, (1..7).joinToString("\n") { "$it. Report $it\nhttps://source$it.example/report" }, toolCallId = search.id)
+        var continued = false
+        var retried = false
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            scenario.onActivity { activity -> activity.setContent { HarnessTheme(dynamicColor = false) {
+                val density = LocalDensity.current
+                CompositionLocalProvider(LocalDensity provides Density(density.density, 1.5f)) {
+                    Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
+                        com.androidharness.app.ui.chat.components.ChatRecovery("Connection interrupted", { continued = true }, { retried = true })
+                        com.androidharness.app.ui.chat.components.ChatToolActivity(search, result, false) { }
+                    }
+                }
+            } } }
+            await("Connection interrupted"); tap("Continue reply"); tap("Retry answer")
+            assertTrue(continued); assertTrue(retried)
+            tap("Searched the web")
+            await("Report 1")
+            // Scroll the tool disclosure to reach the all-sources action after its four previews.
+            repeat(5) {
+                if (find("Sources · 7") == null) nodes().lastOrNull { it.isVisibleToUser && it.isScrollable }
+                    ?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+                SystemClock.sleep(150)
+            }
+            tap("Sources · 7"); await("Sources"); await("source1.example"); await("Found in search")
+            repeat(5) {
+                if (find("Report 7") == null) nodes().lastOrNull { it.isVisibleToUser && it.isScrollable }
+                    ?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+                SystemClock.sleep(150)
+            }
+            await("Report 7")
+            screenshot("chat-all-tool-sources-large-text")
+        }
+    }
+
+    @Test fun collapsedThinkingMetricsTickAtTheRightEdgeAndUseReportedTokens(): Unit = runBlocking {
+        val timing = mutableStateOf(ThinkingTiming(startedAt = ThinkingTiming.now() - 2_000))
+        val thought = mutableStateOf("abcd".repeat(50))
+        val reported = mutableStateOf<Int?>(null)
+        val font = mutableStateOf(1f)
+        val live = mutableStateOf(true)
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            scenario.onActivity { activity -> activity.setContent { HarnessTheme(dynamicColor = false) {
+                val density = LocalDensity.current
+                CompositionLocalProvider(LocalDensity provides Density(density.density, font.value)) {
+                    androidx.compose.material3.Surface(Modifier.fillMaxSize()) {
+                        Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
+                            com.androidharness.app.ui.chat.components.ChatActivity(emptyList(), live = live.value,
+                                autoExpand = false, streamingThinking = thought.value, showThinkingMetrics = true,
+                                thinkingTiming = timing.value, reasoningTokens = reported.value)
+                        }
+                    }
+                }
+            } } }
+            fun metric() = nodes().firstOrNull { it.isVisibleToUser && it.text?.toString()?.contains("tokens") == true }
+            val deadline = SystemClock.uptimeMillis() + 8000
+            while (metric() == null && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(100)
+            val first = requireNotNull(metric()).text.toString()
+            assertTrue(first.contains("~50 tokens"))
+            assertNull(find(thought.value))
+            SystemClock.sleep(1200)
+            assertNotEquals("The collapsed timer must tick without new tokens", first, metric()?.text?.toString())
+            val titleBounds = android.graphics.Rect().also { await("Thinking").getBoundsInScreen(it) }
+            val metricBounds = android.graphics.Rect().also { requireNotNull(metric()).getBoundsInScreen(it) }
+            assertTrue("Metrics are on the far right", metricBounds.left > titleBounds.right)
+            val width = instrumentation.targetContext.resources.displayMetrics.widthPixels
+            assertTrue("Metrics stay within the right edge", metricBounds.right <= width && metricBounds.right > width * .8)
+            scenario.onActivity { thought.value += "abcd".repeat(50); font.value = 1.5f }
+            val updatedDeadline = SystemClock.uptimeMillis() + 8000
+            while (metric()?.text?.toString()?.contains("~100 tokens") != true && SystemClock.uptimeMillis() < updatedDeadline) SystemClock.sleep(100)
+            assertTrue(requireNotNull(metric()).text.toString().contains("~100 tokens"))
+            scenario.onActivity { timing.value = timing.value.stop(ThinkingTiming.now()); reported.value = 42; live.value = false }
+            val reportDeadline = SystemClock.uptimeMillis() + 8000
+            while (metric()?.text?.toString()?.contains("42 tokens") != true && SystemClock.uptimeMillis() < reportDeadline) SystemClock.sleep(100)
+            val frozen = requireNotNull(metric()).text.toString()
+            assertTrue(frozen.contains("42 tokens")); assertFalse(frozen.contains("~"))
+            SystemClock.sleep(1200)
+            assertEquals("The timer stops when thinking ends", frozen, metric()?.text?.toString())
+            screenshot("chat-collapsed-thinking-live-metrics-large-text")
+        }
+    }
+
+    @Test fun codingThinkingShowsLiveAndSavedMetricsWithoutDoubleCounting(): Unit = runBlocking {
+        val timing = mutableStateOf(ThinkingTiming(startedAt = ThinkingTiming.now() - 2000))
+        val live = mutableStateOf(true)
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            scenario.onActivity { activity -> activity.setContent { HarnessTheme(dynamicColor = false) {
+                androidx.compose.material3.Surface(Modifier.fillMaxSize()) {
+                    Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
+                        com.androidharness.app.ui.chat.components.ThinkingBlock("abcd".repeat(50), live = live.value,
+                            timing = timing.value, reasoningTokens = if (live.value) null else 1500)
+                    }
+                }
+            } } }
+            await("Thinking"); await("abcd".repeat(50))
+            assertTrue("Expanded reasoning keeps the live token count visible", nodes().any { it.isVisibleToUser && it.text?.toString()?.contains("~50 tokens") == true })
+            tap("Thinking")
+            fun metric() = nodes().firstOrNull { it.isVisibleToUser && it.text?.toString()?.contains("tokens") == true }
+            val deadline = SystemClock.uptimeMillis() + 8000
+            while (metric() == null && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(100)
+            val first = requireNotNull(metric()).text.toString()
+            assertTrue(first.contains("~50 tokens"))
+            SystemClock.sleep(1200)
+            assertNotEquals(first, metric()?.text?.toString())
+            scenario.onActivity { timing.value = ThinkingTiming(elapsedMs = 5000); live.value = false }
+            await("5s · 1.5k tokens")
+            SystemClock.sleep(1200)
+            await("5s · 1.5k tokens")
+            tap("Thoughts"); await("abcd".repeat(50)); await("5s · 1.5k tokens")
+            screenshot("code-expanded-thinking-metrics")
         }
     }
 
