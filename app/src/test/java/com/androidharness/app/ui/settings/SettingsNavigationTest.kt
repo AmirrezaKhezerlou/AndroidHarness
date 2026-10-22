@@ -48,10 +48,11 @@ class SettingsNavigationTest {
 
     @Test
     fun `empty search keeps the normal primary settings home`() {
+        val home = SettingsPage.entries.filter { it.onHome }
         val entries = matchingSettingsEntries("", settingsTestStrings())
-        assertEquals(SettingsPage.entries.size, entries.size)
+        assertEquals(home.size, entries.size)
         assertTrue(entries.all { it.primary })
-        assertEquals(SettingsPage.entries.toList(), matchingSettingsPages("", settingsTestStrings()))
+        assertEquals(home, matchingSettingsPages("", settingsTestStrings()))
     }
 
     @Test
@@ -64,10 +65,29 @@ class SettingsNavigationTest {
     fun `language is first and GitHub integration still supports a direct link`() {
         assertEquals(SettingsPage.LANGUAGE, matchingSettingsPages("", settingsTestStrings()).first())
         assertEquals(SettingsPage.CHAT_OPTIONS, matchingSettingsPages("", settingsTestStrings())[1])
-        assertEquals(SettingsPage.GITHUB, matchingSettingsPages("", settingsTestStrings())[3])
+        assertEquals(SettingsPage.MEMORY, matchingSettingsPages("", settingsTestStrings())[2])
+        assertEquals(SettingsPage.CODING, matchingSettingsPages("", settingsTestStrings())[3])
+        assertEquals(SettingsPage.GITHUB, matchingSettingsPages("", settingsTestStrings())[4])
         assertEquals(SettingsPage.LANGUAGE, settingsDeepLink("language"))
         assertEquals(SettingsPage.GITHUB, settingsDeepLink("github"))
         assertEquals(listOf(SettingsPage.GITHUB), matchingSettingsPages("commit push", settingsTestStrings()))
+    }
+
+    @Test
+    fun `coding hub owns agent and device pages while memory stands alone`() {
+        assertTrue(SettingsPage.CODING.onHome)
+        for (page in listOf(SettingsPage.SUBAGENT, SettingsPage.AGENT, SettingsPage.CHAT,
+            SettingsPage.SKILLS, SettingsPage.CODE_INTELLIGENCE, SettingsPage.CAVEMAN,
+            SettingsPage.MCP, SettingsPage.TELEGRAM, SettingsPage.WORKSPACE,
+            SettingsPage.ENVIRONMENT, SettingsPage.TROUBLESHOOTING)) {
+            assertFalse(page.onHome)
+            assertEquals(R.string.settings_group_coding, page.group)
+            assertTrue(page in matchingSettingsPages(page.keywords.substringBefore(' '), settingsTestStrings()))
+        }
+        assertEquals(R.string.settings_group_memory, SettingsPage.MEMORY.group)
+        assertEquals(SettingsPage.CODING, settingsDeepLink("coding"))
+        assertTrue(SettingsPage.AGENT in matchingSettingsPages("max context", settingsTestStrings()))
+        assertTrue(SettingsPage.CHAT in matchingSettingsPages("repo map", settingsTestStrings()))
     }
 
     @Test

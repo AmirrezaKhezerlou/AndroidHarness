@@ -18,6 +18,8 @@
     <string name="settings_group_connections">Connections</string>
     <string name="settings_group_workspace_device">Workspace &amp; device</string>
     <string name="settings_group_app_data">App &amp; data</string>
+    <string name="settings_group_memory">Memory</string>
+    <string name="settings_group_coding">Coding</string>
 
     <string name="settings_page_github_title">GitHub</string>
     <string name="settings_page_github_desc">Sign in, import repositories and publish changes</string>
@@ -783,6 +785,8 @@
     <string name="settings_chat_start_last_desc">Continue your most recent conversation when you open Chat.</string>
     <string name="settings_page_memory_title">Memory</string>
     <string name="settings_page_memory_desc">Review and manage what the assistant remembers</string>
+    <string name="settings_page_coding_title">Coding</string>
+    <string name="settings_page_coding_desc">Agent, tools, workspace and device settings for coding</string>
     <string name="settings_memory">Memory</string>
     <string name="settings_memory_on">On. Relevant saved facts are added to Chat and Code requests.</string>
     <string name="settings_memory_off">Off. The assistant will not save or use memories.</string>

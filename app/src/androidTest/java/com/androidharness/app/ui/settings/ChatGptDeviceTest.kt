@@ -231,7 +231,7 @@ class ChatGptDeviceTest {
     }
 
     @Test fun connectedAccountsIsFirstAndShowsSignIn() {
-        assertEquals(SettingsPage.GITHUB, matchingSettingsEntries("", instrumentation.targetContext).first().page)
+        assertEquals(SettingsPage.CONNECTED_ACCOUNTS, matchingSettingsEntries("connected accounts", instrumentation.targetContext).first().page)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity -> activity.setContent { MaterialTheme { SettingsScreen(container, onBack = {}) } } }
             clickText("Connected accounts")

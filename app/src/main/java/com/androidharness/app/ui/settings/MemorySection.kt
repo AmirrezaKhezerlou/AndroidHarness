@@ -33,6 +33,7 @@ internal fun MemoryOptionsSection(
     settings: AppSettings,
     onEnabled: (Boolean) -> Unit,
     onOpen: () -> Unit,
+    showManage: Boolean = true,
 ) {
     val memories by container.memory.memories.collectAsStateWithLifecycle(initialValue = emptyList())
     val count = memories.size
@@ -54,25 +55,27 @@ internal fun MemoryOptionsSection(
                     }
                     Switch(checked = settings.memoryEnabled, onCheckedChange = onEnabled)
                 }
-                HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .4f))
-                Row(
-                    Modifier.fillMaxWidth().heightIn(min = 64.dp).clickable(onClick = onOpen)
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(stringResource(R.string.settings_memory_manage), style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            stringResource(R.string.settings_memory_manage_desc, count),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                if (showManage) {
+                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .4f))
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 64.dp).clickable(onClick = onOpen)
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(stringResource(R.string.settings_memory_manage), style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                stringResource(R.string.settings_memory_manage_desc, count),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Icon(
-                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
             }
         }

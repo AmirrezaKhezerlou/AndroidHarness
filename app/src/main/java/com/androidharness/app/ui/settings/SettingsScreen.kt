@@ -250,14 +250,21 @@ fun SettingsScreen(
                     when (page) {
                         SettingsPage.LANGUAGE -> LanguageSection()
                         SettingsPage.CHAT_OPTIONS -> ChatOptionsSection(
-                            container,
                             settings,
                             onStartScreen = { value -> scope.launch { container.settings.setStartScreen(value) } },
                             onChatStart = { value -> scope.launch { container.settings.setChatStart(value) } },
-                            onMemoryEnabled = { value -> scope.launch { container.settings.setMemoryEnabled(value) } },
-                            onOpenMemory = { openPage(SettingsPage.MEMORY, null) },
                         )
-                        SettingsPage.MEMORY -> MemoryManagerSection(container)
+                        SettingsPage.MEMORY -> {
+                            MemoryOptionsSection(
+                                container = container,
+                                settings = settings,
+                                onEnabled = { value -> scope.launch { container.settings.setMemoryEnabled(value) } },
+                                onOpen = {},
+                                showManage = false,
+                            )
+                            MemoryManagerSection(container)
+                        }
+                        SettingsPage.CODING -> CodingSection { page -> openPage(page) }
                         SettingsPage.CONNECTED_ACCOUNTS -> ConnectedAccountsSection(container)
                         SettingsPage.MODELS -> {
                             SettingsPanel(Modifier.fillMaxWidth()) {
@@ -2307,6 +2314,44 @@ private fun SetupLine(label: String, value: String) {
     }
 }
 
+
+/** Settings reached through the Coding hub, in display order. */
+private val codingSettingsPages = listOf(
+    SettingsPage.SUBAGENT,
+    SettingsPage.AGENT,
+    SettingsPage.CHAT,
+    SettingsPage.SKILLS,
+    SettingsPage.CODE_INTELLIGENCE,
+    SettingsPage.CAVEMAN,
+    SettingsPage.MCP,
+    SettingsPage.TELEGRAM,
+    SettingsPage.WORKSPACE,
+    SettingsPage.ENVIRONMENT,
+    SettingsPage.TROUBLESHOOTING,
+)
+
+@Composable
+private fun CodingSection(onOpen: (SettingsPage) -> Unit) {
+    SettingsPanel(Modifier.fillMaxWidth()) {
+        codingSettingsPages.forEachIndexed { index, destination ->
+            SettingRow(
+                icon = settingsIcon(destination),
+                title = stringResource(destination.title),
+                subtitle = stringResource(destination.description),
+                onClick = { onOpen(destination) },
+                divider = index != codingSettingsPages.lastIndex,
+                trailing = {
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
+                    )
+                },
+            )
+        }
+    }
+}
 
 @Composable
 private fun AgentSection(

@@ -11,7 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import com.androidharness.app.AppContainer
 import com.androidharness.app.R
 import com.androidharness.app.data.AppSettings
 import com.androidharness.app.data.ChatStartMode
@@ -19,12 +18,9 @@ import com.androidharness.app.data.StartScreen
 
 @Composable
 internal fun ChatOptionsSection(
-    container: AppContainer,
     settings: AppSettings,
     onStartScreen: (StartScreen) -> Unit,
     onChatStart: (ChatStartMode) -> Unit,
-    onMemoryEnabled: (Boolean) -> Unit,
-    onOpenMemory: () -> Unit,
 ) {
     SettingsAnchor(R.string.settings_start_screen) {
         ChoicePanel(
@@ -68,12 +64,6 @@ internal fun ChatOptionsSection(
             },
         )
     }
-    MemoryOptionsSection(
-        container = container,
-        settings = settings,
-        onEnabled = onMemoryEnabled,
-        onOpen = onOpenMemory,
-    )
 }
 
 @Composable

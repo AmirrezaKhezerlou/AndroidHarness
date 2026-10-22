@@ -22,6 +22,8 @@ internal enum class SettingsPage(
     @StringRes val description: Int,
     @StringRes val group: Int,
     val keywords: String,
+    /** False for pages that live inside a hub page (Coding) instead of the settings home. */
+    val onHome: Boolean = true,
 ) {
     LANGUAGE(
         R.string.settings_page_language_title,
@@ -38,8 +40,14 @@ internal enum class SettingsPage(
     MEMORY(
         R.string.settings_page_memory_title,
         R.string.settings_page_memory_desc,
-        R.string.settings_group_chat_options,
+        R.string.settings_group_memory,
         "memory remember saved facts preferences projects decisions forget delete clear recall",
+    ),
+    CODING(
+        R.string.settings_page_coding_title,
+        R.string.settings_page_coding_desc,
+        R.string.settings_group_coding,
+        "coding code agent subagent behavior chat commands skills codegraph caveman connected tools mcp telegram workspaces terminal device troubleshooting",
     ),
     GITHUB(
         R.string.settings_page_github_title,
@@ -62,8 +70,9 @@ internal enum class SettingsPage(
     SUBAGENT(
         R.string.settings_page_subagent_title,
         R.string.settings_page_subagent_desc,
-        R.string.settings_group_your_assistant,
+        R.string.settings_group_coding,
         "subagent sub-agent sub agent model provider action tools permissions edit commands",
+        onHome = false,
     ),
     LOCAL_MODELS(
         R.string.settings_page_local_models_title,
@@ -74,26 +83,30 @@ internal enum class SettingsPage(
     AGENT(
         R.string.settings_page_agent_title,
         R.string.settings_page_agent_desc,
-        R.string.settings_group_your_assistant,
+        R.string.settings_group_coding,
         "approval full access iterations tools agents.md memory",
+        onHome = false,
     ),
     CHAT(
         R.string.settings_page_chat_title,
         R.string.settings_page_chat_desc,
-        R.string.settings_group_your_assistant,
+        R.string.settings_group_coding,
         "resume last chat launch repo map shortcuts",
+        onHome = false,
     ),
     CODE_INTELLIGENCE(
         R.string.settings_page_codegraph_title,
         R.string.settings_page_codegraph_desc,
-        R.string.settings_group_integrations,
+        R.string.settings_group_coding,
         "codegraph graph symbols callers callees impact affected index semantic code intelligence",
+        onHome = false,
     ),
     CAVEMAN(
         R.string.settings_page_caveman_title,
         R.string.settings_page_caveman_desc,
-        R.string.settings_group_integrations,
+        R.string.settings_group_coding,
         "caveman install intensity off lite full ultra wenyan compression tokens",
+        onHome = false,
     ),
     VOICE(
         R.string.settings_page_voice_title,
@@ -104,8 +117,9 @@ internal enum class SettingsPage(
     SKILLS(
         R.string.settings_page_skills_title,
         R.string.settings_page_skills_desc,
-        R.string.settings_group_your_assistant,
+        R.string.settings_group_coding,
         "catalog instructions add skills",
+        onHome = false,
     ),
     APPEARANCE(
         R.string.settings_page_appearance_title,
@@ -128,20 +142,23 @@ internal enum class SettingsPage(
     MCP(
         R.string.settings_page_mcp_title,
         R.string.settings_page_mcp_desc,
-        R.string.settings_group_connections,
+        R.string.settings_group_coding,
         "mcp integrations servers transport",
+        onHome = false,
     ),
     TELEGRAM(
         R.string.settings_page_telegram_title,
         R.string.settings_page_telegram_desc,
-        R.string.settings_group_connections,
+        R.string.settings_group_coding,
         "telegram bot remote control pairing notifications gateway",
+        onHome = false,
     ),
     WORKSPACE(
         R.string.settings_page_workspace_title,
         R.string.settings_page_workspace_desc,
-        R.string.settings_group_workspace_device,
+        R.string.settings_group_coding,
         "storage files saf folder project remembered permissions grants revoke always",
+        onHome = false,
     ),
     STORAGE(
         R.string.settings_page_storage_title,
@@ -152,14 +169,16 @@ internal enum class SettingsPage(
     ENVIRONMENT(
         R.string.settings_page_environment_title,
         R.string.settings_page_environment_desc,
-        R.string.settings_group_workspace_device,
+        R.string.settings_group_coding,
         "shizuku shell packages environment battery optimization keep alive",
+        onHome = false,
     ),
     TROUBLESHOOTING(
         R.string.settings_page_troubleshooting_title,
         R.string.settings_page_troubleshooting_desc,
-        R.string.settings_group_workspace_device,
+        R.string.settings_group_coding,
         "diagnostics help doctor repair errors storage linux shizuku ssh mcp notifications provider report",
+        onHome = false,
     ),
     BACKUP(
         R.string.settings_page_backup_title,
@@ -208,7 +227,12 @@ internal data class SettingsSearchEntry(
     @StringRes val anchor: Int? = null,
 )
 
-private val primarySettingsEntries = SettingsPage.entries.map { page ->
+private val homeSettingsEntries = SettingsPage.entries.filter { it.onHome }.map { page ->
+    SettingsSearchEntry(page.title, page.description, page, page.keywords, primary = true)
+}
+
+/** All pages stay searchable, including the ones reached through the Coding hub. */
+private val searchableSettingsEntries = SettingsPage.entries.map { page ->
     SettingsSearchEntry(page.title, page.description, page, page.keywords, primary = true)
 }
 
@@ -540,7 +564,7 @@ internal fun matchingSettingsEntries(
     englishText: ((Int) -> String)? = null,
 ): List<SettingsSearchEntry> {
     val terms = query.trim().lowercase().split(Regex("""\s+""")).filter { it.isNotBlank() }
-    if (terms.isEmpty()) return primarySettingsEntries
+    if (terms.isEmpty()) return homeSettingsEntries
     fun haystack(entry: SettingsSearchEntry): String = buildString {
         append(text(entry.title)).append(' ')
         append(text(entry.description)).append(' ')
@@ -553,7 +577,7 @@ internal fun matchingSettingsEntries(
         }
         append(entry.keywords)
     }.lowercase()
-    return (primarySettingsEntries + subSettingsEntries)
+    return (searchableSettingsEntries + subSettingsEntries)
         .filter { entry -> terms.all { it in haystack(entry) } }
         .sortedWith(
             compareBy<SettingsSearchEntry> { it.primary }
@@ -576,6 +600,7 @@ internal fun settingsDeepLink(target: String): SettingsPage? = when (target) {
     "voice" -> SettingsPage.VOICE
     "telegram" -> SettingsPage.TELEGRAM
     "agent" -> SettingsPage.AGENT
+    "coding" -> SettingsPage.CODING
     "storage" -> SettingsPage.STORAGE
     else -> null
 }

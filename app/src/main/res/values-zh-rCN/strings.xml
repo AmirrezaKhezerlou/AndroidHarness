@@ -17,6 +17,8 @@
     <string name="settings_group_connections">连接</string>
     <string name="settings_group_workspace_device">工作区与设备</string>
     <string name="settings_group_app_data">应用与数据</string>
+    <string name="settings_group_memory">记忆</string>
+    <string name="settings_group_coding">编程</string>
 
     <string name="settings_page_github_title">GitHub</string>
     <string name="settings_page_github_desc">登录、导入仓库并发布改动</string>
@@ -781,6 +783,8 @@
     <string name="settings_chat_start_last_desc">打开聊天时继续最近的对话。</string>
     <string name="settings_page_memory_title">记忆</string>
     <string name="settings_page_memory_desc">查看并管理助手记住的内容</string>
+    <string name="settings_page_coding_title">编程</string>
+    <string name="settings_page_coding_desc">编程相关的代理、工具、工作区与设备设置</string>
     <string name="settings_memory">记忆</string>
     <string name="settings_memory_on">已开启。相关的已保存事实会加入聊天和代码请求。</string>
     <string name="settings_memory_off">已关闭。助手不会保存或使用记忆。</string>

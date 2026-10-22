@@ -73,7 +73,8 @@ internal fun SettingsHome(
         }
         results.groupBy { it.page.group }.forEach { (group, entries) ->
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
+                val showHeader = entries.size > 1 || stringResource(group) != stringResource(entries.first().page.title)
+                if (showHeader) Text(
                     stringResource(group),
                     style = MaterialTheme.typography.titleSmall,
                     color = colors.onSurfaceVariant,
@@ -147,14 +148,19 @@ internal fun DesktopSettingsNavigation(
                     style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant) }
                 results.groupBy { it.page.group }.toList().sortedBy { (group, _) ->
                     when (group) {
-                        R.string.settings_group_language -> -1
-                        R.string.settings_group_personalize -> 0
-                        R.string.settings_group_your_assistant -> 1
+                        R.string.settings_group_language -> -4
+                        R.string.settings_group_chat_options -> -3
+                        R.string.settings_group_memory -> -2
+                        R.string.settings_group_coding -> -1
+                        R.string.settings_group_your_assistant -> 0
+                        R.string.settings_group_personalize -> 1
                         else -> 2
                     }
                 }.forEach { (group, entries) ->
-                    item { Text(stringResource(group), Modifier.padding(start = 12.dp, top = 16.dp, bottom = 6.dp),
-                        style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant) }
+                    if (entries.size > 1 || context.getString(group) != context.getString(entries.first().page.title)) {
+                        item { Text(stringResource(group), Modifier.padding(start = 12.dp, top = 16.dp, bottom = 6.dp),
+                            style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant) }
+                    }
                     items(entries, key = { "${it.page}:${it.title}" }) { entry ->
                         val active = entry.page == selected
                         Surface(onClick = { onOpen(entry.page, entry.anchor) },
@@ -211,10 +217,11 @@ internal fun SettingsPanel(modifier: Modifier = Modifier, content: @Composable C
     }
 }
 
-private fun settingsIcon(page: SettingsPage): ImageVector = when (page) {
+internal fun settingsIcon(page: SettingsPage): ImageVector = when (page) {
     SettingsPage.LANGUAGE -> Icons.Outlined.Translate
     SettingsPage.CHAT_OPTIONS -> Icons.Outlined.ChatBubbleOutline
     SettingsPage.MEMORY -> Icons.Outlined.Memory
+    SettingsPage.CODING -> Icons.Outlined.Code
     SettingsPage.CONNECTED_ACCOUNTS -> Icons.Outlined.AccountCircle
     SettingsPage.MODELS -> ProviderGlyph
     SettingsPage.SUBAGENT -> Icons.Outlined.AccountTree
