@@ -97,6 +97,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.androidharness.app.agent.AgentMode
 import kotlinx.coroutines.flow.filterNotNull
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -478,6 +479,10 @@ private fun ChatScreenContent(
     // should stay in view; only a real user drag away from the bottom clears
     // it, programmatic scrolls (follow, jump) never touch the pin.
     var pinnedToBottom by remember { mutableStateOf(searchMessageId == null) }
+    // LazyColumn index of each turn's question bubble, captured while it is
+    // visible at the start of the turn. Used to park the transcript there when
+    // the answer finishes instead of leaving the view at the bottom.
+    val userItemIndexes = remember(state.sessionId) { mutableStateMapOf<String, Int>() }
     val searchItemIndex = remember(searchMessageId) { mutableStateOf<Int?>(null) }
     val searchTurnId = state.messages.firstOrNull { it.id == searchMessageId }?.turnId
     var diffFile by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -609,6 +614,7 @@ private fun ChatScreenContent(
             agentRunning = state.busy,
             onStopAgent = viewModel::stop,
             onSendPrompt = { prompt ->
+                pinnedToBottom = true
                 viewModel.send(prompt)
             },
             onDismiss = {
@@ -999,12 +1005,28 @@ private fun ChatScreenContent(
             }
     }
 
-    // A committed turn can add a tall answer in one frame, and streamed text can
-    // grow inside an existing item. Keep the true bottom in view while pinned.
-    LaunchedEffect(state.busy, state.messages.size, pinnedToBottom) {
-        if (!pinnedToBottom || gestureActive.value) return@LaunchedEffect
+    // While a turn runs, keep the bottom in view. When it finishes, park the
+    // transcript at the question that started it so the answer is read from
+    // the top instead of leaving the view at its last line.
+    var scrollPrevBusy by remember { mutableStateOf(false) }
+    LaunchedEffect(state.busy) {
+        val wasBusy = scrollPrevBusy
+        scrollPrevBusy = state.busy
+        if (gestureActive.value) return@LaunchedEffect
+        if (state.busy) {
+            if (!pinnedToBottom) return@LaunchedEffect
+            withFrameNanos { }
+            listState.scrollToEnd()
+            return@LaunchedEffect
+        }
+        if (!wasBusy || !pinnedToBottom) return@LaunchedEffect
+        val turnId = state.messages.lastOrNull { it.role == Role.USER }?.turnId ?: return@LaunchedEffect
+        val index = userItemIndexes[turnId] ?: return@LaunchedEffect
+        if (index !in 0 until listState.layoutInfo.totalItemsCount) return@LaunchedEffect
+        // Unpin first so the follow effects do not race the anchor back down.
+        pinnedToBottom = false
         withFrameNanos { }
-        listState.scrollToEnd()
+        listState.scrollToItem(index)
     }
     LaunchedEffect(state.streamingText?.length, pinnedToBottom) {
         if (!pinnedToBottom || gestureActive.value) return@LaunchedEffect
@@ -1326,7 +1348,7 @@ private fun ChatScreenContent(
                                     EmptyState(
                                         hasProvider = state.activeProvider != null,
                                         chatOnly = state.conversation.isChat,
-                                        onSuggestion = { viewModel.send(it) },
+                                        onSuggestion = { pinnedToBottom = true; viewModel.send(it) },
                                         onAddProvider = { addProviderInitially = true; activeProviderManagerTarget = ModelSelectionTarget.ACTIVE },
                                     )
                                 }
@@ -1373,6 +1395,14 @@ private fun ChatScreenContent(
                         }
                         when (message.role) {
                             Role.USER -> indexedItem(key = "message-$messageKey-user", contentType = ChatListContentType.User) {
+                                message.turnId?.let { turnId ->
+                                    LaunchedEffect(listState, messageKey) {
+                                        snapshotFlow {
+                                            listState.layoutInfo.visibleItemsInfo
+                                                .firstOrNull { it.key == "message-$messageKey-user" }?.index
+                                        }.filterNotNull().first().let { userItemIndexes[turnId] = it }
+                                    }
+                                }
                                 Box(Modifier.animateItem(fadeInSpec = fastEffectsSpec(), placementSpec = null, fadeOutSpec = null)) {
                                     Column(horizontalAlignment = Alignment.End) {
                                         val (visibleText, fileChips) = FileAttachments.splitForDisplay(
@@ -1945,6 +1975,7 @@ private fun ChatScreenContent(
                         if (payload.isNotBlank() || state.fileAttachments.isNotEmpty()) {
                             // Keep the draft when a selection is still loading/saving or unavailable.
                             if (viewModel.send(payload)) {
+                                pinnedToBottom = true
                                 setComposerText("")
                                 attachedSkill = null
                                 attachedConceptJson = null

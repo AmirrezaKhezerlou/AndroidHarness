@@ -80,14 +80,31 @@ internal class KeylessSearchBackend : SearchBackend {
             else -> allEngines
         }
         var lastError: String? = null
+        // Collect across engines until the requested batch is full. Auto used
+        // to stop at the first non-empty engine, which capped deep research
+        // levels well below their source budget when the first page was short.
+        val collected = ArrayList<WebSearchResult>()
+        val seen = HashSet<String>()
+        val used = ArrayList<String>()
         for (e in chain) {
+            if (collected.size >= count) break
             try {
                 val results = fetchEngine(searchClient, e, query)
-                if (results.isNotEmpty()) return@withContext SearchOutcome(results, via = e)
-                lastError = "$e returned no results"
+                if (results.isEmpty()) {
+                    lastError = "$e returned no results"
+                    continue
+                }
+                used += e
+                for (result in results) {
+                    if (seen.add(result.url.trimEnd('/'))) collected += result
+                    if (collected.size >= count) break
+                }
             } catch (ex: Exception) {
                 lastError = "$e failed: ${ex.message}"
             }
+        }
+        if (collected.isNotEmpty()) {
+            return@withContext SearchOutcome(collected, via = used.joinToString("+"))
         }
         throw ToolFailure(
             "All keyless engines failed. Tried: ${chain.joinToString(", ")}. " +

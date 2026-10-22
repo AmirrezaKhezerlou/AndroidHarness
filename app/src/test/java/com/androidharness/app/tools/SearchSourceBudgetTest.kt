@@ -35,6 +35,27 @@ class SearchSourceBudgetTest {
         assertEquals(0, budget.used)
     }
 
+    @Test fun researchLevelsPullFullBatchesRegardlessOfModelCount() {
+        val max = com.androidharness.app.data.SearchDepth.MAX_RESEARCH
+        assertEquals(20, searchBatchCount(max, null, 100))
+        assertEquals(20, searchBatchCount(max, 5, 100))
+        assertEquals(20, searchBatchCount(max, 50, 100))
+        assertEquals(12, searchBatchCount(max, null, 12))
+
+        val deep = com.androidharness.app.data.SearchDepth.DEEP
+        assertEquals(20, searchBatchCount(deep, 8, 20))
+
+        val instant = com.androidharness.app.data.SearchDepth.INSTANT
+        assertEquals(5, searchBatchCount(instant, null, 5))
+        assertEquals(5, searchBatchCount(instant, 15, 5))
+        assertEquals(3, searchBatchCount(instant, null, 3))
+
+        // Auto and Code keep honoring the model's smaller count.
+        assertEquals(8, searchBatchCount(null, null, Int.MAX_VALUE))
+        assertEquals(5, searchBatchCount(null, 5, Int.MAX_VALUE))
+        assertEquals(15, searchBatchCount(null, 50, Int.MAX_VALUE))
+    }
+
     @Test fun depthCopiesExposeTheirLimitAndAutoHasNone() {
         val client = okhttp3.OkHttpClient()
         val base = WebSearchTool(client)

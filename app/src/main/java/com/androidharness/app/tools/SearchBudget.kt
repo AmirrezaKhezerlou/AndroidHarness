@@ -1,5 +1,24 @@
 package com.androidharness.app.tools
 
+import com.androidharness.app.data.SearchDepth
+
+/**
+ * Results to request from one search. Research levels pull a full batch and
+ * ignore a smaller model count so the selected depth can actually reach its
+ * budget; Instant never exceeds its five-source allowance.
+ */
+internal fun searchBatchCount(depth: SearchDepth?, rawCount: Int?, remaining: Int): Int {
+    val maxPerCall = if (depth != null) 20 else 15
+    val requested = when (depth) {
+        SearchDepth.INSTANT -> (rawCount ?: 5).coerceAtMost(5)
+        SearchDepth.DEEP,
+        SearchDepth.DEEP_RESEARCH,
+        SearchDepth.MAX_RESEARCH -> (rawCount ?: 20).coerceAtLeast(20)
+        else -> rawCount ?: 8
+    }
+    return requested.coerceIn(1, maxPerCall).coerceAtMost(remaining)
+}
+
 /**
  * Per-turn source allowance for Chat research. Counts distinct result URLs, so
  * repeated hits from overlapping queries do not consume the budget twice.

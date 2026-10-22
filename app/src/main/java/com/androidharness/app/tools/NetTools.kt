@@ -30,6 +30,8 @@ class WebSearchTool(
     private val searchApi: () -> SearchApiConfig? = { null },
     /** Turn-scoped source allowance; null means the model decides. */
     private val sourceBudget: SearchSourceBudget? = null,
+    /** Chat's selected research depth; null for Code and Auto. */
+    private val depth: com.androidharness.app.data.SearchDepth? = null,
 ) : Tool {
     override val name = "web_search"
     override val description: String get() = buildString {
@@ -46,7 +48,7 @@ class WebSearchTool(
     override val parametersSchema = Schema.obj(
         mapOf(
             "query" to Schema.string("The search query."),
-            "count" to Schema.integer("Maximum number of results (default 8)."),
+            "count" to Schema.integer("Maximum number of results (default 8; research depth levels request a full batch of 20)."),
             "engine" to Schema.string("duckduckgo | bing | brave | google | auto (default). Keyless mode only."),
         ),
         required = listOf("query"),
@@ -57,7 +59,7 @@ class WebSearchTool(
 
     /** A run-scoped copy that spends from this turn's source budget. */
     fun forDepth(depth: com.androidharness.app.data.SearchDepth): WebSearchTool =
-        depth.maxSources?.let { WebSearchTool(client, searchApi, SearchSourceBudget(it)) } ?: this
+        depth.maxSources?.let { WebSearchTool(client, searchApi, SearchSourceBudget(it), depth) } ?: this
 
     override suspend fun execute(args: JsonObject, ctx: ToolContext): ToolResult {
         val rawQuery = args["query"]?.jsonPrimitive?.content
@@ -74,9 +76,7 @@ class WebSearchTool(
         if (budget != null && budget.remaining == 0) {
             return ToolResult(true, exhaustedText())
         }
-        val count = (rawCount ?: 8).coerceIn(1, 15).let { wanted ->
-            if (budget != null) wanted.coerceAtMost(budget.remaining) else wanted
-        }
+        val count = searchBatchCount(depth, rawCount, budget?.remaining ?: Int.MAX_VALUE)
         val requested = args["engine"]?.jsonPrimitive?.contentOrNull?.trim()?.lowercase()
             ?: "auto"
         val validEngines = setOf("auto", "duckduckgo", "bing", "brave", "google")
@@ -137,10 +137,20 @@ class WebSearchTool(
         val claimed = budget.claim(results.take(count))
         if (claimed.isEmpty()) {
             val message = if (budget.remaining == 0) exhaustedText()
-            else "[No new sources found; ${budget.remaining} of ${budget.maxSources} sources remain this turn.]"
+            else "[No new sources found; ${budget.remaining} of ${budget.maxSources} sources remain this turn. Try a different query angle.]"
             return ToolResult(true, prefix + message)
         }
-        val note = "\n[sources this turn: ${budget.used}/${budget.maxSources}]"
+        val push = when (depth) {
+            com.androidharness.app.data.SearchDepth.DEEP_RESEARCH,
+            com.androidharness.app.data.SearchDepth.MAX_RESEARCH ->
+                " Keep searching different angles until the budget is used."
+            else -> ""
+        }
+        val note = buildString {
+            append("\n[sources this turn: ${budget.used}/${budget.maxSources}, ${budget.remaining} remaining")
+            append(push)
+            append(']')
+        }
         return ToolResult(true, prefix + formatResults(claimed, claimed.size) + suffix + note)
     }
 
