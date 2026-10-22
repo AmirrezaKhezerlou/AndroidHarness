@@ -41,6 +41,11 @@ class WebSearchTool(
                 "run with automatic fallback. Choose an engine with the 'engine' parameter " +
                 "(duckduckgo, bing, brave, google; keyless mode only) or use 'auto'.",
         )
+        searchBackendFor(searchApi())?.let {
+            append(" The user selected ${it.label} in Settings; every search uses that API with the saved key. " +
+                "The engine parameter is ignored while it is active. If the API fails, the result says so " +
+                "and falls back to keyless engines.")
+        }
         sourceBudget?.let {
             append(" This turn allows at most ${it.maxSources} distinct sources; the tool stops returning new sources when the budget is used.")
         }
@@ -56,6 +61,9 @@ class WebSearchTool(
     override val isReadOnly = true
 
     private val keyless = KeylessSearchBackend()
+
+    /** Human name of the configured search API, or null when keyless engines are active. */
+    internal fun activeBackendLabel(): String? = searchBackendFor(searchApi())?.label
 
     /** A run-scoped copy that spends from this turn's source budget. */
     fun forDepth(depth: com.androidharness.app.data.SearchDepth): WebSearchTool =
