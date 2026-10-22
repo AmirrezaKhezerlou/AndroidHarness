@@ -1178,7 +1178,7 @@ private fun ChatScreenContent(
         topBar = {
             val currentProvider = state.activeProvider
             val currentModel = state.effectiveModel ?: currentProvider?.model
-            val headerModel = if (state.conversation.isChat) com.androidharness.app.core.ChatExperience.modelLabel(currentModel) else currentModel
+            val headerModel = com.androidharness.app.core.ChatExperience.modelLabel(currentModel)
             val modelEntry = state.catalogs[currentProvider?.id].orEmpty().firstOrNull { it.id == currentModel }
                 ?: com.androidharness.app.llm.ModelEntry(currentModel.orEmpty())
             val reasoningRevision by com.androidharness.app.llm.ModelsDev.revision.collectAsState()

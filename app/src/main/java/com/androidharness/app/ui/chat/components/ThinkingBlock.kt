@@ -72,121 +72,16 @@ internal fun ThinkingBlock(
     reasoningTokens: Int? = null,
     timing: ThinkingTiming? = null,
 ) {
-    val uiContext = androidx.compose.ui.platform.LocalContext.current
     if (thinking.isBlank() && !live && (reasoningTokens ?: 0) <= 0) return
-    var now by remember(live, timing?.startedAt) { mutableLongStateOf(ThinkingTiming.now()) }
-    LaunchedEffect(live, timing?.startedAt) {
-        if (live && timing?.startedAt != null) {
-            while (true) { now = ThinkingTiming.now(); delay(250) }
-        }
-    }
-    val elapsedMs = timing?.durationMs(if (live) now else ThinkingTiming.now()) ?: thinkingMs
-    val tokens = remember(thinking, reasoningTokens) { thinkingTokenCount(thinking, reasoningTokens) }
-    val metrics = buildList {
-        if (elapsedMs > 0 || (live && timing?.startedAt != null)) {
-            add(if (!live && elapsedMs in 1..999) uiContext.getString(R.string.ui_thinking_under_one_second)
-                else uiContext.getString(R.string.ui_thinking_seconds, elapsedMs / 1000))
-        }
-        tokens?.let {
-            add(uiContext.getString(if (it.estimated) R.string.ui_thinking_estimated_tokens else R.string.ui_thinking_tokens, it.count))
-        }
-    }.joinToString(" · ")
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    val rotation = animateFloatAsState(
-        targetValue = if (expanded) 180f else 0f,
-        animationSpec = fastEffectsSpec(),
-        label = "reasoning chevron",
+    ChatActivity(
+        messages = listOf(com.androidharness.app.core.ChatMessage(
+            role = com.androidharness.app.core.Role.ASSISTANT,
+            text = "",
+            thinking = thinking,
+            thinkingMs = timing?.durationMs(ThinkingTiming.now()) ?: thinkingMs,
+        )),
+        live = live,
     )
-    val scheme = MaterialTheme.colorScheme
-
-    Surface(
-        color = scheme.surfaceContainerLow,
-        shape = MaterialTheme.shapes.large,
-        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.5f)),
-        onClick = { expanded = !expanded },
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (live) {
-                    DotLoading(color = scheme.onSurfaceVariant, dotSize = 4.dp)
-                    Spacer(Modifier.width(8.dp))
-                }
-                Text(
-                    if (live) uiContext.getString(R.string.ui_thinking) else uiContext.getString(R.string.ui_thinking_2),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = scheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                Icon(
-                    Icons.Filled.KeyboardArrowDown,
-                    contentDescription = if (expanded) uiContext.getString(R.string.ui_collapse) else uiContext.getString(R.string.ui_expand),
-                    modifier = Modifier
-                        .size(18.dp)
-                        .graphicsLayer { rotationZ = rotation.value },
-                    tint = scheme.onSurfaceVariant,
-                )
-            }
-            if (metrics.isNotEmpty()) Text(
-                metrics,
-                style = MaterialTheme.typography.labelSmall,
-                color = scheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 2.dp),
-            )
-            AnimatedVisibility(
-                visible = expanded && thinking.isNotBlank(),
-                enter = fadeIn(defaultEffectsSpec()) + expandVertically(animationSpec = fastSpatialSpec()),
-                exit = fadeOut(defaultEffectsSpec()) + shrinkVertically(animationSpec = fastSpatialSpec()),
-            ) {
-                val scroll = rememberScrollState()
-                var following by remember { mutableStateOf(true) }
-                val userScrollObserver = remember { UserScrollObserver { following = false } }
-                LaunchedEffect(live, following) {
-                    if (!live || !following) return@LaunchedEffect
-                    // Observe measured growth instead of racing layout on each text delta.
-                    snapshotFlow { scroll.maxValue }.collect { end ->
-                        if (following && !scroll.isScrollInProgress && end != Int.MAX_VALUE) {
-                            scroll.scrollTo(end)
-                        }
-                    }
-                }
-                // Paint the rail after measurement instead of asking the entire text for
-                // an intrinsic height before laying it out a second time.
-                Box(
-                    Modifier
-                        .padding(top = 8.dp)
-                        .nestedScroll(userScrollObserver)
-                        .drawBehind {
-                            val railWidth = 2.dp.toPx()
-                            drawRoundRect(
-                                color = scheme.outlineVariant.copy(alpha = 0.7f),
-                                topLeft = Offset(if (layoutDirection == LayoutDirection.Rtl) size.width - railWidth else 0f, 0f),
-                                size = Size(railWidth, size.height),
-                                cornerRadius = CornerRadius(1.dp.toPx()),
-                            )
-                        }
-                        .padding(start = 12.dp),
-                ) {
-                    // A completed, long transcript can lay out only visible paragraphs.
-                    // Live thinking retains the exact scroll observer/following path above.
-                    val paragraphs = remember(thinking, live) {
-                        if (!live && thinking.length > 8_000) thinking.split('\n').takeIf { it.size > 80 }
-                        else null
-                    }
-                    val textModifier = Modifier.fillMaxWidth().heightIn(max = 260.dp)
-                    if (paragraphs != null) {
-                        LazyColumn(modifier = textModifier) {
-                            items(paragraphs.size, key = { it }) { index ->
-                                ThinkingText(paragraphs[index], Modifier.fillMaxWidth())
-                            }
-                        }
-                    } else {
-                        ThinkingText(thinking, textModifier.verticalScroll(scroll))
-                    }
-                }
-            }
-        }
-    }
 }
 
 @Composable
