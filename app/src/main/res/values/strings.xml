@@ -764,4 +764,12 @@
     <string name="chat_tool_failed">Activity unavailable</string>
     <string name="chat_tool_result_failed">This request did not succeed. Other sources may still be available.</string>
     <string name="chat_tool_result_empty">No source links were returned.</string>
+    <string name="settings_group_chat_options">Chat</string>
+    <string name="settings_page_chat_options_title">Chat Option</string>
+    <string name="settings_page_chat_options_desc">Choose which section opens when you launch the app</string>
+    <string name="settings_start_screen">Start screen</string>
+    <string name="settings_start_code_desc">Open Code when the app starts.</string>
+    <string name="settings_start_chat_desc">Open Chat when the app starts.</string>
+    <string name="settings_start_last_selected">Last selected</string>
+    <string name="settings_start_last_desc">Open whichever section you used last.</string>
 </resources>

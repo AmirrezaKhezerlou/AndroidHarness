@@ -61,6 +61,7 @@ object SettingsBackupPolicy {
                 !com.androidharness.app.chatgpt.ChatGptProtocol.isProvider(id)
         }.copy(
             pinnedSessions = emptySet(), archivedSessions = emptySet(), lastActiveSessionId = null,
+            lastConversationKind = ConversationKind.CODE,
             permissionMode = com.androidharness.app.agent.PermissionMode.CONFIRM_RISKY,
             biometricLockEnabled = false, biometricLockTimeoutMinutes = 0, allowScreenshots = false,
         )

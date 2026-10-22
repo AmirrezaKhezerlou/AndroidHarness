@@ -128,18 +128,21 @@ fun AppNav(container: AppContainer) {
     // Stay on setup until Skip or Start harness. Connecting a provider used
     // to flip this and remount NavHost onto chat mid-flow.
     val needsSetup = !settings.onboardingDone
-    val lastSession = settings.lastActiveSessionId?.takeIf { settings.resumeLastChat }
-    val resumeKind by androidx.compose.runtime.produceState<com.androidharness.app.data.ConversationKind?>(
-        initialValue = if (lastSession == null) com.androidharness.app.data.ConversationKind.CODE else null, key1 = lastSession) {
-        value = lastSession?.let { com.androidharness.app.data.ConversationConfig.decode(container.sessions.session(it)?.conversationJson).kind }
-            ?: com.androidharness.app.data.ConversationKind.CODE
+    // Read startup preferences once. Changes made in Settings apply to the next launch,
+    // and regular navigation must not recalculate or remount the initial destination.
+    val launchSettings = remember(container) { settings }
+    val startup by androidx.compose.runtime.produceState<com.androidharness.app.data.ConversationStartup?>(initialValue = null, key1 = container) {
+        val previous = launchSettings.lastActiveSessionId?.let { container.sessions.session(it) }
+        val previousKind = previous?.let { com.androidharness.app.data.ConversationConfig.decode(it.conversationJson).kind }
+        value = com.androidharness.app.data.ConversationStartup.resolve(launchSettings, previousKind)
     }
-    if (resumeKind == null) { Box(Modifier.fillMaxSize()); return }
+    val launch = startup
+    if (launch == null) { Box(Modifier.fillMaxSize()); return }
     val startDestination = remember {
         when {
             needsSetup -> "setup"
-            !lastSession.isNullOrBlank() && resumeKind == com.androidharness.app.data.ConversationKind.CODE -> "chat/$lastSession"
-            else -> "chat"
+            launch.sessionId != null -> "chat/${launch.sessionId}"
+            else -> "chat?kind=${launch.kind.name}"
         }
     }
 
@@ -186,7 +189,7 @@ fun AppNav(container: AppContainer) {
     val currentEntry by nav.currentBackStackEntryFlow.collectAsStateWithLifecycle(initialValue = null)
     var draftSessionId by remember { mutableStateOf<String?>(null) }
     var workspaceChatViewModel by remember { mutableStateOf<ChatViewModel?>(null) }
-    var lastConversation by remember { mutableStateOf(com.androidharness.app.data.ConversationConfig()) }
+    var lastConversation by remember { mutableStateOf(com.androidharness.app.data.ConversationConfig(kind = launch.kind)) }
     val currentSessionId = when (currentEntry?.destination?.route) {
         "chat/{sessionId}?messageId={messageId}" -> currentEntry?.arguments?.getString("sessionId")
         "chat?kind={kind}" -> draftSessionId
@@ -201,6 +204,11 @@ fun AppNav(container: AppContainer) {
         if (activeChatState?.conversationReady == true) lastConversation = activeConversation
     }
     val activeKind = activeConversation.kind
+    androidx.compose.runtime.LaunchedEffect(isConversationRoute, activeChatState?.conversationReady, activeKind) {
+        if (isConversationRoute && activeChatState?.conversationReady == true) {
+            container.settings.setLastConversationKind(activeKind)
+        }
+    }
     var codeRoute by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
     var plainRoute by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
     val workspaceSessionId = currentSessionId
@@ -507,8 +515,11 @@ fun AppNav(container: AppContainer) {
             ) { entry ->
                 val sessionId = entry.arguments?.getString("sessionId")
                 val searchMessageId = entry.arguments?.getString("messageId")
+                val initialKind = sessions.firstOrNull { it.id == sessionId }?.let {
+                    com.androidharness.app.data.ConversationConfig.decode(it.conversationJson).kind
+                } ?: if (sessionId == launch.sessionId) launch.kind else com.androidharness.app.data.ConversationKind.CODE
                 val vm: ChatViewModel =
-                    viewModel(factory = ChatViewModel.factory(container, sessionId))
+                    viewModel(factory = ChatViewModel.factory(container, sessionId, initialKind))
                 androidx.compose.runtime.DisposableEffect(vm) {
                     workspaceChatViewModel = vm
                     onDispose { if (workspaceChatViewModel === vm) workspaceChatViewModel = null }
@@ -746,7 +757,7 @@ fun AppNav(container: AppContainer) {
                 com.androidharness.app.ui.setup.SetupScreen(
                     container = container,
                     onFinish = {
-                        nav.navigate("chat") { popUpTo("setup") { inclusive = true } }
+                        nav.navigate("chat?kind=${launch.kind.name}") { popUpTo("setup") { inclusive = true } }
                     },
                 )
             }

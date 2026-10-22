@@ -762,4 +762,12 @@
     <string name="chat_tool_failed">活动暂不可用</string>
     <string name="chat_tool_result_failed">此请求未成功。其他来源可能仍然可用。</string>
     <string name="chat_tool_result_empty">未返回来源链接。</string>
+    <string name="settings_group_chat_options">聊天</string>
+    <string name="settings_page_chat_options_title">聊天选项</string>
+    <string name="settings_page_chat_options_desc">选择启动应用时打开的版块</string>
+    <string name="settings_start_screen">启动页面</string>
+    <string name="settings_start_code_desc">启动应用时打开代码版块。</string>
+    <string name="settings_start_chat_desc">启动应用时打开聊天版块。</string>
+    <string name="settings_start_last_selected">上次选择</string>
+    <string name="settings_start_last_desc">打开上次使用的版块。</string>
 </resources>

@@ -29,6 +29,12 @@ internal enum class SettingsPage(
         R.string.settings_group_language,
         "language locale translation translate system default english chinese 中文 简体 语言 poeditor contribute",
     ),
+    CHAT_OPTIONS(
+        R.string.settings_page_chat_options_title,
+        R.string.settings_page_chat_options_desc,
+        R.string.settings_group_chat_options,
+        "chat option start screen default ui selection code chat last selected launch startup",
+    ),
     GITHUB(
         R.string.settings_page_github_title,
         R.string.settings_page_github_desc,
@@ -201,6 +207,13 @@ private val primarySettingsEntries = SettingsPage.entries.map { page ->
 }
 
 private val subSettingsEntries = listOfNotNull(
+    SettingsSearchEntry(
+        R.string.settings_start_screen,
+        R.string.settings_page_chat_options_desc,
+        SettingsPage.CHAT_OPTIONS,
+        "default ui selection code chat last selected start screen launch startup",
+        anchor = R.string.settings_start_screen,
+    ),
     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.BAKLAVA) SettingsSearchEntry(
         R.string.settings_search_live_updates_title,
         R.string.settings_search_live_updates_desc,

@@ -5,6 +5,12 @@ import org.junit.Test
 import com.androidharness.app.R
 
 class SettingsNavigationTest {
+    @Test fun `chat option follows language and its startup choice is searchable`() {
+        assertEquals(SettingsPage.LANGUAGE.ordinal + 1, SettingsPage.CHAT_OPTIONS.ordinal)
+        assertTrue(SettingsPage.CHAT_OPTIONS in matchingSettingsPages("last selected", settingsTestStrings()))
+        assertTrue(matchingSettingsEntries("start screen", settingsTestStrings()).any { it.page == SettingsPage.CHAT_OPTIONS && it.anchor == R.string.settings_start_screen })
+    }
+
     @Test
     fun `storage is searchable and supports a direct link`() {
         assertEquals(listOf(SettingsPage.STORAGE), matchingSettingsPages("cleanup disk", settingsTestStrings()))
@@ -54,7 +60,8 @@ class SettingsNavigationTest {
     @Test
     fun `language is first and GitHub integration still supports a direct link`() {
         assertEquals(SettingsPage.LANGUAGE, matchingSettingsPages("", settingsTestStrings()).first())
-        assertEquals(SettingsPage.GITHUB, matchingSettingsPages("", settingsTestStrings())[1])
+        assertEquals(SettingsPage.CHAT_OPTIONS, matchingSettingsPages("", settingsTestStrings())[1])
+        assertEquals(SettingsPage.GITHUB, matchingSettingsPages("", settingsTestStrings())[2])
         assertEquals(SettingsPage.LANGUAGE, settingsDeepLink("language"))
         assertEquals(SettingsPage.GITHUB, settingsDeepLink("github"))
         assertEquals(listOf(SettingsPage.GITHUB), matchingSettingsPages("commit push", settingsTestStrings()))

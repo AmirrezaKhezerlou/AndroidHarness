@@ -190,6 +190,7 @@ class ConversationSectionsDeviceTest {
         val before = c.sessions.sessions.first().map { it.id }.toSet()
         val project = c.workspace.currentProjectOnce()
         val chat = c.sessions.createSession("Navigation Chat fixture", project.id, ConversationConfig(ConversationKind.CHAT))
+        c.settings.setStartScreen(com.androidharness.app.data.StartScreen.CODE)
         c.settings.setOnboardingDone(true)
         c.settings.setResumeLastChat(true)
         c.settings.setWorkspaceLayout(WorkspaceLayoutMode.PHONE)
@@ -243,6 +244,8 @@ class ConversationSectionsDeviceTest {
             c.settings.setResumeLastChat(saved.resumeLastChat)
             c.settings.setWorkspaceLayout(saved.workspaceLayout)
             c.settings.setLastActiveSessionId(saved.lastActiveSessionId)
+            c.settings.setStartScreen(saved.startScreen)
+            c.settings.setLastConversationKind(saved.lastConversationKind)
         }
     }
 

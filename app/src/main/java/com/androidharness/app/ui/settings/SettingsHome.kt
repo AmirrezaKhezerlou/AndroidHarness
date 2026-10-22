@@ -208,6 +208,7 @@ internal fun SettingsPanel(modifier: Modifier = Modifier, content: @Composable C
 
 private fun settingsIcon(page: SettingsPage): ImageVector = when (page) {
     SettingsPage.LANGUAGE -> Icons.Outlined.Translate
+    SettingsPage.CHAT_OPTIONS -> Icons.Outlined.ChatBubbleOutline
     SettingsPage.CONNECTED_ACCOUNTS -> Icons.Outlined.AccountCircle
     SettingsPage.MODELS -> ProviderGlyph
     SettingsPage.SUBAGENT -> Icons.Outlined.AccountTree
