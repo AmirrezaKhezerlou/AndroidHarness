@@ -52,4 +52,7 @@ Use inline rich responses for visuals and documents in Chat. For a custom intera
 
     fun title(text: String): String = com.androidharness.app.core.response.UserMessageContent.visibleText(text)
         .substringBefore("[Attached file:").replace(Regex("\\s+"), " ").trim().take(72)
+
+    /** Header label: Chat shows the model name without the catalog's provider prefix. */
+    fun modelLabel(model: String?): String? = model?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
 }

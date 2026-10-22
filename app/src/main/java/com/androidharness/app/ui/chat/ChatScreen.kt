@@ -1067,6 +1067,7 @@ private fun ChatScreenContent(
         topBar = {
             val currentProvider = state.activeProvider
             val currentModel = state.effectiveModel ?: currentProvider?.model
+            val headerModel = if (state.conversation.isChat) com.androidharness.app.core.ChatExperience.modelLabel(currentModel) else currentModel
             val modelEntry = state.catalogs[currentProvider?.id].orEmpty().firstOrNull { it.id == currentModel }
                 ?: com.androidharness.app.llm.ModelEntry(currentModel.orEmpty())
             val reasoningRevision by com.androidharness.app.llm.ModelsDev.revision.collectAsState()
@@ -1102,10 +1103,10 @@ private fun ChatScreenContent(
                     currentProvider == null && !state.sameModelAcrossChats -> uiContext.getString(R.string.ui_choose_a_model_for_this_chat)
                     currentProvider == null -> uiContext.getString(R.string.ui_add_a_provider_to_get_started)
                     state.dualPlanning && state.mode == AgentMode.PLAN ->
-                        "$currentModel (Plan)"
+                        "$headerModel (Plan)"
                     state.dualPlanning && state.mode == AgentMode.ACT ->
-                        "$currentModel (Exec)"
-                    else -> currentModel ?: currentProvider.name
+                        "$headerModel (Exec)"
+                    else -> headerModel ?: currentProvider.name
                 },
                 modelScopeLabel = if (state.sameModelAcrossChats) null else uiContext.getString(R.string.ui_this_chat),
                 mode = state.mode,
