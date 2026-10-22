@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
@@ -189,6 +190,22 @@ internal fun ChatSources(messages: List<ChatMessage>, onOpenUrl: (String) -> Uni
                     Icon(Icons.Outlined.Public, null, Modifier.size(18.dp))
                 }
             }
+        }
+    }
+}
+
+/** Quiet confirmation below a reply that saved something to memory. */
+@Composable
+internal fun ChatMemorySaved() {
+    val scheme = MaterialTheme.colorScheme
+    Surface(shape = RoundedCornerShape(50), color = scheme.secondaryContainer.copy(alpha = 0.65f)) {
+        Row(
+            Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(Icons.Outlined.Check, null, Modifier.size(13.dp), tint = scheme.onSecondaryContainer)
+            Text(stringResource(R.string.chat_memory_saved), style = MaterialTheme.typography.labelSmall, color = scheme.onSecondaryContainer)
         }
     }
 }

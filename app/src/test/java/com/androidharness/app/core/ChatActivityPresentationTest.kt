@@ -71,4 +71,12 @@ class ChatActivityPresentationTest {
         assertEquals(listOf(false, true), ChatActivityPresentation.steps(failed).map { it.failed })
         assertTrue(ChatActivityPresentation.steps(failed).all { it.finished })
     }
+
+    @Test fun memorySavedFeedbackRequiresASuccessfulRememberResult() {
+        val remember = call("m", "remember")
+        assertTrue(ChatActivityPresentation.savedMemory(listOf(assistant(remember), result("m", "Saved to global memory."))))
+        assertFalse(ChatActivityPresentation.savedMemory(listOf(assistant(remember), result("m", "Memory is off", true))))
+        assertFalse(ChatActivityPresentation.savedMemory(listOf(assistant(call("s", "web_search")), result("s", "ok"))))
+        assertFalse(ChatActivityPresentation.savedMemory(listOf(result("m", "orphan result"))))
+    }
 }

@@ -21,6 +21,13 @@ internal object ChatActivityPresentation {
         }
     }
 
+    /** True only when a remember call in this turn received a successful result. */
+    fun savedMemory(messages: List<ChatMessage>): Boolean {
+        val rememberIds = calls(messages).filter { it.name == "remember" }.map { it.id }.toSet()
+        if (rememberIds.isEmpty()) return false
+        return messages.any { it.role == Role.TOOL && it.toolCallId in rememberIds && !it.isError }
+    }
+
     fun activeCall(messages: List<ChatMessage>, running: List<ToolCallData>): ToolCallData? {
         val finished = messages.filter { it.role == Role.TOOL }.mapNotNull { it.toolCallId }.toSet()
         return running.lastOrNull { it.id !in finished } ?: calls(messages).lastOrNull { it.id !in finished }

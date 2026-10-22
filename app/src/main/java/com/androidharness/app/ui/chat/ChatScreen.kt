@@ -1416,6 +1416,9 @@ private fun ChatScreenContent(
                                                         onClick = { viewModel.container.tts.toggle(id, replyText) }) }
                                                     ResponseActions(onFork = { viewModel.requestFork(message) { onNavigateToSession(it) } }, onUndo = null)
                                                 }
+                                                if (com.androidharness.app.core.ChatActivityPresentation.savedMemory(conversationTurn)) {
+                                                    com.androidharness.app.ui.chat.components.ChatMemorySaved()
+                                                }
                                             }
                                         }
                                     }

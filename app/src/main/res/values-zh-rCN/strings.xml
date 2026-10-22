@@ -762,6 +762,7 @@
     <string name="chat_tool_failed">活动暂不可用</string>
     <string name="chat_tool_result_failed">此请求未成功。其他来源可能仍然可用。</string>
     <string name="chat_tool_result_empty">未返回来源链接。</string>
+    <string name="chat_memory_saved">记忆已保存</string>
     <string name="settings_group_chat_options">聊天</string>
     <string name="settings_page_chat_options_title">聊天选项</string>
     <string name="settings_page_chat_options_desc">选择启动页面以及聊天打开方式</string>
