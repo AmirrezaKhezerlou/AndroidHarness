@@ -75,7 +75,7 @@ internal fun ChatActivity(
         else -> stringResource(R.string.chat_thought)
     }
     ChatActivityRow(title, if (live) active?.name else null, live, entries.isNotEmpty(), followLatest = true, autoExpand = autoExpand,
-        progress = research.takeIf { live },
+        progress = research,
         trailing = if (showThinkingMetrics) ({ ChatThinkingMetrics(messages, streamingThinking, thinkingTiming, reasoningTokens, live) }) else null) {
         entries.forEach { entry ->
             when (entry) {
@@ -236,20 +236,6 @@ private fun ChatActivityRow(
                         (fadeIn(tween(if (motion) 180 else 0)) + slideInVertically { if (motion) it / 3 else 0 }) togetherWith
                             fadeOut(tween(if (motion) 100 else 0))
                     }, label = "Chat activity phase", modifier = Modifier.weight(1f, fill = false)) { label -> ChatShimmerText(label, live && motion) }
-                    progress?.let { counters ->
-                        Text(
-                            buildString {
-                                append(counters.sourcesUsed).append('/').append(counters.sourcesMax)
-                                if (counters.readsRequired > 0) {
-                                    append(" · ").append(counters.pagesRead).append('/')
-                                        .append(counters.readsRequired).append(" read")
-                                }
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = scheme.onSurfaceVariant,
-                            maxLines = 1,
-                        )
-                    }
                     if (expandable) Icon(if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
                         null, Modifier.size(16.dp), tint = scheme.onSurfaceVariant)
                 }
@@ -268,7 +254,44 @@ private fun ChatActivityRow(
                 contentPadding = PaddingValues(top = 4.dp, bottom = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp), content = details)
         }
+        progress?.let { counters ->
+            val style = MaterialTheme.typography.labelSmall
+            val color = scheme.onSurfaceVariant
+            Row(
+                Modifier.padding(top = 4.dp, bottom = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AnimatedCount(counters.sourcesUsed, motion) { count ->
+                    Text("$count", style = style, color = color)
+                }
+                Text("/${counters.sourcesMax} sources", style = style, color = color)
+                if (counters.readsRequired > 0) {
+                    Text(" · ", style = style, color = color)
+                    AnimatedCount(counters.pagesRead, motion) { count ->
+                        Text("$count", style = style, color = color)
+                    }
+                    Text(" read", style = style, color = color)
+                }
+            }
+        }
     }
+}
+
+/** Slides and fades a changed number while the research counters grow. */
+@Composable
+private fun AnimatedCount(value: Int, motion: Boolean, content: @Composable (Int) -> Unit) {
+    if (!motion) {
+        content(value)
+        return
+    }
+    AnimatedContent(
+        targetState = value,
+        transitionSpec = {
+            (slideInVertically(tween(180)) { it / 2 } + fadeIn(tween(180))) togetherWith
+                (slideOutVertically(tween(120)) { -it / 2 } + fadeOut(tween(120)))
+        },
+        label = "Research count",
+    ) { count -> content(count) }
 }
 
 /** Compact, left-aligned attribution below the reply, with domains inside the sources sheet. */
