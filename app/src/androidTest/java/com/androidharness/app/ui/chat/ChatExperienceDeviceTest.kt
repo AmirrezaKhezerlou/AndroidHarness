@@ -400,6 +400,8 @@ class ChatExperienceDeviceTest {
                 scenario.onActivity { activity -> activity.setContent { HarnessTheme(dynamicColor = false) {
                     Column(Modifier.fillMaxSize().statusBarsPadding().padding(24.dp)) {
                         com.androidharness.app.ui.chat.components.ChatMemoryReceipt(messages, c, false)
+                        com.androidharness.app.ui.chat.components.ChatMemoryReceipt(emptyList(), c, false,
+                            listOf(SuppliedMemory(requireNotNull(memoryId), text)))
                     }
                 } } }
                 tap("Memory saved"); tap(text)
@@ -410,7 +412,11 @@ class ChatExperienceDeviceTest {
                 tap("Save"); awaitGone("Edit memory"); await(changed)
                 assertEquals(changed, c.memory.memories.first().single { it.id == memoryId }.text)
                 screenshot("chat-memory-receipt-edited")
-                tap(changed); tap("Delete"); await("Delete this memory?"); tap("Delete")
+                tap("Close"); tap("Memory used · 1"); await(text)
+                screenshot("chat-memory-used-original-snapshot")
+                tap(text); await(changed); tap("Delete"); await("Delete this memory?"); tap("Delete")
+                await(text + " · Deleted from memory")
+                tap("Close"); tap("Memory saved")
                 await("This saved memory is no longer available here. Older receipts can be managed in Settings → Memory.")
                 assertFalse(c.memory.memories.first().any { it.id == memoryId })
             }
@@ -535,10 +541,276 @@ class ChatExperienceDeviceTest {
         }
     }
 
+    @Test fun downButtonReachesTheAnswerBottomInsteadOfTheQuestion(): Unit = runBlocking {
+        val sid = c.sessions.createSession("Down button fixture", conversation = ConversationConfig(ConversationKind.CHAT))
+        val store = ViewModelStore()
+        try {
+            c.sessions.addMessage(sid, ChatMessage(Role.USER, "Question at the top"), "down-turn")
+            c.sessions.addMessage(sid, ChatMessage(Role.ASSISTANT,
+                (1..50).joinToString("\n\n") { "Paragraph $it. " + "Read the answer carefully. ".repeat(5) } + "\n\nFINAL ANSWER END", generation = GenerationMetadata(suppliedMemories = listOf(SuppliedMemory("fixture-memory", "An internal saved preference.")))), "down-turn")
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { activity ->
+                    val vm = ChatViewModel(c, sid); store.put("down", vm)
+                    activity.setContent { HarnessTheme(dynamicColor = false) { ChatScreen(vm, {}, { _, _ -> }, {}, {}, onOpenSubagent = {}) } }
+                }
+                await("FINAL ANSWER END")
+                val display = instrumentation.targetContext.resources.displayMetrics
+                val x = display.widthPixels * .5f
+                val top = display.heightPixels * .3f
+                val bottom = display.heightPixels * .7f
+                val begun = SystemClock.uptimeMillis()
+                instrumentation.sendPointerSync(android.view.MotionEvent.obtain(begun, begun, android.view.MotionEvent.ACTION_DOWN, x, top, 0))
+                repeat(12) { index ->
+                    val at = SystemClock.uptimeMillis()
+                    instrumentation.sendPointerSync(android.view.MotionEvent.obtain(begun, at, android.view.MotionEvent.ACTION_MOVE, x, top + (bottom - top) * (index + 1) / 12, 0))
+                    SystemClock.sleep(16)
+                }
+                instrumentation.sendPointerSync(android.view.MotionEvent.obtain(begun, SystemClock.uptimeMillis(), android.view.MotionEvent.ACTION_UP, x, bottom, 0))
+                await("Scroll to latest"); tap("Scroll to latest"); await("FINAL ANSWER END")
+                SystemClock.sleep(500)
+                await("FINAL ANSWER END")
+                assertNull(find("Question at the top"))
+                assertNull("The memory-used receipt is hidden from the transcript", find("Memory used · 1"))
+                assertNull(find("An internal saved preference."))
+                screenshot("chat-down-button-actual-bottom")
+            }
+        } finally { instrumentation.runOnMainSync { store.clear() }; c.sessions.session(sid)?.let { c.sessions.deleteSession(it) } }
+    }
+
+    @Test fun rapidUpwardFlingsStayInHistoryWhileTheReplyKeepsStreaming() = exerciseRapidUpwardFlings(ConversationKind.CHAT)
+
+    @Test fun codeRapidUpwardFlingsStayInHistoryWhileTheReplyKeepsStreaming() = exerciseRapidUpwardFlings(ConversationKind.CODE)
+
+    private fun exerciseRapidUpwardFlings(kind: ConversationKind): Unit = runBlocking {
+        val sid = c.sessions.createSession("Fast scroll fixture", conversation = ConversationConfig(kind))
+        val store = ViewModelStore()
+        // Publish deterministic deltas through the same live state mirrored by the production screen.
+        @Suppress("UNCHECKED_CAST")
+        val live = c.runManager.live(sid) as kotlinx.coroutines.flow.MutableStateFlow<RunManager.LiveRunState>
+        val reply = (1..45).joinToString("\n\n") { "Streaming paragraph $it. " + "Readable answer text. ".repeat(5) }
+        var updates: kotlinx.coroutines.Job? = null
+        fun tailVisible() = nodes().any { it.isVisibleToUser && it.text?.toString()?.startsWith("STREAM TAIL") == true }
+        fun waitFor(description: String, condition: () -> Boolean) {
+            val deadline = SystemClock.uptimeMillis() + 8000
+            while (!condition() && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(50)
+            assertTrue(description, condition())
+        }
+        try {
+            c.sessions.addMessage(sid, ChatMessage(Role.USER, "Write a long answer"), "fast-scroll-turn")
+            live.value = RunManager.LiveRunState(sid, running = true, turnId = "fast-scroll-turn",
+                liveMessageId = "fast-scroll-live", streamingText = reply + "\n\nSTREAM TAIL 0")
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { activity ->
+                    val vm = ChatViewModel(c, sid); store.put("fast-scroll", vm)
+                    activity.setContent { HarnessTheme(dynamicColor = false) { ChatScreen(vm, {}, { _, _ -> }, {}, {}, onOpenSubagent = {}) } }
+                }
+                waitFor("The live answer opens at the bottom", ::tailVisible)
+                updates = launch(kotlinx.coroutines.Dispatchers.Default) {
+                    var tick = 0
+                    while (true) {
+                        kotlinx.coroutines.delay(16)
+                        tick++
+                        live.value = live.value.copy(streamingText = reply + "\n\n" + "New token ".repeat(tick) + "\n\nSTREAM TAIL $tick")
+                    }
+                }
+                repeat(4) {
+                    if (it > 0) {
+                        tap("Scroll to latest")
+                        waitFor("The down button still reaches a streaming answer's bottom", ::tailVisible)
+                    }
+                    val display = instrumentation.targetContext.resources.displayMetrics
+                    val x = display.widthPixels * .5f
+                    val from = display.heightPixels * .35f
+                    val to = display.heightPixels * .65f
+                    val down = SystemClock.uptimeMillis()
+                    fun event(action: Int, y: Float) {
+                        val motion = android.view.MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, x, y, 0)
+                        try { instrumentation.sendPointerSync(motion) } finally { motion.recycle() }
+                    }
+                    event(android.view.MotionEvent.ACTION_DOWN, from)
+                    repeat(3) { step ->
+                        SystemClock.sleep(16)
+                        event(android.view.MotionEvent.ACTION_MOVE, from + (to - from) * (step + 1) / 3)
+                    }
+                    event(android.view.MotionEvent.ACTION_UP, to)
+                    waitFor("A fast upward fling leaves the latest content", { find("Scroll to latest") != null && !tailVisible() })
+                    SystemClock.sleep(800)
+                    assertFalse("Streaming must not pull a reader back to the bottom", tailVisible())
+                    assertNotNull(find("Scroll to latest"))
+                }
+                screenshot("${kind.name.lowercase()}-fast-upward-fling-stays-in-history")
+            }
+        } finally {
+            updates?.cancel()
+            updates?.join()
+            live.value = RunManager.LiveRunState(sid)
+            instrumentation.runOnMainSync { store.clear() }
+            c.sessions.session(sid)?.let { c.sessions.deleteSession(it) }
+        }
+    }
+
+    @Test fun previousAnswerVersionsRemainBrowsableAfterAFollowUpWithoutChangingHistory(): Unit = runBlocking {
+        val sid = c.sessions.createSession("Old versions fixture", conversation = ConversationConfig(ConversationKind.CHAT))
+        try {
+            val originalQuestion = c.sessions.addMessage(sid, ChatMessage(Role.USER, "First question"), "original-version")
+            c.sessions.addMessage(sid, ChatMessage(Role.ASSISTANT, "Original saved answer"), "original-version")
+            c.sessions.archiveChatAnswer(sid, originalQuestion)
+            c.sessions.truncateFrom(sid, originalQuestion)
+            c.sessions.addMessage(sid, ChatMessage(Role.USER, "First question"), "current-version")
+            c.sessions.addMessage(sid, ChatMessage(Role.ASSISTANT, "Current answer"), "current-version")
+            c.sessions.addMessage(sid, ChatMessage(Role.USER, "A later question"), "later-turn")
+            c.sessions.addMessage(sid, ChatMessage(Role.ASSISTANT, "Later answer stays"), "later-turn")
+            val before = c.sessions.messages(sid)
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { activity -> activity.setContent { HarnessTheme(dynamicColor = false) {
+                    androidx.compose.material3.Surface(Modifier.fillMaxSize()) {
+                        Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
+                            val density = LocalDensity.current
+                            CompositionLocalProvider(LocalDensity provides Density(density.density, 1.5f)) {
+                                com.androidharness.app.ui.chat.components.ChatAnswerVersions(sid, before, c.sessions, true,
+                                    turnId = "current-version", readOnly = true, onSelect = { _, _ -> fail("Browsing older answers must not replace history") })
+                            }
+                        }
+                    }
+                } } }
+                await("2 of 2"); tap("Previous answer"); await("Saved answers"); await("Original saved answer")
+                tap("Next answer"); await("Current answer")
+                assertEquals(before, c.sessions.messages(sid))
+                screenshot("chat-browse-older-answer-version")
+            }
+        } finally { c.sessions.session(sid)?.let { c.sessions.deleteSession(it) } }
+    }
+
+    @Test fun quoteActionUsesTheSelectedTextInsteadOfStaleClipboardContents() {
+        val automation = instrumentation.uiAutomation
+        val oldFlags = automation.serviceInfo.flags
+        automation.serviceInfo = automation.serviceInfo.apply {
+            flags = flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        }
+        val quoteText = "Explain this particular sentence."
+        val chosen = mutableStateOf("")
+        val manager = c.appContext.getSystemService(android.content.ClipboardManager::class.java)
+        var previous: android.content.ClipData? = null
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            try {
+                scenario.onActivity { activity ->
+                    previous = manager.primaryClip
+                    manager.setPrimaryClip(android.content.ClipData.newPlainText("stale", "WRONG OLD CLIPBOARD"))
+                    activity.setContent { HarnessTheme(dynamicColor = false) {
+                        androidx.compose.material3.Surface(Modifier.fillMaxSize()) {
+                            Column(Modifier.fillMaxSize().statusBarsPadding().padding(24.dp)) {
+                                com.androidharness.app.ui.chat.components.QuoteReplySelection({ chosen.value = it }) {
+                                    com.androidharness.app.ui.chat.components.AssistantText(quoteText)
+                                }
+                                if (chosen.value.isNotEmpty()) androidx.compose.material3.Text("Quoted result: " + chosen.value)
+                            }
+                        }
+                    } }
+                }
+                val rect = android.graphics.Rect().also { await(quoteText).getBoundsInScreen(it) }
+                val begun = SystemClock.uptimeMillis()
+                instrumentation.sendPointerSync(android.view.MotionEvent.obtain(begun, begun, android.view.MotionEvent.ACTION_DOWN, rect.centerX().toFloat(), rect.centerY().toFloat(), 0))
+                SystemClock.sleep(650)
+                instrumentation.sendPointerSync(android.view.MotionEvent.obtain(begun, SystemClock.uptimeMillis(), android.view.MotionEvent.ACTION_UP, rect.centerX().toFloat(), rect.centerY().toFloat(), 0))
+                await("Quote"); tap("Select all"); await("Quote"); tap("Quote")
+                await("Quoted result: $quoteText")
+                assertEquals(quoteText, chosen.value)
+                screenshot("chat-quote-selected-text")
+            } finally { instrumentation.runOnMainSync {
+                previous?.let(manager::setPrimaryClip) ?: manager.clearPrimaryClip()
+                automation.serviceInfo = automation.serviceInfo.apply { flags = oldFlags }
+            } }
+        }
+    }
+
+    @Test fun attachmentFailuresStayVisibleAndBlockSendingUntilRemoved(): Unit = runBlocking {
+        val sid = c.sessions.createSession("Attachment fixture", conversation = ConversationConfig(ConversationKind.CHAT))
+        val store = ViewModelStore()
+        val root = File(c.appContext.cacheDir, "shared/readiness-${System.nanoTime()}").apply { mkdirs() }
+        lateinit var vm: ChatViewModel
+        fun uri(file: File) = androidx.core.content.FileProvider.getUriForFile(c.appContext, c.appContext.packageName + ".update", file)
+        fun waitFor(predicate: () -> Boolean) {
+            val deadline = SystemClock.uptimeMillis() + 8000
+            while (!predicate() && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(100)
+            assertTrue(predicate())
+        }
+        try {
+            val ready = File(root, "ready.txt").apply { writeText("A readable attachment") }
+            val binary = File(root, "unsupported.bin").apply { writeBytes(byteArrayOf(0, 1, 2, 3)) }
+            val huge = File(root, "too-large.txt").apply { java.io.RandomAccessFile(this, "rw").use { it.setLength(FileAttachments.COPY_BYTE_LIMIT + 1) } }
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { activity ->
+                    vm = ChatViewModel(c, sid); store.put("attachments", vm)
+                    activity.setContent { HarnessTheme(dynamicColor = false) {
+                        val state by vm.state.collectAsState()
+                        androidx.compose.material3.Surface(Modifier.fillMaxSize()) {
+                            Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
+                                com.androidharness.app.ui.chat.components.ChatAttachmentReadiness(state, vm::removeAttachment, vm::removeFileAttachment, vm::removeAttachmentImport)
+                            }
+                        }
+                    } }
+                }
+                waitFor { vm.state.value.conversation.isChat }
+                vm.attachFile(uri(ready)); waitFor { vm.state.value.fileAttachments.any { it.name == ready.name } && vm.state.value.attachmentImports.isEmpty() }
+                await(FileAttachments.humanBytes(ready.length()) + " · Ready")
+                vm.attachFile(uri(binary)); waitFor { vm.state.value.attachmentImports.any { it.status == AttachmentImportStatus.UNSUPPORTED } }
+                assertFalse(vm.send("Do not send an unsupported attachment"))
+                val binaryText = File(root, "binary.txt").apply { writeBytes(byteArrayOf(0, 1, 2, 3)) }
+                vm.attachFile(uri(binaryText)); waitFor { vm.state.value.attachmentImports.any { it.name == binaryText.name && it.status == AttachmentImportStatus.UNSUPPORTED } }
+                val missing = File(root, "missing.txt")
+                vm.attachFile(uri(missing)); waitFor { vm.state.value.attachmentImports.any { it.name == missing.name && it.status == AttachmentImportStatus.FAILED } }
+                vm.attachFile(uri(huge)); waitFor { vm.state.value.attachmentImports.any { it.status == AttachmentImportStatus.TOO_LARGE } }
+                assertTrue(c.sessions.messages(sid).isEmpty())
+                screenshot("chat-attachment-readiness-errors")
+                vm.state.value.attachmentImports.forEach { vm.removeAttachmentImport(it.id) }
+                assertNull(vm.attachmentBlockReason())
+                assertEquals("A readable attachment", vm.state.value.fileAttachments.single().inlineText)
+            }
+        } finally {
+            instrumentation.runOnMainSync { store.clear() }
+            c.sessions.session(sid)?.let { c.sessions.deleteSession(it) }
+            root.deleteRecursively()
+        }
+    }
+
+    @Test fun memoryReceiptRecordsOnlyFactsActuallySuppliedAndKeepsTheirOriginalText(): Unit = runBlocking {
+        val prefs = c.settings.settings.first()
+        val db = androidx.room.Room.inMemoryDatabaseBuilder(c.appContext, com.androidharness.app.data.db.AppDatabase::class.java).build()
+        val repo = com.androidharness.app.data.MemoryRepository(db, c.settings)
+        val root = File(c.appContext.cacheDir, "memory-receipt-${System.nanoTime()}").apply { mkdirs() }
+        try {
+            c.settings.setMemoryEnabled(true)
+            val saved = requireNotNull(repo.add("Keep replies concise.", MemoryCategory.PREFERENCE, MemoryScope.GLOBAL, null))
+            var suppliedPrompt = ""
+            val provider = object : LlmProvider {
+                override fun streamChat(config: ProviderConfig, apiKey: String, systemPrompt: String,
+                    messages: List<ChatMessage>, tools: List<ToolSchema>, options: RequestOptions) = flow {
+                    suppliedPrompt = systemPrompt
+                    emit(StreamEvent.TextDelta("A concise answer.")); emit(StreamEvent.Done("stop"))
+                }
+            }
+            val engine = AgentEngine({ provider }, c.registry, c.checkpoints, c.images, c.linuxEnv, c.shizuku, c.skills, universalMemory = repo)
+            val events = engine.run("memory-fixture", "memory-turn", ProviderConfig("fixture", "Fixture", ProviderType.OPENAI_COMPAT,
+                "https://example.invalid", "fixture"), "fixture", listOf(ChatMessage(Role.USER, "Explain briefly")),
+                { PermissionMode.FULL_AUTO }, mutableSetOf(), FileFs(root), RequestOptions(), 100000, AgentMode.ACT,
+                conversation = ConversationConfig(ConversationKind.CHAT)).toList()
+            val message = events.filterIsInstance<AgentEvent.AssistantCommitted>().single().message
+            assertTrue(suppliedPrompt.contains(saved.text))
+            assertEquals(listOf(SuppliedMemory(saved.id, saved.text)), message.generation.suppliedMemories)
+            repo.update(saved, "A different preference.", MemoryCategory.PREFERENCE, MemoryScope.GLOBAL, null)
+            assertEquals(saved.text, GenerationMetadata.decode(GenerationMetadata.encode(message.generation)).suppliedMemories.single().text)
+            c.settings.setMemoryEnabled(false)
+            val absent = mutableListOf<com.androidharness.app.data.db.MemoryEntity>()
+            assertNull(repo.promptBlock(null) { absent += it })
+            assertTrue(absent.isEmpty())
+        } finally { c.settings.setMemoryEnabled(prefs.memoryEnabled); db.close(); root.deleteRecursively() }
+    }
+
     private fun nodes(): List<AccessibilityNodeInfo> = buildList {
         if (android.os.Build.VERSION.SDK_INT >= 33) instrumentation.uiAutomation.clearCache()
         fun visit(node: AccessibilityNodeInfo) { add(node); for (i in 0 until node.childCount) node.getChild(i)?.let(::visit) }
-        instrumentation.uiAutomation.rootInActiveWindow?.let(::visit)
+        val roots = instrumentation.uiAutomation.windows.mapNotNull { it.root }
+        if (roots.isEmpty()) instrumentation.uiAutomation.rootInActiveWindow?.let(::visit) else roots.forEach(::visit)
     }
     private fun find(text: String) = nodes().firstOrNull { it.isVisibleToUser && (it.text?.toString() == text || it.contentDescription?.toString() == text) }
     private fun await(text: String): AccessibilityNodeInfo {

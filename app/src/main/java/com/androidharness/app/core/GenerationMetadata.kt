@@ -41,11 +41,15 @@ data class ProviderMessageState(
 }
 
 @Serializable
+data class SuppliedMemory(val id: String, val text: String)
+
+@Serializable
 data class GenerationMetadata(
     val state: ProviderMessageState? = null,
     /** Null means the provider did not report a separate reasoning count. Zero is a real count. */
     val reasoningTokens: Int? = null,
     val reasoningSetting: String? = null,
+    val suppliedMemories: List<SuppliedMemory> = emptyList(),
     val execution: List<com.androidharness.app.data.env.ExecutionReceipt> = emptyList(),
 ) {
     companion object {

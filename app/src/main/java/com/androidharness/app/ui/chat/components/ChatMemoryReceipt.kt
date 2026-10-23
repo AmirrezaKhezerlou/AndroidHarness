@@ -18,24 +18,32 @@ import com.androidharness.app.ui.settings.MemoryEditDialog
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun ChatMemoryReceipt(messages: List<ChatMessage>, container: AppContainer, busy: Boolean) {
+internal fun ChatMemoryReceipt(messages: List<ChatMessage>, container: AppContainer, busy: Boolean,
+    supplied: List<com.androidharness.app.core.SuppliedMemory> = emptyList()) {
     var open by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<MemoryEntity?>(null) }
     var deleting by remember { mutableStateOf<MemoryEntity?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    ChatMemorySaved { open = true }
+    if (supplied.isEmpty()) ChatMemorySaved { open = true }
+    else TextButton(onClick = { open = true }) { Text(stringResource(R.string.chat_memories_used, supplied.size)) }
     if (!open) return
     val memories by container.memory.memories.collectAsStateWithLifecycle(initialValue = emptyList())
     val projects by container.workspace.projects.collectAsStateWithLifecycle(initialValue = emptyList())
-    val ids = remember(messages) { ChatActivityPresentation.savedMemoryIds(messages) }
+    val ids = remember(messages, supplied) { ChatActivityPresentation.savedMemoryIds(messages) + supplied.map { it.id } }
     val saved = memories.filter { it.id in ids }
-    if (editing == null && deleting == null) AlertDialog(onDismissRequest = { open = false }, title = { Text(stringResource(R.string.chat_memory_saved)) },
+    if (editing == null && deleting == null) AlertDialog(onDismissRequest = { open = false }, title = { Text(stringResource(if (supplied.isEmpty()) R.string.chat_memory_saved else R.string.chat_memory_used_title)) },
         text = { Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (saved.isEmpty()) Text(stringResource(R.string.chat_memory_unavailable))
-            saved.forEach { memory ->
+            if (supplied.isNotEmpty()) Text(stringResource(R.string.chat_memory_used_explanation))
+            if (saved.isEmpty() && supplied.isEmpty()) Text(stringResource(R.string.chat_memory_unavailable))
+            if (supplied.isEmpty()) saved.forEach { memory ->
                 TextButton(enabled = !busy && !saving, onClick = { editing = memory }) { Text(memory.text) }
+            } else supplied.forEach { snapshot ->
+                val current = saved.firstOrNull { it.id == snapshot.id }
+                TextButton(enabled = current != null && !busy && !saving, onClick = { editing = current }) {
+                    Text(snapshot.text + if (current == null) " · " + stringResource(R.string.chat_memory_deleted) else "")
+                }
             }
             if (busy) Text(stringResource(R.string.chat_memory_wait))
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }

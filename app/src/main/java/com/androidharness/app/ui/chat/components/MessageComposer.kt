@@ -154,6 +154,7 @@ internal fun MessageComposer(
     onCancelGroqRecord: () -> Unit = {},
     onStopAndTranscribeGroq: () -> Unit = {},
     hasAttachments: Boolean = false,
+    sendAllowed: Boolean = true,
     onSchedule: (() -> Unit)? = null,
     scheduleUnavailableReason: String? = null,
     chatOnly: Boolean = false,
@@ -348,7 +349,7 @@ internal fun MessageComposer(
                                         if (event.isShiftPressed) FocusDirection.Previous else FocusDirection.Next)
                                     true
                                 } else if (desktop && event.isCtrlPressed && (event.key == Key.Enter || event.key == Key.NumPadEnter)) {
-                                    if (event.type == KeyEventType.KeyUp && canSend) onSend()
+                                    if (event.type == KeyEventType.KeyUp && canSend && sendAllowed) onSend()
                                     true
                                 } else false
                             },
@@ -466,7 +467,8 @@ internal fun MessageComposer(
         when {
             showQueueSend -> {
                 ExpressiveIconButton(
-                    onClick = { haptics.performHapticFeedback(HapticFeedbackType.Confirm); onSend() },
+                    onClick = { if (sendAllowed) { haptics.performHapticFeedback(HapticFeedbackType.Confirm); onSend() } },
+                    enabled = sendAllowed,
                     modifier = Modifier.size(actionSize)
                         .semantics { contentDescription = uiContext.getString(R.string.ui_queue_message) },
                     shape = RoundedCornerShape(corner),
@@ -517,7 +519,8 @@ internal fun MessageComposer(
 
             canSend -> {
                 ExpressiveIconButton(
-                    onClick = { haptics.performHapticFeedback(HapticFeedbackType.Confirm); onSend() },
+                    onClick = { if (sendAllowed) { haptics.performHapticFeedback(HapticFeedbackType.Confirm); onSend() } },
+                    enabled = sendAllowed,
                     modifier = Modifier.size(actionSize)
                         .semantics { contentDescription = uiContext.getString(R.string.ui_send_message) },
                     shape = RoundedCornerShape(corner),

@@ -5,9 +5,9 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 
 /** Observe child drags before they move anything, without stealing scroll or edge handoff. */
-internal class UserScrollObserver(private val onUserScroll: () -> Unit) : NestedScrollConnection {
+internal class UserScrollObserver(private val onUserScroll: (Float) -> Unit) : NestedScrollConnection {
     override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-        if (source == NestedScrollSource.UserInput && available.y != 0f) onUserScroll()
+        if (source == NestedScrollSource.UserInput && available.y != 0f) onUserScroll(available.y)
         return Offset.Zero
     }
 }

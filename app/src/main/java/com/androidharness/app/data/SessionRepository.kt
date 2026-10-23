@@ -752,12 +752,19 @@ class SessionRepository(
 
     fun answerVersions(sessionId: String) = db.dao().chatAnswerVersions(sessionId)
 
-    fun latestAnswerVersions(sessionId: String) = combine(db.dao().messagesFlow(sessionId), answerVersions(sessionId)) { rows, versions ->
-        val index = rows.indexOfLast { it.role == Role.USER.name }
+    fun latestAnswerVersions(sessionId: String) = answerVersionsForTurn(sessionId, null)
+
+    fun answerVersionsForTurn(sessionId: String, turnId: String?) = combine(db.dao().messagesFlow(sessionId), answerVersions(sessionId)) { rows, versions ->
+        val index = rows.indexOfLast { it.role == Role.USER.name && (turnId == null || it.turnId == turnId) }
         if (index < 0) emptyList() else {
             val group = com.androidharness.app.core.ChatTurnActions.answerVersionKey(rows.getOrNull(index - 1)?.id, rows[index].text)
             versions.filter { it.groupKey == group }
         }
+    }
+
+    suspend fun answerVersionPreview(sessionId: String, versionId: String): List<ChatMessage> = kotlinx.coroutines.withContext(Dispatchers.Default) {
+        val version = requireNotNull(db.dao().chatAnswerVersion(sessionId, versionId)) { "This answer version is unavailable." }
+        json.decodeFromString(ListSerializer(MessageEntity.serializer()), version.messagesJson).map { it.toChatMessageCached() }
     }
 
     /** Called under RunManager's workspace gate before a Chat retry removes the current answer. */

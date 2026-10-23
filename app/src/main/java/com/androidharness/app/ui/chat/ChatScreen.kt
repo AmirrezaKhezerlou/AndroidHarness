@@ -470,6 +470,7 @@ private fun ChatScreenContent(
         )
     }
 
+    val quoteComposerFocus = com.androidharness.app.ui.LocalComposerFocus.current
     val clipboard = LocalClipboardManager.current
     var actionsMessage by remember { mutableStateOf<ChatMessage?>(null) }
     var editingMessage by remember { mutableStateOf<ChatMessage?>(null) }
@@ -479,13 +480,10 @@ private fun ChatScreenContent(
     var confirmRewindTurn by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    // The transcript is top-anchored. Sending a message parks that question near
-    // the top, leaving a sliver of the previous answer visible above it; nothing
-    // follows the bottom while the answer streams.
+    // Follow new content until the reader scrolls away.
     var showJumpToLatest by remember(state.sessionId) { mutableStateOf(false) }
     var unreadWhileAway by remember(state.sessionId) { mutableStateOf(false) }
     var lastAnchoredTurnId by remember(state.sessionId) { mutableStateOf<String?>(null) }
-    var anchoringTurnId by remember(state.sessionId) { mutableStateOf<String?>(null) }
     var searchRevealDone by remember(state.sessionId, searchMessageId) { mutableStateOf(false) }
     var findOpen by remember(state.sessionId) { mutableStateOf(false) }
     var findQuery by remember(state.sessionId) { mutableStateOf("") }
@@ -493,13 +491,15 @@ private fun ChatScreenContent(
     var findPosition by remember(state.sessionId) { mutableStateOf(0) }
     var findTargetId by remember(state.sessionId) { mutableStateOf<String?>(null) }
     val activeFindId = if (findOpen) findTargetId else searchMessageId
-    // While a turn runs the transcript follows the newest thinking and answer.
-    // When it finishes it parks on the question that started the turn. A real
-    // drag away pauses following until the user returns to the bottom.
+    // A real drag pauses following until the reader returns to the bottom.
     var pinnedToBottom by remember(state.sessionId) { mutableStateOf(false) }
     val gestureActive = remember { mutableStateOf(false) }
-    var mainListDragged by remember { mutableStateOf(false) }
-    val userScrollObserver = remember { UserScrollObserver { pinnedToBottom = false } }
+    var mainListDragged by remember(state.sessionId) { mutableStateOf(false) }
+    var lastDragTowardBottom by remember(state.sessionId) { mutableStateOf(false) }
+    val userScrollObserver = remember(state.sessionId) { UserScrollObserver { deltaY ->
+        pinnedToBottom = false
+        lastDragTowardBottom = deltaY < 0f
+    } }
     val density = LocalDensity.current
     val previewOffset = with(density) { 64.dp.roundToPx() }
     val hideJumpAt = with(density) { 96.dp.toPx() }
@@ -978,37 +978,16 @@ private fun ChatScreenContent(
         }
     }
 
-    // Top-anchored transcript: on open and after every send, park the newest
-    // question near the top and leave the previous answer's tail visible above
-    // it. While the run streams, the busy effect below follows the bottom;
-    // when it ends, the view parks on the question again.
+    // Opening a conversation or sending a new question reveals its newest content.
+    // Completing a response never moves the reader back to the question.
     LaunchedEffect(state.isLoadingMessages, latestUserTurnId, searchMessageId) {
-        if (state.isLoadingMessages) return@LaunchedEffect
-        if (searchMessageId != null && !searchRevealDone) return@LaunchedEffect
+        if (state.isLoadingMessages || (searchMessageId != null && !searchRevealDone)) return@LaunchedEffect
         val turnId = latestUserTurnId ?: return@LaunchedEffect
-        if (turnId == lastAnchoredTurnId || turnId == anchoringTurnId) return@LaunchedEffect
-        repeat(3) {
-            withFrameNanos { }
-            var index = userItemIndexes[turnId]
-            if (index == null) {
-                // The item scope has not registered the new question yet. Force
-                // the newest rows to compose, then retry with the real index.
-                val last = listState.layoutInfo.totalItemsCount - 1
-                if (last >= 0) listState.scrollToItem(last)
-                withFrameNanos { }
-                index = userItemIndexes[turnId]
-            }
-            if (index == null) return@repeat
-            if (index !in 0 until listState.layoutInfo.totalItemsCount) return@repeat
-            anchoringTurnId = turnId
-            try {
-                listState.scrollToItem(index, scrollOffset = -previewOffset)
-                lastAnchoredTurnId = turnId
-            } finally {
-                anchoringTurnId = null
-            }
-            return@LaunchedEffect
-        }
+        if (turnId == lastAnchoredTurnId) return@LaunchedEffect
+        lastAnchoredTurnId = turnId
+        pinnedToBottom = true
+        withFrameNanos { }
+        listState.scrollToEnd { pinnedToBottom && !gestureActive.value }
     }
 
     // Track real finger drags so programmatic scrolls can be told apart.
@@ -1016,8 +995,10 @@ private fun ChatScreenContent(
         listState.interactionSource.interactions.collect { interaction ->
             when (interaction) {
                 is DragInteraction.Start -> {
+                    pinnedToBottom = false
                     gestureActive.value = true
                     mainListDragged = true
+                    lastDragTowardBottom = false
                 }
                 is DragInteraction.Stop, is DragInteraction.Cancel -> gestureActive.value = false
             }
@@ -1031,9 +1012,8 @@ private fun ChatScreenContent(
             .collect { (inProgress, dragging, dragged) ->
                 if (inProgress || dragging || !dragged) return@collect
                 mainListDragged = false
-                if (isAtBottom(listState.layoutInfo, listState.canScrollForward, tolerance = hideJumpAt.toInt())) {
+                if (lastDragTowardBottom && !listState.canScrollForward) {
                     pinnedToBottom = true
-                    listState.snapToEndIfDrifted()
                 }
             }
     }
@@ -1057,7 +1037,7 @@ private fun ChatScreenContent(
             if (total == 0) return@collect
             val last = info.visibleItemsInfo.lastOrNull()
             if (last == null || last.index != total - 1) {
-                listState.scrollToEnd()
+                listState.scrollToEnd { pinnedToBottom && !gestureActive.value && !listState.isScrollInProgress }
             } else {
                 val delta = last.offset + last.size + info.afterContentPadding - info.viewportEndOffset
                 if (delta > 0) listState.scrollBy(delta.toFloat())
@@ -1065,56 +1045,24 @@ private fun ChatScreenContent(
         }
     }
 
-    // While a turn runs, snap to the bottom so thinking and the answer stay in
-    // view. When it ends, park on the question so the answer reads from its
-    // start. A drag away pauses both until the user returns to the bottom.
-    var scrollPrevBusy by remember { mutableStateOf(false) }
-    LaunchedEffect(state.busy) {
-        val wasBusy = scrollPrevBusy
-        scrollPrevBusy = state.busy
-        if (state.busy) {
-            if (gestureActive.value) return@LaunchedEffect
-            pinnedToBottom = true
-            withFrameNanos { }
-            listState.scrollToEnd()
-            return@LaunchedEffect
-        }
-        if (!wasBusy || !pinnedToBottom) return@LaunchedEffect
-        if (findOpen && findTargetId != null) return@LaunchedEffect
-        val turnId = latestUserTurnId ?: return@LaunchedEffect
-        val index = userItemIndexes[turnId] ?: return@LaunchedEffect
-        if (index !in 0 until listState.layoutInfo.totalItemsCount) return@LaunchedEffect
-        pinnedToBottom = false
-        withFrameNanos { }
-        listState.scrollToItem(index, scrollOffset = -previewOffset)
-        lastAnchoredTurnId = turnId
-    }
     LaunchedEffect(
         state.streamingText?.length,
         state.streamingThinking?.length,
         state.runningCalls,
         pinnedToBottom,
     ) {
-        if (!pinnedToBottom || gestureActive.value) return@LaunchedEffect
+        if (!pinnedToBottom || gestureActive.value || listState.isScrollInProgress) return@LaunchedEffect
         withFrameNanos { }
-        listState.snapToEndIfDrifted()
+        if (pinnedToBottom && !gestureActive.value && !listState.isScrollInProgress) listState.snapToEndIfDrifted()
     }
 
-    // The jump button appears only when the current question has left the
-    // screen and the list is not following a run.
-    LaunchedEffect(listState, latestUserTurnId) {
-        val turnId = latestUserTurnId
-        if (turnId == null) {
-            showJumpToLatest = false
-            return@LaunchedEffect
-        }
+    // The down button always refers to the bottom, regardless of which bubble is visible.
+    LaunchedEffect(listState) {
         snapshotFlow {
-            val index = userItemIndexes[turnId]
-            val info = listState.layoutInfo
-            pinnedToBottom to (lastAnchoredTurnId == turnId && index != null && info.visibleItemsInfo.none { it.index == index })
-        }.distinctUntilChanged().collect { (pinned, away) ->
-            showJumpToLatest = away && !pinned
-            if (!showJumpToLatest) unreadWhileAway = false
+            !pinnedToBottom && !isAtBottom(listState.layoutInfo, listState.canScrollForward, tolerance = hideJumpAt.toInt())
+        }.distinctUntilChanged().collect { away ->
+            showJumpToLatest = away
+            if (!away) unreadWhileAway = false
         }
     }
 
@@ -1556,12 +1504,21 @@ private fun ChatScreenContent(
                                     if (message.text.isNotBlank() && message.toolCalls.isEmpty() && (isTurnFinal || message.turnId == null)) indexedItem(key = "chat-$messageKey-answer", contentType = ChatListContentType.AssistantText) {
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             val replyText = remember(message.text) { com.androidharness.app.core.response.ChatRichResponse.normalize(message.text) }
-                                            AssistantText(replyText, showPreviewChip = false,
-                                                onFollowUp = { action ->
-                                                    attachedConceptJson = null
-                                                    attachedResponseJson = ResponseAttachment(action.title, action.context).encode()
-                                                    setComposerText(listOf(composerText.trim(), action.prompt).filter(String::isNotBlank).joinToString("\n\n"))
-                                                }, onOpenUrl = { url -> webPreviewUrl = url; showWebPreview = true })
+                                            com.androidharness.app.ui.chat.components.QuoteReplySelection(onQuote = { selected ->
+                                                attachedConceptJson = null
+                                                attachedResponseJson = ResponseAttachment(uiContext.getString(R.string.chat_quoted_text), selected.take(1500)).encode()
+                                                if (selected.length > 1500) scope.launch { snackbar.showSnackbar(uiContext.getString(R.string.chat_quote_shortened)) }
+                                                quoteComposerFocus?.requestFocus()
+                                                scheduleKeyboard?.show()
+                                                pinnedToBottom = false
+                                            }) {
+                                                AssistantText(replyText, showPreviewChip = false,
+                                                    onFollowUp = { action ->
+                                                        attachedConceptJson = null
+                                                        attachedResponseJson = ResponseAttachment(action.title, action.context).encode()
+                                                        setComposerText(listOf(composerText.trim(), action.prompt).filter(String::isNotBlank).joinToString("\n\n"))
+                                                    }, onOpenUrl = { url -> webPreviewUrl = url; showWebPreview = true })
+                                            }
                                             if (isTurnFinal && message.toolCalls.isEmpty() && !isTurnRunning) {
                                                 com.androidharness.app.ui.chat.components.ChatSources(conversationTurn) { url -> webPreviewUrl = url; showWebPreview = true }
                                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1581,10 +1538,12 @@ private fun ChatScreenContent(
                                                     }
                                                     ResponseActions(onFork = { viewModel.requestFork(message) { onNavigateToSession(it) } }, onUndo = null)
                                                 }
-                                                if (message.turnId == latestUserTurnId) state.sessionId?.let { sid ->
+                                                state.sessionId?.let { sid ->
                                                     com.androidharness.app.ui.chat.components.ChatAnswerVersions(
                                                         sid, state.messages, viewModel.container.sessions,
-                                                        enabled = !state.busy && !state.conversationSaving,
+                                                        turnId = message.turnId, readOnly = message.turnId != latestUserTurnId,
+                                                        onOpenUrl = { url -> webPreviewUrl = url; showWebPreview = true },
+                                                        enabled = message.turnId != latestUserTurnId || (!state.busy && !state.conversationSaving),
                                                         onSelect = viewModel::selectAnswerVersion)
                                                 }
                                                 if (com.androidharness.app.core.ChatActivityPresentation.savedMemory(conversationTurn)) {
@@ -1988,18 +1947,9 @@ private fun ChatScreenContent(
                     onJump = {
                         showJumpToLatest = false
                         unreadWhileAway = false
-                        if (state.busy) {
-                            pinnedToBottom = true
-                            scope.launch { listState.scrollToEnd() }
-                        } else {
-                            val turnId = state.messages.lastOrNull { it.role == Role.USER }?.turnId
-                            val index = turnId?.let { userItemIndexes[it] }
-                            if (index != null) scope.launch {
-                                if (index in 0 until listState.layoutInfo.totalItemsCount) {
-                                    listState.animateScrollToItem(index, scrollOffset = -previewOffset)
-                                }
-                            }
-                        }
+                        pinnedToBottom = true
+                        lastAnchoredTurnId = latestUserTurnId
+                        scope.launch { listState.scrollToEnd { pinnedToBottom && !gestureActive.value } }
                     },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -2068,24 +2018,22 @@ private fun ChatScreenContent(
                 }
                 MessageComposer(
                     chatOnly = state.conversation.isChat,
+                    sendAllowed = viewModel.attachmentBlockReason() == null,
                     attachments = {
                         attachedResponse?.let { ref -> com.androidharness.app.ui.chat.rich.ResponseContextChip(ref.title) { attachedResponseJson = null } }
                         attachedConcept?.let { concept ->
                             com.androidharness.app.ui.chat.components.ConceptAttachmentChip(concept) { attachedConceptJson = null }
                         }
-                if (state.attachments.isNotEmpty()) {
-                    AttachmentChips(
-                        attachments = state.attachments,
-                        onRemove = viewModel::removeAttachment,
-                    )
-                }
-
-                if (state.fileAttachments.isNotEmpty()) {
-                    FileAttachmentChips(
-                        files = state.fileAttachments,
-                        onRemove = viewModel::removeFileAttachment,
-                    )
-                }
+                        if (state.conversation.isChat) {
+                            com.androidharness.app.ui.chat.components.ChatAttachmentReadiness(state, viewModel::removeAttachment,
+                                viewModel::removeFileAttachment, viewModel::removeAttachmentImport)
+                        } else {
+                            if (state.attachments.isNotEmpty()) AttachmentChips(state.attachments, viewModel::removeAttachment)
+                            if (state.fileAttachments.isNotEmpty()) FileAttachmentChips(state.fileAttachments, viewModel::removeFileAttachment)
+                            if (state.attachmentImports.isNotEmpty()) com.androidharness.app.ui.chat.components.ChatAttachmentReadiness(
+                                state.copy(attachments = emptyList(), fileAttachments = emptyList()), viewModel::removeAttachment,
+                                viewModel::removeFileAttachment, viewModel::removeAttachmentImport)
+                        }
 
                     },
                     busy = state.busy,
@@ -2099,7 +2047,7 @@ private fun ChatScreenContent(
                     onSend = {
                         val payload = ResponseAttachment.attach(ArtifactAttachment.attach(SlashCommands.composeSend(attachedSkill,
                             composerText.ifBlank { if (attachedConcept != null) "Revise this concept." else if (attachedResponse != null) "Help me with this response." else "" }), attachedConcept), attachedResponse)
-                        if (payload.isNotBlank() || state.fileAttachments.isNotEmpty()) {
+                        if (payload.isNotBlank() || state.fileAttachments.isNotEmpty() || state.attachments.isNotEmpty()) {
                             // Keep the draft when a selection is still loading/saving or unavailable.
                             if (viewModel.send(payload)) {
                                 setComposerText("")
@@ -2127,7 +2075,7 @@ private fun ChatScreenContent(
                         composerText.isBlank() -> uiContext.getString(R.string.ui_write_a_message_first)
                         attachedConcept != null -> uiContext.getString(R.string.ui_remove_the_concept_attachment_to_schedule_a)
                         attachedResponse != null -> uiContext.getString(R.string.ui_remove_the_response_context_to_schedule_a)
-                        attachedSkill != null || state.attachments.isNotEmpty() || state.fileAttachments.isNotEmpty() -> uiContext.getString(R.string.ui_schedule_a_text_message_without_attachments)
+                        attachedSkill != null || state.attachments.isNotEmpty() || state.fileAttachments.isNotEmpty() || state.attachmentImports.isNotEmpty() -> uiContext.getString(R.string.ui_schedule_a_text_message_without_attachments)
                         currentProject == null -> uiContext.getString(R.string.ui_choose_a_workspace_first)
                         else -> null
                     },
@@ -2383,18 +2331,18 @@ private fun isAtBottom(info: LazyListLayoutInfo, canScrollForward: Boolean, tole
 }
 
 /**
- * Instantly scrolls to the very end of the content, bottom padding included.
- * `scrollToItem(last)` alone only aligns the last item's TOP with the viewport
- * top when the item is taller than the viewport; the extra snap consumes
- * whatever remains. Both steps avoid a synchronous remeasure mid-dispatch,
- * which used to crash when items were removed in the same frame.
+ * Reaches the true bottom after pending item updates. A normal scroll mutation
+ * respects the user's drag/fling; a pending requestScrollToItem would cancel it
+ * on the next measure even after following was switched off.
  */
-private suspend fun LazyListState.scrollToEnd() {
+private suspend fun LazyListState.scrollToEnd(shouldScroll: () -> Boolean) {
+    withFrameNanos { }
+    if (!shouldScroll()) return
     val last = layoutInfo.totalItemsCount - 1
     if (last < 0) return
-    requestScrollToItem(last)
+    scrollToItem(last)
     withFrameNanos { }
-    snapToEndIfDrifted()
+    if (shouldScroll()) snapToEndIfDrifted()
 }
 
 /** Cheap exact snap to the true bottom; a no-op unless the end is composed. */

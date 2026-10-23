@@ -119,6 +119,7 @@ data class ChatUiState(
     val fallbackDefaults: com.androidharness.app.llm.FallbackPolicy = com.androidharness.app.llm.FallbackPolicy(),
     val attachments: List<String> = emptyList(), // display names of picked images
     val fileAttachments: List<FileAttachment> = emptyList(),
+    val attachmentImports: List<AttachmentImport> = emptyList(),
     val maxContextTokens: Int = 1_000_000,
     val maxOutputTokens: Int = 32_768,
     val maxIterations: Int = 0,
@@ -767,9 +768,10 @@ class ChatViewModel(
             _state.update { it.copy(error = c.appContext.getString(R.string.ui_wait_for_compaction_to_finish_or_stop)) }
             return false
         }
+        attachmentBlockReason()?.let { reason -> _state.update { it.copy(error = reason) }; return false }
         val trimmed = rawText.trim()
         // File-only sends are legitimate: the attachments carry the message.
-        if (trimmed.isEmpty() && _state.value.fileAttachments.isEmpty()) return false
+        if (trimmed.isEmpty() && _state.value.fileAttachments.isEmpty() && _state.value.attachments.isEmpty()) return false
 
         val resolved = if (trimmed.startsWith("/") && !_state.value.conversation.isChat) {
             SlashCommands.resolve(
@@ -960,17 +962,72 @@ class ChatViewModel(
     // Attachments
     // ------------------------------------------------------------------
 
-    fun attachImage(uri: Uri) {
-        // Import once, off the main thread (bitmap decode + compress); the
-        // stored reference is reused when the message is sent.
+    fun attachImage(uri: Uri) = importAttachment(uri, imageOnly = true)
+
+    fun removeAttachmentImport(id: String) {
+        _state.update { it.copy(attachmentImports = it.attachmentImports.filterNot { pending -> pending.id == id }) }
+    }
+
+    fun attachmentBlockReason(): String? {
+        val state = _state.value
+        if (state.attachmentImports.isNotEmpty()) return c.appContext.getString(R.string.chat_attachment_resolve)
+        if (state.conversation.isChat && state.attachments.isNotEmpty() && state.imageInputSupport() == false)
+            return c.appContext.getString(R.string.chat_attachment_model_unsupported)
+        return null
+    }
+
+    private class AttachmentProblem(val status: AttachmentImportStatus, message: String) : Exception(message)
+
+    private fun importAttachment(uri: Uri, imageOnly: Boolean = false) {
+        val id = java.util.UUID.randomUUID().toString()
+        _state.update { it.copy(attachmentImports = it.attachmentImports + AttachmentImport(id, uri.lastPathSegment?.substringAfterLast('/').orEmpty())) }
+        fun active() = _state.value.attachmentImports.any { it.id == id }
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val stored = c.images.import(uri)
-            if (stored == null) {
-                _state.update { it.copy(error = c.appContext.getString(R.string.ui_could_not_load_that_image)) }
-                return@launch
+            try {
+                val resolver = c.appContext.contentResolver
+                val name = queryDisplayName(resolver, uri) ?: uri.lastPathSegment?.substringAfterLast('/') ?: "Attachment"
+                val mime = resolver.getType(uri) ?: "application/octet-stream"
+                _state.update { it.copy(attachmentImports = it.attachmentImports.map { item -> if (item.id == id) item.copy(name = name) else item }) }
+                val size = querySize(resolver, uri)
+                if (size != null && size > FileAttachments.COPY_BYTE_LIMIT) throw AttachmentProblem(
+                    AttachmentImportStatus.TOO_LARGE, c.appContext.getString(R.string.chat_attachment_too_large))
+                if (imageOnly || mime.startsWith("image/")) {
+                    val stored = c.images.import(uri) ?: throw IllegalStateException(c.appContext.getString(R.string.ui_could_not_load_that_image))
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
+                        if (active()) {
+                            pendingAttachments += ImageRef(stored.file.name, stored.mime)
+                            _state.update { it.copy(attachments = it.attachments + stored.file.name) }
+                        } else c.images.delete(stored.file.name)
+                    }
+                } else {
+                    val pdf = FileAttachments.isPdf(name, mime)
+                    val pdfExtract = if (pdf) resolver.openInputStream(uri)?.use { PdfTextExtractor.extract(it) } else null
+                    val extracted = if (pdf) pdfExtract?.text?.takeIf { it.isNotBlank() }
+                        else if (FileAttachments.isTextLike(name, mime)) {
+                            try { readTextLimited(resolver, uri) }
+                            catch (problem: AttachmentProblem) { if (_state.value.conversation.isChat) throw problem else null }
+                        } else null
+                    if (!active()) return@launch
+                    if (extracted != null) {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
+                            if (active()) {
+                                val sizeLabel = FileAttachments.humanBytes(size ?: extracted.length.toLong()) +
+                                    (pdfExtract?.let { ", " + if (it.pageCount == 1) "1 page" else c.appContext.getString(R.string.ui_pages, it.pageCount.toString()) } ?: "")
+                                addFileAttachment(FileAttachment(name, mime, sizeLabel, extracted, null))
+                            }
+                        }
+                    } else if (_state.value.conversation.isChat) {
+                        throw AttachmentProblem(AttachmentImportStatus.UNSUPPORTED,
+                            c.appContext.getString(if (pdf) R.string.chat_attachment_pdf_unreadable else R.string.chat_file_requires_code))
+                    } else copyAttachmentToWorkspace(resolver, uri, name, mime, size, id)
+                }
+                removeAttachmentImport(id)
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) {
+                _state.update { it.copy(attachmentImports = it.attachmentImports.map { item ->
+                    if (item.id == id) item.copy(status = (e as? AttachmentProblem)?.status ?: AttachmentImportStatus.FAILED, detail = e.message) else item
+                }) }
             }
-            pendingAttachments += ImageRef(stored.file.name, stored.mime)
-            _state.update { it.copy(attachments = it.attachments + stored.file.name) }
         }
     }
 
@@ -990,52 +1047,7 @@ class ChatViewModel(
     // shell tools can inspect it.
     // ------------------------------------------------------------------
 
-    fun attachFile(uri: Uri) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            runCatching {
-                val resolver = c.appContext.contentResolver
-                val name = queryDisplayName(resolver, uri) ?: "file"
-                val mime = resolver.getType(uri) ?: "application/octet-stream"
-                if (mime.startsWith("image/")) {
-                    attachImage(uri)
-                    return@launch
-                }
-                val size = querySize(resolver, uri)
-                if (FileAttachments.isPdf(name, mime)) {
-                    val pdfExtract = resolver.openInputStream(uri)?.use { stream ->
-                        PdfTextExtractor.extract(stream)
-                    }
-                    if (pdfExtract != null && pdfExtract.text.isNotBlank()) {
-                        val pageLabel = if (pdfExtract.pageCount == 1) "1 page" else c.appContext.getString(R.string.ui_pages, (pdfExtract.pageCount).toString())
-                        val sizeLabel = "${FileAttachments.humanBytes(size ?: pdfExtract.text.length.toLong())}, $pageLabel"
-                        addFileAttachment(
-                            FileAttachment(
-                                name, "application/pdf", sizeLabel,
-                                pdfExtract.text, null,
-                            ),
-                        )
-                        return@launch
-                    }
-                }
-                if (FileAttachments.isTextLike(name, mime)) {
-                    val text = readTextLimited(resolver, uri)
-                    if (text != null) {
-                        addFileAttachment(
-                            FileAttachment(
-                                name, mime, FileAttachments.humanBytes(size ?: text.length.toLong()),
-                                text, null,
-                            ),
-                        )
-                        return@launch
-                    }
-                }
-                check(!_state.value.conversation.isChat) { c.appContext.getString(R.string.chat_file_requires_code) }
-                copyAttachmentToWorkspace(resolver, uri, name, mime, size)
-            }.onFailure {
-                _state.update { st -> st.copy(error = c.appContext.getString(R.string.ui_could_not_attach_that_file, (it.message).toString())) }
-            }
-        }
-    }
+    fun attachFile(uri: Uri) = importAttachment(uri)
 
     fun removeFileAttachment(index: Int) {
         val removed = _state.value.fileAttachments.getOrNull(index) ?: return
@@ -1077,6 +1089,7 @@ class ChatViewModel(
         name: String,
         mime: String,
         size: Long?,
+        importId: String,
     ) {
         val cap = FileAttachments.COPY_BYTE_LIMIT
         if (size != null && size > cap) {
@@ -1087,39 +1100,49 @@ class ChatViewModel(
         dir.mkdirs()
         val safe = name.replace(Regex("[^A-Za-z0-9._\\- ()]"), "_").take(80).ifBlank { "file" }
         val stamp = java.text.SimpleDateFormat("MMdd-HHmmss", java.util.Locale.US).format(java.util.Date())
-        val unique = "$stamp-$safe"
+        val unique = "$stamp-${importId.take(8)}-$safe"
         val node = dir.createFile(unique)
-        val bytes = resolver.openInputStream(uri)!!.use { it.readBytes() }
-        if (bytes.size > cap) {
-            runCatching { node.delete() }
-            throw IllegalStateException(c.appContext.getString(R.string.ui_file_is_larger_than, (FileAttachments.humanBytes(cap)).toString()))
-        }
-        node.writeBytes(bytes)
-        addFileAttachment(
-            FileAttachment(
-                name, mime, FileAttachments.humanBytes(size ?: bytes.size.toLong()),
-                null, ".harness/attachments/$unique",
-            ),
-        )
+        try {
+            val bytes = resolver.openInputStream(uri)!!.use { input ->
+                val out = java.io.ByteArrayOutputStream()
+                val chunk = ByteArray(16 * 1024)
+                while (true) {
+                    val count = input.read(chunk)
+                    if (count < 0) break
+                    if (out.size().toLong() + count > cap) throw AttachmentProblem(AttachmentImportStatus.TOO_LARGE,
+                        c.appContext.getString(R.string.chat_attachment_too_large))
+                    out.write(chunk, 0, count)
+                }
+                out.toByteArray()
+            }
+            node.writeBytes(bytes)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
+                if (_state.value.attachmentImports.any { it.id == importId }) {
+                    addFileAttachment(FileAttachment(name, mime, FileAttachments.humanBytes(size ?: bytes.size.toLong()), null, ".harness/attachments/$unique"))
+                } else node.delete()
+            }
+        } catch (e: Exception) { runCatching { node.delete() }; throw e }
     }
 
-    /** Decoded text up to the inline limit, or null (too big or binary content). */
-    private fun readTextLimited(resolver: android.content.ContentResolver, uri: Uri): String? = runCatching {
-        resolver.openInputStream(uri)!!.use { input ->
+    /** Preserve distinct size, unsupported-content, and read-failure states for the composer. */
+    private fun readTextLimited(resolver: android.content.ContentResolver, uri: Uri): String {
+        return resolver.openInputStream(uri)!!.use { input ->
             val max = FileAttachments.INLINE_CHAR_LIMIT
             val buffer = java.io.ByteArrayOutputStream()
             val chunk = ByteArray(16 * 1024)
             while (true) {
                 val n = input.read(chunk)
                 if (n < 0) break
-                if (buffer.size() + n > max) return null
+                if (buffer.size() + n > max) throw AttachmentProblem(AttachmentImportStatus.TOO_LARGE,
+                    c.appContext.getString(R.string.chat_attachment_text_too_large))
                 buffer.write(chunk, 0, n)
             }
             val text = buffer.toString("UTF-8")
-            // Binary misdetected as text would carry NULs; let it take the copy path.
-            if (text.contains('\u0000')) null else text
+            if (text.contains('\u0000')) throw AttachmentProblem(AttachmentImportStatus.UNSUPPORTED,
+                c.appContext.getString(R.string.chat_file_requires_code))
+            text
         }
-    }.getOrNull()
+    }
 
     private fun queryDisplayName(resolver: android.content.ContentResolver, uri: Uri): String? = runCatching {
         resolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
@@ -1141,6 +1164,7 @@ class ChatViewModel(
 
     private fun startRun(text: String, workspaceMcpGate: Boolean = true, queuedPromptId: String? = null, replacement: ChatMessage? = null): Boolean {
         if (selectingAnswerVersion || startingRun || compactionJob?.isActive == true || !_state.value.conversationReady || _state.value.conversationSaving) return false
+        if (replacement == null) attachmentBlockReason()?.let { reason -> _state.update { it.copy(error = reason) }; return false }
         val targetSession = sessionId
         val s0 = _state.value
         if (!s0.modelSelectionReady || s0.modelSelectionBusy) {
@@ -1360,7 +1384,7 @@ class ChatViewModel(
         if (kind == _state.value.conversation.kind) return null
         // The drawer covers the conversation's snackbar, so report this guard
         // back to the navigation surface before dispatching the switch.
-        if (pendingAttachments.isNotEmpty() || pendingFileAttachments.isNotEmpty())
+        if (pendingAttachments.isNotEmpty() || pendingFileAttachments.isNotEmpty() || _state.value.attachmentImports.isNotEmpty())
             return c.appContext.getString(R.string.chat_switch_attachments)
         _navEvents.tryEmit(NavEvent.SelectSection(kind))
         return null
@@ -1368,7 +1392,7 @@ class ChatViewModel(
 
     fun prepareSectionSwitch(draft: String, onReady: () -> Unit) {
         if (!_state.value.conversationReady || _state.value.conversationSaving || startingRun) return
-        if (pendingAttachments.isNotEmpty() || pendingFileAttachments.isNotEmpty()) {
+        if (pendingAttachments.isNotEmpty() || pendingFileAttachments.isNotEmpty() || _state.value.attachmentImports.isNotEmpty()) {
             _state.update { it.copy(error = c.appContext.getString(R.string.chat_switch_attachments)) }
             return
         }

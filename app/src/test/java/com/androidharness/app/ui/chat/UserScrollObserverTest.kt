@@ -16,6 +16,14 @@ class UserScrollObserverTest {
         assertFalse(following)
     }
 
+    @Test fun `drag direction distinguishes reading older content from returning to the bottom`() {
+        val deltas = mutableListOf<Float>()
+        val observer = UserScrollObserver { deltas += it }
+        observer.onPreScroll(Offset(0f, 8f), NestedScrollSource.UserInput)
+        observer.onPreScroll(Offset(0f, -3f), NestedScrollSource.UserInput)
+        assertEquals(listOf(8f, -3f), deltas)
+    }
+
     @Test fun `automatic following flings and horizontal swipes do not trigger a new user drag`() {
         var calls = 0
         val observer = UserScrollObserver { calls++ }

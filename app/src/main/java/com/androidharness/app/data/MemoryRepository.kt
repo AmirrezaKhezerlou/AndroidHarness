@@ -89,11 +89,14 @@ class MemoryRepository(private val db: AppDatabase, private val settings: Settin
         ?.let { runCatching { dao.projectIdForSession(it) }.getOrNull() }
 
     /** Null when memory is off or nothing applies to this conversation. */
-    suspend fun promptBlock(sessionId: String?): String? {
+    suspend fun promptBlock(sessionId: String?, onUsed: (List<MemoryEntity>) -> Unit = {}): String? {
+        onUsed(emptyList())
         if (!isEnabled()) return null
         val projectId = projectIdForSession(sessionId)
-        val block = MemoryPrompt.build(dao.activeMemories(projectId))
+        val available = dao.activeMemories(projectId)
+        val block = MemoryPrompt.build(available)
         if (block.text.isBlank()) return null
+        onUsed(available.filter { it.id in block.usedIds })
         if (block.usedIds.isNotEmpty()) dao.markMemoriesUsed(block.usedIds, System.currentTimeMillis())
         return block.text
     }

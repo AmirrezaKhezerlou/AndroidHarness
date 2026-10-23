@@ -839,4 +839,25 @@
     <string name="chat_retry_reply">重试回答</string>
     <string name="chat_thinking_estimated_tokens">约 %1$d 个 token</string>
     <string name="chat_thinking_tokens_compact">%1$s 个 token</string>
+    <string name="chat_memories_used">已使用记忆 · %1$d</string>
+    <string name="chat_memory_used_title">已使用记忆</string>
+    <string name="chat_memory_used_explanation">这些已保存的事实已随本次回复提供给模型。点按某条事实可编辑或忘记其当前保存项。</string>
+    <string name="chat_memory_deleted">已从记忆中删除</string>
+    <string name="chat_saved_answers">已保存的回答</string>
+    <string name="chat_saved_answers_explanation">浏览此回答的先前版本。后续消息会保留其现有上下文。</string>
+    <string name="chat_saved_answer_unavailable">这条已保存的回答不可用。</string>
+    <string name="chat_quote_reply">引用</string>
+    <string name="chat_quoted_text">引用文本</string>
+    <string name="chat_attachment_resolve">请等待附件读取完成，或移除无法附加的文件。</string>
+    <string name="chat_attachment_model_unsupported">此模型不接受图片。请选择支持图片的模型或移除图片。</string>
+    <string name="chat_attachment_too_large">此文件超过 64 MB 的附件上限。</string>
+    <string name="chat_attachment_text_too_large">此文本文件太大，无法在聊天中读取。请附加较小的文件或使用代码。</string>
+    <string name="chat_attachment_pdf_unreadable">此 PDF 没有可读文本。请附加页面图片或使用代码。</string>
+    <string name="chat_attachment_reading">正在读取…</string>
+    <string name="chat_attachment_too_large_title">文件过大</string>
+    <string name="chat_attachment_unsupported">聊天模式不支持</string>
+    <string name="chat_attachment_failed">无法读取文件</string>
+    <string name="chat_attachment_ready">就绪</string>
+    <string name="chat_attachment_image_unconfirmed">就绪 · 此模型的图片支持尚未确认</string>
+    <string name="chat_quote_shortened">已引用所选内容的前 1,500 个字符。</string>
 </resources>
