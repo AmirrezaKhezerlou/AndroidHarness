@@ -21,7 +21,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.outlined.BrokenImage
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -67,7 +66,6 @@ internal fun RemoteImageCard(url: String, alt: String, onOpen: ((String) -> Unit
             ?.let { ImageState.Loaded(it) } ?: ImageState.Failed
     }
     val description = alt.ifBlank { stringResource(R.string.ui_image) }
-    val host = url.toHttpUrlOrNull()?.host?.removePrefix("www.") ?: url
     when (val current = state) {
         ImageState.Loading -> Box(
             Modifier.fillMaxWidth().height(180.dp)
@@ -76,27 +74,7 @@ internal fun RemoteImageCard(url: String, alt: String, onOpen: ((String) -> Unit
             contentAlignment = Alignment.Center,
         ) { CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp) }
 
-        ImageState.Failed -> Surface(
-            shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f)),
-            modifier = Modifier.fillMaxWidth().then(
-                if (onOpen != null) Modifier.clickable { onOpen(url) } else Modifier,
-            ),
-        ) {
-            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Outlined.BrokenImage, null, Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.width(8.dp))
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(description, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(host, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                }
-                Icon(Icons.Outlined.Language, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
+        ImageState.Failed -> Unit
 
         is ImageState.Loaded -> BoxWithConstraints(Modifier.fillMaxWidth()) {
             val ratio = current.bitmap.width.toFloat() / current.bitmap.height.coerceAtLeast(1)

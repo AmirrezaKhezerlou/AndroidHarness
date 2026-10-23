@@ -14,18 +14,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.BrokenImage
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,18 +34,28 @@ import com.androidharness.app.tools.PageImage
 import com.androidharness.app.ui.chat.RemoteContentLoader
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
+/** How many pictures one answer can show; the rest stay in the source page. */
+private const val MAX_PAGE_IMAGES = 4
+
 /** Two-column gallery of the images collected from pages read in this turn. */
 @Composable
 internal fun PageImageGrid(images: List<PageImage>, onOpen: (String) -> Unit) {
-    if (images.isEmpty()) return
+    val failed = remember { mutableStateMapOf<String, Boolean>() }
+    val visible = images.filter { failed[it.imageUrl] != true }.take(MAX_PAGE_IMAGES)
+    if (visible.isEmpty()) return
     Column(
         Modifier.fillMaxWidth().padding(vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        images.chunked(2).forEach { row ->
+        visible.chunked(2).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { image ->
-                    PageImageCard(image, onOpen, Modifier.weight(1f))
+                    PageImageCard(
+                        image = image,
+                        onOpen = onOpen,
+                        onFailed = { failed[image.imageUrl] = true },
+                        modifier = Modifier.weight(1f),
+                    )
                 }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
             }
@@ -61,13 +67,13 @@ internal fun PageImageGrid(images: List<PageImage>, onOpen: (String) -> Unit) {
 private fun PageImageCard(
     image: PageImage,
     onOpen: (String) -> Unit,
+    onFailed: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    var failed by remember(image.imageUrl) { mutableStateOf(false) }
     val bitmap by produceState<Bitmap?>(null, image.imageUrl) {
-        value = RemoteContentLoader.loadImage(context, image.imageUrl)
-        if (value == null) failed = true
+        value = RemoteContentLoader.loadImage(context, image.imageUrl, referer = image.pageUrl)
+        if (value == null) onFailed()
     }
     Column(
         modifier.clickable { onOpen(image.pageUrl) },
@@ -80,18 +86,15 @@ private fun PageImageCard(
             contentAlignment = Alignment.Center,
         ) {
             val loaded = bitmap
-            when {
-                loaded != null -> Image(
+            if (loaded != null) {
+                Image(
                     bitmap = loaded.asImageBitmap(),
                     contentDescription = image.title,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxWidth().height(130.dp),
                 )
-                failed -> Icon(
-                    Icons.Outlined.BrokenImage, null, Modifier.size(22.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                else -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            } else {
+                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
             }
         }
         Text(

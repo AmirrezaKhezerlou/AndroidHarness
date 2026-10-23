@@ -124,4 +124,21 @@ class WebFetchHtmlTest {
         assertEquals(listOf("https://site.test/hero.jpg", "https://cdn.test/photo.webp"), scan.images.map { it.url })
         assertEquals(listOf("A red panda", "Sleeping red panda"), scan.images.map { it.alt })
     }
+
+    @Test
+    fun `page image scan skips navigation, footer, and icon chrome`() {
+        val html = """
+            <header><img src="/brand.png" class="site-logo"></header>
+            <nav><img src="/nav-photo.jpg" width="800" height="600"></nav>
+            <main>
+              <img src="/photo.jpg" alt="Photo" width="800" height="600">
+              <img src="/public/images/v6/ico/ico_singlePlayer.png" class="category_icon">
+              <img src="/public/images/mobile/app_icon.webp">
+              <img src="/decor.png" aria-hidden="true">
+            </main>
+            <footer><img src="/footer-photo.jpg" width="800" height="600"></footer>
+        """.trimIndent()
+        val scan = scanPageImages(html, "https://site.test/page")
+        assertEquals(listOf("https://site.test/photo.jpg"), scan.images.map { it.url })
+    }
 }

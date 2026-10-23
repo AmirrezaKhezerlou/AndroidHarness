@@ -426,9 +426,17 @@ internal fun scanPageImages(html: String, baseUrl: String): PageImageScan {
     metas["twitter:image"].orEmpty().forEachIndexed { index, url ->
         add(url, twitterAlts.getOrNull(index) ?: twitterAlts.firstOrNull())
     }
-    for (match in Regex("<img\\s+[^>]*>", RegexOption.IGNORE_CASE).findAll(html)) {
+    val scope = html
+        .replace(Regex("(?s)<nav\\b.*?</nav>"), " ")
+        .replace(Regex("(?s)<aside\\b.*?</aside>"), " ")
+        .replace(Regex("(?s)<footer\\b.*?</footer>"), " ")
+    for (match in Regex("<img\\s+[^>]*>", RegexOption.IGNORE_CASE).findAll(scope)) {
         if (out.size >= 8) break
         val tag = match.value
+        val classes = Regex("class\\s*=\\s*[\"']([^\"']*)[\"']", RegexOption.IGNORE_CASE)
+            .find(tag)?.groupValues?.get(1)?.lowercase().orEmpty()
+        if (Regex("(?:^|[\\s_-])(?:icon|logo|sprite|emoji)(?:$|[\\s_-])").containsMatchIn(classes)) continue
+        if (Regex("aria-hidden\\s*=\\s*[\"']true[\"']", RegexOption.IGNORE_CASE).containsMatchIn(tag)) continue
         val width = Regex("width\\s*=\\s*[\"']?(\\d+)", RegexOption.IGNORE_CASE)
             .find(tag)?.groupValues?.get(1)?.toIntOrNull()
         val height = Regex("height\\s*=\\s*[\"']?(\\d+)", RegexOption.IGNORE_CASE)
@@ -438,9 +446,11 @@ internal fun scanPageImages(html: String, baseUrl: String): PageImageScan {
             .find(tag)?.groupValues?.get(1)
         val srcset = Regex("srcset\\s*=\\s*[\"']([^\"']+)", RegexOption.IGNORE_CASE)
             .find(tag)?.groupValues?.get(1)?.substringBefore(',')
+        val raw = src ?: srcset
+        if (raw != null && Regex("(?i)(?:/ico/|/icons?/|/sprite|favicon|app_icon|footerlogo)").containsMatchIn(raw)) continue
         val alt = Regex("alt\\s*=\\s*[\"']([^\"']*)[\"']", RegexOption.IGNORE_CASE)
             .find(tag)?.groupValues?.get(1)
-        add(src ?: srcset, alt)
+        add(raw, alt)
     }
     return PageImageScan(title, out.values.take(8).toList())
 }
