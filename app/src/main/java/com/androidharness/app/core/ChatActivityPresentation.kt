@@ -1,7 +1,7 @@
 package com.androidharness.app.core
 
-import com.androidharness.app.tools.ImageSearchResult
-import com.androidharness.app.tools.ImageSearchText
+import com.androidharness.app.tools.PageImage
+import com.androidharness.app.tools.PageImageText
 import com.androidharness.app.tools.WebSearchText
 import java.net.URI
 import kotlinx.serialization.json.Json
@@ -102,22 +102,20 @@ internal object ChatActivityPresentation {
                     val url = runCatching { Json.parseToJsonElement(call.argumentsJson).jsonObject["url"]?.jsonPrimitive?.content }.getOrNull()
                     if (url != null) add("", url, true)
                 }
-                "image_search" -> ImageSearchText.parse(result.text).forEach { image ->
-                    image.pageUrl?.let { add(image.title, it, false) }
-                }
             }
         }
         return sources.values.toList()
     }
 
-    /** Images returned by image_search in this turn, deduplicated by image URL. */
-    fun imageResults(messages: List<ChatMessage>): List<ImageSearchResult> {
+    /** Images found on pages the agent actually fetched in this turn, deduplicated. */
+    fun imageResults(messages: List<ChatMessage>, limit: Int = 12): List<PageImage> {
         val results = messages.filter { it.role == Role.TOOL && !it.isError }.associateBy { it.toolCallId }
-        val images = linkedMapOf<String, ImageSearchResult>()
+        val images = linkedMapOf<String, PageImage>()
         for (call in calls(messages)) {
-            if (call.name != "image_search") continue
+            if (call.name != "web_fetch") continue
             val text = results[call.id]?.text ?: continue
-            ImageSearchText.parse(text).forEach { image ->
+            for (image in PageImageText.parse(text)) {
+                if (images.size >= limit) return images.values.toList()
                 val key = image.imageUrl.substringBefore('#').trimEnd('/')
                 images.putIfAbsent(key, image)
             }

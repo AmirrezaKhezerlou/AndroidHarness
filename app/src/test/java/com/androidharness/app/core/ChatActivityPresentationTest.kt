@@ -116,4 +116,25 @@ class ChatActivityPresentationTest {
         assertEquals(5, ChatActivityPresentation.sources(messages).size)
         assertEquals(2, ChatActivityPresentation.sources(messages, limit = 2).size)
     }
+
+    @Test fun imagesComeOnlyFromPagesTheAgentFetched() {
+        val fetch = call("f", "web_fetch", """{"url":"https://site.test/red-panda","images":true}""")
+        val body = """
+            Red panda article text
+            [images on this page]
+            1. A red panda
+               image: https://site.test/hero.jpg
+               page: https://site.test/red-panda
+               source: site.test
+            2. Cub
+               image: https://cdn.test/cub.jpg
+               page: https://site.test/red-panda
+               source: site.test
+        """.trimIndent()
+        val messages = listOf(assistant(fetch), result("f", body))
+        assertEquals(listOf("https://site.test/hero.jpg", "https://cdn.test/cub.jpg"),
+            ChatActivityPresentation.imageResults(messages).map { it.imageUrl })
+        assertTrue(ChatActivityPresentation.imageResults(messages, limit = 1).size == 1)
+        assertTrue(ChatActivityPresentation.imageResults(listOf(assistant(fetch), result("f", body, error = true))).isEmpty())
+    }
 }

@@ -744,9 +744,6 @@
     <string name="chat_settings_instructions_off">此聊天已关闭指令和记忆。文本会保留，重新开启个性化后恢复使用。</string>
     <string name="chat_answered_by">由 %1$s 回答</string>
     <string name="chat_play_video">播放视频</string>
-    <string name="chat_searching_images">正在搜索图片</string>
-    <string name="chat_found_images">已找到图片</string>
-    <string name="chat_image_search_failed">图片搜索失败</string>
     <string name="chat_image_count">%1$d 张图片</string>
     <string name="chat_sources_library">此聊天中的来源</string>
     <string name="chat_sources_library_count">%1$d 个来源</string>

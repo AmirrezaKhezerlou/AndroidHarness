@@ -460,6 +460,10 @@ internal object WebResultCache {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Timed<String>>) =
             size > MAX_PAGES
     }
+    private val pageImages = object : LinkedHashMap<String, Timed<List<PageImage>>>(16, .75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Timed<List<PageImage>>>) =
+            size > MAX_PAGES
+    }
 
     fun getSearch(key: String): SearchOutcome? = synchronized(lock) {
         val hit = searches[key] ?: return null
@@ -485,8 +489,21 @@ internal object WebResultCache {
         pages[url] = Timed(text.take(MAX_PAGE_CHARS), System.currentTimeMillis())
     }
 
+    fun getPageImages(url: String): List<PageImage>? = synchronized(lock) {
+        val hit = pageImages[url] ?: return null
+        if (System.currentTimeMillis() - hit.at > PAGE_TTL_MS) {
+            pageImages.remove(url)
+            null
+        } else hit.value
+    }
+
+    fun putPageImages(url: String, images: List<PageImage>) = synchronized(lock) {
+        pageImages[url] = Timed(images.take(8), System.currentTimeMillis())
+    }
+
     fun clear() = synchronized(lock) {
         searches.clear()
         pages.clear()
+        pageImages.clear()
     }
 }

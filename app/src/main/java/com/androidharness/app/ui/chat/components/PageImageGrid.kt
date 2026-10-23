@@ -34,22 +34,22 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.androidharness.app.tools.ImageSearchResult
+import com.androidharness.app.tools.PageImage
 import com.androidharness.app.ui.chat.RemoteContentLoader
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
-/** ChatGPT-style results grid for image_search, two columns. */
+/** Two-column gallery of the images collected from pages read in this turn. */
 @Composable
-internal fun ImageSearchGrid(results: List<ImageSearchResult>, onOpen: (String) -> Unit) {
-    if (results.isEmpty()) return
+internal fun PageImageGrid(images: List<PageImage>, onOpen: (String) -> Unit) {
+    if (images.isEmpty()) return
     Column(
         Modifier.fillMaxWidth().padding(vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        results.chunked(2).forEach { row ->
+        images.chunked(2).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { result ->
-                    ImageSearchCard(result, onOpen, Modifier.weight(1f))
+                row.forEach { image ->
+                    PageImageCard(image, onOpen, Modifier.weight(1f))
                 }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
             }
@@ -58,21 +58,19 @@ internal fun ImageSearchGrid(results: List<ImageSearchResult>, onOpen: (String) 
 }
 
 @Composable
-private fun ImageSearchCard(
-    result: ImageSearchResult,
+private fun PageImageCard(
+    image: PageImage,
     onOpen: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val thumb = result.thumbnailUrl ?: result.imageUrl
-    var failed by remember(thumb, result.imageUrl) { mutableStateOf(false) }
-    val bitmap by produceState<Bitmap?>(null, thumb, result.imageUrl) {
-        value = RemoteContentLoader.loadImage(context, thumb)
-            ?: if (thumb != result.imageUrl) RemoteContentLoader.loadImage(context, result.imageUrl) else null
+    var failed by remember(image.imageUrl) { mutableStateOf(false) }
+    val bitmap by produceState<Bitmap?>(null, image.imageUrl) {
+        value = RemoteContentLoader.loadImage(context, image.imageUrl)
         if (value == null) failed = true
     }
     Column(
-        modifier.clickable { onOpen(result.pageUrl ?: result.imageUrl) },
+        modifier.clickable { onOpen(image.pageUrl) },
         verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         Box(
@@ -81,11 +79,11 @@ private fun ImageSearchCard(
                 .background(MaterialTheme.colorScheme.surfaceContainerLow),
             contentAlignment = Alignment.Center,
         ) {
-            val image = bitmap
+            val loaded = bitmap
             when {
-                image != null -> Image(
-                    bitmap = image.asImageBitmap(),
-                    contentDescription = result.title,
+                loaded != null -> Image(
+                    bitmap = loaded.asImageBitmap(),
+                    contentDescription = image.title,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxWidth().height(130.dp),
                 )
@@ -97,15 +95,13 @@ private fun ImageSearchCard(
             }
         }
         Text(
-            result.title,
+            image.title,
             style = MaterialTheme.typography.labelMedium,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
         Text(
-            result.credit
-                ?: result.pageUrl?.toHttpUrlOrNull()?.host?.removePrefix("www.")
-                ?: result.source,
+            image.pageUrl.toHttpUrlOrNull()?.host?.removePrefix("www.") ?: image.source,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 2,

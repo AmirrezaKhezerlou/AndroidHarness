@@ -63,7 +63,7 @@ class ChatExperienceDeviceTest {
                 cavemanSettings = { AppSettings(cavemanInstalled = true) },
                 universalMemory = c.memory,
                 chatOnlyTools = listOf(ReadChatTextTool(c.sessions::messages), BrowserReadTool(c.browser),
-                    ImageSearchTool(githubClient), OfferCodeHandoffTool(),
+                    OfferCodeHandoffTool(),
                     GitHubApiTool(githubClient) { null }, GitHubSearchTool(githubClient) { null }, GitHubFileTool(githubClient) { null }))
             val events = engine.run(chat, "chat-engine-turn", ProviderConfig("fixture", "Fixture", ProviderType.OPENAI_COMPAT,
                 "http://localhost", "fixture"), "", c.sessions.messages(chat), { PermissionMode.FULL_ACCESS }, mutableSetOf("read_file", "shell"),

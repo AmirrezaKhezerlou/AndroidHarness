@@ -259,7 +259,8 @@ class WebFetchTool(
                 if (readBudget != null && !readBudget.claimRead()) {
                     return@withContext ToolResult(true, readLimitText())
                 }
-                return@withContext ToolResult(true, renderPage(cached, offset, maxChars, find) + readNote())
+                val imageNote = if (includeImages) renderImageNote(WebResultCache.getPageImages(url).orEmpty()) else ""
+                return@withContext ToolResult(true, renderPage(cached, offset, maxChars, find) + imageNote + readNote())
             }
             val fetchClient = client.newBuilder()
                 .readTimeout(30, TimeUnit.SECONDS)
@@ -286,6 +287,7 @@ class WebFetchTool(
                         val extracted = com.androidharness.app.ui.chat.PdfTextExtractor.extract(bytes)
                             ?: return@withContext ToolResult(true, "[PDF with no extractable text: $mime, ${bytes.size} bytes]")
                         WebResultCache.putPage(url, extracted.text)
+                        WebResultCache.putPageImages(url, emptyList())
                         if (readBudget != null && !readBudget.claimRead()) {
                             return@withContext ToolResult(true, readLimitText())
                         }
@@ -300,23 +302,35 @@ class WebFetchTool(
                     val raw = bytes.toString(mediaType?.charset() ?: Charsets.UTF_8)
                     val text = htmlToText(raw, mediaType?.subtype)
                     WebResultCache.putPage(url, text)
+                    val pageUrl = resp.request.url.toString()
+                    val host = resp.request.url.host
+                    val scan = scanPageImages(raw, pageUrl)
+                    val pageImages = scan.images.map { image ->
+                        PageImage(
+                            title = image.alt ?: scan.title ?: host,
+                            imageUrl = image.url,
+                            pageUrl = pageUrl,
+                            source = host,
+                        )
+                    }
+                    WebResultCache.putPageImages(url, pageImages)
                     if (readBudget != null && !readBudget.claimRead()) {
                         return@withContext ToolResult(true, readLimitText())
                     }
                     val jsNote = if (looksJavascriptOnly(raw, text)) {
                         "\n[note: this page appears to require JavaScript; readable text may be incomplete]"
                     } else ""
-                    val imageNote = if (includeImages) {
-                        val images = pageImageUrls(raw, resp.request.url.toString())
-                        if (images.isEmpty()) "\n[no image urls found]"
-                        else "\n[image urls on this page]\n" + images.joinToString("\n")
-                    } else ""
+                    val imageNote = if (includeImages) renderImageNote(pageImages) else ""
                     ToolResult(true, renderPage(text, offset, maxChars, find) + jsNote + imageNote + readNote())
                 }
             } catch (e: Exception) {
                 ToolResult(false, "Fetch failed: ${e.message}")
             }
         }
+
+    private fun renderImageNote(images: List<PageImage>): String =
+        if (images.isEmpty()) "\n[no image urls found]"
+        else "\n" + PageImageText.render(images, images.size)
 
     private fun readLimitText(): String {
         val budget = readBudget ?: return ""
@@ -377,43 +391,58 @@ private fun looksJavascriptOnly(raw: String, text: String): Boolean =
         (raw.length > 4_000 && text.length < 400)
 
 /**
- * Direct image URLs for the model to render with Markdown. Open Graph comes
- * first, then visible img tags; icon-sized images and SVG are skipped.
+ * Page title and image references from one HTML scan. Open Graph comes first,
+ * then visible img tags; icon-sized images and SVG are skipped.
  */
-internal fun pageImageUrls(html: String, baseUrl: String): List<String> {
-    val base = baseUrl.toHttpUrlOrNull() ?: return emptyList()
-    val out = LinkedHashSet<String>()
-    fun add(raw: String?) {
-        val value = raw?.trim()?.substringBefore(' ')?.takeIf { it.isNotEmpty() } ?: return
-        if (value.startsWith("data:") || value.endsWith(".svg", ignoreCase = true)) return
-        val resolved = if (value.startsWith("http://") || value.startsWith("https://")) value
-        else base.resolve(value)?.toString() ?: return
-        out += resolved
-    }
+internal fun scanPageImages(html: String, baseUrl: String): PageImageScan {
+    val base = baseUrl.toHttpUrlOrNull() ?: return PageImageScan(null, emptyList())
+    val metas = LinkedHashMap<String, MutableList<String>>()
     Regex("<meta\\s+[^>]*>", RegexOption.IGNORE_CASE).findAll(html).forEach { match ->
         val tag = match.value
         val key = Regex("(?:property|name)\\s*=\\s*[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
-            .find(tag)?.groupValues?.get(1)?.lowercase()
-        if (key == "og:image" || key == "og:image:url" || key == "twitter:image") {
-            add(Regex("content\\s*=\\s*[\"']([^\"']*)[\"']", RegexOption.IGNORE_CASE)
-                .find(tag)?.groupValues?.get(1))
-        }
+            .find(tag)?.groupValues?.get(1)?.lowercase() ?: return@forEach
+        val content = Regex("content\\s*=\\s*[\"']([^\"']*)[\"']", RegexOption.IGNORE_CASE)
+            .find(tag)?.groupValues?.get(1) ?: return@forEach
+        metas.getOrPut(key) { mutableListOf() }.add(content)
     }
-    Regex("<img\\s+[^>]*>", RegexOption.IGNORE_CASE).findAll(html).forEach { match ->
-        if (out.size >= 8) return@forEach
+    val title = cleanPageImageText(metas["og:title"]?.firstOrNull()) ?: cleanPageImageText(
+        Regex("<title[^>]*>(.*?)</title>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+            .find(html)?.groupValues?.get(1),
+    )
+    val out = LinkedHashMap<String, PageImageRef>()
+    fun add(raw: String?, alt: String?) {
+        val value = raw?.trim()?.substringBefore(' ')?.takeIf { it.isNotEmpty() } ?: return
+        if (value.startsWith("data:")) return
+        val resolved = if (value.startsWith("http://") || value.startsWith("https://")) value
+        else base.resolve(value)?.toString() ?: return
+        if (resolved.endsWith(".svg", ignoreCase = true)) return
+        out.putIfAbsent(resolved, PageImageRef(resolved, cleanPageImageText(alt)?.take(200)))
+    }
+    val ogAlts = metas["og:image:alt"].orEmpty()
+    (metas["og:image"].orEmpty() + metas["og:image:url"].orEmpty()).forEachIndexed { index, url ->
+        add(url, ogAlts.getOrNull(index) ?: ogAlts.firstOrNull())
+    }
+    val twitterAlts = metas["twitter:image:alt"].orEmpty()
+    metas["twitter:image"].orEmpty().forEachIndexed { index, url ->
+        add(url, twitterAlts.getOrNull(index) ?: twitterAlts.firstOrNull())
+    }
+    for (match in Regex("<img\\s+[^>]*>", RegexOption.IGNORE_CASE).findAll(html)) {
+        if (out.size >= 8) break
         val tag = match.value
         val width = Regex("width\\s*=\\s*[\"']?(\\d+)", RegexOption.IGNORE_CASE)
             .find(tag)?.groupValues?.get(1)?.toIntOrNull()
         val height = Regex("height\\s*=\\s*[\"']?(\\d+)", RegexOption.IGNORE_CASE)
             .find(tag)?.groupValues?.get(1)?.toIntOrNull()
-        if ((width != null && width < 120) || (height != null && height < 120)) return@forEach
+        if ((width != null && width < 120) || (height != null && height < 120)) continue
         val src = Regex("(?:data-src|data-original|src)\\s*=\\s*[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
             .find(tag)?.groupValues?.get(1)
         val srcset = Regex("srcset\\s*=\\s*[\"']([^\"']+)", RegexOption.IGNORE_CASE)
             .find(tag)?.groupValues?.get(1)?.substringBefore(',')
-        add(src ?: srcset)
+        val alt = Regex("alt\\s*=\\s*[\"']([^\"']*)[\"']", RegexOption.IGNORE_CASE)
+            .find(tag)?.groupValues?.get(1)
+        add(src ?: srcset, alt)
     }
-    return out.take(8)
+    return PageImageScan(title, out.values.take(8).toList())
 }
 
 /**

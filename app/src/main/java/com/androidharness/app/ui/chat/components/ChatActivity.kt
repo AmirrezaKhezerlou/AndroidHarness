@@ -19,7 +19,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Code
-import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Public
@@ -116,7 +115,6 @@ internal fun ChatToolActivity(call: ToolCallData, result: ChatMessage?, running:
         result?.isError == true -> stringResource(when (call.name) {
             "web_search" -> R.string.chat_search_failed
             "web_fetch", "browser_read" -> R.string.chat_page_failed
-            "image_search" -> R.string.chat_image_search_failed
             "github_api", "github_search", "github_file" -> R.string.chat_github_failed
             else -> R.string.chat_tool_failed
         })
@@ -125,8 +123,8 @@ internal fun ChatToolActivity(call: ToolCallData, result: ChatMessage?, running:
     }
     val sources = remember(call, result) { ChatActivityPresentation.sources(listOfNotNull(ChatMessage(Role.ASSISTANT, toolCalls = listOf(call)), result)) }
     val images = remember(call, result) {
-        if (call.name != "image_search") emptyList()
-        else result?.let { com.androidharness.app.tools.ImageSearchText.parse(it.text) }.orEmpty()
+        if (call.name != "web_fetch") emptyList()
+        else result?.let { com.androidharness.app.tools.PageImageText.parse(it.text) }.orEmpty()
     }
     ChatActivityRow(title, call.name, running, result != null || sources.isNotEmpty()) {
         item {
@@ -136,7 +134,8 @@ internal fun ChatToolActivity(call: ToolCallData, result: ChatMessage?, running:
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        } else if (sources.isNotEmpty()) {
+        }
+        if (sources.isNotEmpty()) {
             sources.take(4).forEach { source ->
                 TextButton(onClick = { onOpenUrl(source.url) }, shape = RoundedCornerShape(12.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)) {
                     Column {
@@ -146,7 +145,7 @@ internal fun ChatToolActivity(call: ToolCallData, result: ChatMessage?, running:
                 }
             }
             ChatSources(listOfNotNull(ChatMessage(Role.ASSISTANT, toolCalls = listOf(call)), result), onOpenUrl)
-        } else Text(stringResource(when {
+        } else if (images.isEmpty()) Text(stringResource(when {
             result?.isError == true -> R.string.chat_tool_result_failed
             result != null -> R.string.chat_tool_result_empty
             else -> R.string.chat_activity_interrupted
@@ -451,7 +450,6 @@ private fun ChatActivityGlyph(name: String?, live: Boolean, motion: Boolean) {
                     translationX = searchX * size.width / 24f
                     translationY = searchY * size.height / 24f
                 }, tint = scheme.onSurfaceVariant)
-                "image_search" -> Icon(Icons.Outlined.Image, null, Modifier.size(15.dp), tint = scheme.onSurfaceVariant)
                 "web_fetch", "browser_read" -> Box(Modifier.size(15.dp)) {
                     Icon(painterResource(R.drawable.ic_chat_eyes), null, Modifier.fillMaxSize().graphicsLayer {
                         scaleY = blink
@@ -484,7 +482,6 @@ private fun ChatActivityGlyph(name: String?, live: Boolean, motion: Boolean) {
 private fun activityLabel(name: String, running: Boolean): String = stringResource(when (name) {
     "web_search" -> if (running) R.string.chat_searching else R.string.chat_searched
     "web_fetch", "browser_read" -> if (running) R.string.chat_reading_page else R.string.chat_read_page
-    "image_search" -> if (running) R.string.chat_searching_images else R.string.chat_found_images
     "github_api", "github_search", "github_file" -> if (running) R.string.chat_reading_github else R.string.chat_read_github
     "create_artifact" -> if (running) R.string.chat_creating_artifact else R.string.chat_created_artifact
     "read_artifact" -> if (running) R.string.chat_reading_artifact else R.string.chat_read_artifact

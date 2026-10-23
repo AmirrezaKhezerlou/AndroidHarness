@@ -1557,7 +1557,7 @@ private fun ChatScreenContent(
                                                 com.androidharness.app.core.ChatActivityPresentation.imageResults(conversationTurn)
                                             }
                                             if (foundImages.isNotEmpty()) {
-                                                com.androidharness.app.ui.chat.components.ImageSearchGrid(foundImages) { url ->
+                                                com.androidharness.app.ui.chat.components.PageImageGrid(foundImages) { url ->
                                                     webPreviewUrl = url
                                                     showWebPreview = true
                                                 }

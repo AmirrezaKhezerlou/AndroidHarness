@@ -110,16 +110,18 @@ class WebFetchHtmlTest {
     }
 
     @Test
-    fun `page image urls prefer open graph and skip icons and svg`() {
+    fun `page image scan prefers open graph and skips icons and svg`() {
         val html = """
+            <title>Red panda</title>
             <meta property="og:image" content="/hero.jpg">
+            <meta property="og:image:alt" content="A red panda">
             <img src="/icon.png" width="16" height="16">
-            <img data-src="//cdn.test/photo.webp">
+            <img data-src="//cdn.test/photo.webp" alt="Sleeping red panda">
             <img src="/logo.svg">
         """.trimIndent()
-        assertEquals(
-            listOf("https://site.test/hero.jpg", "https://cdn.test/photo.webp"),
-            pageImageUrls(html, "https://site.test/article"),
-        )
+        val scan = scanPageImages(html, "https://site.test/article")
+        assertEquals("Red panda", scan.title)
+        assertEquals(listOf("https://site.test/hero.jpg", "https://cdn.test/photo.webp"), scan.images.map { it.url })
+        assertEquals(listOf("A red panda", "Sleeping red panda"), scan.images.map { it.alt })
     }
 }
