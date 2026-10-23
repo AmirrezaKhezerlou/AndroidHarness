@@ -599,9 +599,12 @@ class AgentEngine(
                     com.androidharness.app.core.ChatExperience.researchReadNudge(
                         searchDepth, researchBudget.pagesRead, researchBudget.minReads))
             } else if (!answerless) {
+                val followUps = if (conversation.isChat)
+                    com.androidharness.app.core.FollowUpSuggestions.extract(text.toString())
+                else com.androidharness.app.core.FollowUpSuggestions(text.toString(), emptyList())
                 val assistant = ChatMessage(
                     role = Role.ASSISTANT,
-                    text = text.toString(),
+                    text = followUps.text,
                     toolCalls = calls.toList(),
                     thinking = thinking.toString(),
                     thinkingMs = thinkingTiming.durationMs(ThinkingTiming.now()),
@@ -614,6 +617,7 @@ class AgentEngine(
                         reasoningSetting = reasoningSetting,
                         suppliedMemories = suppliedMemories,
                         model = config.model,
+                        followUps = followUps.items,
                     ),
                 ).let { it.copy(generation = it.generation.copy(state = responseState?.boundTo(it))) }
                 working += assistant

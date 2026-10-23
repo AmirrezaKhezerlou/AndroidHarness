@@ -1577,6 +1577,18 @@ private fun ChatScreenContent(
                                                 }
                                             }
                                             if (isTurnFinal && message.toolCalls.isEmpty() && !isTurnRunning) {
+                                                if (message.turnId == latestUserTurnId) {
+                                                    val followUps = message.generation.followUps
+                                                    if (followUps.isNotEmpty()) {
+                                                        com.androidharness.app.ui.chat.components.FollowUpChips(followUps) { suggestion ->
+                                                            attachedConceptJson = null
+                                                            attachedResponseJson = null
+                                                            setComposerText(suggestion)
+                                                            quoteComposerFocus?.requestFocus()
+                                                            scheduleKeyboard?.show()
+                                                        }
+                                                    }
+                                                }
                                                 com.androidharness.app.ui.chat.components.ChatSources(conversationTurn) { url -> webPreviewUrl = url; showWebPreview = true }
                                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                                     CopyIconButton(replyText)

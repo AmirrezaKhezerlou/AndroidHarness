@@ -53,6 +53,8 @@ data class GenerationMetadata(
     val execution: List<com.androidharness.app.data.env.ExecutionReceipt> = emptyList(),
     /** Catalog id of the model that produced this answer, for provenance. */
     val model: String? = null,
+    /** Short next-question chips offered under the answer. */
+    val followUps: List<String> = emptyList(),
 ) {
     companion object {
         private val json = Json { ignoreUnknownKeys = true }

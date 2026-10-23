@@ -6,6 +6,8 @@ import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -48,6 +50,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
@@ -58,6 +62,10 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import com.androidharness.app.ui.chat.components.MathBlock
+import com.androidharness.app.ui.chat.components.MathInlineSizes
+import com.androidharness.app.ui.chat.components.MathInlineView
+import com.androidharness.app.ui.chat.components.MermaidBlock
 import com.androidharness.app.ui.chat.components.RemoteImageCard
 import com.androidharness.app.ui.chat.components.RemoteLinkCard
 import com.androidharness.app.ui.files.CodeTokenColors
@@ -93,12 +101,14 @@ fun MarkdownText(
     /** False for external documents such as release notes; no remote fetches. */
     media: Boolean = true,
 ) {
-    // Strip agent system directives (like ::web-preview{...}) so raw markup is never visible to the user
+    // Strip agent system directives (follow-up chips, web preview) so raw
+    // markup is never visible to the user, including mid-stream.
     val cleanText = remember(text) {
-        if (text.contains("preview")) {
-            com.androidharness.app.core.WebResourceExtractor.stripDirectives(text)
+        val withoutFollowUps = com.androidharness.app.core.FollowUpSuggestions.stripForDisplay(text)
+        if (withoutFollowUps.contains("preview")) {
+            com.androidharness.app.core.WebResourceExtractor.stripDirectives(withoutFollowUps)
         } else {
-            text
+            withoutFollowUps
         }
     }
 
@@ -191,6 +201,8 @@ private sealed interface Block {
     ) : Block
     data class Image(val url: String, val alt: String) : Block
     data class LinkPreview(val url: String, val label: String) : Block
+    data class Math(val tex: String, val display: Boolean) : Block
+    data class Mermaid(val code: String) : Block
 }
 
 private data class ListItem(val marker: String, val content: String, val nested: List<ListItem>)
@@ -304,7 +316,65 @@ private fun parseBlocks(text: String): List<Block> {
                     i++
                 }
                 if (i < lines.size) i++ // skip the closing fence
-                out += Block.Code(body.toString(), lang)
+                if (lang.equals("mermaid", ignoreCase = true)) {
+                    out += Block.Mermaid(body.toString().trim())
+                } else {
+                    out += Block.Code(body.toString(), lang)
+                }
+            }
+
+            trimmed.startsWith("$$") -> {
+                flushParagraph()
+                val after = trimmed.removePrefix("$$")
+                val close = after.indexOf("$$")
+                if (close >= 0) {
+                    val tex = after.substring(0, close).trim()
+                    if (tex.isNotEmpty()) out += Block.Math(tex, true)
+                    i++
+                } else {
+                    val body = StringBuilder(after)
+                    i++
+                    while (i < lines.size) {
+                        val current = lines[i]
+                        val end = current.indexOf("$$")
+                        if (end >= 0) {
+                            if (end > 0) body.append('\n').append(current.substring(0, end))
+                            i++
+                            break
+                        }
+                        body.append('\n').append(current)
+                        i++
+                    }
+                    val tex = body.toString().trim()
+                    if (tex.isNotEmpty()) out += Block.Math(tex, true)
+                }
+            }
+
+            trimmed.startsWith("\\[") -> {
+                flushParagraph()
+                val after = trimmed.removePrefix("\\[")
+                val close = after.indexOf("\\]")
+                if (close >= 0) {
+                    val tex = after.substring(0, close).trim()
+                    if (tex.isNotEmpty()) out += Block.Math(tex, true)
+                    i++
+                } else {
+                    val body = StringBuilder(after)
+                    i++
+                    while (i < lines.size) {
+                        val current = lines[i]
+                        val end = current.indexOf("\\]")
+                        if (end >= 0) {
+                            if (end > 0) body.append('\n').append(current.substring(0, end))
+                            i++
+                            break
+                        }
+                        body.append('\n').append(current)
+                        i++
+                    }
+                    val tex = body.toString().trim()
+                    if (tex.isNotEmpty()) out += Block.Math(tex, true)
+                }
             }
 
             headingRegex.matches(trimmed) -> {
@@ -415,6 +485,19 @@ private fun MarkdownBlocks(
                 ParagraphText("[${block.label.ifBlank { "link" }}](${block.url})", onOpenUrl)
             }
             is Block.Code -> CodeBlock(block.text.trimEnd('\n'), block.language)
+            is Block.Math -> if (!media || plain) {
+                Text(
+                    if (block.display) "\$\$${block.tex}\$\$" else "\$${block.tex}\$",
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            } else {
+                MathBlock(block.tex)
+            }
+            is Block.Mermaid -> if (!media || plain) {
+                CodeBlock(block.code, "mermaid")
+            } else {
+                MermaidBlock(block.code)
+            }
             is Block.Heading -> Text(
                 block.content,
                 // Calmer than a type-scale ladder: mobile summaries read best
@@ -628,7 +711,13 @@ private fun TableBlock(
 /** Paragraph text with tap-to-open links (annotations set by [styledText]). */
 @Composable
 private fun ParagraphText(text: String, onOpenUrl: ((String) -> Unit)? = null) {
-    LinkedText(styledText(text), MaterialTheme.typography.bodyLarge, onOpenUrl = onOpenUrl)
+    val styled = styledParagraph(text)
+    LinkedText(
+        styled.text,
+        MaterialTheme.typography.bodyLarge,
+        onOpenUrl = onOpenUrl,
+        inlineContent = styled.inlineContent,
+    )
 }
 
 @Composable
@@ -637,6 +726,7 @@ private fun LinkedText(
     style: TextStyle,
     textAlign: TextAlign = TextAlign.Start,
     onOpenUrl: ((String) -> Unit)? = null,
+    inlineContent: Map<String, InlineTextContent> = emptyMap(),
     modifier: Modifier = Modifier,
 ) {
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
@@ -647,6 +737,7 @@ private fun LinkedText(
         style = style,
         textAlign = textAlign,
         color = MaterialTheme.colorScheme.onSurface,
+        inlineContent = inlineContent,
         onTextLayout = { layout = it },
         modifier = modifier.pointerInput(styled) {
             detectTapGestures { pos ->
@@ -818,12 +909,27 @@ private fun CodeBlock(code: String, language: String) {
 
 private val linkRegex = Regex("\\[([^\\]]+)]\\(([^)\\s]+)\\)")
 
+private data class StyledResult(
+    val text: AnnotatedString,
+    val inlineContent: Map<String, InlineTextContent>,
+)
+
 /** Inline bold, italic, strikethrough, code, and links. */
 @Composable
-private fun styledText(text: String): AnnotatedString {
+private fun styledText(text: String): AnnotatedString = styled(text, math = false).text
+
+/** Paragraph styling plus inline KaTeX placeholders. */
+@Composable
+private fun styledParagraph(text: String): StyledResult = styled(text, math = true)
+
+@Composable
+private fun styled(text: String, math: Boolean): StyledResult {
     val codeColor = MaterialTheme.colorScheme.onSurface
     val codeBackground = MaterialTheme.colorScheme.surfaceContainerHigh
     val linkColor = MaterialTheme.colorScheme.primary
+    val mathColor = MaterialTheme.colorScheme.onSurface
+    val density = LocalDensity.current
+    val mathVersion = if (math) MathInlineSizes.version.intValue else 0
     // A paragraph with an inline image keeps its text flow; render the image
     // as a labelled link instead of leaking the leading "!".
     val normalized = remember(text) {
@@ -832,9 +938,29 @@ private fun styledText(text: String): AnnotatedString {
             "[$label](${match.groupValues[2]})"
         }
     }
-    return remember(normalized, codeColor, codeBackground, linkColor) {
+    return remember(normalized, codeColor, codeBackground, linkColor, mathColor, density, mathVersion, math) {
         val links = linkRegex.findAll(normalized).associateBy { it.range.first }
-        buildAnnotatedString {
+        val inlineContent = LinkedHashMap<String, InlineTextContent>()
+        var mathIndex = 0
+        val result = buildAnnotatedString {
+            fun appendMath(tex: String) {
+                val id = "inline-math-${mathIndex++}"
+                val size = MathInlineSizes.get(tex)
+                // A couple of pixels of slack keep superscripts from clipping
+                // against the inline WebView edge.
+                val width = size?.width?.plus(6)?.dp ?: (tex.length * 8).coerceIn(24, 220).dp
+                val height = size?.height?.plus(2)?.dp ?: 24.dp
+                appendInlineContent(id, tex)
+                inlineContent[id] = InlineTextContent(
+                    Placeholder(
+                        width = with(density) { width.toSp() },
+                        height = with(density) { height.toSp() },
+                        placeholderVerticalAlign = PlaceholderVerticalAlign.Center,
+                    ),
+                ) {
+                    MathInlineView(tex, mathColor) { w, h -> MathInlineSizes.put(tex, w, h) }
+                }
+            }
             var i = 0
             while (i < normalized.length) {
                 val link = links[i]
@@ -892,6 +1018,29 @@ private fun styledText(text: String): AnnotatedString {
                         }
                     }
 
+                    math && normalized.startsWith("\\(", i) -> {
+                        val end = normalized.indexOf("\\)", i + 2)
+                        val tex = if (end > i + 2) normalized.substring(i + 2, end) else null
+                        if (tex != null && isValidInlineMath(tex)) {
+                            appendMath(tex)
+                            i = end + 2
+                        } else {
+                            append(normalized[i]); i++
+                        }
+                    }
+
+                    math && normalized[i] == '$' && !normalized.startsWith("$$", i) &&
+                        (i == 0 || normalized[i - 1] != '\\') -> {
+                        val end = findDollarClose(normalized, i + 1)
+                        val tex = if (end > i + 1) normalized.substring(i + 1, end) else null
+                        if (tex != null && isValidInlineMath(tex)) {
+                            appendMath(tex)
+                            i = end + 1
+                        } else {
+                            append(normalized[i]); i++
+                        }
+                    }
+
                     normalized.startsWith("*", i) -> {
                         val end = normalized.indexOf('*', i + 1)
                         if (end > i + 1) {
@@ -910,5 +1059,22 @@ private fun styledText(text: String): AnnotatedString {
                 }
             }
         }
+        StyledResult(result, inlineContent)
     }
 }
+
+private fun findDollarClose(text: String, start: Int): Int {
+    var i = start
+    while (i < text.length) {
+        when {
+            text[i] == '\\' -> i += 2
+            text[i] == '$' -> return i
+            text[i] == '\n' -> return -1
+            else -> i++
+        }
+    }
+    return -1
+}
+
+private fun isValidInlineMath(tex: String): Boolean =
+    tex.isNotBlank() && !tex.first().isWhitespace() && !tex.last().isWhitespace() && tex.length <= 2_000
