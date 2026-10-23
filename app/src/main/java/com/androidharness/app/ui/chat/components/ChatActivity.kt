@@ -248,7 +248,7 @@ private fun ChatActivityRow(
             enter = fadeIn(tween(120)) + expandVertically(tween(160)),
             exit = fadeOut(tween(100)) + shrinkVertically(tween(160))) {
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 240.dp).nestedScroll(userScroll), state = scroll,
-                contentPadding = PaddingValues(start = 36.dp, top = 4.dp, bottom = 6.dp),
+                contentPadding = PaddingValues(top = 4.dp, bottom = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp), content = details)
         }
     }
