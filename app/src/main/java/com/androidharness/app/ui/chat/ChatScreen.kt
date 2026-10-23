@@ -1553,6 +1553,15 @@ private fun ChatScreenContent(
                                                         setComposerText(listOf(composerText.trim(), action.prompt).filter(String::isNotBlank).joinToString("\n\n"))
                                                     }, onOpenUrl = { url -> webPreviewUrl = url; showWebPreview = true })
                                             }
+                                            val foundImages = remember(conversationTurn) {
+                                                com.androidharness.app.core.ChatActivityPresentation.imageResults(conversationTurn)
+                                            }
+                                            if (foundImages.isNotEmpty()) {
+                                                com.androidharness.app.ui.chat.components.ImageSearchGrid(foundImages) { url ->
+                                                    webPreviewUrl = url
+                                                    showWebPreview = true
+                                                }
+                                            }
                                             if (isTurnFinal && message.toolCalls.isEmpty() && !isTurnRunning) {
                                                 com.androidharness.app.ui.chat.components.ChatSources(conversationTurn) { url -> webPreviewUrl = url; showWebPreview = true }
                                                 Row(verticalAlignment = Alignment.CenterVertically) {

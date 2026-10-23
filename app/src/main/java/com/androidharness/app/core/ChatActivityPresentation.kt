@@ -1,5 +1,7 @@
 package com.androidharness.app.core
 
+import com.androidharness.app.tools.ImageSearchResult
+import com.androidharness.app.tools.ImageSearchText
 import com.androidharness.app.tools.WebSearchText
 import java.net.URI
 import kotlinx.serialization.json.Json
@@ -100,9 +102,27 @@ internal object ChatActivityPresentation {
                     val url = runCatching { Json.parseToJsonElement(call.argumentsJson).jsonObject["url"]?.jsonPrimitive?.content }.getOrNull()
                     if (url != null) add("", url, true)
                 }
+                "image_search" -> ImageSearchText.parse(result.text).forEach { image ->
+                    image.pageUrl?.let { add(image.title, it, false) }
+                }
             }
         }
         return sources.values.toList()
+    }
+
+    /** Images returned by image_search in this turn, deduplicated by image URL. */
+    fun imageResults(messages: List<ChatMessage>): List<ImageSearchResult> {
+        val results = messages.filter { it.role == Role.TOOL && !it.isError }.associateBy { it.toolCallId }
+        val images = linkedMapOf<String, ImageSearchResult>()
+        for (call in calls(messages)) {
+            if (call.name != "image_search") continue
+            val text = results[call.id]?.text ?: continue
+            ImageSearchText.parse(text).forEach { image ->
+                val key = image.imageUrl.substringBefore('#').trimEnd('/')
+                images.putIfAbsent(key, image)
+            }
+        }
+        return images.values.toList()
     }
 
     /** Latest source and page-read counters reported by web_search in this turn. */
