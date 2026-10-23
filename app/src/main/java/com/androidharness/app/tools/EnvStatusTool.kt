@@ -148,6 +148,7 @@ class EnvStatusTool(
                 accessReport?.let { append(it).append("\n\n") }
                 append("Shizuku: ").append(szText).append('\n')
                 append("Linux environment: ").append(envText).append('\n')
+                append("Android build tools: ").append(linuxEnv.androidBuildStatus(probeRoot.absolutePath)).append('\n')
                 append("GitHub: ").append(ghText).append('\n')
                 append("TLS (Bug 1 fix): CA bundle ")
                     .append(if (tlsBundle.isFile) "ready at ${tlsBundle.absolutePath} ✓" else "missing; falling back to system anchors")

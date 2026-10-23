@@ -410,6 +410,9 @@ class LinuxEnvironmentManager(
     ) = withContext(Dispatchers.IO) {
         onProgress(PackageInstallStatus(wanted.toList()))
         installMutex.withLock {
+            if (AndroidBuildToolchain.repairLaunchers(prefix, installedPackages()) > 0) {
+                invalidateExternalToolDeploy()
+            }
             val broken = brokenInstalledPackages().toSet()
             val result = if (isReady && wanted.all { installedContains(it) && it !in broken }) Result.success(Unit)
                 else installLocked(wanted, onProgress)
@@ -579,6 +582,7 @@ class LinuxEnvironmentManager(
                 prefixChanged = true
                 val installedPaths = extractDeb(debFile)
                 publish(PackageInstallPhase.CONFIGURING, pkg.name)
+                AndroidBuildToolchain.repairLaunchers(prefix, listOf(pkg.name))
                 recordPackageFiles(pkg, installedPaths)
                 debFile.delete()
                 // record progress per package so a killed install resumes
@@ -666,9 +670,8 @@ class LinuxEnvironmentManager(
     fun checkMissing(): String {
         val installed = installedPackages().toSet()
         val missingPkgs = fullPackages.filter { it !in installed }
-        val missingBins = BINARY_PROOF.filterKeys { it in installed || it in fullPackages }
-            .filterValues { progs -> progs.none { File(prefix, it).exists() } }
-            .keys.toList()
+        val missingBins = brokenInstalledPackages() + BINARY_PROOF.filterKeys { it in fullPackages && it !in installed }
+            .filterValues { progs -> progs.none { File(prefix, it).exists() } }.keys
         return when {
             missingPkgs.isEmpty() && missingBins.isEmpty() ->
                 "All present: bash, git, gh, python, pip, node, npm."
@@ -697,13 +700,19 @@ class LinuxEnvironmentManager(
             // Un-mark the broken ones so install() re-downloads them.
             marker.writeText(installedPackages().filter { it !in broken }.joinToString("\n"))
         }
-        install(fullPackages).isSuccess && isReady
+        install((fullPackages + broken).distinct()).isSuccess && isReady
     }
 
     /** Packages marked installed whose proof binary is gone from disk. */
-    private fun brokenInstalledPackages(): List<String> = installedPackages().filter { pkg ->
-        BINARY_PROOF[pkg]?.let { progs -> progs.none { File(prefix, it).exists() } } ?: false
+    private fun brokenInstalledPackages(): List<String> {
+        val installed = installedPackages()
+        return (installed.filter { pkg ->
+            BINARY_PROOF[pkg]?.let { progs -> progs.none { File(prefix, it).exists() } } ?: false
+        } + AndroidBuildToolchain.brokenPackages(prefix, installed)).distinct()
     }
+
+    internal fun androidBuildStatus(executionPrefix: String = prefix.absolutePath): String =
+        AndroidBuildToolchain.status(prefix, installedPackages(), executionPrefix)
 
     /** Standard-set packages that are not usable right now: never installed, or marked installed with the binaries gone. */
     private fun incompletePackages(): List<String> {
@@ -829,6 +838,7 @@ class LinuxEnvironmentManager(
             val relinked = repairLegacySymlinks()
             val (purged, shebangsRewritten) = purgeDeadTermuxShims()
             val shellPatched = repairGitShellPaths()
+            val buildLaunchers = AndroidBuildToolchain.repairLaunchers(prefix, installedPackages())
             val broken = brokenInstalledPackages()
             val missing = fullPackages.filter { !installedContains(it) && it !in latePackagesPending() }
             var healNote: String? = null
@@ -838,7 +848,7 @@ class LinuxEnvironmentManager(
                     // Un-mark the broken ones so install() re-downloads them.
                     marker.writeText(installedPackages().filter { it !in broken }.joinToString("\n"))
                 }
-                runCatching { install(fullPackages) }
+                runCatching { install((fullPackages + broken).distinct()) }
                 if (_state.value is EnvState.Failed && wasReady) _state.value = EnvState.Ready
                 healNote = if (incompletePackages().isEmpty()) {
                     buildList {
@@ -850,14 +860,14 @@ class LinuxEnvironmentManager(
                         "); will retry on next launch"
                 }
             }
-            if (relinked == 0 && purged == 0 && shebangsRewritten == 0 && shellPatched == 0 && healNote == null) {
+            if (relinked == 0 && purged == 0 && shebangsRewritten == 0 && shellPatched == 0 && buildLaunchers == 0 && healNote == null) {
                 return@withContext null
             }
             // The repair changed prefix content without necessarily changing the
             // package-set hash; drop the staging marker so the next shell-tier
             // deploy re-stages instead of trusting the stale tarball.
             runCatching { stagingMarker.delete() }
-            ensureShims()
+            ensureShims(force = true)
             buildString {
                 if (relinked > 0) append("relinked ").append(relinked).append(" dangling symlinks")
                 if (purged > 0) {
@@ -874,6 +884,10 @@ class LinuxEnvironmentManager(
                     append("patched ").append(shellPatched)
                         .append(" git binary(ies) with a working shell path")
                 }
+                if (buildLaunchers > 0) {
+                    if (isNotEmpty()) append("; ")
+                    append("repaired ").append(buildLaunchers).append(" Android compiler launcher(s)")
+                }
                 if (healNote != null) append(if (isEmpty()) "" else "; ").append(healNote)
             }.ifBlank { null }
         }
@@ -881,8 +895,11 @@ class LinuxEnvironmentManager(
 
     /** Environment for spawned processes (PATH/LD_LIBRARY_PATH/HOME/…). */
     fun processEnv(): Map<String, String> = buildMap {
-        put("PATH", "${prefix.absolutePath}/bin:${prefix.absolutePath}/bin/applets:/system/bin:/system/xbin:/vendor/bin")
-        put("LD_LIBRARY_PATH", "${prefix.absolutePath}/lib")
+        val javaHome = AndroidBuildToolchain.javaHome(prefix, prefix.absolutePath)
+        val javaPath = javaHome?.let { ":$it/bin" }.orEmpty()
+        put("PATH", "${prefix.absolutePath}/bin:${prefix.absolutePath}/bin/applets$javaPath:/system/bin:/system/xbin:/vendor/bin")
+        put("LD_LIBRARY_PATH", AndroidBuildToolchain.libraryPath(javaHome, prefix.absolutePath))
+        if (javaHome != null) put("JAVA_HOME", javaHome)
         put("HOME", "${prefix.absolutePath}/home")
         put("TMPDIR", "${prefix.absolutePath}/tmp")
         put("PREFIX", prefix.absolutePath)
@@ -1198,6 +1215,9 @@ class LinuxEnvironmentManager(
 
             binDir.listFiles()?.forEach { if (it.isFile || it.canonicalPath != it.absolutePath) addShim(it) }
             File(prefix, "bin/applets").listFiles()?.forEach { addShim(it) }
+            AndroidBuildToolchain.javaHome(prefix)?.let { home ->
+                File(home, "bin").listFiles()?.filter { it.isFile }?.forEach { addShim(it) }
+            }
 
             shimFile.parentFile?.mkdirs()
             shimFile.writeText(sb.toString())
@@ -1224,8 +1244,11 @@ class LinuxEnvironmentManager(
      * /data/local/tmp/androidharness.
      */
     fun tmpProcessEnv(): Map<String, String> = buildMap {
-        put("PATH", "$tmpPrefix/bin:$tmpPrefix/bin/applets:/system/bin:/system/xbin:/vendor/bin")
-        put("LD_LIBRARY_PATH", "$tmpPrefix/lib")
+        val javaHome = AndroidBuildToolchain.javaHome(prefix, tmpPrefix)
+        val javaPath = javaHome?.let { ":$it/bin" }.orEmpty()
+        put("PATH", "$tmpPrefix/bin:$tmpPrefix/bin/applets$javaPath:/system/bin:/system/xbin:/vendor/bin")
+        put("LD_LIBRARY_PATH", AndroidBuildToolchain.libraryPath(javaHome, tmpPrefix))
+        if (javaHome != null) put("JAVA_HOME", javaHome)
         put("HOME", "$tmpPrefix/home")
         put("TMPDIR", "$tmpPrefix/tmp")
         put("PREFIX", tmpPrefix)
@@ -1319,7 +1342,7 @@ class LinuxEnvironmentManager(
             File(prefix, CODEGRAPH_VERSION_MARKER).readText().trim()
         }.getOrDefault("")
         val bundlePatchVersion = CodeGraphBundlePatches.VERSION
-        return ("v23-no-android-bridges-coreutils-env-github-exec-codegraph-p$bundlePatchVersion\n$codeGraphVersion\n" + installedPackages().sorted().joinToString("\n"))
+        return ("v24-android-build-launchers-java-env-codegraph-p$bundlePatchVersion\n$codeGraphVersion\n" + installedPackages().sorted().joinToString("\n"))
             .let { MessageDigest.getInstance("SHA-256").digest(it.toByteArray()).joinToString("") { b -> "%02x".format(b) } }
     }
 
@@ -1372,7 +1395,8 @@ class LinuxEnvironmentManager(
             // Repair earlier env shebangs before checking or creating the tarball.
             // The package set may be unchanged while an old script is still broken.
             val repairedBridges = purgeDeadTermuxShims()
-            if (repairedBridges.first > 0 || repairedBridges.second > 0) stagingMarker.delete()
+            val buildLaunchers = AndroidBuildToolchain.repairLaunchers(prefix, installedPackages())
+            if (repairedBridges.first > 0 || repairedBridges.second > 0 || buildLaunchers > 0) stagingMarker.delete()
             LocaleCommand.ensureInstalled(prefix)
             // Bug 5 fix: the safe.directory config must exist before the
             // prefix is tarred, or the deployed copy exports a missing file.
@@ -1556,14 +1580,13 @@ class LinuxEnvironmentManager(
         if (envAvailable && linker != null) {
             val p = runCatching {
                 val bashPath = bashExecutable()!!.absolutePath
-                val libPath = File(prefix, "lib").absolutePath
                 val binPath = File(prefix, "bin").absolutePath
                 val cmdList = if (setsid != null) {
                     listOf(
                         setsid,
                         shBin,
                         "-c",
-                        "export LD_LIBRARY_PATH=\"$libPath:\$LD_LIBRARY_PATH\"; export PATH=\"$binPath:\$PATH\"; exec \"$linker\" \"$bashPath\" -c \"\$@\"",
+                        "export PATH=\"$binPath:\$PATH\"; exec \"$linker\" \"$bashPath\" -c \"\$@\"",
                         "sh",
                         script,
                     )
@@ -1580,14 +1603,13 @@ class LinuxEnvironmentManager(
         if (envAvailable) {
             val p = runCatching {
                 val bashPath = bashExecutable()!!.absolutePath
-                val libPath = File(prefix, "lib").absolutePath
                 val binPath = File(prefix, "bin").absolutePath
                 val cmdList = if (setsid != null) {
                     listOf(
                         setsid,
                         shBin,
                         "-c",
-                        "export LD_LIBRARY_PATH=\"$libPath:\$LD_LIBRARY_PATH\"; export PATH=\"$binPath:\$PATH\"; exec \"$bashPath\" -c \"\$@\"",
+                        "export PATH=\"$binPath:\$PATH\"; exec \"$bashPath\" -c \"\$@\"",
                         "sh",
                         script,
                     )
@@ -1852,7 +1874,7 @@ internal object ShellShims {
      * Bumped whenever the emitted lines change so existing installs
      * regenerate (ensureShims compares only this header line).
      */
-    const val HEADER = "# auto-generated by AndroidHarness (v3, locale): do not edit"
+    const val HEADER = "# auto-generated by AndroidHarness (v4, locale and Java): do not edit"
 
     fun header(linker: String?): String = if (linker == null) "$HEADER (direct exec)" else HEADER
 

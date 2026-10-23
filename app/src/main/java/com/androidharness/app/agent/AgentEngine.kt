@@ -1894,6 +1894,7 @@ Rules:
                     "If a basic command fails with \"Permission denied\" or exit code 126/127, the environment is misconfigured on this device: run the env_status tool once, tell the user what it reports, and stop retrying command variants.\n",
             )
             sb.append("- /data/local/tmp is readable only by the shell user: never try to inspect it from the app tier, and never conclude Shizuku/toolchain state from files there; use env_status.\n")
+            sb.append("- Android APK builds: Linux environment readiness does not verify Java, D8, or the Android SDK. Use env_status and inspect the actual build error. Search/install missing build packages with pkg_search/pkg_install; the Termux d8 package uses openjdk-21 and its compiler is at \$PREFIX/share/java/d8.jar in the active execution tier. Verify java -version and d8 --version before claiming the compiler works. Never use /data/data/com.termux paths. Shizuku connection alone does not prove build tools are ready, and missing prerequisites alone are not a reason to send the user to a PC.\n")
         }
         if (fullAccess && workspace !is com.androidharness.app.workspace.SshFs) {
             sb.append(

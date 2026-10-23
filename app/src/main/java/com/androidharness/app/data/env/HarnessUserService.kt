@@ -26,7 +26,7 @@ class HarnessUserService() : IHarnessService.Stub() {
      * per-build copies.
      */
     private fun ldPathExport(): String =
-        "export LD_LIBRARY_PATH=\"\${HARNESS_TMP_LIB:-${LinuxEnvironmentManager.LEGACY_TMP_PREFIX}/lib}:\$LD_LIBRARY_PATH\""
+        "export LD_LIBRARY_PATH=\"\${LD_LIBRARY_PATH:+\$LD_LIBRARY_PATH:}\${HARNESS_TMP_LIB:-${LinuxEnvironmentManager.LEGACY_TMP_PREFIX}/lib}\""
 
     private fun binPathExport(): String =
         "export PATH=\"\${HARNESS_TMP_BIN:-${LinuxEnvironmentManager.LEGACY_TMP_PREFIX}/bin}:\$PATH\""
