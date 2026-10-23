@@ -745,7 +745,7 @@
     <string name="chat_settings_instructions_help">Applies to this chat only. Used on your next message.</string>
     <string name="chat_settings_instructions_off">Instructions and memory are off for this chat. Your text is kept and returns when you turn personalization back on.</string>
     <string name="chat_settings_images">Images in this chat</string>
-    <string name="chat_settings_images_desc">How often the assistant adds pictures. Default uses Settings &gt; Chat Option.</string>
+    <string name="chat_settings_images_desc">Use app setting follows Settings &gt; Chat Option. Choose another option to override it for this Chat.</string>
     <string name="chat_image_frequency_none">No image</string>
     <string name="chat_image_frequency_less">Less often</string>
     <string name="chat_image_frequency_default">Default</string>
@@ -924,4 +924,7 @@
     <string name="chat_share_check">Check these claims</string>
     <string name="chat_share_failed">Could not open this share. Try sharing it again.</string>
     <string name="chat_share_find">Find a Chat</string>
+    <string name="chat_personalization_on">Personalization on</string>
+    <string name="chat_personalization_off">Personalization off</string>
+    <string name="chat_image_frequency_inherit">Use app setting (%1$s)</string>
 </resources>

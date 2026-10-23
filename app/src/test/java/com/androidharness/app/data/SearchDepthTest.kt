@@ -13,6 +13,7 @@ class SearchDepthTest {
     }
 
     @Test fun everyNamedLevelKeepsItsSourceCap() {
+        assertEquals(0, SearchDepth.OFF.maxSources)
         assertEquals(5, SearchDepth.INSTANT.maxSources)
         assertEquals(20, SearchDepth.DEEP.maxSources)
         assertEquals(50, SearchDepth.DEEP_RESEARCH.maxSources)

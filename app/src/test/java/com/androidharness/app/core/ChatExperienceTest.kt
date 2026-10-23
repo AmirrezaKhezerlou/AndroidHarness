@@ -89,6 +89,13 @@ class ChatExperienceTest {
         )
     }
 
+    @Test fun researchOffAllowsReadingLinksWithoutEncouragingSearch() {
+        val prompt = ChatExperience.researchDepthPrompt(com.androidharness.app.data.SearchDepth.OFF)
+        assertTrue(prompt.contains("web_search tool is disabled"))
+        assertTrue(prompt.contains("still read links"))
+        assertFalse(prompt.contains("source budget"))
+    }
+
     @Test fun researchDepthPromptStatesTheTurnBudget() {
         val instant = ChatExperience.researchDepthPrompt(com.androidharness.app.data.SearchDepth.INSTANT)
         assertTrue(instant.contains("at most 5 distinct sources"))

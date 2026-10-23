@@ -496,6 +496,7 @@ private fun ChatScreenContent(
     }
     val scope = rememberCoroutineScope()
 
+    val latestUserTurnId = state.messages.lastOrNull { it.role == Role.USER }?.turnId
     // Follow new content until the reader scrolls away.
     var showJumpToLatest by remember(state.sessionId) { mutableStateOf(false) }
     var unreadWhileAway by remember(state.sessionId) { mutableStateOf(false) }
@@ -514,17 +515,24 @@ private fun ChatScreenContent(
     val gestureActive = remember { mutableStateOf(false) }
     var mainListDragged by remember(state.sessionId) { mutableStateOf(false) }
     var lastDragTowardBottom by remember(state.sessionId) { mutableStateOf(false) }
+    val detailScroll = remember(state.sessionId) { ChatDetailScroll { pinnedToBottom = false } }
     val userScrollObserver = remember(state.sessionId) { UserScrollObserver { deltaY ->
+        if (detailScroll.reading) return@UserScrollObserver
         returnToQuestion = false
         pinnedToBottom = false
         lastDragTowardBottom = deltaY < 0f
     } }
     val density = LocalDensity.current
-    // Trailing room so the sent question can reach the top of the viewport
-    // while its reply streams in below.
+    // Only the unused part of the latest turn is filled, so its question
+    // stays anchored during streaming and after a short answer finishes.
     var chatViewportHeight by remember(state.sessionId) { mutableStateOf(0) }
-    val liveTailPx = if (state.conversation.isChat && state.busy) chatViewportHeight else 0
-    val liveTail = with(density) { liveTailPx.toDp() }
+    val chatItemHeights = remember(state.sessionId, latestUserTurnId) { androidx.compose.runtime.mutableStateMapOf<Any, Int>() }
+    var chatTrailingSpace by remember(state.sessionId, latestUserTurnId) { mutableStateOf(0) }
+    val liveTailPx = if (state.conversation.isChat) chatTrailingSpace else 0
+    val chatGapPx = with(density) { 12.dp.roundToPx() }
+    val chatPaddingPx = with(density) { 48.dp.roundToPx() }
+    fun remainingTurnSpace(keys: List<Any>): Int =
+        (chatViewportHeight - chatPaddingPx - keys.sumOf { chatItemHeights[it] ?: 0 } - chatGapPx * keys.size).coerceAtLeast(0)
     val previewOffset = with(density) { 64.dp.roundToPx() }
     val hideJumpAt = with(density) { 96.dp.toPx() }
     // Filled while the LazyColumn registers its items, so the newest question
@@ -532,7 +540,6 @@ private fun ChatScreenContent(
     val userItemIndexes = remember(state.sessionId) { HashMap<String, Int>() }
     val searchItemIndex = remember(activeFindId) { mutableStateOf<Int?>(null) }
     val searchTurnId = state.messages.firstOrNull { it.id == activeFindId }?.turnId
-    val latestUserTurnId = state.messages.lastOrNull { it.role == Role.USER }?.turnId
     var diffFile by remember { mutableStateOf<Pair<String, String>?>(null) }
     var imagePreview by remember { mutableStateOf<com.androidharness.app.core.ImageRef?>(null) }
     diffFile?.let { (turnId, path) ->
@@ -560,6 +567,7 @@ private fun ChatScreenContent(
             instructions = state.conversation.instructions,
             personalization = state.conversation.personalizationEnabled,
             imageFrequency = state.conversation.imageFrequency,
+            globalImageFrequency = globalSettings.chatImageFrequency,
             saving = state.conversationSaving,
             onSave = { text, enabled, frequency ->
                 viewModel.setChatSettings(text, enabled, frequency)
@@ -1046,13 +1054,12 @@ private fun ChatScreenContent(
         if (pinnedToBottom) listState.scrollToEnd(liveTailPx) { pinnedToBottom && !gestureActive.value }
         else if (returnToQuestion && !gestureActive.value) userItemIndexes[turnId]?.let { listState.scrollToItem(it) }
     }
-    // The run adds trailing room so a short transcript can still put the
-    // question at the top; reapply the anchor once that room is available.
+    // Reapply the question anchor once its measured trailing room is available.
     LaunchedEffect(liveTailPx, latestUserTurnId) {
         if (liveTailPx <= 0 || !returnToQuestion) return@LaunchedEffect
         val turnId = latestUserTurnId ?: return@LaunchedEffect
         withFrameNanos { }
-        if (returnToQuestion && !gestureActive.value && latestUserTurnId == turnId) {
+        if (returnToQuestion && !gestureActive.value && !detailScroll.reading && latestUserTurnId == turnId) {
             userItemIndexes[turnId]?.let { listState.scrollToItem(it) }
         }
     }
@@ -1063,7 +1070,7 @@ private fun ChatScreenContent(
         val turnId = latestUserTurnId ?: return@LaunchedEffect
         pinnedToBottom = false
         withFrameNanos { }
-        if (returnToQuestion && !gestureActive.value && latestUserTurnId == turnId) {
+        if (returnToQuestion && !gestureActive.value && !detailScroll.reading && latestUserTurnId == turnId) {
             userItemIndexes[turnId]?.let { listState.scrollToItem(it) }
         }
     }
@@ -1073,6 +1080,7 @@ private fun ChatScreenContent(
         listState.interactionSource.interactions.collect { interaction ->
             when (interaction) {
                 is DragInteraction.Start -> {
+                    if (detailScroll.reading) return@collect
                     returnToQuestion = false
                     pinnedToBottom = false
                     gestureActive.value = true
@@ -1191,6 +1199,14 @@ private fun ChatScreenContent(
         }
     }
 
+    CompositionLocalProvider(
+        LocalChatDetailScroll provides (if (state.conversation.isChat) detailScroll else null),
+        com.androidharness.app.ui.chat.rich.LocalResponseFileOpen provides (if (state.conversation.isChat) null else onOpenFile),
+        com.androidharness.app.ui.chat.rich.LocalResponseContext provides { title, context ->
+            attachedConceptJson = null
+            attachedResponseJson = ResponseAttachment(title.take(100), context.take(1500)).encode()
+        },
+    ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
@@ -1442,7 +1458,7 @@ private fun ChatScreenContent(
                             state = listState,
                             modifier = Modifier.fillMaxSize().nestedScroll(userScrollObserver),
                             contentPadding = PaddingValues(
-                                start = 18.dp, top = 24.dp, end = 18.dp, bottom = 24.dp + liveTail,
+                                start = 18.dp, top = 24.dp, end = 18.dp, bottom = 24.dp,
                             ),
                             // Top-anchored: a sent question stays put while the
                             // answer grows below; short chats no longer sit at the bottom.
@@ -1453,6 +1469,8 @@ private fun ChatScreenContent(
                             // has ever been composed on screen.
                             userItemIndexes.clear()
                             var nextItemIndex = 0
+                            var latestTurnStarted = false
+                            val latestTurnKeys = mutableListOf<Any>()
                             fun indexedItem(
                                 key: Any,
                                 contentType: ChatListContentType,
@@ -1460,7 +1478,35 @@ private fun ChatScreenContent(
                             ) {
                                 if (key == "search-target") searchItemIndex.value = nextItemIndex
                                 nextItemIndex++
-                                item(key = key, contentType = contentType, content = content)
+                                val measureTurn = state.conversation.isChat && latestTurnStarted
+                                if (measureTurn) latestTurnKeys += key
+                                item(key = key, contentType = contentType) {
+                                    if (state.conversation.isChat) {
+                                        val itemScope = this
+                                        Box(Modifier.onSizeChanged {
+                                            if (measureTurn) {
+                                                chatItemHeights[key] = it.height
+                                                chatTrailingSpace = remainingTurnSpace(latestTurnKeys) + chatGapPx
+                                            }
+                                        }) { content(itemScope) }
+                                    } else content()
+                                }
+                            }
+                            // One composition path keeps the disclosure and its inner scroll
+                            // position intact when live activity becomes a saved message.
+                            fun chatActivityItem(activityKey: String?, messages: List<ChatMessage>, running: Boolean, committed: Boolean) {
+                                indexedItem(key = "chat-turn-$activityKey-activity", contentType = ChatListContentType.Thinking) {
+                                    com.androidharness.app.ui.chat.components.ChatActivity(messages, live = running,
+                                        showThinkingMetrics = true,
+                                        thinkingTiming = state.thinkingTiming.takeIf { running && !committed },
+                                        reasoningTokens = state.reasoningTokens.takeIf { running && !committed },
+                                        autoExpand = !appSettings.chatKeepThinkingCollapsed,
+                                        runningCalls = if (running) state.runningCalls else emptyList(),
+                                        streamingThinking = if (running && !committed) state.streamingThinking.orEmpty() else "",
+                                        writing = running && !state.streamingText.isNullOrBlank(),
+                                        streamId = state.streamingMessageId ?: "live",
+                                        onOpenUrl = { url -> webPreviewUrl = url; showWebPreview = true })
+                                }
                             }
                             if (state.hasOlderMessages) {
                                 indexedItem(key = "older-messages", contentType = ChatListContentType.History) {
@@ -1476,6 +1522,11 @@ private fun ChatScreenContent(
                                     EmptyState(
                                         hasProvider = state.activeProvider != null,
                                         chatOnly = state.conversation.isChat,
+                                        personalizationEnabled = state.conversation.personalizationEnabled,
+                                        personalizationChangeEnabled = state.conversationReady && !state.conversationSaving,
+                                        onPersonalizationChange = if (state.conversation.isChat && !state.busy) ({ enabled ->
+                                            viewModel.setChatSettings(state.conversation.instructions, enabled, state.conversation.imageFrequency)
+                                        }) else null,
                                         onSuggestion = { viewModel.send(it) },
                                         onAddProvider = { addProviderInitially = true; activeProviderManagerTarget = ModelSelectionTarget.ACTIVE },
                                     )
@@ -1523,6 +1574,7 @@ private fun ChatScreenContent(
                         }
                         when (message.role) {
                             Role.USER -> {
+                                if (message.turnId != null && message.turnId == latestUserTurnId) latestTurnStarted = true
                                 val userIndex = nextItemIndex
                                 indexedItem(key = "message-$messageKey-user", contentType = ChatListContentType.User) {
                                     Box(Modifier.animateItem(fadeInSpec = fastEffectsSpec(), placementSpec = null, fadeOutSpec = null)) {
@@ -1560,17 +1612,8 @@ private fun ChatScreenContent(
                                 if (state.conversation.isChat) {
                                     val conversationTurn = message.turnId?.let { chatTurns[it] }.orEmpty().ifEmpty { listOf(message) }
                                     val activityKey = message.turnId ?: messageKey
-                                    if (renderedChatActivities.add(activityKey)) indexedItem(key = "chat-turn-$activityKey-activity", contentType = ChatListContentType.Thinking) {
-                                        com.androidharness.app.ui.chat.components.ChatActivity(conversationTurn, live = isTurnRunning,
-                                            showThinkingMetrics = true,
-                                            thinkingTiming = state.thinkingTiming.takeIf { isTurnRunning && !chatStreamCommitted },
-                                            reasoningTokens = state.reasoningTokens.takeIf { isTurnRunning && !chatStreamCommitted },
-                                            autoExpand = !appSettings.chatKeepThinkingCollapsed,
-                                            runningCalls = if (isTurnRunning) state.runningCalls else emptyList(),
-                                            streamingThinking = if (isTurnRunning && !chatStreamCommitted) state.streamingThinking.orEmpty() else "",
-                                            writing = isTurnRunning && !state.streamingText.isNullOrBlank(),
-                                            streamId = state.streamingMessageId ?: "live",
-                                            onOpenUrl = { url -> webPreviewUrl = url; showWebPreview = true })
+                                    if (renderedChatActivities.add(activityKey)) {
+                                        chatActivityItem(activityKey, conversationTurn, isTurnRunning, chatStreamCommitted)
                                     }
                                     // Progress prose stays in the chronological disclosure; only the answer renders here.
                                     if (message.text.isNotBlank() && message.toolCalls.isEmpty() && (isTurnFinal || message.turnId == null)) indexedItem(key = "chat-$messageKey-answer", contentType = ChatListContentType.AssistantText) {
@@ -1914,17 +1957,8 @@ private fun ChatScreenContent(
                     val streamAlreadyCommitted = state.streamingMessageId != null &&
                         state.messages.any { it.id == state.streamingMessageId }
                     val liveTurn = state.currentTurnId?.let { chatTurns[it] }.orEmpty()
-                    if (state.conversation.isChat && state.busy && state.currentTurnId !in renderedChatActivities) indexedItem(key = "chat-turn-${state.currentTurnId}-activity", contentType = ChatListContentType.Thinking) {
-                        com.androidharness.app.ui.chat.components.ChatActivity(
-                            liveTurn, live = true,
-                            showThinkingMetrics = true,
-                            thinkingTiming = state.thinkingTiming.takeUnless { streamAlreadyCommitted },
-                            reasoningTokens = state.reasoningTokens.takeUnless { streamAlreadyCommitted },
-                            autoExpand = !appSettings.chatKeepThinkingCollapsed,
-                            runningCalls = state.runningCalls,
-                            streamingThinking = if (!streamAlreadyCommitted) state.streamingThinking.orEmpty() else "",
-                            writing = !state.streamingText.isNullOrBlank(), streamId = state.streamingMessageId ?: "live",
-                            onOpenUrl = { url -> webPreviewUrl = url; showWebPreview = true })
+                    if (state.conversation.isChat && state.busy && state.currentTurnId !in renderedChatActivities) {
+                        chatActivityItem(state.currentTurnId, liveTurn, running = true, committed = streamAlreadyCommitted)
                     }
 
                     if (!streamAlreadyCommitted) {
@@ -2017,6 +2051,13 @@ private fun ChatScreenContent(
                             com.androidharness.app.ui.chat.components.ChatCodeHandoffCard(
                                 offer = codeHandoff, enabled = !state.conversationSaving,
                                 onClick = { showCodeHandoff = true }, modifier = Modifier.padding(top = 8.dp))
+                        }
+                    }
+                    if (state.conversation.isChat && latestTurnStarted) {
+                        item(key = "chat-turn-space", contentType = ChatListContentType.Empty) {
+                            val space = remainingTurnSpace(latestTurnKeys)
+                            androidx.compose.runtime.SideEffect { chatTrailingSpace = space + chatGapPx }
+                            Spacer(Modifier.fillMaxWidth().height(with(density) { space.toDp() }))
                         }
                     }
                 }
@@ -2267,6 +2308,7 @@ private fun ChatScreenContent(
 
         }
     }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2450,7 +2492,7 @@ private fun FileEditsCard(
 
 /**
  * True when the last item's bottom edge sits within [tolerance]px of the
- * viewport bottom. [tail] is live-run breathing room below the transcript and
+ * viewport bottom. [tail] is unused room below the latest turn and
  * does not count as content.
  */
 private fun isAtBottom(info: LazyListLayoutInfo, canScrollForward: Boolean, tolerance: Int = 64, tail: Int = 0): Boolean {

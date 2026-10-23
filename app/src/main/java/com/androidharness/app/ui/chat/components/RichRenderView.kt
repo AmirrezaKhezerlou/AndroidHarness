@@ -39,7 +39,6 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.webkit.WebViewAssetLoader
@@ -56,23 +55,6 @@ private data class RenderRequest(
     val color: String,
     val dark: Boolean,
 )
-
-/** Inline math sizes reported by the renderer, so the text can reserve the right space. */
-internal object MathInlineSizes {
-    val version = mutableIntStateOf(0)
-    private val sizes = HashMap<String, IntSize>()
-
-    fun get(tex: String): IntSize? = sizes[tex]
-
-    fun put(tex: String, width: Int, height: Int) {
-        if (width <= 0 || height <= 0) return
-        val next = IntSize(width, height)
-        if (sizes[tex] != next) {
-            sizes[tex] = next
-            version.intValue++
-        }
-    }
-}
 
 @Composable
 internal fun MathInlineView(tex: String, color: Color, onMeasured: (Int, Int) -> Unit) {
@@ -176,9 +158,11 @@ private fun SandboxedRenderView(
         factory = { RichRenderWebView(context, density.fontScale).also { it.request(request) } },
         update = { view ->
             view.onMeasured = onMeasured
+            view.updateFontScale(density.fontScale)
             view.request(request)
         },
         modifier = modifier,
+        onRelease = { it.release() },
     )
 }
 
@@ -189,6 +173,7 @@ private fun SandboxedRenderView(
 @SuppressLint("SetJavaScriptEnabled", "ViewConstructor")
 private class RichRenderWebView(context: Context, fontScale: Float) : WebView(context) {
     var onMeasured: ((Int, Int) -> Unit)? = null
+    private var released = false
     private var loaded = false
     private var pending: RenderRequest? = null
     private var current: RenderRequest? = null
@@ -240,8 +225,10 @@ private class RichRenderWebView(context: Context, fontScale: Float) : WebView(co
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = true
 
             override fun onPageFinished(view: WebView, url: String?) {
-                loaded = true
-                pending?.let { render(it) }
+                if (!released) {
+                    loaded = true
+                    pending?.let { render(it) }
+                }
             }
 
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
@@ -249,7 +236,7 @@ private class RichRenderWebView(context: Context, fontScale: Float) : WebView(co
             }
 
             override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
-                destroy()
+                release()
                 return true
             }
         }
@@ -290,9 +277,31 @@ private class RichRenderWebView(context: Context, fontScale: Float) : WebView(co
     }
 
     fun request(next: RenderRequest) {
-        if (current == next) return
+        if (released || current == next) return
         current = next
         if (loaded) render(next) else pending = next
+    }
+
+    fun updateFontScale(fontScale: Float) {
+        if (released) return
+        val zoom = (fontScale * 100).toInt().coerceIn(100, 200)
+        if (settings.textZoom != zoom) {
+            settings.textZoom = zoom
+            current = null // Re-render and report the new size once at the new font scale.
+        }
+    }
+
+    fun release() {
+        if (released) return
+        released = true
+        loaded = false
+        pending = null
+        current = null
+        onMeasured = null
+        stopLoading()
+        settings.javaScriptEnabled = false
+        webChromeClient = null
+        destroy()
     }
 
     private fun render(request: RenderRequest) {

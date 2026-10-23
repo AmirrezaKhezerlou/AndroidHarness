@@ -298,6 +298,7 @@ class AgentEngine(
         } else null
         val runRegistry = (if (conversation.isChat) registry.withExtra(chatOnlyTools + listOfNotNull(scopedSearch, scopedFetch, scopedBrowser)) else registry.withExtra(extraTools))
             .restrictedTo(conversation.allowedTools)
+            .let { if (conversation.isChat && searchDepth == com.androidharness.app.data.SearchDepth.OFF) it.without(setOf("web_search")) else it }
             .let { if (memoryOn) it else it.without(memoryToolNames) }
             .let { if (conversation.personalizationEnabled) it else it.without(recallToolNames) }
         val tools = if (!agentContextEnabled && !conversation.isChat) emptyList() else runRegistry.schemas(
@@ -1666,6 +1667,7 @@ class AgentEngine(
             ),
             tools = (if (conversation.isChat) registry.withExtra(chatOnlyTools + listOfNotNull(scopedSearch, scopedFetch, scopedBrowser)) else registry)
                 .restrictedTo(conversation.allowedTools)
+                .let { if (conversation.isChat && searchDepth == com.androidharness.app.data.SearchDepth.OFF) it.without(setOf("web_search")) else it }
                 .let { if (memoryOn) it else it.without(memoryToolNames) }
                 .let { if (conversation.personalizationEnabled) it else it.without(recallToolNames) }
                 .schemas(),

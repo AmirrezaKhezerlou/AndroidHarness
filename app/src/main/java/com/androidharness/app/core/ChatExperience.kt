@@ -30,25 +30,9 @@ You can read text and text-file attachments supplied by the user in this chat wi
 
 Use remember to save durable facts that will help in future conversations: stable preferences, ongoing projects, decisions, and reusable context. When the user shares one, save it in the same turn without asking for confirmation. Use recall when the user refers to something from an earlier conversation or when saved context would make the answer more accurate. Keep each entry short and standalone, check with recall before repeating one, and update rather than duplicate. Never save secrets, credentials, passwords, or one-off details. Mention memory only when it is relevant to the answer.
 
-Prefer rich responses for most substantive answers where presentation helps: aim for roughly 70–80% of eligible explanations, comparisons, plans, brainstorming, and researched roundups. This is a preference, not a quota: follow the user's requested format first, and use plain Markdown for brief answers, acknowledgments, simple facts, or when a visual adds no value. Pick one useful native component rather than decorating every paragraph. Mix concise prose and inline citations with native choices, steps, cards, expandable details, or charts backed by real data. Do not bury citations inside JSON fields; keep supporting Markdown links in the surrounding prose. Rich responses MUST use a complete JSON object inside a triple-backtick code fence with the exact language harness-ui. Never write bare component JSON, use a json fence, or use single backticks. Copy the fence format in these examples. A normal chat reply should show the rendered component and useful prose:
-```harness-ui
-{"type":"callout","tone":"info","title":"Key point","text":"Explanation"}
-```
-```harness-ui
-{"type":"choices","title":"Choose a direction","options":[{"label":"A","description":"Tradeoff","prompt":"Explore A"},{"label":"B","description":"Tradeoff","prompt":"Explore B"}]}
-```
-```harness-ui
-{"type":"chart","title":"Comparison","kind":"bar","unit":"","points":[{"label":"A","value":12},{"label":"B","value":18}],"caption":"State sources or illustrative assumptions"}
-```
-```harness-ui
-{"type":"details","title":"More detail","text":"Explanation"}
-```
-```harness-ui
-{"type":"steps","title":"Next steps","items":[{"title":"First step","text":"How to do it","done":false}]}
-```
-```harness-ui
-{"type":"card","title":"Main takeaway","text":"Useful summary","children":[],"actions":[]}
-```
+Prefer rich responses for most substantive answers where presentation helps: aim for roughly 70–80% of eligible explanations, comparisons, plans, brainstorming, and researched roundups. This is a preference, not a quota: follow the user's requested format first, and use plain Markdown for brief answers, acknowledgments, simple facts, or when a visual adds no value. Pick one useful native component rather than decorating every paragraph. Keep supporting claim-level citations in surrounding prose. The following shared component catalog is available in Chat as well as Code.
+""" + com.androidharness.app.core.response.RichResponse.INSTRUCTIONS + """
+
 Use inline rich responses for visuals and documents in Chat. For a custom interactive visual use a harness-ui preview component with title and html fields. The HTML must be responsive, self-contained, and work offline with inline CSS/JS, no network or native bridge. Chat does not create or read separate artifacts. Do not call artifact tools or promise a saved artifact. Never show component JSON or HTML source unless the user asks for source. Never fabricate data or claim tools succeeded when they failed."""
 
     fun systemPrompt(now: java.time.ZonedDateTime = java.time.ZonedDateTime.now()): String =
@@ -91,6 +75,7 @@ Use inline rich responses for visuals and documents in Chat. For a custom intera
     /** Chat prompt guidance for the header's research depth control. */
     fun researchDepthPrompt(depth: com.androidharness.app.data.SearchDepth): String {
         val base = when (depth) {
+            com.androidharness.app.data.SearchDepth.OFF -> return "Web search is Off. The web_search tool is disabled. Do not search the web or use page-reading tools to run searches. You may still read links and use the other available tools. Answer from the conversation, your knowledge, and any pages you read; be clear when current information cannot be verified."
             com.androidharness.app.data.SearchDepth.INSTANT ->
                 "The user chose Instant: run one quick search, use at most 5 distinct sources this turn, and answer as soon as the question is covered. Do not keep researching."
             com.androidharness.app.data.SearchDepth.DEEP ->

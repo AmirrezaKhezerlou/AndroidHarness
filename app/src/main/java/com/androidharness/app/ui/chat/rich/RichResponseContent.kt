@@ -52,8 +52,11 @@ internal fun RichResponseContent(text: String, streaming: Boolean, onOpenUrl: ((
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         parts.forEachIndexed { index, part -> key(index) {
             when (part) {
-                is RichResponse.Part.Markdown -> if (streaming && index == parts.lastIndex) MarkdownText(part.text, true, onOpenUrl)
-                    else SelectionContainer { MarkdownText(part.text, onOpenUrl = onOpenUrl) }
+                // Keep the same composition when streaming finishes. Changing this
+                // wrapper used to destroy and reload every math WebView in the reply.
+                is RichResponse.Part.Markdown -> SelectionContainer {
+                    MarkdownText(part.text, streaming && index == parts.lastIndex, onOpenUrl)
+                }
                 is RichResponse.Part.Content -> ResponseNode(part.node, onOpenUrl, if (streaming) null else onFollowUp)
                 RichResponse.Part.Pending -> Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
@@ -70,7 +73,7 @@ internal fun RichResponseContent(text: String, streaming: Boolean, onOpenUrl: ((
 }
 
 @Composable
-private fun ResponsePanel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+internal fun ResponsePanel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
@@ -78,9 +81,10 @@ private fun ResponsePanel(modifier: Modifier = Modifier, content: @Composable Co
 }
 
 @Composable
-private fun ResponseNode(node: RichResponse.Node, onOpenUrl: ((String) -> Unit)?, onFollowUp: ((RichResponse.FollowUp) -> Unit)?) {
+internal fun ResponseNode(node: RichResponse.Node, onOpenUrl: ((String) -> Unit)?, onFollowUp: ((RichResponse.FollowUp) -> Unit)?) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val colors = MaterialTheme.colorScheme
+    val contextChange = LocalResponseContext.current
     when (node) {
         is RichResponse.Node.Text -> SelectionContainer { MarkdownText(node.text, onOpenUrl = onOpenUrl) }
         is RichResponse.Node.Callout -> {
@@ -111,7 +115,7 @@ private fun ResponseNode(node: RichResponse.Node, onOpenUrl: ((String) -> Unit)?
                 }
             }
         }
-        is RichResponse.Node.Chart -> ResponseChart(node)
+        is RichResponse.Node.Chart -> ResponseChart(node, onFollowUp)
         is RichResponse.Node.Choices -> {
             var selected by rememberSaveable(node) { mutableIntStateOf(0) }
             ResponsePanel {
@@ -119,7 +123,7 @@ private fun ResponseNode(node: RichResponse.Node, onOpenUrl: ((String) -> Unit)?
                 node.options.forEachIndexed { index, option ->
                     Surface(shape = RoundedCornerShape(10.dp), color = if (selected == index) colors.primary.copy(alpha = 0.07f) else colors.surface,
                         border = BorderStroke(1.dp, if (selected == index) colors.primary.copy(alpha = 0.45f) else colors.outlineVariant)) {
-                        Row(Modifier.fillMaxWidth().selectable(selected == index, role = Role.RadioButton, onClick = { selected = index }).padding(10.dp), verticalAlignment = Alignment.Top) {
+                        Row(Modifier.fillMaxWidth().selectable(selected == index, role = Role.RadioButton, onClick = { selected = index; contextChange?.invoke(node.title, "Selected: ${option.label}\n${option.description}") }).padding(10.dp), verticalAlignment = Alignment.Top) {
                             RadioButton(selected == index, null, Modifier.size(24.dp))
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f).heightIn(min = 28.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -140,7 +144,7 @@ private fun ResponseNode(node: RichResponse.Node, onOpenUrl: ((String) -> Unit)?
                 Text(node.title, style = MaterialTheme.typography.titleSmall)
                 node.items.forEachIndexed { index, step ->
                     Row(Modifier.fillMaxWidth().toggleable(checked[index], role = Role.Checkbox,
-                        onValueChange = { value -> checked = checked.toMutableList().also { it[index] = value } }).padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
+                        onValueChange = { value -> checked = checked.toMutableList().also { it[index] = value }; contextChange?.invoke(node.title, node.items.mapIndexed { i, step -> "${if (checked[i]) "Done" else "Remaining"}: ${step.title}" }.joinToString("\n")) }).padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
                         Checkbox(checked[index], null, Modifier.size(40.dp))
                         Spacer(Modifier.width(6.dp))
                         Column(Modifier.weight(1f).heightIn(min = 44.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -178,6 +182,13 @@ private fun ResponseNode(node: RichResponse.Node, onOpenUrl: ((String) -> Unit)?
         is RichResponse.Node.Preview -> InlineResponsePreview(node, onFollowUp)
         is RichResponse.Node.Layout -> if (node.columns) AdaptiveItems(node.children.size) { ResponseNode(node.children[it], onOpenUrl, onFollowUp) }
             else Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { node.children.forEachIndexed { i, child -> key(i) { ResponseNode(child, onOpenUrl, onFollowUp) } } }
+        is RichResponse.Node.Table -> ResponseTable(node, onFollowUp)
+        is RichResponse.Node.Tabs -> ResponseTabs(node, onOpenUrl, onFollowUp)
+        is RichResponse.Node.Gallery -> ResponseGallery(node, onOpenUrl, onFollowUp)
+        is RichResponse.Node.Calculator -> ResponseCalculator(node, onFollowUp)
+        is RichResponse.Node.Evidence -> ResponseEvidence(node, onOpenUrl)
+        is RichResponse.Node.Diff -> ResponseDiffView(node, onFollowUp)
+        is RichResponse.Node.Writing -> ResponseWriting(node)
         RichResponse.Node.Divider -> HorizontalDivider(color = colors.outlineVariant)
     }
 }
@@ -191,51 +202,6 @@ private fun AdaptiveItems(count: Int, item: @Composable (Int) -> Unit) {
             for (start in 0 until count step columns) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 for (index in start until minOf(start + columns, count)) Box(Modifier.weight(1f)) { item(index) }
                 if (columns == 2 && start + 1 == count) Spacer(Modifier.weight(1f))
-            }
-        }
-    }
-}
-
-@Composable
-private fun ResponseChart(chart: RichResponse.Node.Chart) {
-    val uiContext = androidx.compose.ui.platform.LocalContext.current
-    val colors = MaterialTheme.colorScheme
-    var selected by rememberSaveable(chart) { mutableIntStateOf(chart.points.lastIndex) }
-    var data by rememberSaveable(chart) { mutableStateOf(false) }
-    val point = chart.points[selected.coerceIn(chart.points.indices)]
-    val low = minOf(0.0, chart.points.minOf { it.value })
-    val high = maxOf(0.0, chart.points.maxOf { it.value })
-    val range = (high - low).takeIf { it > 0 } ?: 1.0
-    ResponsePanel {
-        Text(chart.title, style = MaterialTheme.typography.titleSmall)
-        Text("${point.label} · ${RichResponse.number(point.value)} ${chart.unit}".trim(), style = MaterialTheme.typography.bodyMedium, color = colors.primary)
-        Canvas(Modifier.fillMaxWidth().height(150.dp).semantics { contentDescription = uiContext.getString(R.string.ui_values_use_show_data_for_all_values, (chart.title).toString(), (chart.points.size).toString()) }
-            .pointerInput(chart) { detectTapGestures { tap -> selected = ((tap.x / size.width.coerceAtLeast(1)) * chart.points.size).toInt().coerceIn(chart.points.indices) } }) {
-            val cell = size.width / chart.points.size
-            fun y(value: Double) = (size.height - 12.dp.toPx()) * (1 - ((value - low) / range).toFloat()) + 6.dp.toPx()
-            val zero = y(0.0)
-            drawLine(colors.outlineVariant, Offset(0f, zero), Offset(size.width, zero), 1.dp.toPx())
-            if (chart.kind == "line") {
-                val path = Path()
-                chart.points.forEachIndexed { i, p -> val x = cell * (i + .5f); if (i == 0) path.moveTo(x, y(p.value)) else path.lineTo(x, y(p.value)) }
-                drawPath(path, colors.primary, style = Stroke(2.dp.toPx()))
-                chart.points.forEachIndexed { i, p -> drawCircle(colors.primary, if (selected == i) 5.dp.toPx() else 3.dp.toPx(), Offset(cell * (i + .5f), y(p.value))) }
-            } else chart.points.forEachIndexed { i, p ->
-                val py = y(p.value)
-                drawRoundRect(if (selected == i) colors.primary else colors.primary.copy(alpha = .45f), Offset(cell * i + cell * .12f, minOf(py, zero)),
-                    Size(cell * .76f, kotlin.math.abs(py - zero).coerceAtLeast(1.dp.toPx())), CornerRadius(3.dp.toPx()))
-            }
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(chart.points.first().label, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
-            if (chart.points.size > 1) Text(chart.points.last().label, style = MaterialTheme.typography.labelSmall)
-        }
-        if (chart.caption.isNotBlank()) Text(chart.caption, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-        TextButton(onClick = { data = !data }) { Text(if (data) uiContext.getString(R.string.ui_hide_data) else uiContext.getString(R.string.ui_show_data)) }
-        if (data) chart.points.forEachIndexed { i, p ->
-            Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).selectable(selected == i, role = Role.RadioButton, onClick = { selected = i }).padding(vertical = 6.dp)) {
-                Text(p.label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                Text("${RichResponse.number(p.value)} ${chart.unit}".trim(), style = MaterialTheme.typography.bodyMedium)
             }
         }
     }

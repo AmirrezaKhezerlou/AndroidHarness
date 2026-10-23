@@ -19,6 +19,12 @@ object RichResponse {
     data class FollowUp(val prompt: String, val title: String, val context: String)
     data class Metric(val label: String, val value: String, val detail: String)
     data class Point(val label: String, val value: Double)
+    data class Series(val name: String, val points: List<Point>)
+    data class Tab(val title: String, val children: List<Node>)
+    data class GalleryImage(val url: String, val caption: String, val source: String)
+    data class NumberInput(val id: String, val label: String, val value: Double, val min: Double, val max: Double, val step: Double)
+    data class Calculation(val label: String, val expression: String, val unit: String)
+    data class EvidenceItem(val title: String, val text: String, val url: String, val path: String, val line: Int?, val status: String)
     data class Choice(val label: String, val description: String, val prompt: String)
     data class Step(val title: String, val text: String, val done: Boolean)
     sealed interface Node {
@@ -26,13 +32,20 @@ object RichResponse {
         data class Callout(val title: String, val text: String, val tone: String) : Node
         data class Card(val title: String, val text: String, val children: List<Node>, val actions: List<Action>) : Node
         data class Metrics(val items: List<Metric>) : Node
-        data class Chart(val title: String, val points: List<Point>, val kind: String, val unit: String, val caption: String) : Node
+        data class Chart(val title: String, val points: List<Point>, val kind: String, val unit: String, val caption: String, val series: List<Series> = emptyList()) : Node
         data class Choices(val title: String, val options: List<Choice>) : Node
         data class Steps(val title: String, val items: List<Step>) : Node
         data class Details(val title: String, val text: String) : Node
         data class Link(val title: String, val text: String, val url: String) : Node
         data class Preview(val title: String, val html: String) : Node
         data class Layout(val children: List<Node>, val columns: Boolean) : Node
+        data class Table(val title: String, val columns: List<String>, val rows: List<List<String>>, val caption: String) : Node
+        data class Tabs(val title: String, val tabs: List<Tab>) : Node
+        data class Gallery(val title: String, val images: List<GalleryImage>) : Node
+        data class Calculator(val title: String, val inputs: List<NumberInput>, val outputs: List<Calculation>, val caption: String) : Node
+        data class Evidence(val title: String, val items: List<EvidenceItem>) : Node
+        data class Diff(val title: String, val before: String, val after: String, val path: String, val line: Int?, val language: String) : Node
+        data class Writing(val title: String, val text: String, val language: String) : Node
         data object Divider : Node
     }
 
@@ -85,15 +98,54 @@ object RichResponse {
                 "card" -> Node.Card(o.str("title", 100, true), o.str("text", 6000), if ("children" in o) children(false) else emptyList(),
                     o.array("actions", 2, required = false).map { it.jsonObject.let { a -> Action(a.str("label", 50, true), a.str("prompt", 1000, true)) } })
                 "metrics" -> Node.Metrics(o.array("items", 8).map { it.jsonObject.let { m -> Metric(m.str("label", 80, true), m.str("value", 80, true), m.str("detail", 200)) } })
-                "chart" -> Node.Chart(o.str("title", 100, true), o.array("points", 24).map { it.jsonObject.let { p ->
-                    Point(p.str("label", 60, true), requireNotNull((p["value"] as? JsonPrimitive)?.doubleOrNull).also { value -> require(value.isFinite() && kotlin.math.abs(value) <= 1e15) })
-                } }, o.str("kind", 10).ifBlank { "bar" }.also { require(it in listOf("bar", "line")) }, o.str("unit", 24), o.str("caption", 500))
+                "chart" -> {
+                    fun points(source: JsonObject) = source.array("points", 120).map { it.jsonObject.let { p -> Point(p.str("label", 60, true), p.number("value")) } }
+                    val series = o.array("series", 6, false).map { it.jsonObject.let { item -> Series(item.str("name", 80, true), points(item)) } }
+                    val primary = if (series.isEmpty()) points(o) else series.first().points
+                    require(series.all { seriesItem -> seriesItem.points.map { it.label } == primary.map { it.label } })
+                    Node.Chart(o.str("title", 100, true), primary, o.str("kind", 10).ifBlank { "bar" }.also { require(it in listOf("bar", "line")) },
+                        o.str("unit", 24), o.str("caption", 500), series)
+                }
+                "table" -> {
+                    val columns = o.array("columns", 8).map { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content?.also { value -> require(value.isNotBlank() && value.length <= 80) } ?: error("Expected column") }
+                    val rows = o.array("rows", 100).map { row -> (row as? JsonArray ?: error("Expected row")).also { require(it.size == columns.size) }.map { cell ->
+                        (cell as? JsonPrimitive)?.takeIf { it.isString }?.content?.also { require(it.length <= 1000) } ?: error("Expected cell text")
+                    } }
+                    Node.Table(o.str("title", 100, true), columns, rows, o.str("caption", 500))
+                }
+                "tabs" -> Node.Tabs(o.str("title", 100, true), o.array("tabs", 6).map { it.jsonObject.let { tab ->
+                    Tab(tab.str("title", 60, true), tab.array("children", 12).map { child -> node(child.jsonObject, depth + 1) })
+                } })
+                "gallery" -> Node.Gallery(o.str("title", 100, true), o.array("images", 12).map { it.jsonObject.let { image ->
+                    GalleryImage(image.str("url", 2048, true).also(::requireWebUrl), image.str("caption", 500), image.str("source", 2048).also { url -> if (url.isNotBlank()) requireWebUrl(url) })
+                } })
+                "calculator" -> {
+                    val inputs = o.array("inputs", 6).map { it.jsonObject.let { input ->
+                        val low = input.number("min"); val high = input.number("max"); val step = input.number("step")
+                        require(low < high && step > 0 && step <= high - low && high - low <= 1e15)
+                        NumberInput(input.str("id", 30, true).also { id -> require(id.matches(Regex("[a-zA-Z][a-zA-Z0-9_]*"))) },
+                            input.str("label", 80, true), input.number("value").also { value -> require(value in low..high) }, low, high, step)
+                    } }
+                    require(inputs.map { it.id }.distinct().size == inputs.size)
+                    val outputs = o.array("outputs", 6).map { it.jsonObject.let { output ->
+                        Calculation(output.str("label", 80, true), output.str("expression", 300, true).also { expression ->
+                            require(CalculatorMath.isValid(expression, inputs.map { it.id }.toSet()))
+                        }, output.str("unit", 24))
+                    } }
+                    Node.Calculator(o.str("title", 100, true), inputs, outputs, o.str("caption", 500))
+                }
+                "evidence" -> Node.Evidence(o.str("title", 100, true), o.array("items", 12).map { it.jsonObject.let { item ->
+                    EvidenceItem(item.str("title", 100, true), item.str("text", 2000), item.str("url", 2048).also { url -> if (url.isNotBlank()) requireWebUrl(url) },
+                        item.str("path", 1024).also(::requireFilePath), item.lineNumber(), item.str("status", 20).also { status -> require(status in listOf("", "passed", "failed", "unverified")) })
+                } })
+                "diff" -> Node.Diff(o.str("title", 100, true), o.str("before", 24000), o.str("after", 24000), o.str("path", 1024).also(::requireFilePath), o.lineNumber(), o.str("language", 30)).also {
+                    require(it.before.lines().size <= 400 && it.after.lines().size <= 400)
+                }
+                "writing" -> Node.Writing(o.str("title", 100, true), o.str("text", 24000, true), o.str("language", 30))
                 "choices" -> Node.Choices(o.str("title", 100, true), o.array("options", 6).map { it.jsonObject.let { c -> Choice(c.str("label", 100, true), c.str("description", 1000), c.str("prompt", 1000)) } })
                 "steps" -> Node.Steps(o.str("title", 100, true), o.array("items", 12).map { it.jsonObject.let { s -> Step(s.str("title", 100, true), s.str("text", 1000), (s["done"] as? JsonPrimitive)?.booleanOrNull ?: false) } })
                 "details" -> Node.Details(o.str("title", 100, true), o.str("text", 6000, true))
-                "link" -> Node.Link(o.str("title", 100, true), o.str("text", 500), o.str("url", 2048, true).also { url ->
-                    val uri = URI(url); require(uri.scheme?.lowercase() in listOf("https", "http") && !uri.host.isNullOrBlank() && uri.userInfo == null)
-                })
+                "link" -> Node.Link(o.str("title", 100, true), o.str("text", 500), o.str("url", 2048, true).also(::requireWebUrl))
                 "preview" -> Node.Preview(o.str("title", 80, true), o.str("html", 64_000, true))
                 "column", "columns" -> Node.Layout(children(), o.str("type", 24) == "columns")
                 "divider" -> Node.Divider
@@ -101,6 +153,16 @@ object RichResponse {
             }
         }
     }
+    private fun requireWebUrl(url: String) {
+        val uri = URI(url)
+        require(uri.scheme?.lowercase() in listOf("https", "http") && !uri.host.isNullOrBlank() && uri.userInfo == null)
+    }
+    private fun requireFilePath(path: String) { require(path.none { it.isISOControl() } && !path.contains("://")) }
+    private fun JsonObject.lineNumber(): Int? = if ("line" !in this) null else
+        requireNotNull((this["line"] as? JsonPrimitive)?.intOrNull).also { require(it in 1..10_000_000) }
+    private fun JsonObject.number(key: String): Double = requireNotNull((this[key] as? JsonPrimitive)?.doubleOrNull)
+        .also { require(it.isFinite() && kotlin.math.abs(it) <= 1e15) }
+
     private fun JsonObject.str(key: String, max: Int, required: Boolean = false): String {
         val element = this[key]
         if (element == null) { require(!required); return "" }
@@ -123,13 +185,23 @@ object RichResponse {
         is Node.Callout -> "${node.title}\n${node.text}"
         is Node.Card -> (listOf(node.title, node.text) + node.children.map(::describe)).filter(String::isNotBlank).joinToString("\n")
         is Node.Metrics -> node.items.joinToString("\n") { "${it.label}: ${it.value}${if (it.detail.isBlank()) "" else " · ${it.detail}"}" }
-        is Node.Chart -> node.title + "\n" + node.points.joinToString("\n") { "${it.label}: ${number(it.value)} ${node.unit}" } + "\n" + node.caption
+        is Node.Chart -> node.title + "\n" + (node.series.ifEmpty { listOf(Series("", node.points)) }).joinToString("\n") { series ->
+            (if (series.name.isBlank()) "" else series.name + "\n") + series.points.joinToString("\n") { "${it.label}: ${number(it.value)} ${node.unit}" }
+        } + "\n" + node.caption
         is Node.Choices -> node.title + "\n" + node.options.joinToString("\n") { "${it.label}: ${it.description}" }
         is Node.Steps -> node.title + "\n" + node.items.joinToString("\n") { "${if (it.done) "[x]" else "[ ]"} ${it.title} ${it.text}" }
         is Node.Details -> "${node.title}\n${node.text}"
         is Node.Link -> "${node.title}\n${node.text}\n${node.url}"
         is Node.Preview -> "${node.title} (interactive preview)"
         is Node.Layout -> node.children.joinToString("\n", transform = ::describe)
+        is Node.Table -> node.title + "\n" + node.columns.joinToString(" | ") + "\n" + node.rows.joinToString("\n") { it.joinToString(" | ") } + "\n" + node.caption
+        is Node.Tabs -> node.title + "\n" + node.tabs.joinToString("\n") { it.title + "\n" + it.children.joinToString("\n", transform = ::describe) }
+        is Node.Gallery -> node.title + "\n" + node.images.joinToString("\n") { "${it.caption}\n${it.url}\n${it.source}" }
+        is Node.Calculator -> node.title + "\n" + node.inputs.joinToString("\n") { "${it.label}: ${CalculatorMath.format(it.value)}" } + "\n" +
+            node.outputs.joinToString("\n") { output -> "${output.label}: ${CalculatorMath.evaluate(output.expression, node.inputs.associate { it.id to it.value })?.let(CalculatorMath::format) ?: "—"} ${output.unit}" } + "\n" + node.caption
+        is Node.Evidence -> node.title + "\n" + node.items.joinToString("\n") { "${it.title} ${it.status}\n${it.text}\n${it.url.ifBlank { it.path + (it.line?.let { line -> ":$line" } ?: "") }}" }
+        is Node.Diff -> node.title + "\n" + ResponseDiff.lines(node.before, node.after).joinToString("\n") { "${it.marker}${it.text}" }
+        is Node.Writing -> node.title + "\n" + node.text
         Node.Divider -> ""
     }.trim()
     fun number(value: Double): String = if (value == value.toLong().toDouble()) value.toLong().toString() else String.format(java.util.Locale.getDefault(), "%.2f", value)
@@ -149,7 +221,17 @@ To render a component, put one complete JSON object in a fenced block whose lang
 {"type":"details","title":"Why this works","text":"The longer explanation"}
 {"type":"link","title":"Resource","text":"Why it is useful","url":"https://example.com"}
 {"type":"column","children":[...]} and {"type":"columns","children":[...]} compose cards and text; columns stack on phones. {"type":"text","text":"..."} and {"type":"divider"} can be children. Keep nesting shallow. At most 2 actions per card. Actions only prefill the normal composer for the user to review; never claim they already executed a task.
+Additional native components work in BOTH Chat and Code. Prefer these over custom HTML when they fit. Put each object in its own complete harness-ui fence, never bare JSON. All local controls operate inside the reply; they do not run tools, apply file changes, send a message, or alter project settings. User selections/values can attach removable context to the normal composer. Honor that context on the next user message.
+{"type":"table","title":"Compare options","columns":["Option","Score"],"rows":[["A","12"],["B","18"]],"caption":"Source or illustrative assumptions"} (filter, numeric/text column sorting, row selection, pagination, CSV copy/share; up to 8 columns and 100 rows; cells must be strings)
+{"type":"tabs","title":"Explore the answer","tabs":[{"title":"Overview","children":[{"type":"text","text":"Main answer"}]},{"title":"Examples","children":[{"type":"text","text":"A concrete example"}]}]} (up to 6 tabs; nest any supported components in children; selected-tab controls retain state)
+{"type":"gallery","title":"Visual comparison","images":[{"url":"https://example.com/actual-image.jpg","caption":"What this image shows","source":"https://example.com/source-page"}]} (swipe, previous/next, expand with zoom, and source links; up to 12 images; ONLY actual image URLs returned by tools or supplied by the user, never invented URLs; respect the chat image setting)
+{"type":"chart","title":"Performance over time","kind":"line","unit":"ms","series":[{"name":"Before","points":[{"label":"Day 1","value":18},{"label":"Day 2","value":20}]},{"name":"After","points":[{"label":"Day 1","value":12},{"label":"Day 2","value":14}]}],"caption":"Measured data or clearly marked illustrative values"} (bar or line, up to 6 datasets and 120 points each, aligned labels in exactly the same order; legends toggle datasets, visible-range sliders zoom the data, data view exposes exact values; existing single-series points form still works)
+{"type":"calculator","title":"Try different values","inputs":[{"id":"hours","label":"Hours","value":4,"min":0,"max":24,"step":0.5},{"id":"rate","label":"Rate","value":10,"min":0,"max":100,"step":1}],"outputs":[{"label":"Total","expression":"hours * rate","unit":"credits"}],"caption":"Illustrative estimate; explain assumptions"} (up to 6 numeric inputs and 6 calculated outputs, sliders and editable numbers; use input IDs in arithmetic expressions; supports + - * / ^, parentheses, min(a,b), max(a,b), abs(x), sqrt(x), round(x); NO scripts, functions beyond this list, network, or tool actions)
+{"type":"evidence","title":"Sources and checks","items":[{"title":"Supporting reference","text":"The claim this supports","url":"https://example.com/reference"},{"title":"Focused test","text":"Actual command and observed result","path":"src/example.kt","line":12,"status":"passed"}]} (up to 12 items; optional url, workspace path, positive line, status passed/failed/unverified; file navigation is available only in Code; statuses are agent-reported, never claim a test passed without an actual successful tool result; prefer unverified when uncertain; preserve claim-level citations in prose)
+{"type":"diff","title":"Compare the change","before":"Original text or code","after":"Revised text or code","path":"src/example.kt","line":12,"language":"kotlin"} (line additions/removals, Before/After views, expand, copy/share; path/line/language optional; up to 400 lines per side; comparisons never apply edits; show real observed file changes for completed work, and label proposed changes as proposals)
+{"type":"writing","title":"Ready to copy","text":"The complete reusable text, command, configuration, or code","language":""} (exact copy and user-initiated share, expandable body; optional language for code/config; keep explanations outside this block; up to 24000 characters)
+Use tables for comparisons, tabs for genuinely separate views, galleries for visual comparisons, calculators for what-if questions, evidence for cited findings or actual checks, diffs for before/after text or code, and writing blocks for reusable deliverables. Keep short answers simple and avoid repeating the same content as both prose and components. These are available in ordinary answers without asking permission or enabling a special mode.
 For a custom calculator, diagram, simulation, image/SVG preview, or other visual beyond these components use {"type":"preview","title":"Descriptive title","html":"COMPLETE SELF-CONTAINED HTML WITH INLINE CSS/JS"} in the same harness-ui fence. Keep HTML concise (under 24 KB when possible), responsive at 320px, offline, accessible, and respect reduced motion. Use --background, --foreground, --muted, --surface, --border, --accent theme variables. This renders directly in the answer, without the artifact editor toolbar. Local controls must work. No CDN, remote APIs/fonts/images, native bridge, or workspace changes. To provide current local selections for a user's follow-up, optionally call parent.postMessage({type:'harness:state', summary:'Concise current values'}, '*') after an input changes. This only supplies context; it cannot run tools or send messages. Follow-up questions stay in the same conversation and can produce an updated visual in a new reply.
-Use create_artifact/read_artifact for a separately managed, versioned/exportable concept when the user asks for an artifact or that workflow is useful. Keep existing artifacts available. Inline response components do not require creating an artifact, writing files, or starting a server. Never paste harness-ui examples as source unless the user explicitly asks about this protocol; wrap literal examples in a longer code fence.
+Where create_artifact/read_artifact tools are available, use them for a separately managed, versioned/exportable concept when the user asks for an artifact or that workflow is useful. Keep existing artifacts available. Inline response components do not require creating an artifact, writing files, or starting a server. Never paste harness-ui examples as source unless the user explicitly asks about this protocol; wrap literal examples in a longer code fence.
 """
 }

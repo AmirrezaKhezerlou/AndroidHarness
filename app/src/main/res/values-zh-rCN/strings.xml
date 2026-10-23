@@ -743,7 +743,7 @@
     <string name="chat_settings_instructions_help">仅适用于此聊天，从下一条消息开始生效。</string>
     <string name="chat_settings_instructions_off">此聊天已关闭指令和记忆。文本会保留，重新开启个性化后恢复使用。</string>
     <string name="chat_settings_images">此聊天中的图片</string>
-    <string name="chat_settings_images_desc">助手添加图片的频率。默认使用设置 &gt; 聊天选项中的值。</string>
+    <string name="chat_settings_images_desc">“使用应用设置”会遵循“设置 &gt; 聊天选项”。选择其他选项可单独设置此聊天。</string>
     <string name="chat_image_frequency_none">不显示图片</string>
     <string name="chat_image_frequency_less">较少</string>
     <string name="chat_image_frequency_default">默认</string>
@@ -922,4 +922,7 @@
     <string name="chat_share_check">核实这些说法</string>
     <string name="chat_share_failed">无法打开分享的内容，请重新分享。</string>
     <string name="chat_share_find">查找聊天</string>
+    <string name="chat_personalization_on">个性化已开启</string>
+    <string name="chat_personalization_off">个性化已关闭</string>
+    <string name="chat_image_frequency_inherit">使用应用设置（%1$s）</string>
 </resources>

@@ -102,6 +102,9 @@
     <string name="ui_more_options">"更多选项"</string>
     <string name="ui_search_depth">"搜索深度"</string>
     <string name="ui_search_depth_current">"搜索深度：%1$s"</string>
+    <string name="ui_search_depth_off_short">"关闭"</string>
+    <string name="ui_search_depth_off">"关闭"</string>
+    <string name="ui_search_depth_off_hint">"停用搜索 · 仍可阅读链接"</string>
     <string name="ui_search_depth_auto_short">"自动"</string>
     <string name="ui_search_depth_instant_short">"极速"</string>
     <string name="ui_search_depth_deep_short">"深度"</string>

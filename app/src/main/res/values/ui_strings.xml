@@ -102,6 +102,9 @@
     <string name="ui_more_options">"More options"</string>
     <string name="ui_search_depth">"Search depth"</string>
     <string name="ui_search_depth_current">"Search depth: %1$s"</string>
+    <string name="ui_search_depth_off_short">"Off"</string>
+    <string name="ui_search_depth_off">"Off"</string>
+    <string name="ui_search_depth_off_hint">"Search disabled · links can still be read"</string>
     <string name="ui_search_depth_auto_short">"Auto"</string>
     <string name="ui_search_depth_instant_short">"Instant"</string>
     <string name="ui_search_depth_deep_short">"Deep"</string>

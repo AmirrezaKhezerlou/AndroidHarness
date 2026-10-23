@@ -16,6 +16,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.Switch
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -79,6 +81,9 @@ internal fun EmptyState(
     onSuggestion: (String) -> Unit,
     onAddProvider: () -> Unit,
     chatOnly: Boolean = false,
+    personalizationEnabled: Boolean = true,
+    personalizationChangeEnabled: Boolean = true,
+    onPersonalizationChange: ((Boolean) -> Unit)? = null,
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
@@ -107,6 +112,30 @@ internal fun EmptyState(
             .padding(top = if (desktop) 24.dp else 72.dp, start = 8.dp, end = 8.dp, bottom = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        if (chatOnly && onPersonalizationChange != null) {
+            Surface(
+                color = scheme.surfaceContainerLow,
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.5f)),
+                modifier = Modifier.widthIn(max = 320.dp),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .toggleable(value = personalizationEnabled, enabled = personalizationChangeEnabled,
+                            role = Role.Switch, onValueChange = onPersonalizationChange)
+                        .heightIn(min = 48.dp)
+                        .padding(horizontal = 14.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(uiContext.getString(if (personalizationEnabled) R.string.chat_personalization_on
+                        else R.string.chat_personalization_off), modifier = Modifier.weight(1f, fill = false),
+                        style = MaterialTheme.typography.labelLarge)
+                    Switch(checked = personalizationEnabled, onCheckedChange = null, enabled = personalizationChangeEnabled)
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+        }
         HarnessMark(size = if (desktop) 40.dp else 52.dp)
         Spacer(Modifier.height(20.dp))
         Text(

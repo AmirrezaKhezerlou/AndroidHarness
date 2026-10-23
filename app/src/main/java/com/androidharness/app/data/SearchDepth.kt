@@ -9,6 +9,7 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 enum class SearchDepth(val maxSources: Int?) {
+    OFF(0),
     INSTANT(5),
     DEEP(20),
     AUTO(null),

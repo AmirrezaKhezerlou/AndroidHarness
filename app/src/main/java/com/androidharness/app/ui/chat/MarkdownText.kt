@@ -68,7 +68,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.androidharness.app.ui.chat.components.MathBlock
-import com.androidharness.app.ui.chat.components.MathInlineSizes
 import com.androidharness.app.ui.chat.components.MathInlineView
 import com.androidharness.app.ui.chat.components.MermaidBlock
 import com.androidharness.app.ui.chat.components.RemoteImageCard
@@ -974,7 +973,12 @@ private fun styled(
     val context = LocalContext.current
     val currentOpenUrl by androidx.compose.runtime.rememberUpdatedState(onOpenUrl)
     val openLinkLabel = stringResource(R.string.chat_open_link)
-    val mathVersion = if (math) MathInlineSizes.version.intValue else 0
+    // Measurements belong to this paragraph and font scale. A global revision made
+    // every paragraph rebuild whenever any equation reported its dimensions.
+    val mathSizes = remember(density) {
+        androidx.compose.runtime.mutableStateMapOf<String, androidx.compose.ui.unit.IntSize>()
+    }
+    val measuredMath = if (math) mathSizes.toMap() else emptyMap()
     // A paragraph with an inline image keeps its text flow; render the image
     // as a labelled link instead of leaking the leading "!".
     val normalized = remember(text) {
@@ -983,7 +987,7 @@ private fun styled(
             "[$label](${match.groupValues[2]})"
         }
     }
-    return remember(normalized, codeColor, codeBackground, linkColor, mathColor, density, mathVersion, math, linkIcons, openLinkLabel) {
+    return remember(normalized, codeColor, codeBackground, linkColor, mathColor, density, measuredMath, math, linkIcons, openLinkLabel) {
         val links = linkRegex.findAll(normalized).associateBy { it.range.first }
         val inlineContent = LinkedHashMap<String, InlineTextContent>()
         var mathIndex = 0
@@ -991,7 +995,7 @@ private fun styled(
         val result = buildAnnotatedString {
             fun appendMath(tex: String) {
                 val id = "inline-math-${mathIndex++}"
-                val size = MathInlineSizes.get(tex)
+                val size = measuredMath[tex]
                 // A couple of pixels of slack keep superscripts from clipping
                 // against the inline WebView edge.
                 val width = size?.width?.plus(6)?.dp ?: (tex.length * 8).coerceIn(24, 220).dp
@@ -1004,7 +1008,12 @@ private fun styled(
                         placeholderVerticalAlign = PlaceholderVerticalAlign.Center,
                     ),
                 ) {
-                    MathInlineView(tex, mathColor) { w, h -> MathInlineSizes.put(tex, w, h) }
+                    MathInlineView(tex, mathColor) { w, h ->
+                        if (w > 0 && h > 0) {
+                            val next = androidx.compose.ui.unit.IntSize(w, h)
+                            if (mathSizes[tex] != next) mathSizes[tex] = next
+                        }
+                    }
                 }
             }
             var i = 0

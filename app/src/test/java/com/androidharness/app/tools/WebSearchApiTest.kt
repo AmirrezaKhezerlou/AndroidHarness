@@ -37,6 +37,18 @@ class WebSearchApiTest {
 
     private fun query(value: String) = buildJsonObject { put("query", value) }
 
+    @Test fun offNeverContactsASearchBackendAndDoesNotBlockPageReads() = runBlocking {
+        var requests = 0
+        val tool = WebSearchTool(client { request ->
+            requests++
+            reply(request, "{}")
+        }, { SearchApiConfig("brave", "key") }).forDepth(SearchDepth.OFF)
+        tool.execute(query("a unique query while search is off"), context)
+        assertEquals(0, requests)
+        assertEquals(0, tool.budget()!!.remaining)
+        assertTrue(tool.budget()!!.claimRead())
+    }
+
     @Test fun braveKeyDrivesSearchAndIsNotEchoed() = runBlocking {
         var sentKey: String? = null
         val tool = WebSearchTool(client { request ->

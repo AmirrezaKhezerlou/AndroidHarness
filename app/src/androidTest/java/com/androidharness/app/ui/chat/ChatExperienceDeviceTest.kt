@@ -561,6 +561,8 @@ class ChatExperienceDeviceTest {
                     val vm = ChatViewModel(c, sid); store.put("down", vm)
                     activity.setContent { HarnessTheme(dynamicColor = false) { ChatScreen(vm, {}, { _, _ -> }, {}, {}, onOpenSubagent = {}) } }
                 }
+                await("Question at the top")
+                tap("Scroll to latest")
                 await("FINAL ANSWER END")
                 val display = instrumentation.targetContext.resources.displayMetrics
                 val x = display.widthPixels * .5f
@@ -612,7 +614,11 @@ class ChatExperienceDeviceTest {
                     val vm = ChatViewModel(c, sid); store.put("fast-scroll", vm)
                     activity.setContent { HarnessTheme(dynamicColor = false) { ChatScreen(vm, {}, { _, _ -> }, {}, {}, onOpenSubagent = {}) } }
                 }
-                waitFor("The live answer opens at the bottom", ::tailVisible)
+                if (kind == ConversationKind.CHAT) {
+                    await("Write a long answer")
+                    tap("Scroll to latest")
+                }
+                waitFor("The live answer can be followed at the bottom", ::tailVisible)
                 updates = launch(kotlinx.coroutines.Dispatchers.Default) {
                     var tick = 0
                     while (true) {

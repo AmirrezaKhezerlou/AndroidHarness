@@ -80,7 +80,7 @@ class ShareToChatDeviceTest {
                 tap("New Chat")
                 assertNull(find("Share Code fixture"))
                 searchChats("Share Chat fixture")
-                tap("Share Chat fixture")
+                tapDestination("Share Chat fixture")
                 tap("Open in Chat")
                 await("Share Chat fixture")
                 awaitContains("Existing draft\n\nhttps://x.com/example/status/123")
@@ -89,7 +89,7 @@ class ShareToChatDeviceTest {
                 await("Share to Chat")
                 tap("New Chat")
                 searchChats("Share Chat fixture")
-                tap("Share Chat fixture")
+                tapDestination("Share Chat fixture")
                 tap("Open in Chat")
                 awaitContains("Existing draft\n\nhttps://x.com/example/status/123\n\nSecond shared item")
                 scenario.recreate()
@@ -248,6 +248,14 @@ class ShareToChatDeviceTest {
         assertTrue(field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, android.os.Bundle().apply {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, query)
         }))
+        instrumentation.waitForIdleSync()
+    }
+    private fun tapDestination(title: String) {
+        // The editable search text can equal the result label; choose the result row.
+        await(title)
+        var node = nodes().last { it.isVisibleToUser && !it.isEditable && it.text?.toString() == title }
+        while (!node.isClickable && node.parent != null) node = node.parent
+        assertTrue(node.performAction(AccessibilityNodeInfo.ACTION_CLICK))
         instrumentation.waitForIdleSync()
     }
     private fun tap(text: String) {

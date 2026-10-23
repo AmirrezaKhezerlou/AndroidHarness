@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.androidharness.app.ui.chat.UserScrollObserver
+import com.androidharness.app.ui.chat.containChatDetailScroll
 import com.androidharness.app.ui.chat.rememberChatListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -186,6 +187,7 @@ private fun ChatActivityRow(
     trailing: (@Composable () -> Unit)? = null,
     details: LazyListScope.() -> Unit,
 ) {
+    val detailScroll = com.androidharness.app.ui.chat.LocalChatDetailScroll.current
     var expanded by rememberSaveable { mutableStateOf(false) }
     var autoOpened by remember { mutableStateOf(false) }
     // A live turn opens its working log so streamed commentary never disappears
@@ -201,7 +203,12 @@ private fun ChatActivityRow(
         }
     }
     val scroll = rememberChatListState()
-    var following by remember { mutableStateOf(true) }
+    // Retain a Chat reader's position across the live-to-saved handoff.
+    // Code keeps its existing follow lifecycle.
+    val followingState = if (detailScroll == null) remember { mutableStateOf(true) }
+        else rememberSaveable { mutableStateOf(true) }
+    var following by followingState
+    var wasExpanded by rememberSaveable { mutableStateOf(false) }
     var userDragged by remember { mutableStateOf(false) }
     var towardBottom by remember { mutableStateOf(false) }
     val userScroll = remember { UserScrollObserver { delta ->
@@ -211,7 +218,8 @@ private fun ChatActivityRow(
     } }
     // One layout-driven follower. Stream updates never restart/cancel an in-flight scroll.
     LaunchedEffect(expanded) {
-        if (expanded) { following = true; userDragged = false }
+        if (expanded && (detailScroll == null || !wasExpanded)) { following = true; userDragged = false }
+        wasExpanded = expanded
     }
     LaunchedEffect(expanded, followLatest, following) {
         if (!expanded || !followLatest || !following) return@LaunchedEffect
@@ -274,14 +282,14 @@ private fun ChatActivityRow(
             }
         }
         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
-            if (expandable) TextButton(onClick = { expanded = !expanded }, modifier = Modifier.fillMaxWidth(),
+            if (expandable) TextButton(onClick = { detailScroll?.pause(); expanded = !expanded }, modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp), contentPadding = PaddingValues(horizontal = 4.dp)) { header() }
             else Box(Modifier.fillMaxWidth().heightIn(min = 36.dp).padding(horizontal = 4.dp), contentAlignment = Alignment.CenterStart) { header() }
         }
         AnimatedVisibility(expanded && expandable,
             enter = fadeIn(tween(120)) + expandVertically(tween(160)),
             exit = fadeOut(tween(100)) + shrinkVertically(tween(160))) {
-            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 240.dp).nestedScroll(userScroll), state = scroll,
+            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 240.dp).containChatDetailScroll().nestedScroll(userScroll), state = scroll,
                 contentPadding = PaddingValues(top = 4.dp, bottom = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp), content = details)
         }

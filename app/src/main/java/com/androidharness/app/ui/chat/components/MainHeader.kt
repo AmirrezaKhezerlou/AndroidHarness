@@ -519,13 +519,13 @@ private fun SearchDepthControl(
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     var menu by remember { mutableStateOf(false) }
-    val auto = depth == com.androidharness.app.data.SearchDepth.AUTO
+    val neutral = depth == com.androidharness.app.data.SearchDepth.AUTO || depth == com.androidharness.app.data.SearchDepth.OFF
     val label = uiContext.getString(searchDepthShort(depth))
     Box {
         Surface(
             shape = RoundedCornerShape(50),
-            color = if (auto) scheme.surfaceContainerHigh else scheme.primaryContainer,
-            contentColor = if (auto) scheme.onSurfaceVariant else scheme.primary,
+            color = if (neutral) scheme.surfaceContainerHigh else scheme.primaryContainer,
+            contentColor = if (neutral) scheme.onSurfaceVariant else scheme.primary,
             modifier = Modifier
                 .clip(RoundedCornerShape(50))
                 .clickable { menu = true }
@@ -566,6 +566,7 @@ private fun SearchDepthControl(
 }
 
 private fun searchDepthShort(depth: com.androidharness.app.data.SearchDepth): Int = when (depth) {
+    com.androidharness.app.data.SearchDepth.OFF -> R.string.ui_search_depth_off_short
     com.androidharness.app.data.SearchDepth.INSTANT -> R.string.ui_search_depth_instant_short
     com.androidharness.app.data.SearchDepth.DEEP -> R.string.ui_search_depth_deep_short
     com.androidharness.app.data.SearchDepth.AUTO -> R.string.ui_search_depth_auto_short
@@ -574,6 +575,7 @@ private fun searchDepthShort(depth: com.androidharness.app.data.SearchDepth): In
 }
 
 private fun searchDepthLabel(depth: com.androidharness.app.data.SearchDepth): Int = when (depth) {
+    com.androidharness.app.data.SearchDepth.OFF -> R.string.ui_search_depth_off
     com.androidharness.app.data.SearchDepth.INSTANT -> R.string.ui_search_depth_instant
     com.androidharness.app.data.SearchDepth.DEEP -> R.string.ui_search_depth_deep
     com.androidharness.app.data.SearchDepth.AUTO -> R.string.ui_search_depth_auto
@@ -582,6 +584,7 @@ private fun searchDepthLabel(depth: com.androidharness.app.data.SearchDepth): In
 }
 
 private fun searchDepthHint(depth: com.androidharness.app.data.SearchDepth): Int = when (depth) {
+    com.androidharness.app.data.SearchDepth.OFF -> R.string.ui_search_depth_off_hint
     com.androidharness.app.data.SearchDepth.INSTANT -> R.string.ui_search_depth_instant_hint
     com.androidharness.app.data.SearchDepth.DEEP -> R.string.ui_search_depth_deep_hint
     com.androidharness.app.data.SearchDepth.AUTO -> R.string.ui_search_depth_auto_hint

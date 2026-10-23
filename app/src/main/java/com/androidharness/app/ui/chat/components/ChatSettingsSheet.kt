@@ -51,6 +51,7 @@ internal fun ChatSettingsSheet(
     saving: Boolean,
     onSave: (String, Boolean, ImageFrequency) -> Unit,
     onDismiss: () -> Unit,
+    globalImageFrequency: ImageFrequency = ImageFrequency.DEFAULT,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var text by remember(instructions) { mutableStateOf(instructions) }
@@ -98,7 +99,12 @@ internal fun ChatSettingsSheet(
                 ) {
                     RadioButton(selected = frequency == option, onClick = null)
                     Spacer(Modifier.width(8.dp))
-                    Text(stringResource(imageFrequencyLabel(option)), style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        if (option == ImageFrequency.DEFAULT) stringResource(R.string.chat_image_frequency_inherit,
+                            stringResource(imageFrequencyLabel(globalImageFrequency)))
+                        else stringResource(imageFrequencyLabel(option)),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
                 }
             }
             Spacer(Modifier.height(16.dp))
