@@ -90,13 +90,26 @@ internal object RemoteContentLoader {
         preview
     }
 
+    /**
+     * Some image hosts reject the full Chrome UA unless a matching Referer
+     * arrives, while still serving a generic UA. Try the browser identity
+     * first, then fall back before treating the image as broken.
+     */
+    private val imageUserAgents = listOf(BROWSER_USER_AGENT, "Mozilla/5.0", null)
+
     private fun downloadImage(url: HttpUrl, allowQueryStrip: Boolean = true): ByteArray? {
-        val request = Request.Builder()
+        for (userAgent in imageUserAgents) {
+            downloadOnce(url, userAgent, allowQueryStrip)?.let { return it }
+        }
+        return null
+    }
+
+    private fun downloadOnce(url: HttpUrl, userAgent: String?, allowQueryStrip: Boolean): ByteArray? {
+        val builder = Request.Builder()
             .url(url)
-            .header("User-Agent", BROWSER_USER_AGENT)
             .header("Accept", "image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8")
-            .build()
-        evaluate(request)?.use { response ->
+        if (userAgent != null) builder.header("User-Agent", userAgent)
+        evaluate(builder.build())?.use { response ->
             val type = response.body?.contentType()?.toString()?.lowercase().orEmpty()
             if (type.contains("svg")) {
                 // Some CDNs answer a resized preview URL with an SVG placeholder

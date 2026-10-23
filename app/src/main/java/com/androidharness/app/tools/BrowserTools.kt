@@ -8,8 +8,12 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /**
  * Formats [BrowserState] into a clear, structured text representation for the agent.
@@ -240,11 +244,13 @@ class BrowserReadTool(
     override val description =
         "Render a URL in the in-app browser, let JavaScript run, and return the visible text with the " +
             "final URL and title. Use it when web_fetch reports that a page requires JavaScript or returns " +
-            "almost no readable text. max_chars caps the returned text."
+            "almost no readable text. max_chars caps the returned text. Set images=true to collect the " +
+            "image URLs the rendered page actually shows, including lazy-loaded gallery images."
     override val parametersSchema = Schema.obj(
         mapOf(
             "url" to Schema.string("The http(s) URL to render."),
             "max_chars" to Schema.integer("Maximum characters to return (default 20000, max 60000)."),
+            "images" to Schema.boolean("Also return direct image URLs rendered on the page (default false)."),
         ),
         required = listOf("url"),
     )
@@ -260,6 +266,7 @@ class BrowserReadTool(
         }
         val maxChars = (args["max_chars"]?.jsonPrimitive?.content?.toIntOrNull() ?: 20_000)
             .coerceIn(1_000, 60_000)
+        val includeImages = args["images"]?.jsonPrimitive?.booleanOrNull == true
         if (readBudget != null && !readBudget.canRead()) return ToolResult(true, readLimitText())
         return try {
             val state = controller.navigate(url, ctx.workspace)
@@ -278,8 +285,11 @@ class BrowserReadTool(
             )
             val text = (outcome.value ?: state.textSummary).trim()
             if (readBudget != null && !readBudget.claimRead()) return ToolResult(true, readLimitText())
+            val images = if (includeImages) scanImages(state) else emptyList()
+            val imageNote = if (!includeImages) "" else if (images.isEmpty()) "\n[no image urls found]"
+                else "\n" + PageImageText.render(images, images.size)
             if (text.isBlank()) {
-                ToolResult(true, "URL: ${state.url}\nTitle: ${state.title}\n[no visible text; the page may still be loading]")
+                ToolResult(true, "URL: ${state.url}\nTitle: ${state.title}\n[no visible text; the page may still be loading]" + imageNote)
             } else {
                 val body = text.take(maxChars)
                 ToolResult(true, buildString {
@@ -288,12 +298,32 @@ class BrowserReadTool(
                     state.error?.takeIf { it.isNotBlank() }?.let { append("Warning: ").append(it).append("\n\n") }
                     append(body)
                     if (body.length < text.length) append("\n[truncated at ").append(maxChars).append(" chars]")
+                    append(imageNote)
                     readSourceNote()?.let { append(it) }
                 })
             }
         } catch (e: Exception) {
             ToolResult(false, "Browser read failed: ${e.message}")
         }
+    }
+
+    private suspend fun scanImages(state: BrowserState): List<PageImage> {
+        val raw = controller.evalUser(IMAGE_SCAN_JS).value ?: return emptyList()
+        val pageUrl = state.url.toHttpUrlOrNull() ?: return emptyList()
+        val fallbackTitle = state.title.ifBlank { pageUrl.host }
+        return runCatching {
+            Json.parseToJsonElement(raw).jsonArray.mapNotNull { element ->
+                val item = element.jsonObject
+                val imageUrl = httpImageUrl(item["url"]?.jsonPrimitive?.contentOrNull) ?: return@mapNotNull null
+                val alt = item["alt"]?.jsonPrimitive?.contentOrNull?.trim()
+                PageImage(
+                    title = alt?.takeIf { it.isNotEmpty() } ?: fallbackTitle,
+                    imageUrl = imageUrl,
+                    pageUrl = pageUrl.toString(),
+                    source = pageUrl.host,
+                )
+            }
+        }.getOrDefault(emptyList()).distinctBy { it.imageUrl }.take(8)
     }
 
     private fun readLimitText(): String {
@@ -308,6 +338,49 @@ class BrowserReadTool(
         return "\n[pages read this turn: ${budget.pagesRead}/$limit]"
     }
 }
+
+/**
+ * Collects images the rendered page actually shows: Open Graph first, then
+ * visible img tags, lazy-load attributes, and CSS background images. The
+ * result is a JSON array of {url, alt} objects.
+ */
+private val IMAGE_SCAN_JS = """
+return (() => {
+  const out = [];
+  const seen = new Set();
+  const add = (src, alt) => {
+    if (!src) return;
+    let abs;
+    try { abs = new URL(src, document.baseURI).href; } catch (e) { return; }
+    if (!/^https?:/i.test(abs) || /\.svg(\?|${'$'})/i.test(abs)) return;
+    if (seen.has(abs)) return;
+    seen.add(abs);
+    out.push({url: abs, alt: (alt || '').trim()});
+  };
+  const og = document.querySelector('meta[property="og:image"], meta[name="twitter:image"]');
+  if (og) add(og.getAttribute('content'), document.title);
+  for (const img of Array.from(document.images)) {
+    if (out.length >= 8) break;
+    if (img.naturalWidth && img.naturalWidth < 120) continue;
+    if (img.naturalHeight && img.naturalHeight < 120) continue;
+    const classes = String(img.className || '').toLowerCase();
+    if (/(^|[\s_-])(icon|logo|sprite|emoji)(${'$'}|[\s_-])/.test(classes)) continue;
+    const srcset = img.getAttribute('srcset') || img.getAttribute('data-srcset');
+    const firstSrc = srcset ? srcset.split(',')[0].trim().split(' ')[0] : null;
+    const src = img.currentSrc || img.src || img.getAttribute('data-src') || img.getAttribute('data-original') || firstSrc;
+    if (src && /(\/ico\/|\/icons?\/|\/sprite|favicon|app_icon|footerlogo)/i.test(src)) continue;
+    add(src, img.alt || img.title);
+  }
+  for (const el of Array.from(document.querySelectorAll('[style*="background-image"]'))) {
+    if (out.length >= 8) break;
+    if (el.clientWidth < 120 || el.clientHeight < 120) continue;
+    const bg = getComputedStyle(el).backgroundImage;
+    const m = /url\(["']?(.*?)["']?\)/.exec(bg);
+    if (m) add(m[1], el.getAttribute('aria-label') || el.title);
+  }
+  return out;
+})()
+"""
 
 /**
  * Executes arbitrary JavaScript in the page context.

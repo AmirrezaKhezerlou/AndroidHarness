@@ -381,7 +381,7 @@ private fun MarkdownBlocks(
                     RemoteImageCard(block.url, block.alt, onOpenUrl)
                 }
             } else {
-                ParagraphText("[${block.alt.ifBlank { "image" }}](${block.url})", onOpenUrl)
+                // Extra images beyond the cap stay out of the answer.
             }
 
             is Block.LinkPreview -> if (!media || plain) {

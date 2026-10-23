@@ -123,7 +123,7 @@ internal fun ChatToolActivity(call: ToolCallData, result: ChatMessage?, running:
     }
     val sources = remember(call, result) { ChatActivityPresentation.sources(listOfNotNull(ChatMessage(Role.ASSISTANT, toolCalls = listOf(call)), result)) }
     val images = remember(call, result) {
-        if (call.name != "web_fetch") emptyList()
+        if (call.name != "web_fetch" && call.name != "browser_read") emptyList()
         else result?.let { com.androidharness.app.tools.PageImageText.parse(it.text) }.orEmpty()
     }
     ChatActivityRow(title, call.name, running, result != null || sources.isNotEmpty()) {
