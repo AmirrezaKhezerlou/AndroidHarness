@@ -775,6 +775,12 @@
     <string name="chat_writing_reply">正在回复</string>
     <string name="chat_searching">正在搜索网页</string>
     <string name="chat_searched">已搜索网页</string>
+    <string name="chat_searching_chats">正在搜索过往聊天</string>
+    <string name="chat_searched_chats">已搜索过往聊天</string>
+    <string name="chat_checking_recent_chats">正在查看最近聊天</string>
+    <string name="chat_checked_recent_chats">已查看最近聊天</string>
+    <string name="chat_reading_past_chat">正在读取过往聊天</string>
+    <string name="chat_read_past_chat">已读取过往聊天</string>
     <string name="chat_reading_github">正在读取 GitHub</string>
     <string name="chat_read_github">已读取 GitHub</string>
     <string name="chat_reading_page">正在阅读网页</string>

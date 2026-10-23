@@ -229,6 +229,11 @@ class AppContainer(val appContext: Context) {
         universalMemory = memory,
         chatOnlyTools = listOf(com.androidharness.app.tools.ReadChatTextTool(sessions::messages),
             com.androidharness.app.tools.BrowserReadTool(browser),
+            com.androidharness.app.tools.SearchChatsTool { query, fuzzy, limit ->
+                sessions.searchMessages(query, fuzzy, limit)
+            },
+            com.androidharness.app.tools.RecentChatsTool(sessions.sessions),
+            com.androidharness.app.tools.ReadChatSnippetTool(sessions::messages, sessions::session),
             com.androidharness.app.tools.OfferCodeHandoffTool(),
             com.androidharness.app.tools.GitHubApiTool(fetchClient) { github.accessToken() },
             com.androidharness.app.tools.GitHubSearchTool(fetchClient) { github.accessToken() },

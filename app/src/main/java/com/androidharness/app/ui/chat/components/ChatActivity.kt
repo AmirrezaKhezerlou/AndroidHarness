@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Public
@@ -66,15 +67,21 @@ internal fun ChatActivity(
     val thoughtChunks = remember { mutableMapOf<String, com.androidharness.app.core.ReasoningTextChunks.Stream>() }
     val active = remember(messages, runningCalls) { ChatActivityPresentation.activeCall(messages, runningCalls) }
     val research = remember(messages) { ChatActivityPresentation.researchProgress(messages) }
+    // Fast tools can start and finish between frames, so the live title keeps the
+    // latest call visible until another starts or the answer begins streaming.
+    val lastTool = remember(entries) {
+        entries.filterIsInstance<ChatActivityPresentation.Entry.Tool>().lastOrNull()
+    }
     val seconds = messages.sumOf { it.thinkingMs }.coerceAtLeast(0) / 1000
     val title = when {
         live && active != null -> activityLabel(active.name, true)
         live && writing -> stringResource(R.string.chat_writing_reply)
+        live && lastTool != null -> activityLabel(lastTool.call.name, lastTool.result == null)
         live -> stringResource(R.string.chat_thinking)
         seconds > 0 && !showThinkingMetrics -> stringResource(R.string.chat_thought_seconds, seconds)
         else -> stringResource(R.string.chat_thought)
     }
-    ChatActivityRow(title, if (live) active?.name else null, live, entries.isNotEmpty(), followLatest = true, autoExpand = autoExpand,
+    ChatActivityRow(title, if (live) (active ?: lastTool?.call)?.name else null, live, entries.isNotEmpty(), followLatest = true, autoExpand = autoExpand,
         progress = research,
         trailing = if (showThinkingMetrics) ({ ChatThinkingMetrics(messages, streamingThinking, thinkingTiming, reasoningTokens, live) }) else null) {
         entries.forEach { entry ->
@@ -126,30 +133,43 @@ internal fun ChatToolActivity(call: ToolCallData, result: ChatMessage?, running:
         if (call.name != "web_fetch" && call.name != "browser_read") emptyList()
         else result?.let { com.androidharness.app.tools.PageImageText.parse(it.text) }.orEmpty()
     }
+    val recall = remember(call, result) {
+        if (call.name == "search_chats" || call.name == "recent_chats" || call.name == "read_chat_snippet")
+            result?.text?.take(1_800)
+        else null
+    }
     ChatActivityRow(title, call.name, running, result != null || sources.isNotEmpty()) {
         item {
-        if (images.isNotEmpty()) {
+        if (recall != null) {
             Text(
-                stringResource(R.string.chat_image_count, images.size),
+                recall,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
-        if (sources.isNotEmpty()) {
-            sources.take(4).forEach { source ->
-                TextButton(onClick = { onOpenUrl(source.url) }, shape = RoundedCornerShape(12.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)) {
-                    Column {
-                        Text(source.title, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text(source.host + " · " + stringResource(if (source.read) R.string.chat_source_read else R.string.chat_source_found), style = MaterialTheme.typography.labelSmall)
+        } else {
+            if (images.isNotEmpty()) {
+                Text(
+                    stringResource(R.string.chat_image_count, images.size),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (sources.isNotEmpty()) {
+                sources.take(4).forEach { source ->
+                    TextButton(onClick = { onOpenUrl(source.url) }, shape = RoundedCornerShape(12.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)) {
+                        Column {
+                            Text(source.title, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(source.host + " · " + stringResource(if (source.read) R.string.chat_source_read else R.string.chat_source_found), style = MaterialTheme.typography.labelSmall)
+                        }
                     }
                 }
-            }
-            ChatSources(listOfNotNull(ChatMessage(Role.ASSISTANT, toolCalls = listOf(call)), result), onOpenUrl)
-        } else if (images.isEmpty()) Text(stringResource(when {
-            result?.isError == true -> R.string.chat_tool_result_failed
-            result != null -> R.string.chat_tool_result_empty
-            else -> R.string.chat_activity_interrupted
-        }), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                ChatSources(listOfNotNull(ChatMessage(Role.ASSISTANT, toolCalls = listOf(call)), result), onOpenUrl)
+            } else if (images.isEmpty()) Text(stringResource(when {
+                result?.isError == true -> R.string.chat_tool_result_failed
+                result != null -> R.string.chat_tool_result_empty
+                else -> R.string.chat_activity_interrupted
+            }), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         }
     }
 }
@@ -450,6 +470,9 @@ private fun ChatActivityGlyph(name: String?, live: Boolean, motion: Boolean) {
                     translationX = searchX * size.width / 24f
                     translationY = searchY * size.height / 24f
                 }, tint = scheme.onSurfaceVariant)
+                "search_chats", "recent_chats", "read_chat_snippet" -> Icon(
+                    Icons.Outlined.History, null, Modifier.size(15.dp), tint = scheme.onSurfaceVariant,
+                )
                 "web_fetch", "browser_read" -> Box(Modifier.size(15.dp)) {
                     Icon(painterResource(R.drawable.ic_chat_eyes), null, Modifier.fillMaxSize().graphicsLayer {
                         scaleY = blink
@@ -481,6 +504,9 @@ private fun ChatActivityGlyph(name: String?, live: Boolean, motion: Boolean) {
 @Composable
 private fun activityLabel(name: String, running: Boolean): String = stringResource(when (name) {
     "web_search" -> if (running) R.string.chat_searching else R.string.chat_searched
+    "search_chats" -> if (running) R.string.chat_searching_chats else R.string.chat_searched_chats
+    "recent_chats" -> if (running) R.string.chat_checking_recent_chats else R.string.chat_checked_recent_chats
+    "read_chat_snippet" -> if (running) R.string.chat_reading_past_chat else R.string.chat_read_past_chat
     "web_fetch", "browser_read" -> if (running) R.string.chat_reading_page else R.string.chat_read_page
     "github_api", "github_search", "github_file" -> if (running) R.string.chat_reading_github else R.string.chat_read_github
     "create_artifact" -> if (running) R.string.chat_creating_artifact else R.string.chat_created_artifact
@@ -497,13 +523,24 @@ private fun activityLabel(name: String, running: Boolean): String = stringResour
 private fun ChatShimmerText(text: String, running: Boolean) {
     val scheme = MaterialTheme.colorScheme
     if (!running) {
-        Text(text, style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant)
+        Text(
+            text,
+            style = MaterialTheme.typography.labelLarge,
+            color = scheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
         return
     }
     val transition = rememberInfiniteTransition(label = "Chat activity")
     val x by transition.animateFloat(-180f, 650f,
         infiniteRepeatable(tween(1600, easing = LinearEasing), RepeatMode.Restart), label = "Chat text shimmer")
-    Text(text, style = MaterialTheme.typography.labelLarge.copy(brush = Brush.linearGradient(
-        listOf(scheme.onSurfaceVariant, scheme.onSurface, scheme.onSurfaceVariant),
-        start = Offset(x, 0f), end = Offset(x + 160f, 0f))))
+    Text(
+        text,
+        style = MaterialTheme.typography.labelLarge.copy(brush = Brush.linearGradient(
+            listOf(scheme.onSurfaceVariant, scheme.onSurface, scheme.onSurfaceVariant),
+            start = Offset(x, 0f), end = Offset(x + 160f, 0f))),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
 }

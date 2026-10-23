@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.DriveFileMove
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Search
@@ -58,6 +59,7 @@ internal fun toolIcon(name: String): ImageVector = when (name) {
     "delete_file" -> Icons.Outlined.Delete
     "move_file" -> Icons.Outlined.DriveFileMove
     "web_fetch", "browser_read", "web_search", "http_request" -> Icons.Outlined.Public
+    "search_chats", "recent_chats", "read_chat_snippet" -> Icons.Outlined.History
     "github_api", "github_search", "github_file" -> Icons.Outlined.Code
     "todo_write" -> Icons.Outlined.Checklist
     "memory_write" -> Icons.Outlined.EditNote

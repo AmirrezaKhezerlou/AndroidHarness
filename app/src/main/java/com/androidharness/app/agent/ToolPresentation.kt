@@ -168,6 +168,12 @@ fun toolPresentation(call: ToolCallData, result: ChatMessage? = null): ToolPrese
             val query = arg("query") ?: ""
             ToolPresentation("Searched web", "Searching: ${query.take(48)}…", query, ToolActivityKind.WEB)
         }
+        "search_chats" -> {
+            val query = arg("query") ?: ""
+            ToolPresentation("Searched chats", "Searching past chats: ${query.take(48)}…", query, ToolActivityKind.MEMORY)
+        }
+        "recent_chats" -> ToolPresentation("Checked recent chats", "Checking recent chats…", kind = ToolActivityKind.MEMORY)
+        "read_chat_snippet" -> ToolPresentation("Read a past chat", "Reading a past chat…", kind = ToolActivityKind.MEMORY)
         "http_request" -> {
             val url = arg("url") ?: "API"
             ToolPresentation("Called API", "Calling ${url.take(48)}…", url, ToolActivityKind.WEB)

@@ -63,6 +63,9 @@ class ChatExperienceDeviceTest {
                 cavemanSettings = { AppSettings(cavemanInstalled = true) },
                 universalMemory = c.memory,
                 chatOnlyTools = listOf(ReadChatTextTool(c.sessions::messages), BrowserReadTool(c.browser),
+                    SearchChatsTool { _, _, _ -> emptyList() },
+                    RecentChatsTool(c.sessions.sessions),
+                    ReadChatSnippetTool(c.sessions::messages, c.sessions::session),
                     OfferCodeHandoffTool(),
                     GitHubApiTool(githubClient) { null }, GitHubSearchTool(githubClient) { null }, GitHubFileTool(githubClient) { null }))
             val events = engine.run(chat, "chat-engine-turn", ProviderConfig("fixture", "Fixture", ProviderType.OPENAI_COMPAT,
@@ -308,7 +311,8 @@ class ChatExperienceDeviceTest {
                             com.androidharness.app.ui.chat.components.ChatActivity(emptyList(), live = live.value,
                                 streamingThinking = "A private reasoning detail", autoExpand = !prefs.chatKeepThinkingCollapsed)
                             com.androidharness.app.ui.settings.ChatOptionsSection(prefs, {}, {},
-                                onKeepThinkingCollapsed = { value -> runBlocking { c.settings.setChatKeepThinkingCollapsed(value) } })
+                                onKeepThinkingCollapsed = { value -> runBlocking { c.settings.setChatKeepThinkingCollapsed(value) } },
+                                onImageFrequency = { value -> runBlocking { c.settings.setChatImageFrequency(value) } })
                         }
                     }
                 } } }

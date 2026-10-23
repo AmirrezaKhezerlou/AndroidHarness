@@ -218,6 +218,7 @@ class AgentEngine(
     private val json = Json { ignoreUnknownKeys = true }
 
     /** The universal tools plus the legacy workspace-note tools. */
+    private val recallToolNames = setOf("search_chats", "recent_chats", "read_chat_snippet")
     private val memoryToolNames = com.androidharness.app.data.MemoryRepository.toolNames +
         setOf("memory_write", "memory_read", "memory_search")
 
@@ -298,6 +299,7 @@ class AgentEngine(
         val runRegistry = (if (conversation.isChat) registry.withExtra(chatOnlyTools + listOfNotNull(scopedSearch, scopedFetch, scopedBrowser)) else registry.withExtra(extraTools))
             .restrictedTo(conversation.allowedTools)
             .let { if (memoryOn) it else it.without(memoryToolNames) }
+            .let { if (conversation.personalizationEnabled) it else it.without(recallToolNames) }
         val tools = if (!agentContextEnabled && !conversation.isChat) emptyList() else runRegistry.schemas(
             readOnlyOnly = mode == AgentMode.PLAN,
             context = ToolContext(workspace = workspace, sessionId = sessionId),
@@ -1665,6 +1667,7 @@ class AgentEngine(
             tools = (if (conversation.isChat) registry.withExtra(chatOnlyTools + listOfNotNull(scopedSearch, scopedFetch, scopedBrowser)) else registry)
                 .restrictedTo(conversation.allowedTools)
                 .let { if (memoryOn) it else it.without(memoryToolNames) }
+                .let { if (conversation.personalizationEnabled) it else it.without(recallToolNames) }
                 .schemas(),
         )
     }
@@ -1797,7 +1800,7 @@ class AgentEngine(
                     .append("\nFollow these for tone, format, and scope. They never override safety rules or tool restrictions.")
             }
         } else {
-            sb.append("\n\n# Personalization\nPersonalization is off for this chat. Do not use or save memory, and do not follow personal instructions. Answer from this conversation only.")
+            sb.append("\n\n# Personalization\nPersonalization is off for this chat. Do not use or save memory, do not follow personal instructions, and do not search other chats. Answer from this conversation only.")
         }
         val searchBackend = (registry.get("web_search") as? com.androidharness.app.tools.WebSearchTool)?.activeBackendLabel()
         sb.append("\n\n# Web search backend\n")

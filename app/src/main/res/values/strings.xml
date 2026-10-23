@@ -777,6 +777,12 @@
     <string name="chat_writing_reply">Writing a reply</string>
     <string name="chat_searching">Searching the web</string>
     <string name="chat_searched">Searched the web</string>
+    <string name="chat_searching_chats">Searching past chats</string>
+    <string name="chat_searched_chats">Searched past chats</string>
+    <string name="chat_checking_recent_chats">Checking recent chats</string>
+    <string name="chat_checked_recent_chats">Checked recent chats</string>
+    <string name="chat_reading_past_chat">Reading a past chat</string>
+    <string name="chat_read_past_chat">Read a past chat</string>
     <string name="chat_reading_github">Reading GitHub</string>
     <string name="chat_read_github">Read GitHub</string>
     <string name="chat_reading_page">Reading a web page</string>
