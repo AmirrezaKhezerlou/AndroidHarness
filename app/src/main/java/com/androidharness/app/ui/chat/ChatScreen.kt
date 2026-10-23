@@ -95,6 +95,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.LaunchedEffect
 import android.widget.Toast
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import com.androidharness.app.agent.AgentMode
@@ -517,6 +518,11 @@ private fun ChatScreenContent(
         lastDragTowardBottom = deltaY < 0f
     } }
     val density = LocalDensity.current
+    // Trailing room so the sent question can reach the top of the viewport
+    // while its reply streams in below.
+    var chatViewportHeight by remember(state.sessionId) { mutableStateOf(0) }
+    val liveTailPx = if (state.conversation.isChat && state.busy) chatViewportHeight else 0
+    val liveTail = with(density) { liveTailPx.toDp() }
     val previewOffset = with(density) { 64.dp.roundToPx() }
     val hideJumpAt = with(density) { 96.dp.toPx() }
     // Filled while the LazyColumn registers its items, so the newest question
@@ -1024,7 +1030,8 @@ private fun ChatScreenContent(
         }
     }
 
-    // Chat returns to the question after a reply. An explicit bottom jump or a
+    // Chat snaps the sent question to the top and holds it there while the reply
+    // grows below. Code keeps following the bottom. An explicit bottom jump or a
     // reader's own scrolling takes precedence for the rest of that turn.
     LaunchedEffect(state.isLoadingMessages, latestUserTurnId, searchMessageId) {
         if (state.isLoadingMessages || (searchMessageId != null && !searchRevealDone)) return@LaunchedEffect
@@ -1032,16 +1039,24 @@ private fun ChatScreenContent(
         if (turnId == lastAnchoredTurnId) return@LaunchedEffect
         lastAnchoredTurnId = turnId
         returnToQuestion = true
-        pinnedToBottom = !state.conversation.isChat || state.busy
+        pinnedToBottom = !state.conversation.isChat
         withFrameNanos { }
-        if (pinnedToBottom) listState.scrollToEnd { pinnedToBottom && !gestureActive.value }
+        if (pinnedToBottom) listState.scrollToEnd(liveTailPx) { pinnedToBottom && !gestureActive.value }
         else if (returnToQuestion && !gestureActive.value) userItemIndexes[turnId]?.let { listState.scrollToItem(it) }
     }
+    // The run adds trailing room so a short transcript can still put the
+    // question at the top; reapply the anchor once that room is available.
+    LaunchedEffect(liveTailPx, latestUserTurnId) {
+        if (liveTailPx <= 0 || !returnToQuestion) return@LaunchedEffect
+        val turnId = latestUserTurnId ?: return@LaunchedEffect
+        withFrameNanos { }
+        if (returnToQuestion && !gestureActive.value && latestUserTurnId == turnId) {
+            userItemIndexes[turnId]?.let { listState.scrollToItem(it) }
+        }
+    }
     LaunchedEffect(state.busy, latestUserTurnId) {
-        val started = !chatWasBusy && state.busy
         val finished = chatWasBusy && !state.busy
         chatWasBusy = state.busy
-        if (started && state.conversation.isChat && returnToQuestion) pinnedToBottom = true
         if (!finished || !state.conversation.isChat || !returnToQuestion || findOpen || searchMessageId != null) return@LaunchedEffect
         val turnId = latestUserTurnId ?: return@LaunchedEffect
         pinnedToBottom = false
@@ -1082,7 +1097,7 @@ private fun ChatScreenContent(
     }
 
     // While pinned, keep the newest content in view with small exact deltas.
-    LaunchedEffect(pinnedToBottom, listState) {
+    LaunchedEffect(pinnedToBottom, listState, liveTailPx) {
         if (!pinnedToBottom) return@LaunchedEffect
         var lastFollowAt = 0L
         snapshotFlow {
@@ -1100,18 +1115,19 @@ private fun ChatScreenContent(
             if (total == 0) return@collect
             val last = info.visibleItemsInfo.lastOrNull()
             if (last == null || last.index != total - 1) {
-                listState.scrollToEnd { pinnedToBottom && !gestureActive.value && !listState.isScrollInProgress }
+                listState.scrollToEnd(liveTailPx) { pinnedToBottom && !gestureActive.value && !listState.isScrollInProgress }
             } else {
-                val delta = last.offset + last.size + info.afterContentPadding - info.viewportEndOffset
+                val delta = last.offset + last.size + info.afterContentPadding - liveTailPx - info.viewportEndOffset
                 if (delta > 0) listState.scrollBy(delta.toFloat())
             }
         }
     }
 
     // The down button always refers to the bottom, regardless of which bubble is visible.
-    LaunchedEffect(listState) {
+    LaunchedEffect(listState, liveTailPx) {
         snapshotFlow {
-            !pinnedToBottom && !isAtBottom(listState.layoutInfo, listState.canScrollForward, tolerance = hideJumpAt.toInt())
+            !pinnedToBottom && !isAtBottom(listState.layoutInfo, listState.canScrollForward,
+                tolerance = hideJumpAt.toInt(), tail = liveTailPx)
         }.distinctUntilChanged().collect { away ->
             showJumpToLatest = away
             if (!away) unreadWhileAway = false
@@ -1410,7 +1426,8 @@ private fun ChatScreenContent(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxWidth(),
+                        .fillMaxWidth()
+                        .onSizeChanged { chatViewportHeight = it.height },
                 ) {
                     if (state.isLoadingMessages) {
                         ChatLoadingSkeleton(
@@ -1422,7 +1439,9 @@ private fun ChatScreenContent(
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxSize().nestedScroll(userScrollObserver),
-                            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 24.dp),
+                            contentPadding = PaddingValues(
+                                start = 18.dp, top = 24.dp, end = 18.dp, bottom = 24.dp + liveTail,
+                            ),
                             // Top-anchored: a sent question stays put while the
                             // answer grows below; short chats no longer sit at the bottom.
                             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -2061,7 +2080,7 @@ private fun ChatScreenContent(
                         returnToQuestion = false
                         pinnedToBottom = true
                         lastAnchoredTurnId = latestUserTurnId
-                        scope.launch { listState.scrollToEnd { pinnedToBottom && !gestureActive.value } }
+                        scope.launch { listState.scrollToEnd(liveTailPx) { pinnedToBottom && !gestureActive.value } }
                     },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -2427,36 +2446,41 @@ private fun FileEditsCard(
     }
 }
 
-/** True when the last item's bottom edge sits within [tolerance]px of the viewport bottom. */
-private fun isAtBottom(info: LazyListLayoutInfo, canScrollForward: Boolean, tolerance: Int = 64): Boolean {
+/**
+ * True when the last item's bottom edge sits within [tolerance]px of the
+ * viewport bottom. [tail] is live-run breathing room below the transcript and
+ * does not count as content.
+ */
+private fun isAtBottom(info: LazyListLayoutInfo, canScrollForward: Boolean, tolerance: Int = 64, tail: Int = 0): Boolean {
     if (!canScrollForward) return true
     val last = info.visibleItemsInfo.lastOrNull() ?: return false
     if (last.index != info.totalItemsCount - 1) return false
-    return last.offset + last.size + info.afterContentPadding <= info.viewportEndOffset + tolerance
+    return last.offset + last.size + info.afterContentPadding - tail <= info.viewportEndOffset + tolerance
 }
 
 /**
  * Reaches the true bottom after pending item updates. A normal scroll mutation
  * respects the user's drag/fling; a pending requestScrollToItem would cancel it
- * on the next measure even after following was switched off.
+ * on the next measure even after following was switched off. [tail] is the
+ * extra bottom padding that must stay below the fold.
  */
-private suspend fun LazyListState.scrollToEnd(shouldScroll: () -> Boolean) {
+private suspend fun LazyListState.scrollToEnd(tail: Int = 0, shouldScroll: () -> Boolean) {
     withFrameNanos { }
     if (!shouldScroll()) return
     val last = layoutInfo.totalItemsCount - 1
     if (last < 0) return
     scrollToItem(last)
     withFrameNanos { }
-    if (shouldScroll()) snapToEndIfDrifted()
+    if (shouldScroll()) snapToEndIfDrifted(tail)
 }
 
 /** Cheap exact snap to the true bottom; a no-op unless the end is composed. */
-private suspend fun LazyListState.snapToEndIfDrifted() {
+private suspend fun LazyListState.snapToEndIfDrifted(tail: Int = 0) {
     val info = layoutInfo
     val last = info.visibleItemsInfo.lastOrNull() ?: return
     if (last.index != info.totalItemsCount - 1) return
-    val delta = last.offset + last.size + info.afterContentPadding - info.viewportEndOffset
-    if (delta > 0) scrollBy(delta.toFloat())
+    val delta = last.offset + last.size + info.afterContentPadding - tail - info.viewportEndOffset
+    if (delta > 0 || (tail > 0 && delta < 0)) scrollBy(delta.toFloat())
 }
 
 // Follow-scroll coalescing: during a stream the list follows the newest
