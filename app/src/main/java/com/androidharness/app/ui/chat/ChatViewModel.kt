@@ -1422,6 +1422,38 @@ class ChatViewModel(
         }
     }
 
+    /** Persists this chat's instructions and personalization switch. */
+    fun setChatSettings(instructions: String, personalization: Boolean) {
+        val current = _state.value.conversation
+        val updated = current.copy(
+            instructions = instructions.trim()
+                .take(com.androidharness.app.data.ConversationConfig.MAX_INSTRUCTIONS_CHARS),
+            personalizationEnabled = personalization,
+        )
+        if (updated == current) return
+        _state.update { it.copy(conversation = updated, conversationSaving = true) }
+        viewModelScope.launch {
+            try {
+                c.sessions.saveConversation(ensureSession(), updated)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = e.message) }
+            } finally {
+                _state.update { it.copy(conversationSaving = false) }
+            }
+        }
+    }
+
+    /** Every web source in this chat, for the chat-wide source library. */
+    internal suspend fun loadChatSources(): List<com.androidharness.app.core.ChatActivityPresentation.Source> {
+        val sid = _state.value.sessionId ?: return emptyList()
+        return com.androidharness.app.core.ChatActivityPresentation.sources(
+            c.sessions.messages(sid),
+            limit = 500,
+        )
+    }
+
     fun setMode(mode: AgentMode) {
         if (_state.value.mode == mode && !_state.value.dualPlanning) return
         val wasDual = _state.value.dualPlanning

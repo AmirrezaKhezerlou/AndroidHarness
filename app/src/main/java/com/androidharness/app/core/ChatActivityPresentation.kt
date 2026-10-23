@@ -77,7 +77,7 @@ internal object ChatActivityPresentation {
         }
     }
 
-    fun sources(messages: List<ChatMessage>): List<Source> {
+    fun sources(messages: List<ChatMessage>, limit: Int = 100): List<Source> {
         val results = messages.filter { it.role == Role.TOOL && !it.isError }.associateBy { it.toolCallId }
         val sources = linkedMapOf<String, Source>()
         fun add(title: String, rawUrl: String, read: Boolean) {
@@ -87,7 +87,7 @@ internal object ChatActivityPresentation {
             val key = url.substringBefore('#').trimEnd('/')
             val existing = sources[key]
             if (existing != null) sources[key] = existing.copy(read = existing.read || read)
-            else if (sources.size < 100) sources[key] = Source(title.trim().ifBlank { uri.host }.take(240), url, uri.host.removePrefix("www."), read)
+            else if (sources.size < limit) sources[key] = Source(title.trim().ifBlank { uri.host }.take(240), url, uri.host.removePrefix("www."), read)
         }
         for (call in calls(messages)) {
             val result = results[call.id] ?: continue

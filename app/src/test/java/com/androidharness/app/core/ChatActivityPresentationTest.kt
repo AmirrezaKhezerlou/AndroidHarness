@@ -108,4 +108,12 @@ class ChatActivityPresentationTest {
         val messages = listOf(assistant(call("s", "web_search")), result("s", "1. A\n   https://a.test\n   x"))
         assertNull(ChatActivityPresentation.researchProgress(messages))
     }
+
+    @Test fun sourceLedgerLimitCapsTheAggregate() {
+        val search = call("s", "web_search")
+        val text = (1..5).joinToString("\n") { "$it. T$it\n   https://e$it.test/a\n   x" }
+        val messages = listOf(assistant(search), result("s", text))
+        assertEquals(5, ChatActivityPresentation.sources(messages).size)
+        assertEquals(2, ChatActivityPresentation.sources(messages, limit = 2).size)
+    }
 }

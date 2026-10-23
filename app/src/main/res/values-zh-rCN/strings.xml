@@ -735,6 +735,17 @@
     <string name="chat_file_requires_code">请在代码中使用此文件。聊天可以读取图片、文本文件以及可提取文本的 PDF。</string>
     <string name="chat_thinking">正在思考</string>
     <string name="chat_thought">思考过程</string>
+    <string name="chat_settings_title">聊天设置</string>
+    <string name="chat_settings_personalization">个性化</string>
+    <string name="chat_settings_personalization_desc">使用已保存的记忆和此聊天的指令。</string>
+    <string name="chat_settings_instructions">聊天指令</string>
+    <string name="chat_settings_instructions_hint">例如：用中文回答、保持简短，或把我当初学者。</string>
+    <string name="chat_settings_instructions_help">仅适用于此聊天，从下一条消息开始生效。</string>
+    <string name="chat_settings_instructions_off">此聊天已关闭指令和记忆。文本会保留，重新开启个性化后恢复使用。</string>
+    <string name="chat_answered_by">由 %1$s 回答</string>
+    <string name="chat_sources_library">此聊天中的来源</string>
+    <string name="chat_sources_library_count">%1$d 个来源</string>
+    <string name="chat_sources_library_empty">此聊天中还没有网络来源。</string>
     <string name="chat_thought_seconds">思考了 %1$d 秒</string>
     <string name="chat_writing_reply">正在回复</string>
     <string name="chat_searching">正在搜索网页</string>

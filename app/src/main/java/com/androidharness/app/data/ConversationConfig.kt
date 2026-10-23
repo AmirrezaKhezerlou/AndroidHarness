@@ -20,6 +20,10 @@ data class ConversationConfig(
     val selectedTools: Set<ChatTool> = setOf(ChatTool.WEB_SEARCH, ChatTool.WEB_PAGES),
     val sourceChatId: String? = null,
     val draftText: String = "",
+    /** Per-chat guidance appended to the Chat system prompt. */
+    val instructions: String = "",
+    /** Off means no saved memory, no memory tools, and no chat instructions. */
+    val personalizationEnabled: Boolean = true,
 ) {
     val isChat: Boolean get() = kind == ConversationKind.CHAT
 
@@ -27,6 +31,7 @@ data class ConversationConfig(
     val allowedTools: Set<String>? get() = if (!isChat) null else com.androidharness.app.core.ChatExperience.tools
 
     companion object {
+        const val MAX_INSTRUCTIONS_CHARS = 4_000
         private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
         fun decode(value: String?): ConversationConfig = if (value == null) ConversationConfig() else
             runCatching {

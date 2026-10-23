@@ -24,6 +24,18 @@ class ConversationConfigTest {
         assertFalse(saved.allowedTools!!.any { it in setOf("shell", "read_file", "write_file", "task", "http_request", "create_artifact", "read_artifact") })
     }
 
+    @Test fun chatInstructionsAndPersonalizationSurvivePersistence() {
+        val saved = ConversationConfig(
+            kind = ConversationKind.CHAT,
+            instructions = "Answer in German and stay brief.",
+            personalizationEnabled = false,
+        )
+        assertEquals(saved, ConversationConfig.decode(ConversationConfig.encode(saved)))
+        val legacy = ConversationConfig.decode("{\"kind\":\"CHAT\"}")
+        assertEquals("", legacy.instructions)
+        assertTrue(legacy.personalizationEnabled)
+    }
+
     @Test fun restrictingRegistryBlocksBothAdvertisedAndExecutableToolsIncludingExtras() {
         fun tool(name: String) = object : Tool {
             override val name = name

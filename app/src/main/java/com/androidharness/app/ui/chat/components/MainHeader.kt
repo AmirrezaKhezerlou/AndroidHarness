@@ -119,6 +119,8 @@ internal fun MainHeader(
     conversation: com.androidharness.app.data.ConversationConfig = com.androidharness.app.data.ConversationConfig(),
     searchDepth: com.androidharness.app.data.SearchDepth = com.androidharness.app.data.SearchDepth.AUTO,
     onSetSearchDepth: (com.androidharness.app.data.SearchDepth) -> Unit = {},
+    onOpenChatSettings: (() -> Unit)? = null,
+    onOpenSources: (() -> Unit)? = null,
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     var menu by remember { mutableStateOf(false) }
@@ -134,7 +136,8 @@ internal fun MainHeader(
             onOpenContext, onOpenUndo, canUndo, onOpenGitHub, canOpenGitHub, onOpenWebPreview, thinkingResolved, onCustomizeThinking, onSetCustomThinking, onAddThinkingLevel,
             showPreviewShortcut = showWebPreviewShortcut, conversation = conversation,
             workspaceName = workspaceName, onOpenDrawer = onOpenDrawer,
-            searchDepth = searchDepth, onSetSearchDepth = onSetSearchDepth, onFind = onFind)
+            searchDepth = searchDepth, onSetSearchDepth = onSetSearchDepth, onFind = onFind,
+            onOpenChatSettings = onOpenChatSettings, onOpenSources = onOpenSources)
         }
         return
     }
@@ -275,6 +278,20 @@ internal fun MainHeader(
                                 },
                                 onClick = { menu = false; permissionMenu = true },
                             )
+                            if (conversation.isChat) {
+                                DropdownMenuItem(
+                                    text = { Text(uiContext.getString(R.string.chat_settings_title)) },
+                                    leadingIcon = { Icon(Icons.Outlined.EditNote, contentDescription = null) },
+                                    enabled = onOpenChatSettings != null,
+                                    onClick = { menu = false; onOpenChatSettings?.invoke() },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(uiContext.getString(R.string.chat_sources_library)) },
+                                    leadingIcon = { Icon(Icons.Outlined.Language, contentDescription = null) },
+                                    enabled = onOpenSources != null,
+                                    onClick = { menu = false; onOpenSources?.invoke() },
+                                )
+                            }
                             DropdownMenuItem(
                                 text = { Text(uiContext.getString(R.string.ui_find_in_chat)) },
                                 leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
@@ -389,6 +406,8 @@ private fun DesktopConversationHeader(
     searchDepth: com.androidharness.app.data.SearchDepth,
     onSetSearchDepth: (com.androidharness.app.data.SearchDepth) -> Unit,
     onFind: (() -> Unit)? = null,
+    onOpenChatSettings: (() -> Unit)? = null,
+    onOpenSources: (() -> Unit)? = null,
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
@@ -435,6 +454,14 @@ private fun DesktopConversationHeader(
                         onClick = { menu = false; onFind?.invoke() },
                     )
                     DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_context_limits)) }, onClick = { menu = false; onContext() })
+                    if (chatOnly) DropdownMenuItem(
+                        text = { Text(uiContext.getString(R.string.chat_settings_title)) },
+                        onClick = { menu = false; onOpenChatSettings?.invoke() },
+                    )
+                    if (chatOnly) DropdownMenuItem(
+                        text = { Text(uiContext.getString(R.string.chat_sources_library)) },
+                        onClick = { menu = false; onOpenSources?.invoke() },
+                    )
                     if (!chatOnly) DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_web_preview)) }, onClick = { menu = false; onPreview() })
                     if (!chatOnly) DropdownMenuItem(text = { Text("GitHub") }, enabled = canGitHub, onClick = { menu = false; onGitHub() })
                     if (!chatOnly) DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_undo_file_changes_165)) }, enabled = canUndo, onClick = { menu = false; onUndo() })

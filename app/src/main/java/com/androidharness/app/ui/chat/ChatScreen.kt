@@ -470,6 +470,11 @@ private fun ChatScreenContent(
     var showUndoDialog by remember { mutableStateOf(false) }
     // Chosen checkpoint awaiting confirmation with a per-file preview.
     var confirmRewindTurn by remember { mutableStateOf<String?>(null) }
+    var showChatSettings by remember(state.sessionId) { mutableStateOf(false) }
+    var showChatSources by remember(state.sessionId) { mutableStateOf(false) }
+    var chatSources by remember(state.sessionId) {
+        mutableStateOf<List<com.androidharness.app.core.ChatActivityPresentation.Source>?>(null)
+    }
     val scope = rememberCoroutineScope()
 
     // Follow new content until the reader scrolls away.
@@ -519,6 +524,35 @@ private fun ChatScreenContent(
             ref = ref,
             dir = viewModel.container.images.imagesDir,
             onDismiss = { imagePreview = null },
+        )
+    }
+    LaunchedEffect(showChatSources) {
+        if (!showChatSources) return@LaunchedEffect
+        chatSources = null
+        chatSources = runCatching { viewModel.loadChatSources() }.getOrDefault(emptyList())
+    }
+    if (showChatSettings) {
+        com.androidharness.app.ui.chat.components.ChatSettingsSheet(
+            instructions = state.conversation.instructions,
+            personalization = state.conversation.personalizationEnabled,
+            saving = state.conversationSaving,
+            onSave = { text, enabled ->
+                viewModel.setChatSettings(text, enabled)
+                showChatSettings = false
+            },
+            onDismiss = { showChatSettings = false },
+        )
+    }
+    if (showChatSources) {
+        com.androidharness.app.ui.chat.components.ChatSourceLibrarySheet(
+            sources = chatSources.orEmpty(),
+            loading = chatSources == null,
+            onOpen = { url ->
+                showChatSources = false
+                webPreviewUrl = url
+                showWebPreview = true
+            },
+            onDismiss = { showChatSources = false },
         )
     }
     LaunchedEffect(searchMessageId, state.isLoadingMessages) {
@@ -1195,6 +1229,8 @@ private fun ChatScreenContent(
                 onSetMode = viewModel::setMode,
                 onToggleDualPlanning = viewModel::toggleDualPlanning,
                 onOpenContext = { showContext = true },
+                onOpenChatSettings = { showChatSettings = true },
+                onOpenSources = { chatSources = null; showChatSources = true },
                 onOpenUndo = { showUndoDialog = true },
                 onOpenFiles = onOpenFiles,
                 canOpenGitHub = currentProject != null,
@@ -1534,7 +1570,23 @@ private fun ChatScreenContent(
                                                                 Modifier.size(17.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                                         }
                                                     }
-                                                    ResponseActions(onFork = { viewModel.requestFork(message) { onNavigateToSession(it) } }, onUndo = null)
+                                                    ResponseActions(
+                                                        onFork = { viewModel.requestFork(message) { onNavigateToSession(it) } },
+                                                        onUndo = null,
+                                                        details = {
+                                                            message.generation.model?.let { model ->
+                                                                Text(
+                                                                    uiContext.getString(
+                                                                        R.string.chat_answered_by,
+                                                                        com.androidharness.app.core.ChatExperience.modelLabel(model) ?: model,
+                                                                    ),
+                                                                    style = MaterialTheme.typography.labelSmall,
+                                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                                                )
+                                                            }
+                                                        },
+                                                    )
                                                 }
                                                 state.sessionId?.let { sid ->
                                                     com.androidharness.app.ui.chat.components.ChatAnswerVersions(
@@ -1645,11 +1697,24 @@ private fun ChatScreenContent(
                                                         onFork = { viewModel.requestFork(message) { onNavigateToSession(it) } },
                                                         onUndo = if (canRewind) ({ message.turnId?.let { confirmRewindTurn = it } }) else null,
                                                         details = {
-                                                            val duration = turnFirstUserTimes[message.turnId]?.let { message.createdAt - it }
-                                                            Text(turnPerformanceLabel(duration, turnSpeeds[message.turnId]),
-                                                                style = MaterialTheme.typography.labelSmall,
-                                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                                                            Column {
+                                                                message.generation.model?.let { model ->
+                                                                    Text(
+                                                                        uiContext.getString(
+                                                                            R.string.chat_answered_by,
+                                                                            com.androidharness.app.core.ChatExperience.modelLabel(model) ?: model,
+                                                                        ),
+                                                                        style = MaterialTheme.typography.labelSmall,
+                                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                                                    )
+                                                                }
+                                                                val duration = turnFirstUserTimes[message.turnId]?.let { message.createdAt - it }
+                                                                Text(turnPerformanceLabel(duration, turnSpeeds[message.turnId]),
+                                                                    style = MaterialTheme.typography.labelSmall,
+                                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                                                            }
                                                         },
                                                     )
                                                     if (isTurnFinal && !isTurnRunning) {

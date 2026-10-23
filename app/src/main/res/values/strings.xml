@@ -737,6 +737,17 @@
     <string name="chat_file_requires_code">Use Code for this file. Chat can read images, text files, and PDFs with extractable text.</string>
     <string name="chat_thinking">Thinking</string>
     <string name="chat_thought">Thoughts</string>
+    <string name="chat_settings_title">Chat settings</string>
+    <string name="chat_settings_personalization">Personalization</string>
+    <string name="chat_settings_personalization_desc">Use saved memory and this chat\'s instructions.</string>
+    <string name="chat_settings_instructions">Chat instructions</string>
+    <string name="chat_settings_instructions_hint">For example: answer in German, keep it brief, or treat me as a beginner.</string>
+    <string name="chat_settings_instructions_help">Applies to this chat only. Used on your next message.</string>
+    <string name="chat_settings_instructions_off">Instructions and memory are off for this chat. Your text is kept and returns when you turn personalization back on.</string>
+    <string name="chat_answered_by">Answered by %1$s</string>
+    <string name="chat_sources_library">Sources in this chat</string>
+    <string name="chat_sources_library_count">%1$d sources</string>
+    <string name="chat_sources_library_empty">No web sources in this chat yet.</string>
     <string name="chat_thought_seconds">Thought for %1$ds</string>
     <string name="chat_writing_reply">Writing a reply</string>
     <string name="chat_searching">Searching the web</string>
