@@ -57,6 +57,8 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import com.androidharness.app.ui.chat.components.RemoteImageCard
+import com.androidharness.app.ui.chat.components.RemoteLinkCard
 import com.androidharness.app.ui.files.CodeTokenColors
 import com.androidharness.app.ui.files.CodeTokenizer
 import com.androidharness.app.ui.theme.HarnessMono
@@ -84,6 +86,8 @@ fun MarkdownText(
     text: String,
     streaming: Boolean = false,
     onOpenUrl: ((String) -> Unit)? = null,
+    /** False for external documents such as release notes; no remote fetches. */
+    media: Boolean = true,
 ) {
     // Strip agent system directives (like ::web-preview{...}) so raw markup is never visible to the user
     val cleanText = remember(text) {
@@ -120,7 +124,7 @@ fun MarkdownText(
     Column(Modifier.fillMaxWidth()) {
         // Capped fence text still parses to a real CodeBlock (language header,
         // copy button); the cap bounds the per-frame layout cost.
-        if (safeText.isNotEmpty()) MarkdownBlocks(safeText, onOpenUrl = onOpenUrl)
+        if (safeText.isNotEmpty()) MarkdownBlocks(safeText, onOpenUrl = onOpenUrl, media = media)
         if (tail.isNotEmpty()) MarkdownBlocks(tail, plain = true, onOpenUrl = onOpenUrl)
     }
 }
@@ -181,6 +185,8 @@ private sealed interface Block {
         val alignments: List<TextAlign>,
         val rows: List<List<String>>,
     ) : Block
+    data class Image(val url: String, val alt: String) : Block
+    data class LinkPreview(val url: String, val label: String) : Block
 }
 
 private data class ListItem(val marker: String, val content: String, val nested: List<ListItem>)
@@ -225,6 +231,14 @@ private val bulletRegex = Regex("^\\s*([-*+])\\s+(.*)$")
 private val numberedRegex = Regex("^\\s*(\\d+)[.)]\\s+(.*)$")
 private val headingRegex = Regex("^(#{1,6})\\s+(.*)$")
 private val ruleRegex = Regex("^\\s*([-*_])\\s*(?:\\1\\s*){2,}$")
+private val standaloneImageRegex = Regex("^!\\[([^\\]]*)]\\((https?://[^)\\s]+)\\)\\s*$")
+private val standaloneLinkRegex = Regex("^\\[([^\\]]+)]\\((https?://[^)\\s]+)\\)\\s*$")
+private val bareUrlRegex = Regex("^https?://\\S+$")
+private val bareImageUrlRegex = Regex(
+    "^https?://\\S+\\.(?:png|jpe?g|webp|gif)(?:\\?\\S*)?$",
+    RegexOption.IGNORE_CASE,
+)
+private val inlineImageRegex = Regex("!\\[([^\\]]*)]\\((https?://[^)\\s]+)\\)")
 
 private fun parseBlocks(text: String): List<Block> {
     val out = mutableListOf<Block>()
@@ -233,10 +247,27 @@ private fun parseBlocks(text: String): List<Block> {
     val paraBuf = mutableListOf<String>()
 
     fun flushParagraph() {
-        if (paraBuf.isNotEmpty()) {
-            out += Block.Paragraph(paraBuf.joinToString("\n").trimEnd())
-            paraBuf.clear()
+        if (paraBuf.isEmpty()) return
+        val joined = paraBuf.joinToString("\n").trimEnd()
+        paraBuf.clear()
+        val trimmed = joined.trim()
+        standaloneImageRegex.matchEntire(trimmed)?.let {
+            out += Block.Image(it.groupValues[2], it.groupValues[1])
+            return
         }
+        standaloneLinkRegex.matchEntire(trimmed)?.let {
+            out += Block.LinkPreview(it.groupValues[2], it.groupValues[1])
+            return
+        }
+        if (bareImageUrlRegex.matches(trimmed)) {
+            out += Block.Image(trimmed, "")
+            return
+        }
+        if (bareUrlRegex.matches(trimmed)) {
+            out += Block.LinkPreview(trimmed, "")
+            return
+        }
+        out += Block.Paragraph(joined)
     }
 
     while (i < lines.size) {
@@ -329,10 +360,40 @@ private fun MarkdownBlocks(
     text: String,
     plain: Boolean = false,
     onOpenUrl: ((String) -> Unit)? = null,
+    media: Boolean = true,
 ) {
     val blocks = remember(text) { parseBlocks(text) }
+    var imageCards = 0
+    var linkCards = 0
     blocks.forEachIndexed { index, block ->
         when (block) {
+            is Block.Image -> if (!media || plain) {
+                Text(
+                    if (block.alt.isNotBlank()) "${block.alt}: ${block.url}" else block.url,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            } else if (imageCards < 4) {
+                imageCards++
+                Box(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    RemoteImageCard(block.url, block.alt, onOpenUrl)
+                }
+            } else {
+                ParagraphText("[${block.alt.ifBlank { "image" }}](${block.url})", onOpenUrl)
+            }
+
+            is Block.LinkPreview -> if (!media || plain) {
+                Text(
+                    if (block.label.isNotBlank()) "${block.label}: ${block.url}" else block.url,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            } else if (linkCards < 3 && onOpenUrl != null) {
+                linkCards++
+                Box(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    RemoteLinkCard(block.url, block.label, onOpenUrl)
+                }
+            } else {
+                ParagraphText("[${block.label.ifBlank { "link" }}](${block.url})", onOpenUrl)
+            }
             is Block.Code -> CodeBlock(block.text.trimEnd('\n'), block.language)
             is Block.Heading -> Text(
                 block.content,
@@ -743,11 +804,19 @@ private fun styledText(text: String): AnnotatedString {
     val codeColor = MaterialTheme.colorScheme.onSurface
     val codeBackground = MaterialTheme.colorScheme.surfaceContainerHigh
     val linkColor = MaterialTheme.colorScheme.primary
-    return remember(text, codeColor, codeBackground, linkColor) {
-        val links = linkRegex.findAll(text).associateBy { it.range.first }
+    // A paragraph with an inline image keeps its text flow; render the image
+    // as a labelled link instead of leaking the leading "!".
+    val normalized = remember(text) {
+        inlineImageRegex.replace(text) { match ->
+            val label = match.groupValues[1].ifBlank { "image" }
+            "[$label](${match.groupValues[2]})"
+        }
+    }
+    return remember(normalized, codeColor, codeBackground, linkColor) {
+        val links = linkRegex.findAll(normalized).associateBy { it.range.first }
         buildAnnotatedString {
             var i = 0
-            while (i < text.length) {
+            while (i < normalized.length) {
                 val link = links[i]
                 when {
                     link != null -> {
@@ -759,32 +828,32 @@ private fun styledText(text: String): AnnotatedString {
                         i = link.range.last + 1
                     }
 
-                    text.startsWith("**", i) -> {
-                        val end = text.indexOf("**", i + 2)
+                    normalized.startsWith("**", i) -> {
+                        val end = normalized.indexOf("**", i + 2)
                         if (end > i + 2) {
                             pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
-                            append(text.substring(i + 2, end))
+                            append(normalized.substring(i + 2, end))
                             pop()
                             i = end + 2
                         } else {
-                            append(text[i]); i++
+                            append(normalized[i]); i++
                         }
                     }
 
-                    text.startsWith("~~", i) -> {
-                        val end = text.indexOf("~~", i + 2)
+                    normalized.startsWith("~~", i) -> {
+                        val end = normalized.indexOf("~~", i + 2)
                         if (end > i + 2) {
                             pushStyle(SpanStyle(textDecoration = TextDecoration.LineThrough))
-                            append(text.substring(i + 2, end))
+                            append(normalized.substring(i + 2, end))
                             pop()
                             i = end + 2
                         } else {
-                            append(text[i]); i++
+                            append(normalized[i]); i++
                         }
                     }
 
-                    text.startsWith("`", i) -> {
-                        val end = text.indexOf('`', i + 1)
+                    normalized.startsWith("`", i) -> {
+                        val end = normalized.indexOf('`', i + 1)
                         if (end > i + 1) {
                             pushStyle(
                                 SpanStyle(
@@ -795,28 +864,28 @@ private fun styledText(text: String): AnnotatedString {
                             )
                             // Hair spaces pad the chip visually, spans can't
                             // take real padding inside a Text.
-                            append(" " + text.substring(i + 1, end) + " ")
+                            append(" " + normalized.substring(i + 1, end) + " ")
                             pop()
                             i = end + 1
                         } else {
-                            append(text[i]); i++
+                            append(normalized[i]); i++
                         }
                     }
 
-                    text.startsWith("*", i) -> {
-                        val end = text.indexOf('*', i + 1)
+                    normalized.startsWith("*", i) -> {
+                        val end = normalized.indexOf('*', i + 1)
                         if (end > i + 1) {
                             pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
-                            append(text.substring(i + 1, end))
+                            append(normalized.substring(i + 1, end))
                             pop()
                             i = end + 1
                         } else {
-                            append(text[i]); i++
+                            append(normalized[i]); i++
                         }
                     }
 
                     else -> {
-                        append(text[i]); i++
+                        append(normalized[i]); i++
                     }
                 }
             }

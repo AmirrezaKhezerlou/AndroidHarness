@@ -108,4 +108,18 @@ class WebFetchHtmlTest {
     fun `numeric and named entities decode after tag stripping`() {
         assertEquals("It's 5 < 6", htmlToText("<p>It&#39;s 5 &lt; 6</p>", "html"))
     }
+
+    @Test
+    fun `page image urls prefer open graph and skip icons and svg`() {
+        val html = """
+            <meta property="og:image" content="/hero.jpg">
+            <img src="/icon.png" width="16" height="16">
+            <img data-src="//cdn.test/photo.webp">
+            <img src="/logo.svg">
+        """.trimIndent()
+        assertEquals(
+            listOf("https://site.test/hero.jpg", "https://cdn.test/photo.webp"),
+            pageImageUrls(html, "https://site.test/article"),
+        )
+    }
 }

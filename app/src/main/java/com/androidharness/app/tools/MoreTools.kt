@@ -13,6 +13,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
@@ -224,13 +225,14 @@ class WebFetchTool(
     override val description =
         "Fetch a URL and return readable text. HTML is reduced to the main content, with scripts, " +
             "navigation, and footers removed; PDFs are text-extracted. Long pages can be paged with " +
-            "offset and max_chars, or searched with find."
+            "offset and max_chars, or searched with find. Set images=true to also return direct image URLs from the page."
     override val parametersSchema = Schema.obj(
         mapOf(
             "url" to Schema.string("The http(s) URL to fetch."),
             "offset" to Schema.integer("Start character offset for long pages. Defaults to 0."),
             "max_chars" to Schema.integer("Maximum characters to return (default 20000, max 60000)."),
             "find" to Schema.string("Optional terms; return the passages that match them instead of the page start."),
+            "images" to Schema.boolean("Also return direct image URLs found on the page (default false)."),
         ),
         required = listOf("url"),
     )
@@ -249,6 +251,7 @@ class WebFetchTool(
             val maxChars = (args["max_chars"]?.jsonPrimitive?.content?.toIntOrNull() ?: 20_000)
                 .coerceIn(1_000, 60_000)
             val find = args["find"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotBlank() }
+            val includeImages = args["images"]?.jsonPrimitive?.booleanOrNull == true
             if (readBudget != null && !readBudget.canRead()) {
                 return@withContext ToolResult(true, readLimitText())
             }
@@ -303,7 +306,12 @@ class WebFetchTool(
                     val jsNote = if (looksJavascriptOnly(raw, text)) {
                         "\n[note: this page appears to require JavaScript; readable text may be incomplete]"
                     } else ""
-                    ToolResult(true, renderPage(text, offset, maxChars, find) + jsNote + readNote())
+                    val imageNote = if (includeImages) {
+                        val images = pageImageUrls(raw, resp.request.url.toString())
+                        if (images.isEmpty()) "\n[no image urls found]"
+                        else "\n[image urls on this page]\n" + images.joinToString("\n")
+                    } else ""
+                    ToolResult(true, renderPage(text, offset, maxChars, find) + jsNote + imageNote + readNote())
                 }
             } catch (e: Exception) {
                 ToolResult(false, "Fetch failed: ${e.message}")
@@ -367,6 +375,46 @@ private fun ByteArray.startsWithAscii(prefix: String): Boolean {
 private fun looksJavascriptOnly(raw: String, text: String): Boolean =
     Regex("(?i)(enable|requires?) javascript|javascript is disabled").containsMatchIn(text) ||
         (raw.length > 4_000 && text.length < 400)
+
+/**
+ * Direct image URLs for the model to render with Markdown. Open Graph comes
+ * first, then visible img tags; icon-sized images and SVG are skipped.
+ */
+internal fun pageImageUrls(html: String, baseUrl: String): List<String> {
+    val base = baseUrl.toHttpUrlOrNull() ?: return emptyList()
+    val out = LinkedHashSet<String>()
+    fun add(raw: String?) {
+        val value = raw?.trim()?.substringBefore(' ')?.takeIf { it.isNotEmpty() } ?: return
+        if (value.startsWith("data:") || value.endsWith(".svg", ignoreCase = true)) return
+        val resolved = if (value.startsWith("http://") || value.startsWith("https://")) value
+        else base.resolve(value)?.toString() ?: return
+        out += resolved
+    }
+    Regex("<meta\\s+[^>]*>", RegexOption.IGNORE_CASE).findAll(html).forEach { match ->
+        val tag = match.value
+        val key = Regex("(?:property|name)\\s*=\\s*[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
+            .find(tag)?.groupValues?.get(1)?.lowercase()
+        if (key == "og:image" || key == "og:image:url" || key == "twitter:image") {
+            add(Regex("content\\s*=\\s*[\"']([^\"']*)[\"']", RegexOption.IGNORE_CASE)
+                .find(tag)?.groupValues?.get(1))
+        }
+    }
+    Regex("<img\\s+[^>]*>", RegexOption.IGNORE_CASE).findAll(html).forEach { match ->
+        if (out.size >= 8) return@forEach
+        val tag = match.value
+        val width = Regex("width\\s*=\\s*[\"']?(\\d+)", RegexOption.IGNORE_CASE)
+            .find(tag)?.groupValues?.get(1)?.toIntOrNull()
+        val height = Regex("height\\s*=\\s*[\"']?(\\d+)", RegexOption.IGNORE_CASE)
+            .find(tag)?.groupValues?.get(1)?.toIntOrNull()
+        if ((width != null && width < 120) || (height != null && height < 120)) return@forEach
+        val src = Regex("(?:data-src|data-original|src)\\s*=\\s*[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
+            .find(tag)?.groupValues?.get(1)
+        val srcset = Regex("srcset\\s*=\\s*[\"']([^\"']+)", RegexOption.IGNORE_CASE)
+            .find(tag)?.groupValues?.get(1)?.substringBefore(',')
+        add(src ?: srcset)
+    }
+    return out.take(8)
+}
 
 /**
  * Strips HTML into readable text.

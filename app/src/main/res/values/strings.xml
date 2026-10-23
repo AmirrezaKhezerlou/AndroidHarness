@@ -745,6 +745,7 @@
     <string name="chat_settings_instructions_help">Applies to this chat only. Used on your next message.</string>
     <string name="chat_settings_instructions_off">Instructions and memory are off for this chat. Your text is kept and returns when you turn personalization back on.</string>
     <string name="chat_answered_by">Answered by %1$s</string>
+    <string name="chat_play_video">Play video</string>
     <string name="chat_sources_library">Sources in this chat</string>
     <string name="chat_sources_library_count">%1$d sources</string>
     <string name="chat_sources_library_empty">No web sources in this chat yet.</string>
