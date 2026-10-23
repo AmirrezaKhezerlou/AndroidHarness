@@ -355,6 +355,9 @@ private fun parseBlocks(text: String): List<Block> {
 // ---------------------------------------------------------------------------
 // Block rendering
 
+/** Answers may place up to five pictures inline; extra image links stay as text. */
+private const val MAX_INLINE_IMAGES = 5
+
 @Composable
 private fun MarkdownBlocks(
     text: String,
@@ -372,7 +375,7 @@ private fun MarkdownBlocks(
                     if (block.alt.isNotBlank()) "${block.alt}: ${block.url}" else block.url,
                     style = MaterialTheme.typography.bodyLarge,
                 )
-            } else if (imageCards < 4) {
+            } else if (imageCards < MAX_INLINE_IMAGES) {
                 imageCards++
                 Box(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                     RemoteImageCard(block.url, block.alt, onOpenUrl)
