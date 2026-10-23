@@ -91,6 +91,21 @@ internal fun ChatCodeHandoffCard(offer: ChatExperience.CodeHandoffOffer, enabled
     }
 }
 
+/** Compact origin badge attached to the first Code message after a Chat handoff. */
+@Composable
+internal fun ChatFromChatBadge(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(onClick = onClick, shape = RoundedCornerShape(50),
+        color = scheme.secondaryContainer.copy(alpha = .6f), contentColor = scheme.onSecondaryContainer,
+        modifier = modifier) {
+        Row(Modifier.padding(start = 10.dp, end = 6.dp, top = 5.dp, bottom = 5.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(stringResource(R.string.chat_from_chat), style = MaterialTheme.typography.labelSmall)
+            Icon(painterResource(R.drawable.ic_chat_chevron_right), null, Modifier.size(14.dp))
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ChatCodeHandoffSheet(projects: List<ProjectEntity>, initialProjectId: String?, enabled: Boolean,

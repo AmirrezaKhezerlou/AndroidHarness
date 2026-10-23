@@ -1594,6 +1594,13 @@ private fun ChatScreenContent(
                                                         showWebPreview = true
                                                     },
                                                 )
+                                                if (state.conversation.sourceChatId != null &&
+                                                    com.androidharness.app.data.isCodeHandoffGreeting(message.text)) {
+                                                    com.androidharness.app.ui.chat.components.ChatFromChatBadge(
+                                                        onClick = { state.conversation.sourceChatId?.let(onNavigateToSession) },
+                                                        modifier = Modifier.padding(top = 8.dp),
+                                                    )
+                                                }
                                                 val edits = state.fileEditsByTurn[message.turnId].orEmpty()
                                                 if (isTurnFinal && !isTurnRunning && edits.isNotEmpty()) {
                                                     FileEditsCard(
@@ -2011,9 +2018,6 @@ private fun ChatScreenContent(
                 }
 
                 if (!state.conversation.isChat) AgentStatusBar(action = state.currentAction, busy = state.busy)
-                state.conversation.sourceChatId?.let { source ->
-                    TextButton(onClick = { onNavigateToSession(source) }) { Text(uiContext.getString(R.string.chat_from_chat)) }
-                }
                 com.androidharness.app.ui.automation.ScheduledMessageRow(chatSchedules, scheduleConnection, scheduleNow) {
                     if (chatSchedules.size == 1) scheduleDraft = chatSchedules.first() else showScheduledList = true
                 }

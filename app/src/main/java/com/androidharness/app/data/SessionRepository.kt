@@ -32,6 +32,13 @@ data class MessageHit(
 
 internal const val MAX_PERSISTED_FIELD_CHARS = 250_000
 
+/** Greeting the agent posts as the first message when Chat continues in Code. */
+internal const val CONTINUED_IN_CODE_PREFIX = "Continuing in Code."
+private const val LEGACY_CONTINUED_IN_CODE_PREFIX = "Continued from Chat."
+
+internal fun isCodeHandoffGreeting(text: String): Boolean =
+    text.startsWith(CONTINUED_IN_CODE_PREFIX) || text.startsWith(LEGACY_CONTINUED_IN_CODE_PREFIX)
+
 internal fun clampForStorage(s: String, max: Int = MAX_PERSISTED_FIELD_CHARS): String =
     if (s.length <= max) s
     else s.substring(0, max) + "\n[truncated for storage safety]"
@@ -212,7 +219,7 @@ class SessionRepository(
         db.dao().setCompaction(id, context, 0)
         source.modelSelectionJson?.let { db.dao().setModelSelection(id, it) }
         addMessage(id, ChatMessage(role = Role.ASSISTANT,
-            text = "Continued from Chat. Your discussion is available here. Send a message when you are ready to work on this project."))
+            text = "$CONTINUED_IN_CODE_PREFIX Your chat discussion is carried over as reference."))
         id
     }
 
