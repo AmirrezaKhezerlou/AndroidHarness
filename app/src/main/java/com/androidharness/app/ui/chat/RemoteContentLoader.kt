@@ -50,7 +50,7 @@ internal object RemoteContentLoader {
     private data class CachedPreview(val value: LinkPreview, val at: Long)
     private val previews = ConcurrentHashMap<String, CachedPreview>()
 
-    suspend fun loadImage(context: Context, rawUrl: String, referer: String? = null): Bitmap? = withContext(Dispatchers.IO) {
+    suspend fun loadImage(context: Context, rawUrl: String): Bitmap? = withContext(Dispatchers.IO) {
         val url = rawUrl.toHttpUrlOrNull() ?: return@withContext null
         val key = url.toString()
         memory.get(key)?.let { return@withContext it }
@@ -59,7 +59,7 @@ internal object RemoteContentLoader {
         val bytes = if (file.exists()) {
             runCatching { file.readBytes() }.getOrNull()
         } else null
-        val downloaded = bytes ?: runCatching { downloadImage(url, referer) }.getOrNull() ?: return@withContext null
+        val downloaded = bytes ?: runCatching { downloadImage(url) }.getOrNull() ?: return@withContext null
         if (bytes == null) {
             runCatching { file.writeBytes(downloaded) }
             trimDiskCache(context)
@@ -90,12 +90,11 @@ internal object RemoteContentLoader {
         preview
     }
 
-    private fun downloadImage(url: HttpUrl, referer: String?, allowQueryStrip: Boolean = true): ByteArray? {
+    private fun downloadImage(url: HttpUrl, allowQueryStrip: Boolean = true): ByteArray? {
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", BROWSER_USER_AGENT)
             .header("Accept", "image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8")
-            .apply { referer?.takeIf { it.startsWith("http://") || it.startsWith("https://") }?.let { header("Referer", it) } }
             .build()
         evaluate(request)?.use { response ->
             val type = response.body?.contentType()?.toString()?.lowercase().orEmpty()
@@ -103,7 +102,7 @@ internal object RemoteContentLoader {
                 // Some CDNs answer a resized preview URL with an SVG placeholder
                 // while the plain asset URL is a normal image. Drop the query
                 // once before giving up.
-                if (allowQueryStrip && url.query != null) return downloadImage(url.newBuilder().query(null).build(), referer, false)
+                if (allowQueryStrip && url.query != null) return downloadImage(url.newBuilder().query(null).build(), false)
                 return null
             }
             if (type.isNotEmpty() && !type.startsWith("image/")) return null

@@ -1,7 +1,5 @@
 package com.androidharness.app.core
 
-import com.androidharness.app.tools.PageImage
-import com.androidharness.app.tools.PageImageText
 import com.androidharness.app.tools.WebSearchText
 import java.net.URI
 import kotlinx.serialization.json.Json
@@ -105,22 +103,6 @@ internal object ChatActivityPresentation {
             }
         }
         return sources.values.toList()
-    }
-
-    /** Images found on pages the agent actually fetched in this turn, deduplicated. */
-    fun imageResults(messages: List<ChatMessage>, limit: Int = 12): List<PageImage> {
-        val results = messages.filter { it.role == Role.TOOL && !it.isError }.associateBy { it.toolCallId }
-        val images = linkedMapOf<String, PageImage>()
-        for (call in calls(messages)) {
-            if (call.name != "web_fetch") continue
-            val text = results[call.id]?.text ?: continue
-            for (image in PageImageText.parse(text)) {
-                if (images.size >= limit) return images.values.toList()
-                val key = image.imageUrl.substringBefore('#').trimEnd('/')
-                images.putIfAbsent(key, image)
-            }
-        }
-        return images.values.toList()
     }
 
     /** Latest source and page-read counters reported by web_search in this turn. */
