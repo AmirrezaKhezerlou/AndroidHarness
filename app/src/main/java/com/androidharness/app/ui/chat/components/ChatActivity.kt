@@ -314,11 +314,12 @@ private fun ChatActivityGlyph(name: String?, live: Boolean, motion: Boolean) {
     var searchY = 0f
     var codeX = 0f
     var codeTilt = 0f
-    var turn = 0f
+    var blink = 1f
+    var blinkAlpha = 1f
+    var lookX = 0f
     if (animated) {
         // lucide-animated (MIT) loops: sparkles hop then blink, search lifts and settles,
-        // code nudges side to side. The earth icon draws itself in, which an ImageVector
-        // cannot do, so the globe keeps a slow turn instead.
+        // code nudges side to side, and the reading eyes scan a line then blink.
         val transition = rememberInfiniteTransition(label = "Chat activity orbit")
         angle = transition.animateFloat(0f, 360f, infiniteRepeatable(tween(2200, easing = LinearEasing)), label = "Chat orbit rotation").value
         sparkleHop = transition.animateFloat(0f, 0f, infiniteRepeatable(keyframes {
@@ -329,7 +330,8 @@ private fun ChatActivityGlyph(name: String?, live: Boolean, motion: Boolean) {
         }), label = "Chat sparkle hop").value
         starBlink = transition.animateFloat(1f, 1f, infiniteRepeatable(keyframes {
             durationMillis = 3000
-            0.15f at 1250
+            1f at 1150
+            0.15f at 1300
             1f at 1500
         }), label = "Chat star blink").value
         searchX = transition.animateFloat(0f, 0f, infiniteRepeatable(keyframes {
@@ -360,7 +362,30 @@ private fun ChatActivityGlyph(name: String?, live: Boolean, motion: Boolean) {
             8f at 900
             0f at 1150
         }), label = "Chat code tilt").value
-        turn = transition.animateFloat(-16f, 16f, infiniteRepeatable(tween(1600, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "Chat globe turn").value
+        // Lucide Animated eye blink: squashes to 0.1 over 0.4s with an opacity dip.
+        blink = transition.animateFloat(1f, 1f, infiniteRepeatable(keyframes {
+            durationMillis = 4200
+            1f at 3000
+            0.1f at 3140
+            1f at 3280
+        }), label = "Chat eye blink").value
+        blinkAlpha = transition.animateFloat(1f, 1f, infiniteRepeatable(keyframes {
+            durationMillis = 4200
+            1f at 3000
+            0.3f at 3140
+            1f at 3280
+        }), label = "Chat eye blink alpha").value
+        // The pupils sweep left to right before the blink, like reading a line.
+        lookX = transition.animateFloat(0f, 0f, infiniteRepeatable(keyframes {
+            durationMillis = 4200
+            0f at 400
+            -1.2f at 650
+            -1.2f at 950
+            0f at 1150
+            1.2f at 1400
+            1.2f at 1900
+            0f at 2200
+        }), label = "Chat eye scan").value
     }
     Box(Modifier.size(28.dp).background(scheme.surfaceContainerHigh.copy(alpha = .65f), CircleShape), contentAlignment = Alignment.Center) {
         if (live) Canvas(Modifier.fillMaxSize()) {
@@ -374,7 +399,17 @@ private fun ChatActivityGlyph(name: String?, live: Boolean, motion: Boolean) {
                     translationX = searchX * size.width / 24f
                     translationY = searchY * size.height / 24f
                 }, tint = scheme.onSurfaceVariant)
-                "web_fetch" -> Icon(Icons.Outlined.Public, null, Modifier.size(15.dp).graphicsLayer { rotationY = turn }, tint = scheme.onSurfaceVariant)
+                "web_fetch" -> Box(Modifier.size(15.dp)) {
+                    Icon(painterResource(R.drawable.ic_chat_eyes), null, Modifier.fillMaxSize().graphicsLayer {
+                        scaleY = blink
+                        alpha = blinkAlpha
+                    }, tint = scheme.onSurfaceVariant)
+                    Icon(painterResource(R.drawable.ic_chat_eyes_pupils), null, Modifier.fillMaxSize().graphicsLayer {
+                        scaleY = blink
+                        alpha = blinkAlpha
+                        translationX = lookX * size.width / 24f
+                    }, tint = scheme.onSurfaceVariant)
+                }
                 "github_api", "github_search", "github_file" -> Icon(Icons.Outlined.Code, null, Modifier.size(15.dp).graphicsLayer {
                     translationX = codeX * size.width / 24f
                     rotationZ = codeTilt
