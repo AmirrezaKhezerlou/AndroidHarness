@@ -208,6 +208,9 @@ private fun ChatScreenContent(
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     // Lazy list content and its derived lookup maps must use the same snapshot.
     val state = viewModel.state.collectAsStateWithLifecycle().value
+    val globalSettings by viewModel.container.settings.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
+    val effectiveImageFrequency = com.androidharness.app.core.ChatExperience
+        .effectiveImageFrequency(state.conversation.imageFrequency, globalSettings.chatImageFrequency)
     var showCodeHandoff by remember(state.sessionId) { mutableStateOf(false) }
     val codeHandoff = remember(state.conversation.isChat, state.messages) {
         if (state.conversation.isChat) com.androidharness.app.core.ChatExperience.codeHandoffOffer(state.messages) else null
@@ -548,9 +551,10 @@ private fun ChatScreenContent(
         com.androidharness.app.ui.chat.components.ChatSettingsSheet(
             instructions = state.conversation.instructions,
             personalization = state.conversation.personalizationEnabled,
+            imageFrequency = state.conversation.imageFrequency,
             saving = state.conversationSaving,
-            onSave = { text, enabled ->
-                viewModel.setChatSettings(text, enabled)
+            onSave = { text, enabled, frequency ->
+                viewModel.setChatSettings(text, enabled, frequency)
                 showChatSettings = false
             },
             onDismiss = { showChatSettings = false },
@@ -1562,6 +1566,7 @@ private fun ChatScreenContent(
                                                 CompositionLocalProvider(
                                                     com.androidharness.app.ui.chat.components.LocalChatImageSources provides imageSources,
                                                     com.androidharness.app.ui.chat.components.LocalChatImageOpen provides { url -> viewerImageUrl = url },
+                                                    LocalChatImagesEnabled provides (effectiveImageFrequency != com.androidharness.app.data.ImageFrequency.NONE),
                                                 ) {
                                                     AssistantText(replyText, showPreviewChip = false,
                                                         onFollowUp = { action ->

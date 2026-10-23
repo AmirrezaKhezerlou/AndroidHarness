@@ -503,6 +503,7 @@ class RunManager(
                     mode = if (conversation.isChat) AgentMode.ACT else mode,
                     conversation = conversation,
                     searchDepth = reasoningPrefs.searchDepth,
+                    chatImageFrequency = reasoningPrefs.chatImageFrequency,
                     maxIterations = maxIterations,
                     // Connected MCP servers ride into this run; a failing
                     // server must never block the run itself.

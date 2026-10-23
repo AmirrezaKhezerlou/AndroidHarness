@@ -9,11 +9,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -26,9 +30,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.androidharness.app.R
 import com.androidharness.app.data.ConversationConfig
+import com.androidharness.app.data.ImageFrequency
+import com.androidharness.app.ui.common.imageFrequencyLabel
 
 /**
  * Per-chat instructions and the personalization switch. Personalization off
@@ -40,16 +47,19 @@ import com.androidharness.app.data.ConversationConfig
 internal fun ChatSettingsSheet(
     instructions: String,
     personalization: Boolean,
+    imageFrequency: ImageFrequency,
     saving: Boolean,
-    onSave: (String, Boolean) -> Unit,
+    onSave: (String, Boolean, ImageFrequency) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var text by remember(instructions) { mutableStateOf(instructions) }
     var enabled by remember(personalization) { mutableStateOf(personalization) }
+    var frequency by remember(imageFrequency) { mutableStateOf(imageFrequency) }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
-            Modifier.fillMaxWidth().imePadding().padding(horizontal = 20.dp).padding(bottom = 28.dp),
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding()
+                .padding(horizontal = 20.dp).padding(bottom = 28.dp),
         ) {
             Text(stringResource(R.string.chat_settings_title), style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(10.dp))
@@ -66,6 +76,30 @@ internal fun ChatSettingsSheet(
                     )
                 }
                 Switch(checked = enabled, onCheckedChange = { enabled = it })
+            }
+            Spacer(Modifier.height(16.dp))
+            Text(stringResource(R.string.chat_settings_images), style = MaterialTheme.typography.titleSmall)
+            Text(
+                stringResource(R.string.chat_settings_images_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(4.dp))
+            ImageFrequency.entries.forEach { option ->
+                Row(
+                    Modifier.fillMaxWidth()
+                        .selectable(
+                            selected = frequency == option,
+                            role = Role.RadioButton,
+                            onClick = { frequency = option },
+                        )
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(selected = frequency == option, onClick = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(imageFrequencyLabel(option)), style = MaterialTheme.typography.bodyMedium)
+                }
             }
             Spacer(Modifier.height(16.dp))
             OutlinedTextField(
@@ -86,10 +120,11 @@ internal fun ChatSettingsSheet(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_action_cancel)) }
                 Spacer(Modifier.width(8.dp))
-                Button(onClick = { onSave(text, enabled) }, enabled = !saving) {
+                Button(onClick = { onSave(text, enabled, frequency) }, enabled = !saving) {
                     Text(stringResource(R.string.settings_action_save))
                 }
             }
         }
     }
 }
+

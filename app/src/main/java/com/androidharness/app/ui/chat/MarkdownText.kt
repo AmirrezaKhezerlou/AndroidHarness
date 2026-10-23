@@ -32,6 +32,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,6 +65,9 @@ import com.androidharness.app.ui.files.CodeTokenizer
 import com.androidharness.app.ui.theme.HarnessMono
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+/** False when this chat is set to "No image"; stray image blocks become links. */
+internal val LocalChatImagesEnabled = compositionLocalOf { true }
 
 /**
  * Markdown-style renderer for model output, no external dependency. Supports
@@ -379,16 +383,20 @@ private fun MarkdownBlocks(
     media: Boolean = true,
 ) {
     val blocks = remember(text) { parseBlocks(text) }
+    val imagesEnabled = LocalChatImagesEnabled.current
     var linkCards = 0
     blocks.forEachIndexed { index, block ->
         when (block) {
-            is Block.Image -> if (!media || plain) {
-                Text(
+            is Block.Image -> when {
+                !media || plain -> Text(
                     if (block.alt.isNotBlank()) "${block.alt}: ${block.url}" else block.url,
                     style = MaterialTheme.typography.bodyLarge,
                 )
-            } else {
-                Box(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                !imagesEnabled -> ParagraphText(
+                    "[${block.alt.ifBlank { "image" }}](${block.url})",
+                    onOpenUrl,
+                )
+                else -> Box(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                     RemoteImageCard(block.url, block.alt, onOpenUrl)
                 }
             }

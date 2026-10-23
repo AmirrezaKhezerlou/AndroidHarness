@@ -1422,13 +1422,18 @@ class ChatViewModel(
         }
     }
 
-    /** Persists this chat's instructions and personalization switch. */
-    fun setChatSettings(instructions: String, personalization: Boolean) {
+    /** Persists this chat's instructions, personalization switch, and image appetite. */
+    fun setChatSettings(
+        instructions: String,
+        personalization: Boolean,
+        imageFrequency: com.androidharness.app.data.ImageFrequency,
+    ) {
         val current = _state.value.conversation
         val updated = current.copy(
             instructions = instructions.trim()
                 .take(com.androidharness.app.data.ConversationConfig.MAX_INSTRUCTIONS_CHARS),
             personalizationEnabled = personalization,
+            imageFrequency = imageFrequency,
         )
         if (updated == current) return
         _state.update { it.copy(conversation = updated, conversationSaving = true) }

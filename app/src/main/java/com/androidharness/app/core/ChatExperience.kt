@@ -96,6 +96,27 @@ Use inline rich responses for visuals and documents in Chat. For a custom intera
         else base + " web_search enforces this turn's source budget and reports how many sources remain; when it is used up, answer from the sources already collected instead of searching more."
     }
 
+    /** Per-chat Default inherits the global Chat Option setting. */
+    fun effectiveImageFrequency(
+        perChat: com.androidharness.app.data.ImageFrequency,
+        global: com.androidharness.app.data.ImageFrequency,
+    ): com.androidharness.app.data.ImageFrequency =
+        if (perChat == com.androidharness.app.data.ImageFrequency.DEFAULT) global else perChat
+
+    /** How readily this chat should add pictures; the model still chooses the count. */
+    fun imageFrequencyPrompt(frequency: com.androidharness.app.data.ImageFrequency): String = when (frequency) {
+        com.androidharness.app.data.ImageFrequency.NONE ->
+            "Images are turned off for this chat. Do not add images, do not call web_fetch or browser_read with images=true, and do not include Markdown image syntax. Answer with text and links only. If the user asks for pictures, say that images are turned off for this chat and offer the source link."
+        com.androidharness.app.data.ImageFrequency.LESS ->
+            "Use images sparingly. Add a picture only when the user explicitly asks to see something, or when the answer would be unclear without it. One image is usually enough, and do not add galleries."
+        com.androidharness.app.data.ImageFrequency.DEFAULT ->
+            "Choose images when they genuinely help the answer. A few images are fine for a visual subject or an explicit request, and more are fine for a gallery or comparison. Do not pad the answer with pictures."
+        com.androidharness.app.data.ImageFrequency.MORE ->
+            "Lean toward showing images. Add two or three representative pictures whenever the subject is visual or the user asks to see something, and use more for a gallery or comparison. Avoid near-identical repeats."
+        com.androidharness.app.data.ImageFrequency.ALWAYS ->
+            "Include images whenever a relevant one is available, even if the user did not ask. Lead with at least one picture for a visual subject and use as many as the answer needs. If no usable image exists, say so and link the source."
+    }
+
     /** Sent when a research turn tries to answer before reading enough pages. */
     fun researchReadNudge(
         depth: com.androidharness.app.data.SearchDepth,

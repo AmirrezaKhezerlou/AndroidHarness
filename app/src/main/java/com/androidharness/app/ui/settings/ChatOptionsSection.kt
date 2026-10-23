@@ -16,7 +16,10 @@ import com.androidharness.app.R
 import com.androidharness.app.data.AppSettings
 import com.androidharness.app.data.ChatStartMode
 import com.androidharness.app.data.CodeStartMode
+import com.androidharness.app.data.ImageFrequency
 import com.androidharness.app.data.StartScreen
+import com.androidharness.app.ui.common.imageFrequencyDescription
+import com.androidharness.app.ui.common.imageFrequencyLabel
 
 @Composable
 internal fun ChatOptionsSection(
@@ -24,6 +27,7 @@ internal fun ChatOptionsSection(
     onStartScreen: (StartScreen) -> Unit,
     onChatStart: (ChatStartMode) -> Unit,
     onKeepThinkingCollapsed: (Boolean) -> Unit,
+    onImageFrequency: (ImageFrequency) -> Unit,
 ) {
     SettingsPanel(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().toggleable(value = settings.chatKeepThinkingCollapsed, role = Role.Switch, onValueChange = onKeepThinkingCollapsed).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -33,6 +37,16 @@ internal fun ChatOptionsSection(
             }
             Switch(checked = settings.chatKeepThinkingCollapsed, onCheckedChange = null)
         }
+    }
+    SettingsAnchor(R.string.settings_image_frequency) {
+        ChoicePanel(
+            title = R.string.settings_image_frequency,
+            options = ImageFrequency.entries,
+            selected = settings.chatImageFrequency,
+            onSelect = onImageFrequency,
+            label = { imageFrequencyLabel(it) },
+            description = { imageFrequencyDescription(it) },
+        )
     }
     SettingsAnchor(R.string.settings_start_screen) {
         ChoicePanel(

@@ -253,6 +253,7 @@ class AgentEngine(
         durableEvent: (suspend (AgentEvent) -> Unit)? = null,
         conversation: com.androidharness.app.data.ConversationConfig = com.androidharness.app.data.ConversationConfig(),
         searchDepth: com.androidharness.app.data.SearchDepth = com.androidharness.app.data.SearchDepth.AUTO,
+        chatImageFrequency: com.androidharness.app.data.ImageFrequency = com.androidharness.app.data.ImageFrequency.DEFAULT,
     ): Flow<AgentEvent> = channelFlow {
         var config = config
         // Parallel subagents emit from async children, plain flow{} forbids
@@ -271,7 +272,7 @@ class AgentEngine(
         val agentContextEnabled = !localChat || replySettings.localModelAgentContext
         var suppliedMemories = emptyList<com.androidharness.app.core.SuppliedMemory>()
         suspend fun runSystemPrompt(fullAccess: Boolean): String =
-            if (conversation.isChat) chatSystemPrompt(sessionId, searchDepth, conversation) { memories ->
+            if (conversation.isChat) chatSystemPrompt(sessionId, searchDepth, conversation, chatImageFrequency) { memories ->
                 suppliedMemories = memories.map { com.androidharness.app.core.SuppliedMemory(it.id, it.text) }
             } else if (!agentContextEnabled) "" else systemPrompt(workspace, mode, fullAccess = fullAccess, repoMapEnabled = repoMapEnabled, sessionId = sessionId) +
                 if (pinnedInstructions.isBlank()) "" else "\n\nPinned user instructions:\n$pinnedInstructions"
@@ -1634,6 +1635,7 @@ class AgentEngine(
         conversation: com.androidharness.app.data.ConversationConfig = com.androidharness.app.data.ConversationConfig(),
         sessionId: String? = null,
         searchDepth: com.androidharness.app.data.SearchDepth = com.androidharness.app.data.SearchDepth.AUTO,
+        chatImageFrequency: com.androidharness.app.data.ImageFrequency = com.androidharness.app.data.ImageFrequency.DEFAULT,
     ): ContextEstimate {
         val caveman = cavemanSettings()
         val memoryOn = universalMemory?.isEnabled() == true && conversation.personalizationEnabled
@@ -1650,7 +1652,7 @@ class AgentEngine(
         } else null
         return estimateContext(
             history,
-            if (conversation.isChat) chatSystemPrompt(sessionId, searchDepth, conversation) else com.androidharness.app.caveman.CavemanPolicy.apply(
+            if (conversation.isChat) chatSystemPrompt(sessionId, searchDepth, conversation, chatImageFrequency) else com.androidharness.app.caveman.CavemanPolicy.apply(
                 systemPrompt(workspace, mode, fullAccess, repoMapEnabled, sessionId = sessionId),
                 installed = caveman.cavemanInstalled,
                 intensity = caveman.cavemanIntensity,
@@ -1773,11 +1775,16 @@ class AgentEngine(
         sessionId: String?,
         searchDepth: com.androidharness.app.data.SearchDepth,
         conversation: com.androidharness.app.data.ConversationConfig,
+        chatImageFrequency: com.androidharness.app.data.ImageFrequency,
         onUsed: (List<com.androidharness.app.data.db.MemoryEntity>) -> Unit = {},
     ): String {
         val sb = StringBuilder(com.androidharness.app.core.ChatExperience.systemPrompt())
         sb.append("\n\n# Research depth\n")
             .append(com.androidharness.app.core.ChatExperience.researchDepthPrompt(searchDepth))
+        val effectiveImageFrequency = com.androidharness.app.core.ChatExperience
+            .effectiveImageFrequency(conversation.imageFrequency, chatImageFrequency)
+        sb.append("\n\n# Images in answers\n")
+            .append(com.androidharness.app.core.ChatExperience.imageFrequencyPrompt(effectiveImageFrequency))
         if (conversation.personalizationEnabled) {
             val instructions = conversation.instructions.trim()
             if (instructions.isNotEmpty()) {

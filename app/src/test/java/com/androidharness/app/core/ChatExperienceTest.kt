@@ -67,6 +67,28 @@ class ChatExperienceTest {
         assertNull(ChatExperience.modelLabel("/"))
     }
 
+    @Test fun imageFrequencyPromptStatesTheChatSetting() {
+        val none = ChatExperience.imageFrequencyPrompt(com.androidharness.app.data.ImageFrequency.NONE)
+        assertTrue(none.contains("Images are turned off"))
+        assertTrue(none.contains("do not call web_fetch"))
+        assertTrue(ChatExperience.imageFrequencyPrompt(com.androidharness.app.data.ImageFrequency.LESS).contains("sparingly"))
+        assertTrue(ChatExperience.imageFrequencyPrompt(com.androidharness.app.data.ImageFrequency.ALWAYS).contains("even if the user did not ask"))
+        assertEquals(
+            com.androidharness.app.data.ImageFrequency.MORE,
+            ChatExperience.effectiveImageFrequency(
+                com.androidharness.app.data.ImageFrequency.DEFAULT,
+                com.androidharness.app.data.ImageFrequency.MORE,
+            ),
+        )
+        assertEquals(
+            com.androidharness.app.data.ImageFrequency.NONE,
+            ChatExperience.effectiveImageFrequency(
+                com.androidharness.app.data.ImageFrequency.NONE,
+                com.androidharness.app.data.ImageFrequency.ALWAYS,
+            ),
+        )
+    }
+
     @Test fun researchDepthPromptStatesTheTurnBudget() {
         val instant = ChatExperience.researchDepthPrompt(com.androidharness.app.data.SearchDepth.INSTANT)
         assertTrue(instant.contains("at most 5 distinct sources"))

@@ -116,6 +116,8 @@ data class AppSettings(
     /** Chat opens a fresh conversation unless the user asks to continue the latest one. */
     val chatStart: ChatStartMode = ChatStartMode.NEW_CHAT,
     val chatKeepThinkingCollapsed: Boolean = true,
+    /** Default image appetite for chats that have not overridden it. */
+    val chatImageFrequency: ImageFrequency = ImageFrequency.DEFAULT,
     /** Code opens a fresh conversation unless the user asks to continue the latest one. */
     val codeStart: CodeStartMode = CodeStartMode.LAST_CODE,
     /** Web research effort for Chat turns. */
@@ -234,6 +236,7 @@ class SettingsRepository(private val context: Context) {
         val RESUME_LAST_CHAT = booleanPreferencesKey("resume_last_chat")
         val START_SCREEN = stringPreferencesKey("start_screen")
         val CHAT_KEEP_THINKING_COLLAPSED = booleanPreferencesKey("chat_keep_thinking_collapsed")
+        val CHAT_IMAGE_FREQUENCY = stringPreferencesKey("chat_image_frequency")
         val CHAT_START = stringPreferencesKey("chat_start")
         val CODE_START = stringPreferencesKey("code_start")
         val SEARCH_DEPTH = stringPreferencesKey("search_depth")
@@ -316,6 +319,9 @@ class SettingsRepository(private val context: Context) {
             startScreen = StartScreen.fromStored(prefs[Keys.START_SCREEN]),
             chatStart = ChatStartMode.fromStored(prefs[Keys.CHAT_START]),
             chatKeepThinkingCollapsed = prefs[Keys.CHAT_KEEP_THINKING_COLLAPSED] ?: true,
+            chatImageFrequency = prefs[Keys.CHAT_IMAGE_FREQUENCY]?.let {
+                runCatching { ImageFrequency.valueOf(it) }.getOrNull()
+            } ?: ImageFrequency.DEFAULT,
             codeStart = prefs[Keys.CODE_START]?.let { CodeStartMode.fromStored(it) }
                 ?: if (prefs[Keys.RESUME_LAST_CHAT] ?: true) CodeStartMode.LAST_CODE else CodeStartMode.NEW_CODE,
             searchDepth = SearchDepth.fromStored(prefs[Keys.SEARCH_DEPTH]),
@@ -368,6 +374,7 @@ class SettingsRepository(private val context: Context) {
             p[Keys.START_SCREEN] = s.startScreen.name
             p[Keys.CHAT_START] = s.chatStart.name
             p[Keys.CHAT_KEEP_THINKING_COLLAPSED] = s.chatKeepThinkingCollapsed
+            p[Keys.CHAT_IMAGE_FREQUENCY] = s.chatImageFrequency.name
             p[Keys.CODE_START] = s.codeStart.name
             p[Keys.SEARCH_DEPTH] = s.searchDepth.name
             p[Keys.MEMORY_ENABLED] = s.memoryEnabled
@@ -709,6 +716,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setChatKeepThinkingCollapsed(value: Boolean) {
         context.settingsStore.edit { it[Keys.CHAT_KEEP_THINKING_COLLAPSED] = value }
+    }
+
+    suspend fun setChatImageFrequency(value: ImageFrequency) {
+        context.settingsStore.edit { it[Keys.CHAT_IMAGE_FREQUENCY] = value.name }
     }
 
     suspend fun setChatStart(value: ChatStartMode) {

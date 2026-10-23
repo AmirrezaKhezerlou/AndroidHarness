@@ -12,6 +12,10 @@ enum class ConversationKind { CODE, CHAT }
 @Serializable
 enum class ChatTool { WEB_SEARCH, WEB_PAGES, ARTIFACTS }
 
+/** How readily the assistant adds pictures to Chat answers. */
+@Serializable
+enum class ImageFrequency { NONE, LESS, DEFAULT, MORE, ALWAYS }
+
 /** Independent of PLAN/ACT and of approvals. Old sessions remain Code. */
 @Serializable
 data class ConversationConfig(
@@ -24,6 +28,8 @@ data class ConversationConfig(
     val instructions: String = "",
     /** Off means no saved memory, no memory tools, and no chat instructions. */
     val personalizationEnabled: Boolean = true,
+    /** Per-chat image appetite; the assistant decides the exact count. */
+    val imageFrequency: ImageFrequency = ImageFrequency.DEFAULT,
 ) {
     val isChat: Boolean get() = kind == ConversationKind.CHAT
 

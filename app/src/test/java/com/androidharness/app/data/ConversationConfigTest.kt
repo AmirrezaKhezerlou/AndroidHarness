@@ -36,6 +36,12 @@ class ConversationConfigTest {
         assertTrue(legacy.personalizationEnabled)
     }
 
+    @Test fun chatImageFrequencyDefaultsAndSurvivesPersistence() {
+        assertEquals(ImageFrequency.DEFAULT, ConversationConfig.decode("{\"kind\":\"CHAT\"}").imageFrequency)
+        val saved = ConversationConfig(kind = ConversationKind.CHAT, imageFrequency = ImageFrequency.ALWAYS)
+        assertEquals(saved, ConversationConfig.decode(ConversationConfig.encode(saved)))
+    }
+
     @Test fun restrictingRegistryBlocksBothAdvertisedAndExecutableToolsIncludingExtras() {
         fun tool(name: String) = object : Tool {
             override val name = name
