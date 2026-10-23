@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -305,11 +306,19 @@ internal fun ChatMemorySaved(onClick: () -> Unit = {}) {
 @Composable
 private fun ChatActivityGlyph(name: String?, live: Boolean, motion: Boolean) {
     val scheme = MaterialTheme.colorScheme
+    val animated = live && motion
     var angle = 0f
-    if (live && motion) {
+    var spin = 0f
+    var pulse = 1f
+    var tilt = 0f
+    var turn = 0f
+    if (animated) {
         val transition = rememberInfiniteTransition(label = "Chat activity orbit")
-        val rotation by transition.animateFloat(0f, 360f, infiniteRepeatable(tween(2200, easing = LinearEasing)), label = "Chat orbit rotation")
-        angle = rotation
+        angle = transition.animateFloat(0f, 360f, infiniteRepeatable(tween(2200, easing = LinearEasing)), label = "Chat orbit rotation").value
+        spin = transition.animateFloat(0f, 360f, infiniteRepeatable(tween(8000, easing = LinearEasing)), label = "Chat sparkle spin").value
+        pulse = transition.animateFloat(0.92f, 1.1f, infiniteRepeatable(tween(950, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "Chat glyph pulse").value
+        tilt = transition.animateFloat(-12f, 12f, infiniteRepeatable(tween(1100, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "Chat glyph tilt").value
+        turn = transition.animateFloat(-18f, 18f, infiniteRepeatable(tween(1500, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "Chat globe turn").value
     }
     Box(Modifier.size(28.dp).background(scheme.surfaceContainerHigh.copy(alpha = .65f), CircleShape), contentAlignment = Alignment.Center) {
         if (live) Canvas(Modifier.fillMaxSize()) {
@@ -318,11 +327,19 @@ private fun ChatActivityGlyph(name: String?, live: Boolean, motion: Boolean) {
                 style = Stroke(1.3.dp.toPx(), cap = StrokeCap.Round))
         }
         Crossfade(name.orEmpty(), animationSpec = tween(if (motion) 180 else 0), label = "Chat activity icon") { phase ->
+            val glyph = Modifier.size(15.dp).graphicsLayer {
+                when (phase) {
+                    "web_search" -> rotationZ = tilt
+                    "web_fetch" -> rotationY = turn
+                    "github_api", "github_search", "github_file" -> { scaleX = pulse; scaleY = pulse }
+                    else -> { scaleX = pulse; scaleY = pulse; rotationZ = spin }
+                }
+            }
             when (phase) {
-                "web_search" -> Icon(Icons.Outlined.Search, null, Modifier.size(15.dp), tint = scheme.onSurfaceVariant)
-                "web_fetch" -> Icon(Icons.Outlined.Public, null, Modifier.size(15.dp), tint = scheme.onSurfaceVariant)
-                "github_api", "github_search", "github_file" -> Icon(Icons.Outlined.Code, null, Modifier.size(15.dp), tint = scheme.onSurfaceVariant)
-                else -> Icon(painterResource(R.drawable.ic_chat_sparkles), null, Modifier.size(15.dp), tint = scheme.onSurfaceVariant)
+                "web_search" -> Icon(Icons.Outlined.Search, null, glyph, tint = scheme.onSurfaceVariant)
+                "web_fetch" -> Icon(Icons.Outlined.Public, null, glyph, tint = scheme.onSurfaceVariant)
+                "github_api", "github_search", "github_file" -> Icon(Icons.Outlined.Code, null, glyph, tint = scheme.onSurfaceVariant)
+                else -> Icon(painterResource(R.drawable.ic_chat_sparkles), null, glyph, tint = scheme.onSurfaceVariant)
             }
         }
     }
