@@ -65,6 +65,7 @@ internal fun ChatActivity(
     if (!live && entries.isEmpty()) return
     val thoughtChunks = remember { mutableMapOf<String, com.androidharness.app.core.ReasoningTextChunks.Stream>() }
     val active = remember(messages, runningCalls) { ChatActivityPresentation.activeCall(messages, runningCalls) }
+    val research = remember(messages) { ChatActivityPresentation.researchProgress(messages) }
     val seconds = messages.sumOf { it.thinkingMs }.coerceAtLeast(0) / 1000
     val title = when {
         live && active != null -> activityLabel(active.name, true)
@@ -74,6 +75,7 @@ internal fun ChatActivity(
         else -> stringResource(R.string.chat_thought)
     }
     ChatActivityRow(title, if (live) active?.name else null, live, entries.isNotEmpty(), followLatest = true, autoExpand = autoExpand,
+        progress = research.takeIf { live },
         trailing = if (showThinkingMetrics) ({ ChatThinkingMetrics(messages, streamingThinking, thinkingTiming, reasoningTokens, live) }) else null) {
         entries.forEach { entry ->
             when (entry) {
@@ -112,7 +114,7 @@ internal fun ChatToolActivity(call: ToolCallData, result: ChatMessage?, running:
         running -> activityLabel(call.name, true)
         result?.isError == true -> stringResource(when (call.name) {
             "web_search" -> R.string.chat_search_failed
-            "web_fetch" -> R.string.chat_page_failed
+            "web_fetch", "browser_read" -> R.string.chat_page_failed
             "github_api", "github_search", "github_file" -> R.string.chat_github_failed
             else -> R.string.chat_tool_failed
         })
@@ -149,6 +151,7 @@ private fun ChatActivityRow(
     expandable: Boolean,
     followLatest: Boolean = false,
     autoExpand: Boolean = true,
+    progress: ChatActivityPresentation.ResearchProgress? = null,
     trailing: (@Composable () -> Unit)? = null,
     details: LazyListScope.() -> Unit,
 ) {
@@ -233,6 +236,20 @@ private fun ChatActivityRow(
                         (fadeIn(tween(if (motion) 180 else 0)) + slideInVertically { if (motion) it / 3 else 0 }) togetherWith
                             fadeOut(tween(if (motion) 100 else 0))
                     }, label = "Chat activity phase", modifier = Modifier.weight(1f, fill = false)) { label -> ChatShimmerText(label, live && motion) }
+                    progress?.let { counters ->
+                        Text(
+                            buildString {
+                                append(counters.sourcesUsed).append('/').append(counters.sourcesMax)
+                                if (counters.readsRequired > 0) {
+                                    append(" · ").append(counters.pagesRead).append('/')
+                                        .append(counters.readsRequired).append(" read")
+                                }
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = scheme.onSurfaceVariant,
+                            maxLines = 1,
+                        )
+                    }
                     if (expandable) Icon(if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
                         null, Modifier.size(16.dp), tint = scheme.onSurfaceVariant)
                 }
@@ -399,7 +416,7 @@ private fun ChatActivityGlyph(name: String?, live: Boolean, motion: Boolean) {
                     translationX = searchX * size.width / 24f
                     translationY = searchY * size.height / 24f
                 }, tint = scheme.onSurfaceVariant)
-                "web_fetch" -> Box(Modifier.size(15.dp)) {
+                "web_fetch", "browser_read" -> Box(Modifier.size(15.dp)) {
                     Icon(painterResource(R.drawable.ic_chat_eyes), null, Modifier.fillMaxSize().graphicsLayer {
                         scaleY = blink
                         alpha = blinkAlpha
@@ -430,7 +447,7 @@ private fun ChatActivityGlyph(name: String?, live: Boolean, motion: Boolean) {
 @Composable
 private fun activityLabel(name: String, running: Boolean): String = stringResource(when (name) {
     "web_search" -> if (running) R.string.chat_searching else R.string.chat_searched
-    "web_fetch" -> if (running) R.string.chat_reading_page else R.string.chat_read_page
+    "web_fetch", "browser_read" -> if (running) R.string.chat_reading_page else R.string.chat_read_page
     "github_api", "github_search", "github_file" -> if (running) R.string.chat_reading_github else R.string.chat_read_github
     "create_artifact" -> if (running) R.string.chat_creating_artifact else R.string.chat_created_artifact
     "read_artifact" -> if (running) R.string.chat_reading_artifact else R.string.chat_read_artifact

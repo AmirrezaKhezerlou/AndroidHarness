@@ -87,4 +87,25 @@ class ChatActivityPresentationTest {
         assertEquals(setOf("abc-123"), ChatActivityPresentation.savedMemoryIds(messages))
         assertTrue(ChatActivityPresentation.savedMemoryIds(listOf(assistant(call("old", "remember")), result("old", "Saved to global memory."))).isEmpty())
     }
+
+    @Test fun researchProgressUsesTheLatestBudgetNote() {
+        val first = call("s1", "web_search")
+        val second = call("s2", "web_search")
+        val messages = listOf(
+            assistant(first),
+            result("s1", "1. A\n   https://a.test\n   x\n[sources this turn: 5/20, 15 remaining; pages read: 1/5 required. Read more.]"),
+            assistant(second),
+            result("s2", "1. B\n   https://b.test\n   y\n[sources this turn: 8/20, 12 remaining; pages read: 3/5 required. Read more.]"),
+        )
+        val progress = ChatActivityPresentation.researchProgress(messages)
+        assertEquals(8, progress?.sourcesUsed)
+        assertEquals(20, progress?.sourcesMax)
+        assertEquals(3, progress?.pagesRead)
+        assertEquals(5, progress?.readsRequired)
+    }
+
+    @Test fun researchProgressIsNullWithoutABudgetNote() {
+        val messages = listOf(assistant(call("s", "web_search")), result("s", "1. A\n   https://a.test\n   x"))
+        assertNull(ChatActivityPresentation.researchProgress(messages))
+    }
 }

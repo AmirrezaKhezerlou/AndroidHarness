@@ -228,6 +228,88 @@ class BrowserGetDomTool(
 }
 
 /**
+ * Read a JavaScript-rendered page with the in-app browser. web_fetch is a
+ * plain HTTP client, so SPA shells can come back with almost no text; this
+ * renders the page in the headless WebView and returns its visible text.
+ */
+class BrowserReadTool(
+    private val controller: BrowserController,
+    private val readBudget: SearchSourceBudget? = null,
+) : Tool {
+    override val name = "browser_read"
+    override val description =
+        "Render a URL in the in-app browser, let JavaScript run, and return the visible text with the " +
+            "final URL and title. Use it when web_fetch reports that a page requires JavaScript or returns " +
+            "almost no readable text. max_chars caps the returned text."
+    override val parametersSchema = Schema.obj(
+        mapOf(
+            "url" to Schema.string("The http(s) URL to render."),
+            "max_chars" to Schema.integer("Maximum characters to return (default 20000, max 60000)."),
+        ),
+        required = listOf("url"),
+    )
+    override val isReadOnly = true
+
+    internal fun forBudget(budget: SearchSourceBudget?): BrowserReadTool = BrowserReadTool(controller, budget)
+
+    override suspend fun execute(args: JsonObject, ctx: ToolContext): ToolResult {
+        val url = args["url"]?.jsonPrimitive?.content
+            ?: throw ToolFailure("Missing required argument: url")
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            throw ToolFailure("Only http(s) URLs are supported.")
+        }
+        val maxChars = (args["max_chars"]?.jsonPrimitive?.content?.toIntOrNull() ?: 20_000)
+            .coerceIn(1_000, 60_000)
+        if (readBudget != null && !readBudget.canRead()) return ToolResult(true, readLimitText())
+        return try {
+            val state = controller.navigate(url, ctx.workspace)
+            // Prefer the article/main container when it carries real text, then
+            // fall back to the whole body. innerText reflects the rendered DOM,
+            // which is the point of this tool.
+            val outcome = controller.evalUser(
+                "return (() => {" +
+                    " const a = document.querySelector('article');" +
+                    " const m = document.querySelector('main');" +
+                    " if (a && a.innerText && a.innerText.trim().length > 200) return a.innerText;" +
+                    " if (m && m.innerText && m.innerText.trim().length > 200) return m.innerText;" +
+                    " return document.body ? document.body.innerText : " +
+                    "  (document.documentElement ? document.documentElement.innerText : '');" +
+                    " })()",
+            )
+            val text = (outcome.value ?: state.textSummary).trim()
+            if (readBudget != null && !readBudget.claimRead()) return ToolResult(true, readLimitText())
+            if (text.isBlank()) {
+                ToolResult(true, "URL: ${state.url}\nTitle: ${state.title}\n[no visible text; the page may still be loading]")
+            } else {
+                val body = text.take(maxChars)
+                ToolResult(true, buildString {
+                    append("URL: ").append(state.url).append('\n')
+                    append("Title: ").append(state.title).append("\n\n")
+                    state.error?.takeIf { it.isNotBlank() }?.let { append("Warning: ").append(it).append("\n\n") }
+                    append(body)
+                    if (body.length < text.length) append("\n[truncated at ").append(maxChars).append(" chars]")
+                    readSourceNote()?.let { append(it) }
+                })
+            }
+        } catch (e: Exception) {
+            ToolResult(false, "Browser read failed: ${e.message}")
+        }
+    }
+
+    private fun readLimitText(): String {
+        val budget = readBudget ?: return ""
+        return "[Page read limit reached: ${budget.pagesRead}/${budget.maxReads} pages this turn. " +
+            "Answer from the pages already read.]"
+    }
+
+    private fun readSourceNote(): String? {
+        val budget = readBudget ?: return null
+        val limit = budget.maxReads ?: return null
+        return "\n[pages read this turn: ${budget.pagesRead}/$limit]"
+    }
+}
+
+/**
  * Executes arbitrary JavaScript in the page context.
  */
 class BrowserEvalTool(

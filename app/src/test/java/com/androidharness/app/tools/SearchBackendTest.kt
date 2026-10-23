@@ -51,6 +51,22 @@ class SearchBackendTest {
     }
 
     @Test
+    fun `brave and tavily parsers keep publication dates`() {
+        val age = BraveSearchParser.parse(
+            """{"web":{"results":[{"title":"News","url":"https://news.test/a","description":"d","age":"2 days ago"}]}}""",
+        )
+        assertEquals("2 days ago", age.single().date)
+        val pageAge = BraveSearchParser.parse(
+            """{"web":{"results":[{"title":"News","url":"https://news.test/a","description":"d","page_age":"2026-10-20T10:00:00"}]}}""",
+        )
+        assertEquals("2026-10-20", pageAge.single().date)
+        val tavily = TavilySearchParser.parse(
+            """{"results":[{"title":"News","url":"https://news.test/b","content":"c","published_date":"2026-10-19T08:00:00"}]}""",
+        )
+        assertEquals("2026-10-19", tavily.single().date)
+    }
+
+    @Test
     fun `backend selection follows provider and key`() {
         assertNull(searchBackendFor(null))
         assertNull(searchBackendFor(SearchApiConfig("keyless", "ignored")))

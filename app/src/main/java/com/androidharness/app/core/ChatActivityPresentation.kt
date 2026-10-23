@@ -1,5 +1,6 @@
 package com.androidharness.app.core
 
+import com.androidharness.app.tools.WebSearchText
 import java.net.URI
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -9,6 +10,12 @@ import kotlinx.serialization.json.jsonPrimitive
 internal object ChatActivityPresentation {
     data class Source(val title: String, val url: String, val host: String, val read: Boolean)
     data class Step(val name: String, val finished: Boolean, val failed: Boolean)
+    data class ResearchProgress(
+        val sourcesUsed: Int,
+        val sourcesMax: Int,
+        val pagesRead: Int,
+        val readsRequired: Int,
+    )
 
     fun calls(messages: List<ChatMessage>): List<ToolCallData> = messages
         .filter { it.role == Role.ASSISTANT && it.toolCallId == null }
@@ -80,26 +87,44 @@ internal object ChatActivityPresentation {
             val key = url.substringBefore('#').trimEnd('/')
             val existing = sources[key]
             if (existing != null) sources[key] = existing.copy(read = existing.read || read)
-            else if (sources.size < 40) sources[key] = Source(title.trim().ifBlank { uri.host }.take(240), url, uri.host.removePrefix("www."), read)
+            else if (sources.size < 100) sources[key] = Source(title.trim().ifBlank { uri.host }.take(240), url, uri.host.removePrefix("www."), read)
         }
         for (call in calls(messages)) {
             val result = results[call.id] ?: continue
             when (call.name) {
-                "web_search" -> {
-                    // WebSearchTool's numbered title + standalone URL format. Do not scrape
-                    // arbitrary links from snippets or error/fallback diagnostic messages.
-                    val lines = result.text.lineSequence().take(300).toList()
-                    for (index in 0 until lines.lastIndex) {
-                        val title = Regex("^\\d+\\.\\s+(.+)$").matchEntire(lines[index].trim())?.groupValues?.get(1) ?: continue
-                        add(title, lines[index + 1].trim(), false)
-                    }
-                }
-                "web_fetch" -> if (result.text.isNotBlank() && !result.text.startsWith("[binary content:")) {
+                "web_search" -> WebSearchText.parse(result.text.lineSequence().take(400).joinToString("\n"))
+                    .forEach { add(it.title, it.url, false) }
+                "web_fetch", "browser_read" -> if (result.text.isNotBlank() &&
+                    !result.text.startsWith("[binary content:") &&
+                    !result.text.startsWith("[Page read limit reached:")) {
                     val url = runCatching { Json.parseToJsonElement(call.argumentsJson).jsonObject["url"]?.jsonPrimitive?.content }.getOrNull()
                     if (url != null) add("", url, true)
                 }
             }
         }
         return sources.values.toList()
+    }
+
+    /** Latest source and page-read counters reported by web_search in this turn. */
+    fun researchProgress(messages: List<ChatMessage>): ResearchProgress? {
+        val results = messages.filter { it.role == Role.TOOL && !it.isError }.associateBy { it.toolCallId }
+        val pattern = Regex(
+            "\\[sources this turn: (\\d+)/(\\d+), \\d+ remaining" +
+                "(?:; pages read: (\\d+)/(\\d+) required)?",
+        )
+        var latest: ResearchProgress? = null
+        for (call in calls(messages)) {
+            if (call.name != "web_search") continue
+            val text = results[call.id]?.text ?: continue
+            val match = pattern.findAll(text).lastOrNull() ?: continue
+            val values = match.groupValues
+            latest = ResearchProgress(
+                sourcesUsed = values[1].toIntOrNull() ?: continue,
+                sourcesMax = values[2].toIntOrNull() ?: continue,
+                pagesRead = values[3].toIntOrNull() ?: 0,
+                readsRequired = values[4].toIntOrNull() ?: 0,
+            )
+        }
+        return latest
     }
 }

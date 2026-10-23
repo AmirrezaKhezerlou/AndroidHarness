@@ -160,6 +160,10 @@ fun toolPresentation(call: ToolCallData, result: ChatMessage? = null): ToolPrese
             val url = arg("url") ?: "page"
             ToolPresentation("Fetched page", "Fetching ${url.take(48)}…", url, ToolActivityKind.WEB)
         }
+        "browser_read" -> {
+            val url = arg("url") ?: "page"
+            ToolPresentation("Rendered page", "Rendering ${url.take(48)}…", url, ToolActivityKind.WEB)
+        }
         "web_search" -> {
             val query = arg("query") ?: ""
             ToolPresentation("Searched web", "Searching: ${query.take(48)}…", query, ToolActivityKind.WEB)

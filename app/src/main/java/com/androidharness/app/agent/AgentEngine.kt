@@ -284,7 +284,17 @@ class AgentEngine(
         val scopedSearch = if (conversation.isChat) {
             (registry.get("web_search") as? com.androidharness.app.tools.WebSearchTool)?.forDepth(searchDepth)
         } else null
-        val runRegistry = (if (conversation.isChat) registry.withExtra(chatOnlyTools + listOfNotNull(scopedSearch)) else registry.withExtra(extraTools))
+        // Same run budget for page reads: deep research must not only collect
+        // snippets, and every read is counted against the same turn.
+        val scopedFetch = if (conversation.isChat) {
+            (registry.get("web_fetch") as? com.androidharness.app.tools.WebFetchTool)
+                ?.forBudget(scopedSearch?.budget())
+        } else null
+        val scopedBrowser = if (conversation.isChat) {
+            (chatOnlyTools.firstOrNull { it.name == "browser_read" } as? com.androidharness.app.tools.BrowserReadTool)
+                ?.forBudget(scopedSearch?.budget())
+        } else null
+        val runRegistry = (if (conversation.isChat) registry.withExtra(chatOnlyTools + listOfNotNull(scopedSearch, scopedFetch, scopedBrowser)) else registry.withExtra(extraTools))
             .restrictedTo(conversation.allowedTools)
             .let { if (memoryOn) it else it.without(memoryToolNames) }
         val tools = if (!agentContextEnabled && !conversation.isChat) emptyList() else runRegistry.schemas(
@@ -310,6 +320,7 @@ class AgentEngine(
         // actually produce its answer.
         var lastFinishReason: String? = null
         var answerNudges = 0
+        var researchNudges = 0
         var roundsWithoutTodoUpdate = 0
 
         while (true) {
@@ -570,9 +581,22 @@ class AgentEngine(
             val answerless = text.isBlank() && calls.isEmpty()
             val wantsNudge = failure == null && answerless &&
                 thinking.isNotBlank() && answerNudges < MAX_ANSWER_NUDGES
+            // Research levels require real page reads, not just search snippets.
+            // Ask again with the shortfall named instead of committing an answer
+            // that never opened a source.
+            val researchBudget = scopedSearch?.budget()
+            val wantsResearchNudge = !wantsNudge && failure == null && calls.isEmpty() && text.isNotBlank() &&
+                conversation.isChat && researchBudget != null && researchBudget.minReads > 0 &&
+                researchBudget.used > 0 && researchBudget.pagesRead < researchBudget.minReads &&
+                researchNudges < MAX_RESEARCH_NUDGES
             if (wantsNudge) {
                 answerNudges++
                 working += ChatMessage(role = Role.USER, text = ANSWER_NUDGE)
+            } else if (wantsResearchNudge && researchBudget != null) {
+                researchNudges++
+                working += ChatMessage(role = Role.USER, text =
+                    com.androidharness.app.core.ChatExperience.researchReadNudge(
+                        searchDepth, researchBudget.pagesRead, researchBudget.minReads))
             } else if (!answerless) {
                 val assistant = ChatMessage(
                     role = Role.ASSISTANT,
@@ -595,7 +619,7 @@ class AgentEngine(
                     emit(AgentEvent.Error(failure!!, recoverable = recoverableFailure))
                     break
                 }
-                wantsNudge -> continue
+                wantsNudge || wantsResearchNudge -> continue
                 calls.isEmpty() -> {
                     emit(AgentEvent.Finished(emptyAnswerReason(text.toString(), thinking.toString(), lastFinishReason, reasoningTokens)))
                     break
@@ -1611,6 +1635,14 @@ class AgentEngine(
         val scopedSearch = if (conversation.isChat) {
             (registry.get("web_search") as? com.androidharness.app.tools.WebSearchTool)?.forDepth(searchDepth)
         } else null
+        val scopedFetch = if (conversation.isChat) {
+            (registry.get("web_fetch") as? com.androidharness.app.tools.WebFetchTool)
+                ?.forBudget(scopedSearch?.budget())
+        } else null
+        val scopedBrowser = if (conversation.isChat) {
+            (chatOnlyTools.firstOrNull { it.name == "browser_read" } as? com.androidharness.app.tools.BrowserReadTool)
+                ?.forBudget(scopedSearch?.budget())
+        } else null
         return estimateContext(
             history,
             if (conversation.isChat) chatSystemPrompt(sessionId, searchDepth) else com.androidharness.app.caveman.CavemanPolicy.apply(
@@ -1619,7 +1651,7 @@ class AgentEngine(
                 intensity = caveman.cavemanIntensity,
                 wenyan = caveman.cavemanWenyan,
             ),
-            tools = (if (conversation.isChat) registry.withExtra(chatOnlyTools + listOfNotNull(scopedSearch)) else registry)
+            tools = (if (conversation.isChat) registry.withExtra(chatOnlyTools + listOfNotNull(scopedSearch, scopedFetch, scopedBrowser)) else registry)
                 .restrictedTo(conversation.allowedTools)
                 .let { if (memoryOn) it else it.without(memoryToolNames) }
                 .schemas(),
@@ -1904,6 +1936,9 @@ Rules:
 
         /** How many times a silent (reasoning-only, no answer) model is asked to answer. */
         const val MAX_ANSWER_NUDGES = 1
+
+        /** How many times a research turn is sent back to read pages before answering. */
+        const val MAX_RESEARCH_NUDGES = 2
         private val ANSWER_NUDGE =
             "Your previous reply ended without any visible answer: it was likely cut off " +
                 "mid-generation. Respond now with your actual answer (or the tool calls you intended)."

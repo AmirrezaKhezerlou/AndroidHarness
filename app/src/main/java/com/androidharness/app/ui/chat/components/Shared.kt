@@ -57,7 +57,7 @@ internal fun toolIcon(name: String): ImageVector = when (name) {
     "create_dir" -> Icons.Outlined.CreateNewFolder
     "delete_file" -> Icons.Outlined.Delete
     "move_file" -> Icons.Outlined.DriveFileMove
-    "web_fetch", "web_search", "http_request" -> Icons.Outlined.Public
+    "web_fetch", "browser_read", "web_search", "http_request" -> Icons.Outlined.Public
     "github_api", "github_search", "github_file" -> Icons.Outlined.Code
     "todo_write" -> Icons.Outlined.Checklist
     "memory_write" -> Icons.Outlined.EditNote

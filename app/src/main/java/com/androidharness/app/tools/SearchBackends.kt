@@ -1,7 +1,12 @@
 package com.androidharness.app.tools
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -9,6 +14,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -16,10 +22,25 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
-data class WebSearchResult(val title: String, val url: String, val snippet: String)
+data class WebSearchResult(
+    val title: String,
+    val url: String,
+    val snippet: String,
+    /** Publication age as the backend reported it, for recency judgements. */
+    val date: String? = null,
+)
 
 /** Results plus the source that produced them, for the [via …] output tag. */
 internal data class SearchOutcome(val results: List<WebSearchResult>, val via: String?)
+
+/** Per-call search options. Freshness is day, week, month, year or null. */
+internal data class SearchOptions(
+    val engine: String = "auto",
+    val freshness: String? = null,
+    val language: String? = null,
+    val country: String? = null,
+    val deep: Boolean = false,
+)
 
 /**
  * The user's search API choice: provider id ("brave" | "tavily") plus the key
@@ -44,7 +65,7 @@ internal interface SearchBackend {
         client: OkHttpClient,
         query: String,
         count: Int,
-        engine: String = "auto",
+        options: SearchOptions = SearchOptions(),
     ): SearchOutcome
 }
 
@@ -66,41 +87,46 @@ internal class KeylessSearchBackend : SearchBackend {
 
     private val allEngines = listOf("duckduckgo", "bing", "brave", "google")
 
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     override suspend fun fetch(
         client: OkHttpClient,
         query: String,
         count: Int,
-        engine: String,
+        options: SearchOptions,
     ): SearchOutcome = withContext(Dispatchers.IO) {
         val searchClient = client.newBuilder()
             .readTimeout(25, TimeUnit.SECONDS)
             .build()
-        val chain = when (engine?.trim()?.lowercase()) {
+        val engine = options.engine
+        val chain = when (engine.trim().lowercase()) {
             "duckduckgo", "bing", "brave", "google" -> listOf(engine.trim().lowercase())
             else -> allEngines
         }
-        var lastError: String? = null
-        // Collect across engines until the requested batch is full. Auto used
-        // to stop at the first non-empty engine, which capped deep research
-        // levels well below their source budget when the first page was short.
+        // Engines run concurrently. The old chain waited out every engine in
+        // turn, so one blocked engine could hold a research query for its full
+        // read timeout before the next one even started.
+        val jobs = chain.map { name ->
+            async(Dispatchers.IO) {
+                name to runCatching { fetchEngineWithRetry(searchClient, name, query, options) }
+            }
+        }
+        val finished = withTimeoutOrNull(28_000) { jobs.awaitAll() }
+            ?: jobs.filter { it.isCompleted }.mapNotNull { runCatching { it.getCompleted() }.getOrNull() }
         val collected = ArrayList<WebSearchResult>()
         val seen = HashSet<String>()
         val used = ArrayList<String>()
-        for (e in chain) {
+        var lastError: String? = null
+        for ((name, result) in finished) {
+            val results = result.getOrElse { lastError = "$name failed: ${it.message}"; continue }
+            if (results.isEmpty()) {
+                lastError = "$name returned no results"
+                continue
+            }
             if (collected.size >= count) break
-            try {
-                val results = fetchEngine(searchClient, e, query)
-                if (results.isEmpty()) {
-                    lastError = "$e returned no results"
-                    continue
-                }
-                used += e
-                for (result in results) {
-                    if (seen.add(result.url.trimEnd('/'))) collected += result
-                    if (collected.size >= count) break
-                }
-            } catch (ex: Exception) {
-                lastError = "$e failed: ${ex.message}"
+            used += name
+            for (item in results) {
+                if (seen.add(canonicalResultUrl(item.url))) collected += item
+                if (collected.size >= count) break
             }
         }
         if (collected.isNotEmpty()) {
@@ -112,18 +138,57 @@ internal class KeylessSearchBackend : SearchBackend {
         )
     }
 
-    private fun fetchEngine(client: OkHttpClient, engine: String, query: String): List<WebSearchResult> {
+    /** One retry for transient rate limits and gateway errors, nothing for hard failures. */
+    private fun fetchEngineWithRetry(
+        client: OkHttpClient,
+        engine: String,
+        query: String,
+        options: SearchOptions,
+    ): List<WebSearchResult> = try {
+        fetchEngine(client, engine, query, options)
+    } catch (e: Exception) {
+        val transient = e.message?.let { Regex("HTTP (429|5\\d\\d)").containsMatchIn(it) } == true
+        if (!transient) throw e
+        Thread.sleep(350)
+        fetchEngine(client, engine, query, options)
+    }
+
+    private fun fetchEngine(
+        client: OkHttpClient,
+        engine: String,
+        query: String,
+        options: SearchOptions,
+    ): List<WebSearchResult> {
         val encoded = URLEncoder.encode(query, "UTF-8")
+        val lang = options.language?.trim()?.lowercase()?.takeIf { it.isNotBlank() }
+        val country = options.country?.trim()?.uppercase()?.takeIf { it.isNotBlank() }
         val url = when (engine) {
-            "duckduckgo" -> "https://html.duckduckgo.com/html/?q=$encoded"
-            "bing" -> "https://www.bing.com/search?q=$encoded"
-            "brave" -> "https://search.brave.com/search?q=$encoded"
-            else -> "https://www.google.com/search?q=$encoded&num=10"
+            "duckduckgo" -> buildString {
+                append("https://html.duckduckgo.com/html/?q=").append(encoded)
+                if (lang != null && country != null) append("&kl=").append(country.lowercase()).append('-').append(lang)
+                ddgDate(options.freshness)?.let { append("&df=").append(it) }
+            }
+            "bing" -> buildString {
+                append("https://www.bing.com/search?q=").append(encoded)
+                lang?.let { append("&setlang=").append(it) }
+                country?.let { append("&cc=").append(it) }
+            }
+            "brave" -> buildString {
+                append("https://search.brave.com/search?q=").append(encoded)
+                braveDate(options.freshness)?.let { append("&tf=").append(it) }
+            }
+            else -> buildString {
+                append("https://www.google.com/search?q=").append(encoded).append("&num=10")
+                lang?.let { append("&hl=").append(it) }
+                country?.let { append("&gl=").append(it) }
+                googleDate(options.freshness)?.let { append("&tbs=").append(it) }
+            }
         }
         val html = client.newCall(
             Request.Builder()
                 .url(url)
                 .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AndroidHarness/1.0")
+                .header("Accept-Language", languageHeader(options.language))
                 .build()
         ).execute().use { resp ->
             if (!resp.isSuccessful) throw ToolFailure("HTTP ${resp.code}")
@@ -239,10 +304,15 @@ internal class BraveApiBackend(private val apiKey: String) : SearchBackend {
         client: OkHttpClient,
         query: String,
         count: Int,
-        engine: String,
+        options: SearchOptions,
     ): SearchOutcome = withContext(Dispatchers.IO) {
-        val url = "https://api.search.brave.com/res/v1/web/search" +
-            "?q=${URLEncoder.encode(query, "UTF-8")}&count=$count"
+        val url = buildString {
+            append("https://api.search.brave.com/res/v1/web/search")
+            append("?q=").append(URLEncoder.encode(query, "UTF-8")).append("&count=").append(count)
+            braveDate(options.freshness)?.let { append("&freshness=").append(it) }
+            options.language?.trim()?.takeIf { it.isNotBlank() }?.let { append("&search_lang=").append(it) }
+            options.country?.trim()?.takeIf { it.isNotBlank() }?.let { append("&country=").append(it.uppercase()) }
+        }
         val body = client.newCall(
             Request.Builder()
                 .url(url)
@@ -268,7 +338,9 @@ internal object BraveSearchParser {
             val o = el.jsonObject
             val title = o["title"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
             val url = o["url"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-            WebSearchResult(title, url, o["description"]?.jsonPrimitive?.contentOrNull ?: "")
+            val date = o["age"]?.jsonPrimitive?.contentOrNull
+                ?: o["page_age"]?.jsonPrimitive?.contentOrNull?.take(10)
+            WebSearchResult(title, url, o["description"]?.jsonPrimitive?.contentOrNull ?: "", date)
         }.filter { it.url.startsWith("http") }
     }.getOrDefault(emptyList())
 }
@@ -281,13 +353,14 @@ internal class TavilyApiBackend(private val apiKey: String) : SearchBackend {
         client: OkHttpClient,
         query: String,
         count: Int,
-        engine: String,
+        options: SearchOptions,
     ): SearchOutcome = withContext(Dispatchers.IO) {
         val payload = buildJsonObject {
             put("api_key", apiKey)
             put("query", query)
             put("max_results", count)
-            put("search_depth", "basic")
+            put("search_depth", if (options.deep) "advanced" else "basic")
+            tavilyTimeRange(options.freshness)?.let { put("time_range", it) }
         }
         val body = client.newCall(
             Request.Builder()
@@ -313,7 +386,100 @@ internal object TavilySearchParser {
             val o = el.jsonObject
             val title = o["title"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
             val url = o["url"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-            WebSearchResult(title, url, o["content"]?.jsonPrimitive?.contentOrNull ?: "")
+            val date = o["published_date"]?.jsonPrimitive?.contentOrNull?.take(10)
+            WebSearchResult(title, url, o["content"]?.jsonPrimitive?.contentOrNull ?: "", date)
         }.filter { it.url.startsWith("http") }
     }.getOrDefault(emptyList())
+}
+
+/** Freshness values understood by the tool, mapped per backend. */
+private fun ddgDate(freshness: String?): String? = when (freshness) {
+    "day" -> "d"; "week" -> "w"; "month" -> "m"; "year" -> "y"; else -> null
+}
+
+private fun braveDate(freshness: String?): String? = when (freshness) {
+    "day" -> "pd"; "week" -> "pw"; "month" -> "pm"; "year" -> "py"; else -> null
+}
+
+private fun googleDate(freshness: String?): String? = when (freshness) {
+    "day" -> "qdr:d"; "week" -> "qdr:w"; "month" -> "qdr:m"; "year" -> "qdr:y"; else -> null
+}
+
+private fun tavilyTimeRange(freshness: String?): String? =
+    freshness?.takeIf { it in setOf("day", "week", "month", "year") }
+
+/** Accept-Language for keyless scraping when the caller asks for a language. */
+internal fun languageHeader(language: String?): String {
+    val lang = language?.trim()?.takeIf { it.isNotBlank() } ?: "en"
+    return "$lang,$lang;q=0.9,en;q=0.6"
+}
+
+/** URL identity for budget and dedupe: no fragment, no tracking params, no trailing slash. */
+internal fun canonicalResultUrl(raw: String): String {
+    val trimmed = raw.trim()
+    if (trimmed.isEmpty()) return ""
+    val parsed = runCatching { trimmed.toHttpUrlOrNull() }.getOrNull()
+        ?: return trimmed.trimEnd('/').lowercase()
+    val builder = parsed.newBuilder().fragment(null)
+    TRACKING_PARAMS.forEach { builder.removeAllQueryParameters(it) }
+    return builder.build().toString().trimEnd('/')
+}
+
+private val TRACKING_PARAMS = setOf(
+    "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+    "fbclid", "gclid", "mc_cid", "mc_eid", "ref", "source",
+)
+
+/**
+ * Small process-wide cache for search and page reads. Deep research repeats
+ * queries and pages across overlapping angles; the TTLs are short enough that
+ * news still refreshes within a session.
+ */
+internal object WebResultCache {
+    private data class Timed<T>(val value: T, val at: Long)
+
+    private const val SEARCH_TTL_MS = 10 * 60_000L
+    private const val PAGE_TTL_MS = 15 * 60_000L
+    private const val MAX_SEARCHES = 24
+    private const val MAX_PAGES = 8
+    private const val MAX_PAGE_CHARS = 400_000
+
+    private val lock = Any()
+    private val searches = object : LinkedHashMap<String, Timed<SearchOutcome>>(16, .75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Timed<SearchOutcome>>) =
+            size > MAX_SEARCHES
+    }
+    private val pages = object : LinkedHashMap<String, Timed<String>>(16, .75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Timed<String>>) =
+            size > MAX_PAGES
+    }
+
+    fun getSearch(key: String): SearchOutcome? = synchronized(lock) {
+        val hit = searches[key] ?: return null
+        if (System.currentTimeMillis() - hit.at > SEARCH_TTL_MS) {
+            searches.remove(key)
+            null
+        } else hit.value
+    }
+
+    fun putSearch(key: String, outcome: SearchOutcome) = synchronized(lock) {
+        if (outcome.results.isNotEmpty()) searches[key] = Timed(outcome, System.currentTimeMillis())
+    }
+
+    fun getPage(url: String): String? = synchronized(lock) {
+        val hit = pages[url] ?: return null
+        if (System.currentTimeMillis() - hit.at > PAGE_TTL_MS) {
+            pages.remove(url)
+            null
+        } else hit.value
+    }
+
+    fun putPage(url: String, text: String) = synchronized(lock) {
+        pages[url] = Timed(text.take(MAX_PAGE_CHARS), System.currentTimeMillis())
+    }
+
+    fun clear() = synchronized(lock) {
+        searches.clear()
+        pages.clear()
+    }
 }

@@ -56,6 +56,46 @@ class SearchSourceBudgetTest {
         assertEquals(15, searchBatchCount(null, 50, Int.MAX_VALUE))
     }
 
+    @Test fun readBudgetCountsPagesAndStopsAtItsLimit() {
+        val budget = SearchSourceBudget(5, maxReads = 2, minReads = 1)
+        assertEquals(0, budget.pagesRead)
+        assertTrue(budget.canRead())
+        assertTrue(budget.claimRead())
+        assertTrue(budget.claimRead())
+        assertTrue(!budget.canRead())
+        assertTrue(!budget.claimRead())
+        assertEquals(2, budget.pagesRead)
+        assertEquals(1, budget.minReads)
+    }
+
+    @Test fun researchLevelsCarryReadTargets() {
+        assertEquals(0, researchReadMinimum(com.androidharness.app.data.SearchDepth.INSTANT))
+        assertEquals(2, researchReadMinimum(com.androidharness.app.data.SearchDepth.DEEP))
+        assertEquals(5, researchReadMinimum(com.androidharness.app.data.SearchDepth.DEEP_RESEARCH))
+        assertEquals(8, researchReadMinimum(com.androidharness.app.data.SearchDepth.MAX_RESEARCH))
+        assertEquals(10, researchReadLimit(com.androidharness.app.data.SearchDepth.DEEP))
+        assertTrue(researchReadLimit(com.androidharness.app.data.SearchDepth.AUTO) == null)
+    }
+
+    @Test fun diversityCapsResultsPerHost() {
+        val results = listOf(
+            hit("https://a.test/1"), hit("https://a.test/2"), hit("https://a.test/3"),
+            hit("https://a.test/4"), hit("https://b.test/1"),
+        )
+        assertEquals(
+            listOf("https://a.test/1", "https://a.test/2", "https://a.test/3", "https://b.test/1"),
+            diversifyResults(results).map { it.url },
+        )
+    }
+
+    @Test fun trackingParametersAndFragmentsDoNotSpendTheBudgetTwice() {
+        val budget = SearchSourceBudget(2)
+        assertEquals(1, budget.claim(listOf(hit("https://a.test/x?utm_source=feed"))).size)
+        assertTrue(budget.claim(listOf(hit("https://a.test/x?utm_medium=email"))).isEmpty())
+        assertEquals(1, budget.claim(listOf(hit("https://a.test/y#top"))).size)
+        assertTrue(budget.claim(listOf(hit("https://a.test/y#bottom"))).isEmpty())
+    }
+
     @Test fun depthCopiesExposeTheirLimitAndAutoHasNone() {
         val client = okhttp3.OkHttpClient()
         val base = WebSearchTool(client)

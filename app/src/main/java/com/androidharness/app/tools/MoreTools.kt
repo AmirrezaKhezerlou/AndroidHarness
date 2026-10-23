@@ -217,15 +217,26 @@ class MoveFileTool : Tool {
 
 class WebFetchTool(
     private val client: OkHttpClient,
+    /** Turn-scoped page-read allowance; null in Code and Auto. */
+    private val readBudget: SearchSourceBudget? = null,
 ) : Tool {
     override val name = "web_fetch"
     override val description =
-        "Fetch a URL and return its text content (HTML is stripped to text). Useful for reading docs."
+        "Fetch a URL and return readable text. HTML is reduced to the main content, with scripts, " +
+            "navigation, and footers removed; PDFs are text-extracted. Long pages can be paged with " +
+            "offset and max_chars, or searched with find."
     override val parametersSchema = Schema.obj(
-        mapOf("url" to Schema.string("The http(s) URL to fetch.")),
+        mapOf(
+            "url" to Schema.string("The http(s) URL to fetch."),
+            "offset" to Schema.integer("Start character offset for long pages. Defaults to 0."),
+            "max_chars" to Schema.integer("Maximum characters to return (default 20000, max 60000)."),
+            "find" to Schema.string("Optional terms; return the passages that match them instead of the page start."),
+        ),
         required = listOf("url"),
     )
     override val isReadOnly = true
+
+    internal fun forBudget(budget: SearchSourceBudget?): WebFetchTool = WebFetchTool(client, budget)
 
     override suspend fun execute(args: JsonObject, ctx: ToolContext): ToolResult =
         withContext(Dispatchers.IO) {
@@ -234,37 +245,132 @@ class WebFetchTool(
             if (!url.startsWith("http://") && !url.startsWith("https://")) {
                 throw ToolFailure("Only http(s) URLs are supported.")
             }
+            val offset = (args["offset"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0).coerceAtLeast(0)
+            val maxChars = (args["max_chars"]?.jsonPrimitive?.content?.toIntOrNull() ?: 20_000)
+                .coerceIn(1_000, 60_000)
+            val find = args["find"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotBlank() }
+            if (readBudget != null && !readBudget.canRead()) {
+                return@withContext ToolResult(true, readLimitText())
+            }
+            WebResultCache.getPage(url)?.let { cached ->
+                if (readBudget != null && !readBudget.claimRead()) {
+                    return@withContext ToolResult(true, readLimitText())
+                }
+                return@withContext ToolResult(true, renderPage(cached, offset, maxChars, find) + readNote())
+            }
             val fetchClient = client.newBuilder()
                 .readTimeout(30, TimeUnit.SECONDS)
                 .build()
             try {
-                fetchClient.newCall(Request.Builder().url(url).build()).execute().use { resp ->
+                fetchClient.newCall(
+                    Request.Builder()
+                        .url(url)
+                        .header("User-Agent", BROWSER_UA)
+                        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7")
+                        .header("Accept-Language", languageHeader(java.util.Locale.getDefault().language))
+                        .build()
+                ).execute().use { resp ->
                     if (!resp.isSuccessful) {
                         return@withContext ToolResult(false, "HTTP ${resp.code} fetching $url")
                     }
                     val body = resp.body
                     val mediaType = body?.contentType()
-                    if (HttpBinaryDetector.isBinaryMediaType(mediaType)) {
-                        val mime = mediaType?.let { "${it.type}/${it.subtype}" } ?: "application/octet-stream"
-                        val len = if ((body?.contentLength() ?: -1L) >= 0L) {
-                            body!!.contentLength()
-                        } else {
-                            body?.bytes()?.size?.toLong() ?: 0L
-                        }
-                        return@withContext ToolResult(true, "[binary content: $mime, $len bytes]")
-                    }
                     val bytes = body?.bytes() ?: ByteArray(0)
+                    val mime = mediaType?.let { "${it.type}/${it.subtype}" } ?: "application/octet-stream"
+
+                    val isPdf = mediaType?.subtype?.equals("pdf", true) == true || bytes.startsWithAscii("%PDF-")
+                    if (isPdf) {
+                        val extracted = com.androidharness.app.ui.chat.PdfTextExtractor.extract(bytes)
+                            ?: return@withContext ToolResult(true, "[PDF with no extractable text: $mime, ${bytes.size} bytes]")
+                        WebResultCache.putPage(url, extracted.text)
+                        if (readBudget != null && !readBudget.claimRead()) {
+                            return@withContext ToolResult(true, readLimitText())
+                        }
+                        return@withContext ToolResult(true, renderPage(extracted.text, offset, maxChars, find) + readNote())
+                    }
+                    if (HttpBinaryDetector.isBinaryMediaType(mediaType)) {
+                        return@withContext ToolResult(true, "[binary content: $mime, ${bytes.size} bytes]")
+                    }
                     if (mediaType == null && bytes.isNotEmpty() && com.androidharness.app.workspace.isBinaryStream(java.io.ByteArrayInputStream(bytes))) {
-                        return@withContext ToolResult(true, "[binary content: application/octet-stream, ${bytes.size} bytes]")
+                        return@withContext ToolResult(true, "[binary content: $mime, ${bytes.size} bytes]")
                     }
                     val raw = bytes.toString(mediaType?.charset() ?: Charsets.UTF_8)
-                    ToolResult(true, htmlToText(raw, mediaType?.subtype).take(20_000))
+                    val text = htmlToText(raw, mediaType?.subtype)
+                    WebResultCache.putPage(url, text)
+                    if (readBudget != null && !readBudget.claimRead()) {
+                        return@withContext ToolResult(true, readLimitText())
+                    }
+                    val jsNote = if (looksJavascriptOnly(raw, text)) {
+                        "\n[note: this page appears to require JavaScript; readable text may be incomplete]"
+                    } else ""
+                    ToolResult(true, renderPage(text, offset, maxChars, find) + jsNote + readNote())
                 }
             } catch (e: Exception) {
                 ToolResult(false, "Fetch failed: ${e.message}")
             }
         }
+
+    private fun readLimitText(): String {
+        val budget = readBudget ?: return ""
+        return "[Page read limit reached: ${budget.pagesRead}/${budget.maxReads} pages this turn. " +
+            "Answer from the pages already read.]"
+    }
+
+    private fun readNote(): String {
+        val budget = readBudget ?: return ""
+        val limit = budget.maxReads ?: return ""
+        return "\n[pages read this turn: ${budget.pagesRead}/$limit]"
+    }
+
+    private fun renderPage(text: String, offset: Int, maxChars: Int, find: String?): String {
+        if (find != null) return excerpt(text, find, maxChars)
+        if (text.isEmpty()) return "[no readable text]"
+        val start = offset.coerceIn(0, text.length)
+        val end = (start + maxChars).coerceAtMost(text.length)
+        val body = text.substring(start, end)
+        if (start == 0 && end == text.length) return body
+        return buildString {
+            append("[chars ").append(start + 1).append('-').append(end).append(" of ").append(text.length).append("]\n")
+            append(body)
+            if (end < text.length) append("\n[more text: use offset=").append(end).append(']')
+        }
+    }
+
+    private fun excerpt(text: String, terms: String, maxChars: Int): String {
+        val needles = terms.lowercase().split(Regex("\\s+")).filter { it.length > 1 }
+        if (needles.isEmpty()) return renderPage(text, 0, maxChars, null)
+        val paragraphs = text.split(Regex("\\n+")).map { it.trim() }.filter { it.isNotEmpty() }
+        val scored = paragraphs.mapNotNull { paragraph ->
+            val score = needles.count { paragraph.contains(it, ignoreCase = true) }
+            if (score == 0) null else score to paragraph
+        }.sortedByDescending { it.first }
+        if (scored.isEmpty()) {
+            return "No passages matched \"$terms\".\n" + renderPage(text, 0, maxChars, null)
+        }
+        val out = StringBuilder("[passages matching \"").append(terms).append("\"]\n")
+        for ((_, paragraph) in scored) {
+            val room = maxChars - out.length
+            if (room <= 0) break
+            out.append(paragraph.take(room)).append("\n\n")
+            if (paragraph.length > room) break
+        }
+        return out.toString().trimEnd()
+    }
 }
+
+private const val BROWSER_UA =
+    "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) " +
+        "Chrome/125.0.0.0 Mobile Safari/537.36"
+
+private fun ByteArray.startsWithAscii(prefix: String): Boolean {
+    if (size < prefix.length) return false
+    return prefix.indices.all { this[it].toInt() == prefix[it].code }
+}
+
+/** A page that is mostly a JS shell, or that says JS is required, gets a warning. */
+private fun looksJavascriptOnly(raw: String, text: String): Boolean =
+    Regex("(?i)(enable|requires?) javascript|javascript is disabled").containsMatchIn(text) ||
+        (raw.length > 4_000 && text.length < 400)
 
 /**
  * Strips HTML into readable text.
@@ -280,9 +386,17 @@ class WebFetchTool(
  */
 internal fun htmlToText(raw: String, contentTypeSubtype: String? = null): String {
     if (!looksLikeHtml(raw, contentTypeSubtype)) return raw
-    return raw
+    return mainContent(raw)
         .replace(Regex("(?s)<script.*?</script>"), " ")
         .replace(Regex("(?s)<style.*?</style>"), " ")
+        .replace(Regex("(?s)<noscript.*?</noscript>"), " ")
+        .replace(Regex("(?s)<svg.*?</svg>"), " ")
+        .replace(Regex("(?s)<canvas.*?</canvas>"), " ")
+        .replace(Regex("(?s)<iframe.*?</iframe>"), " ")
+        .replace(Regex("(?s)<nav\\b.*?</nav>"), " ")
+        .replace(Regex("(?s)<aside\\b.*?</aside>"), " ")
+        .replace(Regex("(?s)<footer\\b.*?</footer>"), " ")
+        .replace(Regex("(?s)<form\\b.*?</form>"), " ")
         .replace(Regex("(?s)<!--.*?-->"), " ")
         .replace(Regex("<br\\s*/?>"), "\n")
         // Block-level boundaries become line breaks, on BOTH sides of the tag.
@@ -296,6 +410,11 @@ internal fun htmlToText(raw: String, contentTypeSubtype: String? = null): String
         .replace(Regex("&amp;"), "&")
         .replace(Regex("&lt;"), "<")
         .replace(Regex("&gt;"), ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&apos;", "'")
+        .replace(Regex("&#(\\d+);")) { decodeEntity(it.groupValues[1].toIntOrNull()) }
+        .replace(Regex("&#[xX]([0-9a-fA-F]+);")) { decodeEntity(it.groupValues[1].toIntOrNull(16)) }
         .replace(Regex("[ \\t\\u00a0]+"), " ")
         .replace(Regex(" ?\\n ?"), "\n")
         // Adjacent boundaries (</div><div>) and any blank line the source had
@@ -304,6 +423,23 @@ internal fun htmlToText(raw: String, contentTypeSubtype: String? = null): String
         // lines between every element would just cost tokens.
         .replace(Regex("\\n+"), "\n")
         .trim()
+}
+
+/** Prefer the article/main container when it holds a real share of the page. */
+private fun mainContent(raw: String): String {
+    val candidates = listOfNotNull(
+        Regex("(?is)<article\\b[^>]*>(.*?)</article>").find(raw)?.groupValues?.get(1),
+        Regex("(?is)<main\\b[^>]*>(.*?)</main>").find(raw)?.groupValues?.get(1),
+    )
+    val best = candidates.maxByOrNull { it.length } ?: return raw
+    // A container with a real body of text is the article; a short teaser is
+    // not trusted over the page itself.
+    return if (best.length >= 200) best else raw
+}
+
+private fun decodeEntity(codePoint: Int?): String {
+    if (codePoint == null || codePoint <= 0 || codePoint > 0x10FFFF) return ""
+    return runCatching { String(Character.toChars(codePoint)) }.getOrDefault("")
 }
 
 /**

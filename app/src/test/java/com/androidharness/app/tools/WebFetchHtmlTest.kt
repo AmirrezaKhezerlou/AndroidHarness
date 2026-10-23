@@ -79,4 +79,33 @@ class WebFetchHtmlTest {
         assertTrue(looksLikeHtml("any body at all", "html"))
         assertFalse(looksLikeHtml("just words", "plain"))
     }
+
+    @Test
+    fun `navigation footers and forms are dropped`() {
+        val body = "<html><body><nav>menu</nav><article><h1>Story</h1><p>Body text</p></article>" +
+            "<footer>footer words</footer><aside>side note</aside><form>subscribe</form></body></html>"
+        val text = htmlToText(body, "html")
+        assertTrue(text.contains("Story"))
+        assertTrue(text.contains("Body text"))
+        assertFalse(text.contains("menu"))
+        assertFalse(text.contains("footer words"))
+        assertFalse(text.contains("side note"))
+        assertFalse(text.contains("subscribe"))
+    }
+
+    @Test
+    fun `article content wins over surrounding page chrome`() {
+        val filler = "filler ".repeat(60)
+        val story = "Keep this story text. ".repeat(30)
+        val body = "<html><body><div>$filler</div><article><h1>Only story</h1><p>$story</p></article></body></html>"
+        val text = htmlToText(body, "html")
+        assertTrue(text.contains("Only story"))
+        assertTrue(text.contains("Keep this story text."))
+        assertFalse(text.contains("filler"))
+    }
+
+    @Test
+    fun `numeric and named entities decode after tag stripping`() {
+        assertEquals("It's 5 < 6", htmlToText("<p>It&#39;s 5 &lt; 6</p>", "html"))
+    }
 }

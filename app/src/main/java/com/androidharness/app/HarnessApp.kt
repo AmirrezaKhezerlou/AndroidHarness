@@ -228,6 +228,7 @@ class AppContainer(val appContext: Context) {
         deviceAccess = deviceAccess,
         universalMemory = memory,
         chatOnlyTools = listOf(com.androidharness.app.tools.ReadChatTextTool(sessions::messages),
+            com.androidharness.app.tools.BrowserReadTool(browser),
             com.androidharness.app.tools.OfferCodeHandoffTool(),
             com.androidharness.app.tools.GitHubApiTool(fetchClient) { github.accessToken() },
             com.androidharness.app.tools.GitHubSearchTool(fetchClient) { github.accessToken() },
