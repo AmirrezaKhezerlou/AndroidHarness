@@ -207,25 +207,17 @@ private fun ChatScreenContent(
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     // Lazy list content and its derived lookup maps must use the same snapshot.
     val state = viewModel.state.collectAsStateWithLifecycle().value
-    var showCodeHandoff by remember { mutableStateOf(false) }
+    var showCodeHandoff by remember(state.sessionId) { mutableStateOf(false) }
+    val codeHandoff = remember(state.conversation.isChat, state.messages) {
+        if (state.conversation.isChat) com.androidharness.app.core.ChatExperience.codeHandoffOffer(state.messages) else null
+    }
     if (showCodeHandoff) {
         val projects by viewModel.container.workspace.projects.collectAsStateWithLifecycle(initialValue = emptyList())
-        var selected by remember { mutableStateOf<String?>(null) }
-        val projectId = selected ?: viewModel.activeWorkspace.value?.id?.takeIf { id -> projects.any { it.id == id } } ?: projects.firstOrNull()?.id
-        androidx.compose.material3.AlertDialog(onDismissRequest = { showCodeHandoff = false },
-            title = { Text(uiContext.getString(R.string.chat_continue_code)) },
-            text = { Column(Modifier.heightIn(max = 360.dp).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
-                Text(uiContext.getString(R.string.chat_handoff_description))
-                projects.forEach { project ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        androidx.compose.material3.RadioButton(selected = project.id == projectId, onClick = { selected = project.id })
-                        Text(project.name, Modifier.weight(1f))
-                    }
-                }
-            } },
-            confirmButton = { TextButton(enabled = projectId != null && !state.busy && !state.conversationSaving,
-                onClick = { projectId?.let(viewModel::continueInCode); showCodeHandoff = false }) { Text(uiContext.getString(R.string.chat_create_code)) } },
-            dismissButton = { TextButton(onClick = { showCodeHandoff = false }) { Text(uiContext.getString(android.R.string.cancel)) } })
+        com.androidharness.app.ui.chat.components.ChatCodeHandoffSheet(
+            projects = projects, initialProjectId = viewModel.activeWorkspace.value?.id,
+            enabled = !state.busy && !state.conversationSaving,
+            onDismiss = { showCodeHandoff = false },
+            onContinue = { projectId -> viewModel.continueInCode(projectId); showCodeHandoff = false })
     }
     val ttsState by viewModel.container.tts.state.collectAsStateWithLifecycle()
     var ttsTermsError by remember { mutableStateOf<TtsError?>(null) }
@@ -1707,7 +1699,7 @@ private fun ChatScreenContent(
                                             }
                                         }
                                     }
-                                    if (otherCalls.size >= 3 && otherCalls.none { BrowserToolActivity.isBrowserTool(it.name) } && !(state.showLiveCode && otherCalls.any {
+                                    if (otherCalls.size >= 3 && otherCalls.none { BrowserToolActivity.isBrowserTool(it.name) || it.name == "pkg_install" } && !(state.showLiveCode && otherCalls.any {
                                             it.name in com.androidharness.app.agent.LiveCodePreview.tools })) {
                                         indexedItem(key = "message-$messageKey-tools", contentType = ChatListContentType.Tools) {
                                             Box(Modifier.animateItem(fadeInSpec = fastEffectsSpec(), placementSpec = null, fadeOutSpec = null)) {
@@ -1720,6 +1712,7 @@ private fun ChatScreenContent(
                                                     showLiveCode = state.showLiveCode,
                                                     onWatchBrowser = ::watchBrowser,
                                                     browserTargets = browserTargets,
+                                                    packageProgress = state.packageProgress,
                                                 )
                                             }
                                         }
@@ -1737,6 +1730,7 @@ private fun ChatScreenContent(
                                                         awaitingApproval = isTurnRunning && state.pendingApproval?.call?.id == call.id,
                                                         onWatchBrowser = ::watchBrowser,
                                                         browserTarget = browserTargets[call.id],
+                                                        packageProgress = state.packageProgress[call.id],
                                                     )
                                                 }
                                             }
@@ -1887,6 +1881,13 @@ private fun ChatScreenContent(
                             }
                         }
                     }
+                    if (!state.busy && codeHandoff != null) {
+                        indexedItem(key = "chat-code-handoff-${state.sessionId}", contentType = ChatListContentType.Handoff) {
+                            com.androidharness.app.ui.chat.components.ChatCodeHandoffCard(
+                                offer = codeHandoff, enabled = !state.conversationSaving,
+                                onClick = { showCodeHandoff = true }, modifier = Modifier.padding(top = 8.dp))
+                        }
+                    }
                 }
             }
 
@@ -2006,10 +2007,6 @@ private fun ChatScreenContent(
                 }
 
                 if (!state.conversation.isChat) AgentStatusBar(action = state.currentAction, busy = state.busy)
-                if (state.conversation.isChat && !state.busy && com.androidharness.app.core.ChatExperience.offersCode(state.messages)) {
-                    TextButton(onClick = { showCodeHandoff = true }, enabled = !state.busy && !state.conversationSaving,
-                        modifier = Modifier.align(Alignment.End)) { Text(uiContext.getString(R.string.chat_continue_code)) }
-                }
                 state.conversation.sourceChatId?.let { source ->
                     TextButton(onClick = { onNavigateToSession(source) }) { Text(uiContext.getString(R.string.chat_from_chat)) }
                 }

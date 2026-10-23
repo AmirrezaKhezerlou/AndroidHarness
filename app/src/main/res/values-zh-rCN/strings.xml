@@ -860,4 +860,10 @@
     <string name="chat_attachment_ready">就绪</string>
     <string name="chat_attachment_image_unconfirmed">就绪 · 此模型的图片支持尚未确认</string>
     <string name="chat_quote_shortened">已引用所选内容的前 1,500 个字符。</string>
+    <string name="chat_handoff_default_title">在项目中继续</string>
+    <string name="chat_handoff_default_reason">使用聊天中的上下文，在工作区内进行修改。</string>
+    <string name="chat_handoff_choose_workspace">选择工作区</string>
+    <string name="chat_handoff_picker_note">选择要使用的工作区。聊天中的计划会一并带入。</string>
+    <string name="chat_handoff_close">关闭工作区选择器</string>
+    <string name="chat_handoff_no_workspace">请先在代码中添加工作区。</string>
 </resources>

@@ -30,11 +30,16 @@ class ReadChatTextTool(private val load: suspend (String) -> List<ChatMessage>) 
 
 class OfferCodeHandoffTool : Tool {
     override val name = "offer_code_handoff"
-    override val description = "Offer a Continue in Code button only when the user requests Code or project editing/execution is needed. Does not navigate, run commands, or change files."
-    override val parametersSchema = Schema.obj(mapOf("reason" to Schema.string("Short reason that project access or Code was requested.")), required = listOf("reason"))
+    override val description = "Offer a Continue in Code card only when the user requests Code or project editing/execution is needed. Does not navigate, run commands, or change files."
+    override val parametersSchema = Schema.obj(mapOf(
+        "title" to Schema.string("Concise action title for the card in the user's language, such as Build your reading tracker. Up to 80 characters."),
+        "reason" to Schema.string("One short sentence describing the project editing or execution needed, in the user's language. Up to 400 characters."),
+    ), required = listOf("reason"))
     override val isReadOnly = true
     override suspend fun execute(args: JsonObject, ctx: ToolContext): ToolResult {
         val reason = args["reason"]?.jsonPrimitive?.content?.trim().orEmpty()
+        val title = args["title"]?.jsonPrimitive?.content?.trim()
+        if (title != null && (title.isBlank() || title.length > 80)) throw ToolFailure("Provide an action title of 1 to 80 characters, or omit it.")
         if (reason.isBlank() || reason.length > 400) throw ToolFailure("Provide a short reason, up to 400 characters.")
         return ToolResult(true, "Continue in Code is offered. The user must choose it before a Code conversation is created.")
     }

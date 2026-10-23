@@ -29,7 +29,7 @@ class ChatToolsTest {
     @Test fun handoffToolOnlyOffersItNeverStartsExecution(): Unit = runBlocking {
         val root = Files.createTempDirectory("chat-handoff").toFile()
         try {
-            val result = OfferCodeHandoffTool().execute(buildJsonObject { put("reason", "Editing the project needs Code") }, ToolContext(FileFs(root), sessionId = "chat"))
+            val result = OfferCodeHandoffTool().execute(buildJsonObject { put("title", "Apply the project changes"); put("reason", "Editing the project needs Code") }, ToolContext(FileFs(root), sessionId = "chat"))
             assertTrue(result.ok)
             assertTrue(root.listFiles().orEmpty().isEmpty())
             assertTrue(result.output.contains("must choose"))

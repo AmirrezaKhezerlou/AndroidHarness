@@ -17,6 +17,8 @@ data class ToolContext(
      */
     val sandboxOff: Boolean = false,
     val sessionId: String? = null,
+    /** Scoped to this call by the engine; never shared across chats or concurrent installs. */
+    val onPackageProgress: suspend (com.androidharness.app.data.env.PackageInstallStatus) -> Unit = {},
 )
 
 data class ToolResult(

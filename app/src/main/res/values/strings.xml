@@ -862,4 +862,10 @@
     <string name="chat_attachment_ready">Ready</string>
     <string name="chat_attachment_image_unconfirmed">Ready · image support is unconfirmed for this model</string>
     <string name="chat_quote_shortened">Quoted the first 1,500 characters of the selection.</string>
+    <string name="chat_handoff_default_title">Continue in your project</string>
+    <string name="chat_handoff_default_reason">Use your Chat context to make changes in a workspace.</string>
+    <string name="chat_handoff_choose_workspace">Choose a workspace</string>
+    <string name="chat_handoff_picker_note">Choose where to build. Your Chat plan comes along.</string>
+    <string name="chat_handoff_close">Close workspace picker</string>
+    <string name="chat_handoff_no_workspace">Add a workspace in Code to continue.</string>
 </resources>

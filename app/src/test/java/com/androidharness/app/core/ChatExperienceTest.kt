@@ -22,6 +22,29 @@ class ChatExperienceTest {
         assertFalse(ChatExperience.offersCode(turn + ChatMessage(Role.USER, "Just explain the idea for now")))
     }
 
+    @Test fun cardCopyComesOnlyFromASuccessfulOfferInTheCurrentTurn() {
+        val turn = listOf(ChatMessage(Role.USER, "Build this in my project"),
+            ChatMessage(Role.ASSISTANT, toolCalls = listOf(ToolCallData("card", "offer_code_handoff",
+                """{"title":"Build your reading tracker","reason":"Create the screens and connect local storage."}"""))),
+            ChatMessage(Role.TOOL, "Offered", toolCallId = "card", toolName = "offer_code_handoff"))
+        assertEquals(ChatExperience.CodeHandoffOffer("Build your reading tracker", "Create the screens and connect local storage."), ChatExperience.codeHandoffOffer(turn))
+        assertNull(ChatExperience.codeHandoffOffer(turn.dropLast(1)))
+        assertNull(ChatExperience.codeHandoffOffer(turn.dropLast(1) + turn.last().copy(isError = true)))
+        assertNull(ChatExperience.codeHandoffOffer(turn + ChatMessage(Role.USER, "Just explain it")))
+        assertEquals(ChatExperience.CodeHandoffOffer(), ChatExperience.codeHandoffOffer(turn + ChatMessage(Role.USER, "Switch to Code")))
+    }
+
+    @Test fun oldAndMalformedOffersUseFallbackCopyWithoutLeakingArguments() {
+        fun offer(args: String) = ChatExperience.codeHandoffOffer(listOf(ChatMessage(Role.USER, "Apply this"),
+            ChatMessage(Role.ASSISTANT, toolCalls = listOf(ToolCallData("card", "offer_code_handoff", args))),
+            ChatMessage(Role.TOOL, "Offered", toolCallId = "card")))
+        assertEquals(ChatExperience.CodeHandoffOffer(), offer("{}"))
+        assertEquals(ChatExperience.CodeHandoffOffer(), offer("not json"))
+        assertEquals(ChatExperience.CodeHandoffOffer(), offer("""{"title":false,"reason":4}"""))
+        assertEquals(ChatExperience.CodeHandoffOffer("A useful title", "A short reason"), offer("""{"title":"  A   useful title  ","reason":"A  short reason"}"""))
+        assertEquals(80, offer("""{"title":"${"x".repeat(200)}"}""")?.title?.length)
+    }
+
     @Test fun chatPromptUsesTheLocalCalendarDateAcrossTimezoneBoundaries() {
         val instant = java.time.Instant.parse("2026-10-21T20:00:00Z")
         val india = ChatExperience.systemPrompt(instant.atZone(java.time.ZoneId.of("Asia/Kolkata")))

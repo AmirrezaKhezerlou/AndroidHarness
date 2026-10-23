@@ -184,7 +184,11 @@ fun toolPresentation(call: ToolCallData, result: ChatMessage? = null): ToolPrese
         "pkg_install" -> {
             val packages = arg("packages") ?: arg("package") ?: "package"
             ToolPresentation(
-                if (result?.isError == true) "Install failed" else "Installed $packages",
+                when {
+                    result == null -> "Install $packages"
+                    result.isError -> "Install failed: $packages"
+                    else -> "Installed $packages"
+                },
                 "Installing $packages…",
                 kind = ToolActivityKind.EDIT,
             )

@@ -12,14 +12,15 @@ class PkgInstallTool(
     private val installedPackages: () -> List<String>,
     private val installPackages: suspend (List<String>) -> Unit,
     private val installForWorkspace: (suspend (List<String>, String) -> Unit)? = null,
+    private val installWithProgress: (suspend (List<String>, String, suspend (com.androidharness.app.data.env.PackageInstallStatus) -> Unit) -> Unit)? = null,
 ) : Tool {
 
     constructor(linuxEnv: LinuxEnvironmentManager) : this(
         isReady = { linuxEnv.isReady },
         installedPackages = { linuxEnv.installedPackages() },
         installPackages = { linuxEnv.install(it).getOrThrow() },
-        installForWorkspace = { packages, workspace ->
-            linuxEnv.install(packages, workspace).getOrThrow()
+        installWithProgress = { packages, workspace, progress ->
+            linuxEnv.install(packages, workspace, progress).getOrThrow()
             check(linuxEnv.isReady && packages.all(linuxEnv::installedContains)) { "Package installation did not complete. Check the Linux environment status." }
         },
     )
@@ -63,7 +64,11 @@ class PkgInstallTool(
         }
         return try {
             val previouslyInstalled = installedPackages().toSet()
-            if (installForWorkspace != null) installForWorkspace.invoke(pkgs, ctx.workspace.displayPath) else installPackages(pkgs)
+            when {
+                installWithProgress != null -> installWithProgress.invoke(pkgs, ctx.workspace.displayPath, ctx.onPackageProgress)
+                installForWorkspace != null -> installForWorkspace.invoke(pkgs, ctx.workspace.displayPath)
+                else -> installPackages(pkgs)
+            }
             val installed = installedPackages().toSet()
             check(pkgs.all { it in installed }) { "Package installation did not complete." }
             val newlyInstalled = pkgs.filter { it !in previouslyInstalled }

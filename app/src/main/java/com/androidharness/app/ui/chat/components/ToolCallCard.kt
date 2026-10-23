@@ -91,8 +91,13 @@ internal fun ToolCallCard(
     awaitingApproval: Boolean = false,
     onWatchBrowser: ((String?) -> Unit)? = null,
     browserTarget: String? = null,
+    packageProgress: com.androidharness.app.data.env.PackageInstallStatus? = null,
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
+    if (call.name == "pkg_install") {
+        PackageInstallCard(call, result, running, awaitingApproval, packageProgress)
+        return
+    }
     if (com.androidharness.app.browser.BrowserToolActivity.isBrowserTool(call.name)) {
         BrowserToolCard(call, result, running, browserTarget, awaitingApproval, onWatchBrowser)
         return
@@ -303,6 +308,7 @@ internal fun ToolGroupCard(
     showLiveCode: Boolean = true,
     onWatchBrowser: ((String?) -> Unit)? = null,
     browserTargets: Map<String, String> = emptyMap(),
+    packageProgress: Map<String, com.androidharness.app.data.env.PackageInstallStatus> = emptyMap(),
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     var expanded by rememberSaveable(calls.joinToString(",") { it.id }) { mutableStateOf(false) }
@@ -452,6 +458,7 @@ internal fun ToolGroupCard(
                                 showLiveCode = showLiveCode,
                                 onWatchBrowser = onWatchBrowser,
                                 browserTarget = browserTargets[call.id],
+                                packageProgress = packageProgress[call.id],
                             )
                         }
                     }

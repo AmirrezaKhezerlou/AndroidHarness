@@ -85,6 +85,7 @@ class RunManager(
         val lastCommittedId: String? = null,
         val runningCalls: List<ToolCallData> = emptyList(),
         val codeDrafts: Map<String, LiveCodeDraft> = emptyMap(),
+        val packageProgress: Map<String, com.androidharness.app.data.env.PackageInstallStatus> = emptyMap(),
         val pendingApproval: ApprovalRequest? = null,
         val pendingQuestion: QuestionRequest? = null,
         val pendingEnvironment: EnvironmentRequest? = null,
@@ -415,7 +416,7 @@ class RunManager(
                 running = true, cancelled = false, error = null, turnId = turnId,
                 streamingText = "", streamingThinking = null,
                 thinkingTiming = ThinkingTiming(), reasoningTokens = null,
-                codeDrafts = emptyMap(),
+                codeDrafts = emptyMap(), packageProgress = emptyMap(),
                 liveMessageId = UUID.randomUUID().toString(), lastCommittedId = null,
                 queuedMessage = null, pendingPlan = null,
             )
@@ -577,7 +578,7 @@ class RunManager(
                         // which committed row it is waiting on.
                         liveMessageId = null,
                         runningCalls = emptyList(),
-                        codeDrafts = emptyMap(),
+                        codeDrafts = emptyMap(), packageProgress = emptyMap(),
                         pendingApproval = null,
                         pendingQuestion = null,
                         pendingEnvironment = null,
@@ -736,6 +737,10 @@ class RunManager(
                 }
             }
 
+            is AgentEvent.PackageProgress -> live.update { st ->
+                if (st.runningCalls.any { it.id == event.callId })
+                    st.copy(packageProgress = st.packageProgress + (event.callId to event.status)) else st
+            }
             is AgentEvent.ApprovalNeeded -> live.update { it.copy(pendingApproval = event.request) }
             is AgentEvent.QuestionNeeded -> live.update { it.copy(pendingQuestion = event.request) }
             is AgentEvent.EnvironmentNeeded -> live.update { it.copy(pendingEnvironment = event.request) }
@@ -780,6 +785,7 @@ class RunManager(
                 live.update {
                     it.copy(
                         runningCalls = remaining,
+                        packageProgress = it.packageProgress - event.callId,
                         pendingApproval = null,
                         subagentSteps = it.subagentSteps - event.callId,
                         codeDrafts = it.codeDrafts.mapValues { (id, draft) ->

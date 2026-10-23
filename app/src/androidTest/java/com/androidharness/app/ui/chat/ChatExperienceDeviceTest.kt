@@ -117,18 +117,18 @@ class ChatExperienceDeviceTest {
                     } }
                 }
                 await("Start with one small idea you can test this week.")
-                await("Thought for 3s")
+                await("Thoughts")
                 assertNull(find("Searched the web"))
                 assertNull(find("Work summary")); assertNull(find("RAW_PRIVATE_TOOL_OUTPUT"))
                 assertNull(find("Chat tools off")); assertNull(find("Continue in Code"))
                 screenshot("chat-reply")
-                tap("Thought for 3s"); await("Consider the audience and keep the first experiment small.")
+                tap("Thoughts"); await("Consider the audience and keep the first experiment small.")
                 screenshot("chat-thoughts-expanded")
                 scenario.onActivity { scale.value = 1.5f; theme.value = ThemeMode.DARK }
                 await("Consider the audience and keep the first experiment small.")
                 screenshot("chat-thoughts-large-dark")
                 scenario.onActivity { scale.value = 1f; theme.value = ThemeMode.LIGHT }
-                tap("Thought for 3s")
+                tap("Thoughts")
                 val count = c.sessions.sessions.first().size
                 val offerTurn = "chat-offer-fixture"
                 c.sessions.addMessage(chat, ChatMessage(Role.USER, "Apply the chosen idea to my project"), offerTurn)
@@ -136,11 +136,14 @@ class ChatExperienceDeviceTest {
                     toolCalls = listOf(ToolCallData("offer", "offer_code_handoff", "{\"reason\":\"Project edits need Code\"}"))), offerTurn)
                 c.sessions.addMessage(chat, ChatMessage(Role.TOOL, "Offered", toolCallId = "offer", toolName = "offer_code_handoff"), offerTurn)
                 c.sessions.addMessage(chat, ChatMessage(Role.ASSISTANT, "You can continue in Code to apply the changes."), offerTurn)
-                await("Continue in Code")
+                val deadline = SystemClock.uptimeMillis() + 8000
+                while (find("Choose a workspace") == null && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(50)
+                val handoff = clickableText("Choose a workspace")
                 assertEquals("Offering does not create a Code conversation", count, c.sessions.sessions.first().size)
-                tap("Continue in Code"); await("Create Code conversation")
+                assertTrue(handoff.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+                await("Choose where to build. Your Chat plan comes along.")
                 assertEquals(count, c.sessions.sessions.first().size)
-                tap("Cancel")
+                tap("Close workspace picker")
                 scenario.onActivity { selected.value = ConversationKind.CODE }
                 await("Work summary")
                 screenshot("code-summary-preserved")
@@ -804,6 +807,121 @@ class ChatExperienceDeviceTest {
             assertNull(repo.promptBlock(null) { absent += it })
             assertTrue(absent.isEmpty())
         } finally { c.settings.setMemoryEnabled(prefs.memoryEnabled); db.close(); root.deleteRecursively() }
+    }
+
+    @Test fun contextCardMatchesTheConceptAndHandoffWaitsForConfirmation(): Unit = runBlocking {
+        val saved = c.settings.settings.first()
+        val project = c.workspace.currentProjectOnce()
+        val chat = c.sessions.createSession("Reading tracker", project.id,
+            ConversationConfig(ConversationKind.CHAT, draftText = "Keep this draft"))
+        val store = ViewModelStore()
+        val theme = mutableStateOf(ThemeMode.LIGHT)
+        val opened = java.util.concurrent.atomic.AtomicReference<String?>(null)
+        val turn = "context-card-fixture"
+        try {
+            c.sessions.addMessage(chat, ChatMessage(Role.USER, "Build the reading tracker we discussed."), turn)
+            c.sessions.addMessage(chat, ChatMessage(Role.ASSISTANT, toolCalls = listOf(ToolCallData("offer", "offer_code_handoff",
+                """{"title":"Build your reading tracker","reason":"Create the screens and connect local storage."}"""))), turn)
+            c.sessions.addMessage(chat, ChatMessage(Role.TOOL, "Offered", toolCallId = "offer", toolName = "offer_code_handoff"), turn)
+            c.sessions.addMessage(chat, ChatMessage(Role.ASSISTANT, "The plan is ready. Start with a small reading list, progress tracking, and a simple daily goal."), turn)
+            val count = c.sessions.sessions.first().size
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { activity ->
+                    val vm = ChatViewModel(c, chat); store.put("context-card", vm)
+                    activity.setContent { HarnessTheme(themeMode = theme.value, dynamicColor = false) {
+                        ChatScreen(vm, {}, { _, _ -> }, {}, {}, onOpenSubagent = {}, onNavigateToSession = { opened.set(it) })
+                    } }
+                }
+                awaitCard("Build your reading tracker")
+                screenshot("context-card-light")
+                assertTrue(awaitCard("Build your reading tracker").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+                await("Choose where to build. Your Chat plan comes along.")
+                screenshot("context-picker-light")
+                assertEquals(count, c.sessions.sessions.first().size)
+                tap("Close workspace picker")
+                scenario.onActivity { theme.value = ThemeMode.DARK }
+                awaitCard("Build your reading tracker")
+                instrumentation.waitForIdleSync()
+                screenshot("context-card-dark")
+                assertTrue(awaitCard("Build your reading tracker").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+                await("Choose where to build. Your Chat plan comes along.")
+                screenshot("context-picker-dark")
+                val confirm = clickableText("Continue in Code")
+                assertTrue(confirm.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+                val deadline = SystemClock.uptimeMillis() + 8000
+                while (opened.get() == null && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(50)
+                val id = requireNotNull(opened.get())
+                val code = requireNotNull(c.sessions.session(id))
+                assertEquals(count + 1, c.sessions.sessions.first().size)
+                assertEquals(project.id, code.projectId)
+                assertEquals(chat, ConversationConfig.decode(code.conversationJson).sourceChatId)
+                assertFalse(ConversationConfig.decode(code.conversationJson).isChat)
+                assertTrue(code.compactionSummary.contains("Build the reading tracker we discussed."))
+                assertFalse(code.compactionSummary.contains("offer_code_handoff"))
+                assertFalse(c.runManager.isRunning(id))
+                assertFalse(c.sessions.messages(id).any { it.role == Role.USER })
+                assertEquals("Keep this draft", ConversationConfig.decode(c.sessions.session(chat)?.conversationJson).draftText)
+            }
+        } finally {
+            instrumentation.runOnMainSync { store.clear() }
+            opened.get()?.let { c.sessions.session(it)?.let { session -> c.sessions.deleteSession(session) } }
+            c.sessions.session(chat)?.let { c.sessions.deleteSession(it) }
+            c.settings.setLastActiveSessionId(saved.lastActiveSessionId)
+        }
+    }
+
+    @Test fun contextPickerSupportsLargeTextAndSelectingAnotherWorkspace(): Unit = runBlocking {
+        val show = mutableStateOf(false)
+        val chosen = java.util.concurrent.atomic.AtomicReference<String?>(null)
+        val projects = listOf(
+            com.androidharness.app.data.db.ProjectEntity("first", "My workspace", "APP", null, 0L),
+            com.androidharness.app.data.db.ProjectEntity("second", "Reading tracker with a longer workspace name", "APP", null, 0L),
+        )
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            scenario.onActivity { activity -> activity.setContent { HarnessTheme(themeMode = ThemeMode.DARK, dynamicColor = false) {
+                val density = LocalDensity.current
+                CompositionLocalProvider(LocalDensity provides Density(density.density, 1.5f)) {
+                    Box(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                        com.androidharness.app.ui.chat.components.ChatCodeHandoffCard(
+                            ChatExperience.CodeHandoffOffer("Build your reading tracker", "Create the screens and connect local storage."),
+                            true, { show.value = true }, Modifier.widthIn(max = 320.dp))
+                    }
+                    if (show.value) com.androidharness.app.ui.chat.components.ChatCodeHandoffSheet(projects, "first", true,
+                        { show.value = false }, { chosen.set(it); show.value = false })
+                }
+            } } }
+            awaitCard("Build your reading tracker")
+            screenshot("context-card-large-text")
+            assertTrue(awaitCard("Build your reading tracker").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            val row = await("Reading tracker with a longer workspace name")
+            var selectable = row
+            while (!selectable.isClickable && selectable.parent != null) selectable = selectable.parent
+            assertTrue(selectable.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            instrumentation.waitForIdleSync()
+            screenshot("context-picker-large-text")
+            val confirm = clickableText("Continue in Code")
+            assertTrue(confirm.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            instrumentation.waitForIdleSync()
+            assertEquals("second", chosen.get())
+        }
+    }
+
+    private fun awaitCard(title: String): AccessibilityNodeInfo {
+        val deadline = SystemClock.uptimeMillis() + 15_000
+        do {
+            find(title)?.let { return clickableText(title) }
+            SystemClock.sleep(100)
+        } while (SystemClock.uptimeMillis() < deadline)
+        screenshot("failure"); throw AssertionError("Expected Context card: $title; visible: ${nodes().mapNotNull { it.text?.toString() }}")
+    }
+
+    private fun clickableText(text: String): AccessibilityNodeInfo {
+        for (match in nodes().filter { it.isVisibleToUser && it.text?.toString() == text }) {
+            var node = match
+            while (!node.isClickable && node.parent != null) node = node.parent
+            if (node.isClickable) return node
+        }
+        throw AssertionError("Expected clickable control: $text")
     }
 
     private fun nodes(): List<AccessibilityNodeInfo> = buildList {

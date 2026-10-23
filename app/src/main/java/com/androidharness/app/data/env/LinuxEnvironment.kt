@@ -405,11 +405,14 @@ class LinuxEnvironmentManager(
     val fullPackages = corePackages + listOf("gh", "python", "python-pip", "nodejs", "npm")
 
     /** Installs [wanted] plus their full dependency closure. Resumes after interruptions. */
-    suspend fun install(wanted: List<String>, requester: String = "Manual install") = withContext(Dispatchers.IO) {
+    suspend fun install(wanted: List<String>, requester: String = "Manual install",
+        onProgress: suspend (PackageInstallStatus) -> Unit = {},
+    ) = withContext(Dispatchers.IO) {
+        onProgress(PackageInstallStatus(wanted.toList()))
         installMutex.withLock {
             val broken = brokenInstalledPackages().toSet()
             val result = if (isReady && wanted.all { installedContains(it) && it !in broken }) Result.success(Unit)
-                else installLocked(wanted)
+                else installLocked(wanted, onProgress)
             if (result.isSuccess) toolStore.require(wanted, requester)
             result
         }
@@ -523,13 +526,19 @@ class LinuxEnvironmentManager(
             (packageProtection(name) ?: "No recorded requirements remain."))
     }
 
-    private suspend fun installLocked(wanted: List<String>): Result<Unit> {
+    private suspend fun installLocked(wanted: List<String>, onProgress: suspend (PackageInstallStatus) -> Unit): Result<Unit> {
+        var progress = PackageInstallStatus(wanted.toList(), PackageInstallPhase.RESOLVING)
+        suspend fun publish(phase: PackageInstallPhase, pkg: String? = null, downloaded: Long = 0, total: Long? = null) {
+            progress = progress.copy(phase = phase, currentPackage = pkg, downloadedBytes = downloaded, totalBytes = total)
+            onProgress(progress)
+        }
         val wasReady = isReady
         var prefixChanged = false
         try {
             // React to the tap immediately: fetching the package index takes
             // seconds on mobile networks before the first package download.
             _state.value = EnvState.Preparing
+            onProgress(progress)
             val index = getPackageIndex()
             val already = installedPackages().toSet() - brokenInstalledPackages().toSet()
             val unknown = wanted.filter { it !in index }
@@ -537,6 +546,7 @@ class LinuxEnvironmentManager(
                 throw IllegalArgumentException("Unknown package(s): ${unknown.joinToString(", ")}. Not found in repository.")
             }
             val closure = resolve(index, wanted).filter { it.name !in already }
+            progress = progress.copy(packages = closure.map { it.name })
             if (closure.isEmpty()) {
                 markInstalled(wanted)
                 _state.value = EnvState.Ready
@@ -546,6 +556,7 @@ class LinuxEnvironmentManager(
 
             closure.forEachIndexed { i, pkg ->
                 _state.value = EnvState.Downloading(i, closure.size, pkg.name, totalBytes = pkg.size.takeIf { it > 0 })
+                publish(PackageInstallPhase.DOWNLOADING, pkg.name, total = pkg.size.takeIf { it > 0 })
                 // The index is parsed from the network response, so its Filename
                 // field is untrusted: keep the download URL inside the repo pool
                 // and the local file inside this temp dir.
@@ -556,23 +567,30 @@ class LinuxEnvironmentManager(
                     !debBase.endsWith(".deb")
                 ) throw IllegalStateException("Unsafe package filename in the index: $fileField")
                 val debFile = File(tempDir, debBase)
-                downloadVerified("$BASE_URL/$fileField", debFile, pkg.sha256) { downloaded, total ->
-                    _state.value = EnvState.Downloading(i, closure.size, pkg.name, downloaded,
-                        total ?: pkg.size.takeIf { it > 0 })
-                }
+                downloadVerified("$BASE_URL/$fileField", debFile, pkg.sha256,
+                    onVerifying = { publish(PackageInstallPhase.VERIFYING, pkg.name) },
+                    onProgress = { downloaded, total ->
+                        val size = total ?: pkg.size.takeIf { it > 0 }
+                        _state.value = EnvState.Downloading(i, closure.size, pkg.name, downloaded, size)
+                        publish(PackageInstallPhase.DOWNLOADING, pkg.name, downloaded, size)
+                    })
                 _state.value = EnvState.Installing(i, closure.size, pkg.name)
+                publish(PackageInstallPhase.UNPACKING, pkg.name)
                 prefixChanged = true
                 val installedPaths = extractDeb(debFile)
+                publish(PackageInstallPhase.CONFIGURING, pkg.name)
                 recordPackageFiles(pkg, installedPaths)
                 debFile.delete()
                 // record progress per package so a killed install resumes
                 markInstalled(listOf(pkg.name))
+                progress = progress.copy(completed = progress.completed + pkg.name)
             }
 
             File(prefix, "home").mkdirs()
             File(prefix, "tmp").mkdirs()
             File(prefix, "etc/termux").mkdirs()
             markInstalled(wanted)
+            publish(PackageInstallPhase.CONFIGURING)
             ensureShims(force = true)
             _state.value = EnvState.Ready
             runCatching { deployStateListener?.invoke() }
@@ -1623,9 +1641,10 @@ class LinuxEnvironmentManager(
         return visited.mapNotNull { index[it] }
     }
 
-    private fun downloadVerified(
+    private suspend fun downloadVerified(
         url: String, dest: File, expectedSha256: String,
-        onProgress: ((Long, Long?) -> Unit)? = null,
+        onVerifying: (suspend () -> Unit)? = null,
+        onProgress: (suspend (Long, Long?) -> Unit)? = null,
     ) {
         client.newCall(Request.Builder().url(url).build()).execute().use { resp ->
             if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code} downloading $url")
@@ -1653,6 +1672,7 @@ class LinuxEnvironmentManager(
                 }
             }
             onProgress?.invoke(downloaded, totalBytes)
+            onVerifying?.invoke()
             val actual = digest.digest().joinToString("") { "%02x".format(it) }
             if (expectedSha256.isNotBlank() && !actual.equals(expectedSha256, ignoreCase = true)) {
                 dest.delete()

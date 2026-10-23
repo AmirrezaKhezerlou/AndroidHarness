@@ -124,6 +124,7 @@ sealed interface AgentEvent {
     data class CodeDraft(val draft: LiveCodeDraft) : AgentEvent
     data object CodeDraftsCleared : AgentEvent
     data class ToolStarted(val call: ToolCallData) : AgentEvent
+    data class PackageProgress(val callId: String, val status: com.androidharness.app.data.env.PackageInstallStatus) : AgentEvent
     data class ToolFinished(val callId: String, val result: ToolResult) : AgentEvent
     data class ApprovalNeeded(val request: ApprovalRequest) : AgentEvent
     data class QuestionNeeded(val request: QuestionRequest) : AgentEvent
@@ -826,6 +827,8 @@ class AgentEngine(
         catch (e: Exception) { return ToolResult(false, e.message ?: "Workspace access was denied.") }
         val workspace = route.workspace
         val sandboxOff = mode == PermissionMode.FULL_ACCESS && checkpointWorkspace !is ChatWorkspaceFs
+        val toolContext = ToolContext(workspace, sandboxOff, sessionId,
+            onPackageProgress = { emitEvent(AgentEvent.PackageProgress(call.id, it)) })
 
         // The model sometimes tries to modify files in plan mode, refuse cleanly.
         if (agentMode == AgentMode.PLAN && !tool.isReadOnly) {
@@ -1038,8 +1041,8 @@ class AgentEngine(
                 var outcome: ToolResult? = null
                 try {
                     val completed = deviceAccess?.traceTool(route.binding?.id ?: (route.workspace as? ChatWorkspaceFs)?.primaryId, sessionId, args["access"]?.jsonPrimitive?.content == "root", args["access"]?.jsonPrimitive?.content == "shizuku") {
-                        tool.execute(args, ToolContext(workspace, sandboxOff, sessionId))
-                    } ?: tool.execute(args, ToolContext(workspace, sandboxOff, sessionId))
+                        tool.execute(args, toolContext)
+                    } ?: tool.execute(args, toolContext)
                     outcome = completed
                     completed
                 } finally {
@@ -1083,8 +1086,8 @@ class AgentEngine(
                     kotlin.coroutines.coroutineContext[TaskBudget]?.check()
                     val retry = try {
                         deviceAccess?.traceTool(route.binding?.id ?: (route.workspace as? ChatWorkspaceFs)?.primaryId, sessionId, args["access"]?.jsonPrimitive?.content == "root", args["access"]?.jsonPrimitive?.content == "shizuku") {
-                            tool.execute(args, ToolContext(workspace, sandboxOff, sessionId))
-                        } ?: tool.execute(args, ToolContext(workspace, sandboxOff, sessionId))
+                            tool.execute(args, toolContext)
+                        } ?: tool.execute(args, toolContext)
                     } catch (ce: CancellationException) {
                         throw ce
                     } catch (e: Exception) {

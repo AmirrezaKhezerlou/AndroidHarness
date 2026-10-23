@@ -16,6 +16,23 @@ import java.io.File
 
 class PkgToolsTest {
 
+    @Test fun `install progress is forwarded to its tool context and failure cannot report success`() = runBlocking {
+        val workspace = createMockWorkspace()
+        val received = mutableListOf<com.androidharness.app.data.env.PackageInstallStatus>()
+        val context = ToolContext(workspace, onPackageProgress = { received += it })
+        val tool = PkgInstallTool({ true }, { emptyList() }, {}, installWithProgress = { names, owner, progress ->
+            assertEquals(workspace.displayPath, owner)
+            progress(com.androidharness.app.data.env.PackageInstallStatus(names,
+                com.androidharness.app.data.env.PackageInstallPhase.VERIFYING, currentPackage = "ffmpeg"))
+            error("Checksum mismatch")
+        })
+        val result = tool.execute(buildJsonObject { put("packages", buildJsonArray { add(kotlinx.serialization.json.JsonPrimitive("ffmpeg")) }) }, context)
+        assertFalse(result.ok)
+        assertTrue(result.output.contains("Checksum mismatch"))
+        assertEquals(listOf("ffmpeg"), received.single().requested)
+        assertEquals("ffmpeg", received.single().currentPackage)
+    }
+
     private val samplePackages = """
 Package: jq
 Version: 1.7.1
