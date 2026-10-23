@@ -265,7 +265,7 @@ class WebFetchTool(
                 fetchClient.newCall(
                     Request.Builder()
                         .url(url)
-                        .header("User-Agent", BROWSER_UA)
+                        .header("User-Agent", BROWSER_USER_AGENT)
                         .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7")
                         .header("Accept-Language", languageHeader(java.util.Locale.getDefault().language))
                         .build()
@@ -357,10 +357,6 @@ class WebFetchTool(
         return out.toString().trimEnd()
     }
 }
-
-private const val BROWSER_UA =
-    "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) " +
-        "Chrome/125.0.0.0 Mobile Safari/537.36"
 
 private fun ByteArray.startsWithAscii(prefix: String): Boolean {
     if (size < prefix.length) return false

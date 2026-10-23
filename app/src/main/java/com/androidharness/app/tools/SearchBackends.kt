@@ -115,11 +115,11 @@ internal class KeylessSearchBackend : SearchBackend {
         val collected = ArrayList<WebSearchResult>()
         val seen = HashSet<String>()
         val used = ArrayList<String>()
-        var lastError: String? = null
+        val errors = LinkedHashMap<String, String>()
         for ((name, result) in finished) {
-            val results = result.getOrElse { lastError = "$name failed: ${it.message}"; continue }
+            val results = result.getOrElse { errors[name] = it.message ?: "failed"; continue }
             if (results.isEmpty()) {
-                lastError = "$name returned no results"
+                errors[name] = "returned no results"
                 continue
             }
             if (collected.size >= count) break
@@ -134,7 +134,8 @@ internal class KeylessSearchBackend : SearchBackend {
         }
         throw ToolFailure(
             "All keyless engines failed. Tried: ${chain.joinToString(", ")}. " +
-                "Last error: ${lastError ?: "unknown"}.",
+                "Details: ${errors.entries.joinToString("; ") { "${it.key}: ${it.value}" }}. " +
+                "You can also use browser_read on a search URL or web_fetch a known URL.",
         )
     }
 
@@ -187,7 +188,8 @@ internal class KeylessSearchBackend : SearchBackend {
         val html = client.newCall(
             Request.Builder()
                 .url(url)
-                .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AndroidHarness/1.0")
+                .header("User-Agent", BROWSER_USER_AGENT)
+                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
                 .header("Accept-Language", languageHeader(options.language))
                 .build()
         ).execute().use { resp ->
@@ -391,6 +393,11 @@ internal object TavilySearchParser {
         }.filter { it.url.startsWith("http") }
     }.getOrDefault(emptyList())
 }
+
+/** Shared browser identity for keyless search and page reads. */
+internal const val BROWSER_USER_AGENT =
+    "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) " +
+        "Chrome/125.0.0.0 Mobile Safari/537.36"
 
 /** Freshness values understood by the tool, mapped per backend. */
 private fun ddgDate(freshness: String?): String? = when (freshness) {
