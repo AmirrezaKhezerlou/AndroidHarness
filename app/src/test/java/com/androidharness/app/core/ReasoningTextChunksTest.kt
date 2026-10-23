@@ -4,6 +4,29 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReasoningTextChunksTest {
+    @Test fun appendCacheReusesCompletedChunksAndResetsForReplacement() {
+        val cache = ReasoningTextChunks.Stream()
+        val initial = "A careful reasoning step.\n".repeat(200)
+        val first = cache.update(initial)
+        val next = cache.update(initial + "More thoughts.\n".repeat(40))
+        assertSame(first.first(), next.first())
+        assertEquals(initial + "More thoughts.\n".repeat(40), next.joinToString(""))
+        assertSame(next, cache.update(initial + "More thoughts.\n".repeat(40)))
+        assertEquals(listOf("A new response."), cache.update("A new response."))
+        assertTrue(cache.update("").isEmpty())
+    }
+
+    @Test fun fastAppendBurstsKeepEveryCharacterAndBoundEachLayout() {
+        val cache = ReasoningTextChunks.Stream()
+        var text = ""
+        repeat(160) { index ->
+            text += "Step $index: " + "token 😀 ".repeat(64) + "\n"
+            val chunks = cache.update(text)
+            assertEquals(text, chunks.joinToString(""))
+            assertTrue(chunks.all { it.length <= 1024 })
+            assertTrue(chunks.none { it.last().isHighSurrogate() || it.first().isLowSurrogate() })
+        }
+    }
     @Test fun longUnbrokenReasoningIsBoundedAndLossless() {
         val text = "x".repeat(250_000)
         val chunks = ReasoningTextChunks.split(text)

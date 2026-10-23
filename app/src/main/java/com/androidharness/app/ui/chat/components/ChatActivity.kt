@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import com.androidharness.app.ui.chat.UserScrollObserver
+import com.androidharness.app.ui.chat.rememberChatListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -60,6 +62,7 @@ internal fun ChatActivity(
         ChatActivityPresentation.timeline(messages, runningCalls, streamingThinking, streamId, streamingCommentary)
     }
     if (!live && entries.isEmpty()) return
+    val thoughtChunks = remember { mutableMapOf<String, com.androidharness.app.core.ReasoningTextChunks.Stream>() }
     val active = remember(messages, runningCalls) { ChatActivityPresentation.activeCall(messages, runningCalls) }
     val seconds = messages.sumOf { it.thinkingMs }.coerceAtLeast(0) / 1000
     val title = when {
@@ -81,7 +84,7 @@ internal fun ChatActivity(
                             else stringResource(R.string.chat_thought), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     }
-                    com.androidharness.app.core.ReasoningTextChunks.split(entry.text).forEachIndexed { index, chunk ->
+                    thoughtChunks.getOrPut(entry.key) { com.androidharness.app.core.ReasoningTextChunks.Stream() }.update(entry.text).forEachIndexed { index, chunk ->
                         item(key = entry.key + "-text-" + index) {
                             Text(chunk, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -162,13 +165,21 @@ private fun ChatActivityRow(
             autoOpened = false
         }
     }
-    val scroll = rememberLazyListState()
+    val scroll = rememberChatListState()
     var following by remember { mutableStateOf(true) }
     var userDragged by remember { mutableStateOf(false) }
+    var towardBottom by remember { mutableStateOf(false) }
+    val userScroll = remember { UserScrollObserver { delta ->
+        following = false
+        userDragged = true
+        towardBottom = delta < 0f
+    } }
     // One layout-driven follower. Stream updates never restart/cancel an in-flight scroll.
-    LaunchedEffect(expanded, followLatest) {
-        if (!expanded || !followLatest) return@LaunchedEffect
-        following = true
+    LaunchedEffect(expanded) {
+        if (expanded) { following = true; userDragged = false }
+    }
+    LaunchedEffect(expanded, followLatest, following) {
+        if (!expanded || !followLatest || !following) return@LaunchedEffect
         snapshotFlow {
             val info = scroll.layoutInfo
             val last = info.visibleItemsInfo.lastOrNull()
@@ -181,8 +192,7 @@ private fun ChatActivityRow(
             val lastIndex = info.totalItemsCount - 1
             if (lastIndex < 0) return@collect
             if (info.visibleItemsInfo.lastOrNull()?.index != lastIndex) {
-                scroll.requestScrollToItem(lastIndex)
-                withFrameNanos { }
+                scroll.scrollToItem(lastIndex)
                 if (!following || scroll.isScrollInProgress) return@collect
                 info = scroll.layoutInfo
             }
@@ -203,15 +213,16 @@ private fun ChatActivityRow(
     }
     LaunchedEffect(scroll) {
         snapshotFlow { scroll.isScrollInProgress to scroll.canScrollForward }.collect { (moving, canScroll) ->
-            if (userDragged && !moving && !canScroll) {
+            if (userDragged && towardBottom && !moving && !canScroll) {
                 userDragged = false
                 following = true
             }
         }
     }
     val scheme = MaterialTheme.colorScheme
-    val motion = android.provider.Settings.Global.getFloat(androidx.compose.ui.platform.LocalContext.current.contentResolver,
-        android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val motion = remember(context) { android.provider.Settings.Global.getFloat(context.contentResolver,
+        android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f }
     Column(Modifier.fillMaxWidth()) {
         val header: @Composable () -> Unit = {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -232,8 +243,10 @@ private fun ChatActivityRow(
                 shape = RoundedCornerShape(12.dp), contentPadding = PaddingValues(horizontal = 4.dp)) { header() }
             else Box(Modifier.fillMaxWidth().heightIn(min = 36.dp).padding(horizontal = 4.dp), contentAlignment = Alignment.CenterStart) { header() }
         }
-        AnimatedVisibility(expanded && expandable) {
-            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 240.dp), state = scroll,
+        AnimatedVisibility(expanded && expandable,
+            enter = fadeIn(tween(120)) + expandVertically(tween(160)),
+            exit = fadeOut(tween(100)) + shrinkVertically(tween(160))) {
+            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 240.dp).nestedScroll(userScroll), state = scroll,
                 contentPadding = PaddingValues(start = 36.dp, top = 4.dp, bottom = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp), content = details)
         }

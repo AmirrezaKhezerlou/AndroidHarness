@@ -26,10 +26,10 @@ internal fun ChatThinkingMetrics(messages: List<ChatMessage>, streamingThinking:
             delay(200)
         }
     }
-    val totals = remember(messages, streamingThinking, timing, reasoningTokens, now) {
-        chatThinkingTotals(messages, streamingThinking, timing, reasoningTokens, now)
+    val totals = remember(messages, streamingThinking, reasoningTokens) {
+        chatThinkingTotals(messages, streamingThinking, null, reasoningTokens, 0)
     }
-    val duration = stringResource(R.string.ui_thinking_seconds, totals.milliseconds / 1000)
+    val duration = stringResource(R.string.ui_thinking_seconds, (totals.milliseconds + (timing?.durationMs(now) ?: 0)) / 1000)
     val count = compactThinkingTokenCount(totals.tokens)
     val tokens = stringResource(R.string.chat_thinking_tokens_compact, if (totals.estimated) "~$count" else count)
     val description = duration + " · " + stringResource(

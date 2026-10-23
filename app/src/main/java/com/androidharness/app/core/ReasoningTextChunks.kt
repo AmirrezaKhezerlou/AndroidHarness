@@ -2,7 +2,22 @@ package com.androidharness.app.core
 
 /** Stable, bounded text layouts for the live transcript. Joining chunks preserves every character. */
 internal object ReasoningTextChunks {
-    private const val CHUNK_SIZE = 1024
+    private const val CHUNK_SIZE = 512
+
+    /** Reuse all completed text layouts; only the growing tail needs new strings. */
+    class Stream {
+        private var previous = ""
+        private var chunks: List<String> = emptyList()
+        fun update(text: String): List<String> {
+            if (text == previous) return chunks
+            val append = text.startsWith(previous)
+            val stable = if (append) chunks.dropLast(1) else emptyList()
+            val offset = stable.sumOf { it.length }
+            chunks = stable + split(text.substring(offset))
+            previous = text
+            return chunks
+        }
+    }
 
     fun split(text: String): List<String> {
         if (text.isEmpty()) return emptyList()

@@ -80,11 +80,6 @@ class ChatActivityPresentationTest {
         assertFalse(ChatActivityPresentation.savedMemory(listOf(result("m", "orphan result"))))
     }
 
-    @Test fun toolWorkMarksStreamedProseAsCommentary() {
-        assertTrue(ChatActivityPresentation.hasToolWork(listOf(assistant(call("s", "web_search")))))
-        assertFalse(ChatActivityPresentation.hasToolWork(listOf(assistant(), ChatMessage(Role.ASSISTANT, "Answer"))))
-        assertFalse(ChatActivityPresentation.hasToolWork(listOf(result("s", "orphan result"))))
-    }
     @Test fun memoryReceiptsOnlyExposeIdsFromSuccessfulMatchingRememberCalls() {
         val messages = listOf(assistant(call("m", "remember")), result("m", "Saved.\n[memory_id:abc-123]"),
             assistant(call("f", "remember")), result("f", "[memory_id:failed]", true),

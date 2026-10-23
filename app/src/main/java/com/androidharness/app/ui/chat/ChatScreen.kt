@@ -485,10 +485,13 @@ private fun ChatScreenContent(
     val activeFindId = if (findOpen) findTargetId else searchMessageId
     // A real drag pauses following until the reader returns to the bottom.
     var pinnedToBottom by remember(state.sessionId) { mutableStateOf(false) }
+    var returnToQuestion by remember(state.sessionId) { mutableStateOf(true) }
+    var chatWasBusy by remember(state.sessionId) { mutableStateOf(false) }
     val gestureActive = remember { mutableStateOf(false) }
     var mainListDragged by remember(state.sessionId) { mutableStateOf(false) }
     var lastDragTowardBottom by remember(state.sessionId) { mutableStateOf(false) }
     val userScrollObserver = remember(state.sessionId) { UserScrollObserver { deltaY ->
+        returnToQuestion = false
         pinnedToBottom = false
         lastDragTowardBottom = deltaY < 0f
     } }
@@ -970,16 +973,31 @@ private fun ChatScreenContent(
         }
     }
 
-    // Opening a conversation or sending a new question reveals its newest content.
-    // Completing a response never moves the reader back to the question.
+    // Chat returns to the question after a reply. An explicit bottom jump or a
+    // reader's own scrolling takes precedence for the rest of that turn.
     LaunchedEffect(state.isLoadingMessages, latestUserTurnId, searchMessageId) {
         if (state.isLoadingMessages || (searchMessageId != null && !searchRevealDone)) return@LaunchedEffect
         val turnId = latestUserTurnId ?: return@LaunchedEffect
         if (turnId == lastAnchoredTurnId) return@LaunchedEffect
         lastAnchoredTurnId = turnId
-        pinnedToBottom = true
+        returnToQuestion = true
+        pinnedToBottom = !state.conversation.isChat || state.busy
         withFrameNanos { }
-        listState.scrollToEnd { pinnedToBottom && !gestureActive.value }
+        if (pinnedToBottom) listState.scrollToEnd { pinnedToBottom && !gestureActive.value }
+        else if (returnToQuestion && !gestureActive.value) userItemIndexes[turnId]?.let { listState.scrollToItem(it) }
+    }
+    LaunchedEffect(state.busy, latestUserTurnId) {
+        val started = !chatWasBusy && state.busy
+        val finished = chatWasBusy && !state.busy
+        chatWasBusy = state.busy
+        if (started && state.conversation.isChat && returnToQuestion) pinnedToBottom = true
+        if (!finished || !state.conversation.isChat || !returnToQuestion || findOpen || searchMessageId != null) return@LaunchedEffect
+        val turnId = latestUserTurnId ?: return@LaunchedEffect
+        pinnedToBottom = false
+        withFrameNanos { }
+        if (returnToQuestion && !gestureActive.value && latestUserTurnId == turnId) {
+            userItemIndexes[turnId]?.let { listState.scrollToItem(it) }
+        }
     }
 
     // Track real finger drags so programmatic scrolls can be told apart.
@@ -987,6 +1005,7 @@ private fun ChatScreenContent(
         listState.interactionSource.interactions.collect { interaction ->
             when (interaction) {
                 is DragInteraction.Start -> {
+                    returnToQuestion = false
                     pinnedToBottom = false
                     gestureActive.value = true
                     mainListDragged = true
@@ -1005,6 +1024,7 @@ private fun ChatScreenContent(
                 if (inProgress || dragging || !dragged) return@collect
                 mainListDragged = false
                 if (lastDragTowardBottom && !listState.canScrollForward) {
+                    returnToQuestion = false
                     pinnedToBottom = true
                 }
             }
@@ -1017,7 +1037,7 @@ private fun ChatScreenContent(
         snapshotFlow {
             val info = listState.layoutInfo
             val last = info.visibleItemsInfo.lastOrNull()
-            info.totalItemsCount to (last?.let { it.index to (it.offset + it.size) })
+            Triple(info.totalItemsCount, last?.let { it.index to (it.offset + it.size) }, listState.isScrollInProgress)
         }.distinctUntilChanged().collect {
             if (gestureActive.value || listState.isScrollInProgress) return@collect
             val wait = lastFollowAt + FOLLOW_MIN_INTERVAL_MS - System.currentTimeMillis()
@@ -1035,17 +1055,6 @@ private fun ChatScreenContent(
                 if (delta > 0) listState.scrollBy(delta.toFloat())
             }
         }
-    }
-
-    LaunchedEffect(
-        state.streamingText?.length,
-        state.streamingThinking?.length,
-        state.runningCalls,
-        pinnedToBottom,
-    ) {
-        if (!pinnedToBottom || gestureActive.value || listState.isScrollInProgress) return@LaunchedEffect
-        withFrameNanos { }
-        if (pinnedToBottom && !gestureActive.value && !listState.isScrollInProgress) listState.snapToEndIfDrifted()
     }
 
     // The down button always refers to the bottom, regardless of which bubble is visible.
@@ -1476,8 +1485,6 @@ private fun ChatScreenContent(
                                     (state.currentTurnId == null && message.turnId == state.messages.lastOrNull { it.turnId != null }?.turnId))
                                 if (state.conversation.isChat) {
                                     val conversationTurn = message.turnId?.let { chatTurns[it] }.orEmpty().ifEmpty { listOf(message) }
-                                    val turnHasTools = com.androidharness.app.core.ChatActivityPresentation.hasToolWork(conversationTurn) ||
-                                        (isTurnRunning && state.runningCalls.isNotEmpty())
                                     val activityKey = message.turnId ?: messageKey
                                     if (renderedChatActivities.add(activityKey)) indexedItem(key = "chat-turn-$activityKey-activity", contentType = ChatListContentType.Thinking) {
                                         com.androidharness.app.ui.chat.components.ChatActivity(conversationTurn, live = isTurnRunning,
@@ -1487,9 +1494,8 @@ private fun ChatScreenContent(
                                             autoExpand = !appSettings.chatKeepThinkingCollapsed,
                                             runningCalls = if (isTurnRunning) state.runningCalls else emptyList(),
                                             streamingThinking = if (isTurnRunning && !chatStreamCommitted) state.streamingThinking.orEmpty() else "",
-                                            writing = isTurnRunning && !state.streamingText.isNullOrBlank() && !turnHasTools,
+                                            writing = isTurnRunning && !state.streamingText.isNullOrBlank(),
                                             streamId = state.streamingMessageId ?: "live",
-                                            streamingCommentary = if (isTurnRunning && !chatStreamCommitted && turnHasTools) state.streamingText.orEmpty() else "",
                                             onOpenUrl = { url -> webPreviewUrl = url; showWebPreview = true })
                                     }
                                     // Progress prose stays in the chronological disclosure; only the answer renders here.
@@ -1780,8 +1786,6 @@ private fun ChatScreenContent(
                     val streamAlreadyCommitted = state.streamingMessageId != null &&
                         state.messages.any { it.id == state.streamingMessageId }
                     val liveTurn = state.currentTurnId?.let { chatTurns[it] }.orEmpty()
-                    val liveHasTools = state.runningCalls.isNotEmpty() ||
-                        com.androidharness.app.core.ChatActivityPresentation.hasToolWork(liveTurn)
                     if (state.conversation.isChat && state.busy && state.currentTurnId !in renderedChatActivities) indexedItem(key = "chat-turn-${state.currentTurnId}-activity", contentType = ChatListContentType.Thinking) {
                         com.androidharness.app.ui.chat.components.ChatActivity(
                             liveTurn, live = true,
@@ -1791,8 +1795,7 @@ private fun ChatScreenContent(
                             autoExpand = !appSettings.chatKeepThinkingCollapsed,
                             runningCalls = state.runningCalls,
                             streamingThinking = if (!streamAlreadyCommitted) state.streamingThinking.orEmpty() else "",
-                            writing = !state.streamingText.isNullOrBlank() && !liveHasTools, streamId = state.streamingMessageId ?: "live",
-                            streamingCommentary = if (!streamAlreadyCommitted && liveHasTools) state.streamingText.orEmpty() else "",
+                            writing = !state.streamingText.isNullOrBlank(), streamId = state.streamingMessageId ?: "live",
                             onOpenUrl = { url -> webPreviewUrl = url; showWebPreview = true })
                     }
 
@@ -1807,7 +1810,7 @@ private fun ChatScreenContent(
                                 }
                             }
                         }
-                        state.streamingText?.takeUnless { state.conversation.isChat && liveHasTools }?.let { streaming ->
+                        state.streamingText?.let { streaming ->
                             indexedItem(key = "streaming-$streamKey-text", contentType = ChatListContentType.AssistantText) {
                                 AssistantText(
                                     if (state.conversation.isChat) com.androidharness.app.core.response.ChatRichResponse.normalize(streaming, !state.streamingCommitted) else streaming,
@@ -1948,6 +1951,7 @@ private fun ChatScreenContent(
                     onJump = {
                         showJumpToLatest = false
                         unreadWhileAway = false
+                        returnToQuestion = false
                         pinnedToBottom = true
                         lastAnchoredTurnId = latestUserTurnId
                         scope.launch { listState.scrollToEnd { pinnedToBottom && !gestureActive.value } }
