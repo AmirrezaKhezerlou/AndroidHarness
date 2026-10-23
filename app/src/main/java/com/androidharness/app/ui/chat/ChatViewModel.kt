@@ -980,7 +980,7 @@ class ChatViewModel(
 
     private class AttachmentProblem(val status: AttachmentImportStatus, message: String) : Exception(message)
 
-    private fun importAttachment(uri: Uri, imageOnly: Boolean = false) {
+    private fun importAttachment(uri: Uri, imageOnly: Boolean = false, mimeHint: String? = null) {
         val id = java.util.UUID.randomUUID().toString()
         _state.update { it.copy(attachmentImports = it.attachmentImports + AttachmentImport(id, uri.lastPathSegment?.substringAfterLast('/').orEmpty())) }
         fun active() = _state.value.attachmentImports.any { it.id == id }
@@ -988,7 +988,8 @@ class ChatViewModel(
             try {
                 val resolver = c.appContext.contentResolver
                 val name = queryDisplayName(resolver, uri) ?: uri.lastPathSegment?.substringAfterLast('/') ?: "Attachment"
-                val mime = resolver.getType(uri) ?: "application/octet-stream"
+                val mime = resolver.getType(uri)?.takeUnless { it.contains('*') }
+                    ?: mimeHint?.takeUnless { it.contains('*') } ?: "application/octet-stream"
                 _state.update { it.copy(attachmentImports = it.attachmentImports.map { item -> if (item.id == id) item.copy(name = name) else item }) }
                 val size = querySize(resolver, uri)
                 if (size != null && size > FileAttachments.COPY_BYTE_LIMIT) throw AttachmentProblem(
@@ -1050,6 +1051,8 @@ class ChatViewModel(
     // ------------------------------------------------------------------
 
     fun attachFile(uri: Uri) = importAttachment(uri)
+
+    fun attachSharedFile(uri: Uri, mimeHint: String?) = importAttachment(uri, mimeHint = mimeHint)
 
     fun removeFileAttachment(index: Int) {
         val removed = _state.value.fileAttachments.getOrNull(index) ?: return

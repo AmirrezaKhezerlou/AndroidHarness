@@ -426,6 +426,57 @@ fun AppNav(container: AppContainer) {
         )
     }
 
+    val incomingShare by container.pendingShare.collectAsStateWithLifecycle()
+    var openingShare by remember { mutableStateOf(false) }
+    var shareError by remember(incomingShare?.id) { mutableStateOf<String?>(null) }
+    // Restore the selected destination if the activity was recreated before draft import.
+    androidx.compose.runtime.LaunchedEffect(incomingShare?.id, incomingShare?.targetSessionId, needsSetup) {
+        val sid = incomingShare?.targetSessionId
+        if (!needsSetup && sid != null && (currentSessionId != sid || !isConversationRoute)) {
+            openChat(sid)
+        }
+    }
+    incomingShare?.takeIf { !needsSetup && it.targetSessionId == null }?.let { share ->
+        com.androidharness.app.ui.chat.components.ShareToChatSheet(
+            share = share,
+            chats = sessions.filter {
+                com.androidharness.app.data.ConversationConfig.decode(it.conversationJson).isChat && it.id !in settings.archivedSessions
+            },
+            opening = openingShare,
+            error = shareError,
+            onDismiss = { container.pendingShare.compareAndSet(share, null) },
+            onOpen = { chosenId, question ->
+                navigateFromSidebar {
+                    if (!openingShare) {
+                        openingShare = true
+                        scope.launch {
+                            var created: String? = null
+                            try {
+                                val sid = if (chosenId == null) {
+                                    container.sessions.createSession(uiContext.getString(R.string.settings_telegram_new_chat),
+                                        conversation = com.androidharness.app.data.ConversationConfig(com.androidharness.app.data.ConversationKind.CHAT))
+                                        .also { created = it; container.chatModels.initialize(it) }
+                                } else {
+                                    val destination = container.sessions.session(chosenId)
+                                    check(destination != null && com.androidharness.app.data.ConversationConfig.decode(destination.conversationJson).isChat)
+                                    chosenId
+                                }
+                                val text = listOfNotNull(share.text, question).joinToString("\n\n").takeIf(String::isNotBlank)
+                                if (!container.pendingShare.compareAndSet(share, share.copy(text = text, targetSessionId = sid))) {
+                                    created?.let { container.sessions.session(it)?.let { session -> container.sessions.deleteSession(session) } }
+                                }
+                            } catch (e: Exception) {
+                                if (e is kotlinx.coroutines.CancellationException) throw e
+                                created?.let { container.sessions.session(it)?.let { session -> container.sessions.deleteSession(session) } }
+                                shareError = uiContext.getString(R.string.chat_share_failed)
+                            } finally { openingShare = false }
+                        }
+                    }
+                }
+            },
+        )
+    }
+
     androidx.compose.runtime.CompositionLocalProvider(
         LocalDesktopLayout provides desktopNavigation,
         LocalDesktopInput provides (settings.workspaceLayout == com.androidharness.app.data.WorkspaceLayoutMode.DESKTOP),

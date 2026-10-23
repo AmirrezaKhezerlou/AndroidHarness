@@ -357,16 +357,18 @@ private fun ChatScreenContent(
         }
     }
 
-    // Share target: text/link shares prefill the composer, image shares ride
-    // the normal attach pipeline. Consumed once, by whichever chat is open.
-    LaunchedEffect(Unit) {
+    // Only the chosen, fully loaded regular Chat may claim a share. Outgoing Code
+    // screens can remain composed during navigation, so section gating is essential.
+    LaunchedEffect(state.sessionId, state.conversationReady, state.conversation.isChat, draftRestored) {
+        if (!state.conversationReady || !state.conversation.isChat || !draftRestored) return@LaunchedEffect
         viewModel.container.pendingShare.filterNotNull().collect { share ->
-            viewModel.container.pendingShare.value = null
-            if (!share.text.isNullOrBlank()) {
-                setComposerText(if (composerText.isBlank()) share.text else "$composerText\n\n${share.text}")
-            }
-            if (share.stream != null && share.mime.startsWith("image/")) {
-                viewModel.attachImage(share.stream)
+            if (share.isFor(state.sessionId, state.conversation) &&
+                viewModel.container.pendingShare.compareAndSet(share, null)) {
+                if (!share.text.isNullOrBlank()) {
+                    val current = composerValue.text
+                    setComposerText(if (current.isBlank()) share.text else "$current\n\n${share.text}")
+                }
+                share.streams.forEach { viewModel.attachSharedFile(it, share.mime) }
             }
         }
     }

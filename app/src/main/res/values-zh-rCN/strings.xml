@@ -800,6 +800,7 @@
     <string name="chat_activity_interrupted">活动已停止</string>
     <string name="chat_sources">来源</string>
     <string name="chat_source_count">来源 · %1$d</string>
+    <string name="chat_open_link">打开链接</string>
     <string name="chat_sources_explanation">回复期间搜索到或阅读过的网页。文中的引用标明每项陈述的来源。</string>
     <string name="chat_source_read">已阅读网页</string>
     <string name="chat_source_found">搜索结果</string>
@@ -908,4 +909,17 @@
     <string name="chat_handoff_picker_note">选择要使用的工作区。聊天中的计划会一并带入。</string>
     <string name="chat_handoff_close">关闭工作区选择器</string>
     <string name="chat_handoff_no_workspace">请先在代码中添加工作区。</string>
+    <string name="chat_share_target">AndroidHarness 聊天</string>
+    <string name="chat_share_title">分享到聊天</string>
+    <string name="chat_share_review">检查分享的内容，选择聊天并添加问题。只有在聊天中点击发送后才会发送。</string>
+    <string name="chat_share_new">新聊天</string>
+    <string name="chat_share_question">询问相关内容（可选）</string>
+    <string name="chat_share_open">在聊天中打开</string>
+    <string name="chat_share_attachment">分享的附件</string>
+    <string name="chat_share_summarize">总结这些内容</string>
+    <string name="chat_share_explain">解释这些内容</string>
+    <string name="chat_share_translate">翻译这些内容</string>
+    <string name="chat_share_check">核实这些说法</string>
+    <string name="chat_share_failed">无法打开分享的内容，请重新分享。</string>
+    <string name="chat_share_find">查找聊天</string>
 </resources>

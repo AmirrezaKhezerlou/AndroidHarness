@@ -97,15 +97,20 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="androidharness" android:host="mcp" />
             </intent-filter>
-            <!-- Share target: text, links, and images shared from other apps
-                 land in the chat composer. -->
+        </activity>
+
+        <activity-alias
+            android:name=".ShareToChat"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:label="@string/chat_share_target">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
-                <data android:mimeType="image/*" />
+                <data android:mimeType="*/*" />
             </intent-filter>
-        </activity>
+        </activity-alias>
 
         <provider
             android:name="rikka.shizuku.ShizukuProvider"

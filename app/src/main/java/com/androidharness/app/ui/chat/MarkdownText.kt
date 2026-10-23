@@ -4,6 +4,7 @@ import com.androidharness.app.R
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.text.InlineTextContent
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -26,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -61,7 +64,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.androidharness.app.ui.chat.components.MathBlock
 import com.androidharness.app.ui.chat.components.MathInlineSizes
 import com.androidharness.app.ui.chat.components.MathInlineView
@@ -465,6 +470,7 @@ private fun MarkdownBlocks(
                 !imagesEnabled -> ParagraphText(
                     "[${block.alt.ifBlank { "image" }}](${block.url})",
                     onOpenUrl,
+                    linkIcons = false,
                 )
                 else -> Box(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                     RemoteImageCard(block.url, block.alt, onOpenUrl)
@@ -482,7 +488,8 @@ private fun MarkdownBlocks(
                     RemoteLinkCard(block.url, block.label, onOpenUrl)
                 }
             } else {
-                ParagraphText("[${block.label.ifBlank { "link" }}](${block.url})", onOpenUrl)
+                // Beyond the preview cards a standalone link stays visible as a link.
+                ParagraphText("[${block.label.ifBlank { "link" }}](${block.url})", onOpenUrl, linkIcons = false)
             }
             is Block.Code -> CodeBlock(block.text.trimEnd('\n'), block.language)
             is Block.Math -> if (!media || plain) {
@@ -509,12 +516,12 @@ private fun MarkdownBlocks(
                 },
                 modifier = Modifier.padding(top = if (index == 0) 0.dp else 6.dp),
             )
-            is Block.Quote -> QuoteBlock(block.lines)
+            is Block.Quote -> QuoteBlock(block.lines, onOpenUrl = onOpenUrl)
             is Block.Rule -> HorizontalDivider(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                 modifier = Modifier.padding(vertical = 4.dp),
             )
-            is Block.Bullets -> ListBlock(block.items, plain = plain)
+            is Block.Bullets -> ListBlock(block.items, plain = plain, onOpenUrl = onOpenUrl)
             is Block.Table -> TableBlock(block, onOpenUrl = onOpenUrl)
             is Block.Paragraph -> if (plain) {
                 Text(block.text, style = MaterialTheme.typography.bodyLarge)
@@ -527,7 +534,7 @@ private fun MarkdownBlocks(
 }
 
 @Composable
-private fun ListBlock(items: List<ListItem>, plain: Boolean) {
+private fun ListBlock(items: List<ListItem>, plain: Boolean, onOpenUrl: ((String) -> Unit)? = null) {
     Column(Modifier.fillMaxWidth()) {
         items.forEach { item ->
             Row {
@@ -541,7 +548,8 @@ private fun ListBlock(items: List<ListItem>, plain: Boolean) {
                     if (plain) {
                         Text(item.content, style = MaterialTheme.typography.bodyLarge)
                     } else {
-                        Text(styledText(item.content), style = MaterialTheme.typography.bodyLarge)
+                        val styled = styledLine(item.content, onOpenUrl)
+                        Text(styled.text, style = MaterialTheme.typography.bodyLarge, inlineContent = styled.inlineContent)
                     }
                     item.nested.forEach { nested ->
                         Row {
@@ -558,10 +566,12 @@ private fun ListBlock(items: List<ListItem>, plain: Boolean) {
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             } else {
+                                val styled = styledLine(nested.content, onOpenUrl)
                                 Text(
-                                    styledText(nested.content),
+                                    styled.text,
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    inlineContent = styled.inlineContent,
                                 )
                             }
                         }
@@ -573,7 +583,7 @@ private fun ListBlock(items: List<ListItem>, plain: Boolean) {
 }
 
 @Composable
-private fun QuoteBlock(lines: List<String>) {
+private fun QuoteBlock(lines: List<String>, onOpenUrl: ((String) -> Unit)? = null) {
     val scheme = MaterialTheme.colorScheme
     Row(
         Modifier
@@ -589,11 +599,13 @@ private fun QuoteBlock(lines: List<String>) {
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             lines.forEach { line ->
+                val styled = styledLine(line, onOpenUrl)
                 Text(
-                    styledText(line),
+                    styled.text,
                     style = MaterialTheme.typography.bodyMedium,
                     color = scheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 1.dp),
+                    inlineContent = styled.inlineContent,
                 )
             }
         }
@@ -710,8 +722,12 @@ private fun TableBlock(
 
 /** Paragraph text with tap-to-open links (annotations set by [styledText]). */
 @Composable
-private fun ParagraphText(text: String, onOpenUrl: ((String) -> Unit)? = null) {
-    val styled = styledParagraph(text)
+private fun ParagraphText(
+    text: String,
+    onOpenUrl: ((String) -> Unit)? = null,
+    linkIcons: Boolean = true,
+) {
+    val styled = styledParagraph(text, onOpenUrl, linkIcons)
     LinkedText(
         styled.text,
         MaterialTheme.typography.bodyLarge,
@@ -744,14 +760,7 @@ private fun LinkedText(
                 val offset = layout?.getOffsetForPosition(pos) ?: return@detectTapGestures
                 styled.getStringAnnotations("url", offset, offset)
                     .firstOrNull()?.let { ann ->
-                        val url = ann.item
-                        if (currentOpenUrl != null && com.androidharness.app.core.LocalPortProbe.isLocalhostUrl(url)) {
-                            currentOpenUrl?.invoke(url)
-                        } else {
-                            runCatching {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                            }
-                        }
+                        openMarkdownLink(context, ann.item, currentOpenUrl)
                     }
             }
         },
@@ -909,26 +918,62 @@ private fun CodeBlock(code: String, language: String) {
 
 private val linkRegex = Regex("\\[([^\\]]+)]\\(([^)\\s]+)\\)")
 
+/**
+ * Inline links are citations by default, so they collapse to a link icon. A
+ * link whose label is the address itself is an explicit URL the reader should
+ * see, so it stays as text.
+ */
+private fun isCitationLink(label: String, url: String): Boolean {
+    val text = label.trim()
+    if (text.isEmpty()) return true
+    if (text.equals(url.trim(), ignoreCase = true)) return false
+    if (text.startsWith("http://", ignoreCase = true) || text.startsWith("https://", ignoreCase = true)) return false
+    return true
+}
+
+/** External links go to the system browser; chats route localhost to their preview. */
+private fun openMarkdownLink(context: android.content.Context, url: String, onOpenUrl: ((String) -> Unit)?) {
+    if (onOpenUrl != null && com.androidharness.app.core.LocalPortProbe.isLocalhostUrl(url)) onOpenUrl(url)
+    else runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+}
+
 private data class StyledResult(
     val text: AnnotatedString,
     val inlineContent: Map<String, InlineTextContent>,
 )
 
-/** Inline bold, italic, strikethrough, code, and links. */
+/** Plain text with inline styling and underlined links, used where inline content is not laid out. */
 @Composable
-private fun styledText(text: String): AnnotatedString = styled(text, math = false).text
+private fun styledText(text: String): AnnotatedString = styled(text, math = false, linkIcons = false).text
 
-/** Paragraph styling plus inline KaTeX placeholders. */
+/** Paragraph styling plus inline KaTeX placeholders and compact citation icons. */
 @Composable
-private fun styledParagraph(text: String): StyledResult = styled(text, math = true)
+private fun styledParagraph(
+    text: String,
+    onOpenUrl: ((String) -> Unit)? = null,
+    linkIcons: Boolean = true,
+): StyledResult = styled(text, math = true, linkIcons = linkIcons, onOpenUrl = onOpenUrl)
+
+/** One list item or quote line with citation icons and no math. */
+@Composable
+private fun styledLine(text: String, onOpenUrl: ((String) -> Unit)? = null): StyledResult =
+    styled(text, math = false, onOpenUrl = onOpenUrl)
 
 @Composable
-private fun styled(text: String, math: Boolean): StyledResult {
+private fun styled(
+    text: String,
+    math: Boolean,
+    linkIcons: Boolean = true,
+    onOpenUrl: ((String) -> Unit)? = null,
+): StyledResult {
     val codeColor = MaterialTheme.colorScheme.onSurface
     val codeBackground = MaterialTheme.colorScheme.surfaceContainerHigh
     val linkColor = MaterialTheme.colorScheme.primary
     val mathColor = MaterialTheme.colorScheme.onSurface
     val density = LocalDensity.current
+    val context = LocalContext.current
+    val currentOpenUrl by androidx.compose.runtime.rememberUpdatedState(onOpenUrl)
+    val openLinkLabel = stringResource(R.string.chat_open_link)
     val mathVersion = if (math) MathInlineSizes.version.intValue else 0
     // A paragraph with an inline image keeps its text flow; render the image
     // as a labelled link instead of leaking the leading "!".
@@ -938,10 +983,11 @@ private fun styled(text: String, math: Boolean): StyledResult {
             "[$label](${match.groupValues[2]})"
         }
     }
-    return remember(normalized, codeColor, codeBackground, linkColor, mathColor, density, mathVersion, math) {
+    return remember(normalized, codeColor, codeBackground, linkColor, mathColor, density, mathVersion, math, linkIcons, openLinkLabel) {
         val links = linkRegex.findAll(normalized).associateBy { it.range.first }
         val inlineContent = LinkedHashMap<String, InlineTextContent>()
         var mathIndex = 0
+        var linkIndex = 0
         val result = buildAnnotatedString {
             fun appendMath(tex: String) {
                 val id = "inline-math-${mathIndex++}"
@@ -966,11 +1012,39 @@ private fun styled(text: String, math: Boolean): StyledResult {
                 val link = links[i]
                 when {
                     link != null -> {
-                        pushStringAnnotation(tag = "url", annotation = link.groupValues[2])
-                        pushStyle(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline))
-                        append(link.groupValues[1])
-                        pop()
-                        pop()
+                        val label = link.groupValues[1]
+                        val url = link.groupValues[2]
+                        if (linkIcons && isCitationLink(label, url)) {
+                            // A cited site becomes a small chain icon; the label
+                            // stays as alternate text for copying and selection.
+                            val id = "inline-link-${linkIndex++}"
+                            appendInlineContent(id, label.ifBlank { url })
+                            inlineContent[id] = InlineTextContent(
+                                Placeholder(
+                                    width = 18.sp,
+                                    height = 18.sp,
+                                    placeholderVerticalAlign = PlaceholderVerticalAlign.Center,
+                                ),
+                            ) {
+                                Box(
+                                    Modifier.fillMaxSize().clickable {
+                                        openMarkdownLink(context, url, currentOpenUrl)
+                                    },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.Link, contentDescription = openLinkLabel,
+                                        modifier = Modifier.size(13.dp), tint = linkColor,
+                                    )
+                                }
+                            }
+                        } else {
+                            pushStringAnnotation(tag = "url", annotation = url)
+                            pushStyle(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline))
+                            append(label)
+                            pop()
+                            pop()
+                        }
                         i = link.range.last + 1
                     }
 

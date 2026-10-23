@@ -802,6 +802,7 @@
     <string name="chat_activity_interrupted">Activity stopped</string>
     <string name="chat_sources">Sources</string>
     <string name="chat_source_count">Sources · %1$d</string>
+    <string name="chat_open_link">Open link</string>
     <string name="chat_sources_explanation">Pages found or read during this reply. Inline citations identify the source for each claim.</string>
     <string name="chat_source_read">Read page</string>
     <string name="chat_source_found">Found in search</string>
@@ -910,4 +911,17 @@
     <string name="chat_handoff_picker_note">Choose where to build. Your Chat plan comes along.</string>
     <string name="chat_handoff_close">Close workspace picker</string>
     <string name="chat_handoff_no_workspace">Add a workspace in Code to continue.</string>
+    <string name="chat_share_target">AndroidHarness Chat</string>
+    <string name="chat_share_title">Share to Chat</string>
+    <string name="chat_share_review">Review your shared items, choose a Chat, and add a question. Nothing is sent until you tap Send in Chat.</string>
+    <string name="chat_share_new">New Chat</string>
+    <string name="chat_share_question">Ask about this (optional)</string>
+    <string name="chat_share_open">Open in Chat</string>
+    <string name="chat_share_attachment">Shared attachment</string>
+    <string name="chat_share_summarize">Summarize this</string>
+    <string name="chat_share_explain">Explain this</string>
+    <string name="chat_share_translate">Translate this</string>
+    <string name="chat_share_check">Check these claims</string>
+    <string name="chat_share_failed">Could not open this share. Try sharing it again.</string>
+    <string name="chat_share_find">Find a Chat</string>
 </resources>

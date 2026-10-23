@@ -47,7 +47,7 @@ class AppContainer(val appContext: Context) {
     /** Deep-link channel: run-result notifications deliver a session id here. */
     val pendingSessionId = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 1)
 
-    /** Share-target channel: one ACTION_SEND payload awaiting the open chat. */
+    /** Share-target channel: content awaiting a regular Chat destination and draft import. */
     val pendingShare = kotlinx.coroutines.flow.MutableStateFlow<com.androidharness.app.data.PendingShare?>(null)
 
     /** Selected-code prompt waiting for its specific chat composer. */
