@@ -91,6 +91,7 @@ import com.androidharness.app.ui.common.formatTokenCount
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.LaunchedEffect
 import android.widget.Toast
@@ -255,6 +256,18 @@ private fun ChatScreenContent(
     val showProviderManager = activeProviderManagerTarget != null
     var showWebPreview by remember { mutableStateOf(false) }
     var webPreviewUrl by remember { mutableStateOf<String?>(null) }
+    val imageSources = remember(state.messages) {
+        com.androidharness.app.core.ChatActivityPresentation.imageSources(state.messages)
+    }
+    var viewerImageUrl by remember { mutableStateOf<String?>(null) }
+    viewerImageUrl?.let { imageUrl ->
+        com.androidharness.app.ui.chat.components.ImageViewerDialog(
+            imageUrl = imageUrl,
+            sourceUrl = imageSources[imageUrl],
+            onDismiss = { viewerImageUrl = null },
+            onOpenSource = { source -> viewerImageUrl = null; webPreviewUrl = source; showWebPreview = true },
+        )
+    }
     fun watchBrowser(target: String?) {
         webPreviewUrl = target ?: viewModel.container.browser.getActiveUrl()?.takeUnless { it == "about:blank" }
         showWebPreview = true
@@ -1546,12 +1559,17 @@ private fun ChatScreenContent(
                                                 scheduleKeyboard?.show()
                                                 pinnedToBottom = false
                                             }) {
-                                                AssistantText(replyText, showPreviewChip = false,
-                                                    onFollowUp = { action ->
-                                                        attachedConceptJson = null
-                                                        attachedResponseJson = ResponseAttachment(action.title, action.context).encode()
-                                                        setComposerText(listOf(composerText.trim(), action.prompt).filter(String::isNotBlank).joinToString("\n\n"))
-                                                    }, onOpenUrl = { url -> webPreviewUrl = url; showWebPreview = true })
+                                                CompositionLocalProvider(
+                                                    com.androidharness.app.ui.chat.components.LocalChatImageSources provides imageSources,
+                                                    com.androidharness.app.ui.chat.components.LocalChatImageOpen provides { url -> viewerImageUrl = url },
+                                                ) {
+                                                    AssistantText(replyText, showPreviewChip = false,
+                                                        onFollowUp = { action ->
+                                                            attachedConceptJson = null
+                                                            attachedResponseJson = ResponseAttachment(action.title, action.context).encode()
+                                                            setComposerText(listOf(composerText.trim(), action.prompt).filter(String::isNotBlank).joinToString("\n\n"))
+                                                        }, onOpenUrl = { url -> webPreviewUrl = url; showWebPreview = true })
+                                                }
                                             }
                                             if (isTurnFinal && message.toolCalls.isEmpty() && !isTurnRunning) {
                                                 com.androidharness.app.ui.chat.components.ChatSources(conversationTurn) { url -> webPreviewUrl = url; showWebPreview = true }

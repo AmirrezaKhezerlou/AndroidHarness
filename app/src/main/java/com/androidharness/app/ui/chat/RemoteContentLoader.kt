@@ -26,6 +26,8 @@ import java.util.concurrent.TimeUnit
  * Open Graph tags. Nothing here executes page scripts, so the SVG/HTML
  * injection class of bug does not apply.
  */
+internal data class RemoteImageBytes(val bytes: ByteArray, val mimeType: String)
+
 internal object RemoteContentLoader {
     private const val MAX_IMAGE_BYTES = 8 * 1024 * 1024
     private const val MAX_IMAGE_EDGE = 1600
@@ -67,6 +69,31 @@ internal object RemoteContentLoader {
         val bitmap = decode(downloaded) ?: return@withContext null
         memory.put(key, bitmap)
         bitmap
+    }
+
+    /** Original bytes for saving or sharing, reusing the image disk cache when possible. */
+    suspend fun downloadOriginal(context: Context, rawUrl: String): RemoteImageBytes? = withContext(Dispatchers.IO) {
+        val url = rawUrl.toHttpUrlOrNull() ?: return@withContext null
+        if (!isHttp(url) || !isPublic(url)) return@withContext null
+        val file = imageCacheFile(context, url.toString())
+        val cached = if (file.exists()) runCatching { file.readBytes() }.getOrNull() else null
+        val bytes = cached ?: runCatching { downloadImage(url) }.getOrNull() ?: return@withContext null
+        if (cached == null) {
+            runCatching { file.writeBytes(bytes) }
+            trimDiskCache(context)
+        }
+        RemoteImageBytes(bytes, imageMimeType(bytes))
+    }
+
+    private fun imageMimeType(bytes: ByteArray): String = when {
+        bytes.size >= 3 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() && bytes[2] == 0xFF.toByte() -> "image/jpeg"
+        bytes.size >= 8 && bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte() &&
+            bytes[2] == 0x4E.toByte() && bytes[3] == 0x47.toByte() -> "image/png"
+        bytes.size >= 12 && String(bytes, 0, 4) == "RIFF" && String(bytes, 8, 4) == "WEBP" -> "image/webp"
+        bytes.size >= 4 && String(bytes, 0, 4) == "GIF8" -> "image/gif"
+        bytes.size >= 12 && String(bytes, 4, 4) == "ftyp" &&
+            String(bytes, 8, 4) in setOf("avif", "avis") -> "image/avif"
+        else -> "image/jpeg"
     }
 
     suspend fun loadPreview(rawUrl: String): LinkPreview? = withContext(Dispatchers.IO) {

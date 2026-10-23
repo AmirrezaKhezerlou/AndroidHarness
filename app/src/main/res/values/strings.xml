@@ -747,6 +747,15 @@
     <string name="chat_answered_by">Answered by %1$s</string>
     <string name="chat_play_video">Play video</string>
     <string name="chat_image_count">%1$d images</string>
+    <string name="chat_image_close">Close</string>
+    <string name="chat_image_share">Share</string>
+    <string name="chat_image_download">Download</string>
+    <string name="chat_image_open_source">Open source</string>
+    <string name="chat_image_open_failed">Could not load image</string>
+    <string name="chat_image_saved">Image saved</string>
+    <string name="chat_image_save_failed">Could not save image</string>
+    <string name="chat_image_shared">Image ready to share</string>
+    <string name="chat_image_share_failed">Could not share image</string>
     <string name="chat_sources_library">Sources in this chat</string>
     <string name="chat_sources_library_count">%1$d sources</string>
     <string name="chat_sources_library_empty">No web sources in this chat yet.</string>

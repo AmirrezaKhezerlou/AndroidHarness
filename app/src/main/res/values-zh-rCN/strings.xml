@@ -745,6 +745,15 @@
     <string name="chat_answered_by">由 %1$s 回答</string>
     <string name="chat_play_video">播放视频</string>
     <string name="chat_image_count">%1$d 张图片</string>
+    <string name="chat_image_close">关闭</string>
+    <string name="chat_image_share">分享</string>
+    <string name="chat_image_download">下载</string>
+    <string name="chat_image_open_source">打开来源</string>
+    <string name="chat_image_open_failed">无法加载图片</string>
+    <string name="chat_image_saved">图片已保存</string>
+    <string name="chat_image_save_failed">无法保存图片</string>
+    <string name="chat_image_shared">图片已准备好分享</string>
+    <string name="chat_image_share_failed">无法分享图片</string>
     <string name="chat_sources_library">此聊天中的来源</string>
     <string name="chat_sources_library_count">%1$d 个来源</string>
     <string name="chat_sources_library_empty">此聊天中还没有网络来源。</string>

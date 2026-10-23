@@ -1,5 +1,6 @@
 package com.androidharness.app.core
 
+import com.androidharness.app.tools.PageImageText
 import com.androidharness.app.tools.WebSearchText
 import java.net.URI
 import kotlinx.serialization.json.Json
@@ -103,6 +104,18 @@ internal object ChatActivityPresentation {
             }
         }
         return sources.values.toList()
+    }
+
+    /** Direct image URL to the page it was found on, for captions and source actions. */
+    fun imageSources(messages: List<ChatMessage>): Map<String, String> {
+        val results = messages.filter { it.role == Role.TOOL && !it.isError }.associateBy { it.toolCallId }
+        val out = linkedMapOf<String, String>()
+        for (call in calls(messages)) {
+            if (call.name != "web_fetch" && call.name != "browser_read") continue
+            val text = results[call.id]?.text ?: continue
+            for (image in PageImageText.parse(text)) out.putIfAbsent(image.imageUrl, image.pageUrl)
+        }
+        return out
     }
 
     /** Latest source and page-read counters reported by web_search in this turn. */

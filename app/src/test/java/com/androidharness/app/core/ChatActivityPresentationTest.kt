@@ -116,4 +116,34 @@ class ChatActivityPresentationTest {
         assertEquals(5, ChatActivityPresentation.sources(messages).size)
         assertEquals(2, ChatActivityPresentation.sources(messages, limit = 2).size)
     }
+
+    @Test fun imageSourcesMapEachDirectImageToItsPage() {
+        val fetched = call("f", "web_fetch", """{"url":"https://site.test/red-panda","images":true}""")
+        val browsed = call("b", "browser_read", """{"url":"https://site.test/gallery","images":true}""")
+        val fetchedText = """
+            [images on this page]
+            1. Red panda
+               image: https://site.test/hero.jpg
+               page: https://site.test/red-panda
+               source: site.test
+        """.trimIndent()
+        val browsedText = """
+            [images on this page]
+            1. Gallery photo
+               image: https://cdn.test/photo.jpg
+               page: https://site.test/gallery
+               source: site.test
+        """.trimIndent()
+        val messages = listOf(
+            assistant(fetched), result("f", fetchedText),
+            assistant(browsed), result("b", browsedText),
+        )
+        assertEquals(
+            mapOf(
+                "https://site.test/hero.jpg" to "https://site.test/red-panda",
+                "https://cdn.test/photo.jpg" to "https://site.test/gallery",
+            ),
+            ChatActivityPresentation.imageSources(messages),
+        )
+    }
 }

@@ -267,6 +267,22 @@ private fun parseBlocks(text: String): List<Block> {
             out += Block.LinkPreview(trimmed, "")
             return
         }
+        // An image inside a normal paragraph renders as a picture, not as a
+        // link. Split the paragraph around it so the surrounding prose keeps
+        // its order.
+        val images = inlineImageRegex.findAll(joined).toList()
+        if (images.isNotEmpty()) {
+            var cursor = 0
+            for (match in images) {
+                val before = joined.substring(cursor, match.range.first).trim()
+                if (before.isNotEmpty()) out += Block.Paragraph(before)
+                out += Block.Image(match.groupValues[2], match.groupValues[1])
+                cursor = match.range.last + 1
+            }
+            val after = joined.substring(cursor).trim()
+            if (after.isNotEmpty()) out += Block.Paragraph(after)
+            return
+        }
         out += Block.Paragraph(joined)
     }
 

@@ -1,6 +1,13 @@
 package com.androidharness.app.ui.chat.components
 
 import android.graphics.Bitmap
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -11,6 +18,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,17 +30,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.Language
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -44,6 +54,12 @@ import com.androidharness.app.R
 import com.androidharness.app.ui.chat.LinkPreview
 import com.androidharness.app.ui.chat.RemoteContentLoader
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+
+/** The page an image came from, keyed by direct image URL. */
+internal val LocalChatImageSources = compositionLocalOf<Map<String, String>> { emptyMap() }
+
+/** Opens the full-screen viewer; null keeps the old tap-through behaviour. */
+internal val LocalChatImageOpen = compositionLocalOf<((String) -> Unit)?> { null }
 
 private sealed interface ImageState {
     data object Loading : ImageState
@@ -57,7 +73,7 @@ private sealed interface PreviewState {
     data object Failed : PreviewState
 }
 
-/** Inline image from Markdown, with a bounded decode and a tap-through. */
+/** Inline image from Markdown, with a bounded decode and a tap-through to the viewer. */
 @Composable
 internal fun RemoteImageCard(url: String, alt: String, onOpen: ((String) -> Unit)?) {
     val context = LocalContext.current
@@ -66,41 +82,67 @@ internal fun RemoteImageCard(url: String, alt: String, onOpen: ((String) -> Unit
             ?.let { ImageState.Loaded(it) } ?: ImageState.Failed
     }
     val description = alt.ifBlank { stringResource(R.string.ui_image) }
-    when (val current = state) {
-        ImageState.Loading -> Box(
-            Modifier.fillMaxWidth().height(180.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerLow),
-            contentAlignment = Alignment.Center,
-        ) { CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp) }
+    val sourceUrl = LocalChatImageSources.current[url]
+    val openImage = LocalChatImageOpen.current
+    val sourceHost = (sourceUrl ?: url).toHttpUrlOrNull()?.host?.removePrefix("www.")
+    Column(Modifier.fillMaxWidth().animateContentSize()) {
+        when (val current = state) {
+            ImageState.Loading -> Box(
+                Modifier.fillMaxWidth().aspectRatio(16f / 10f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(shimmerBrush()),
+            )
 
-        ImageState.Failed -> Unit
+            ImageState.Failed -> Unit
 
-        is ImageState.Loaded -> BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val ratio = current.bitmap.width.toFloat() / current.bitmap.height.coerceAtLeast(1)
-            val height = (maxWidth / ratio).coerceIn(120.dp, 420.dp)
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Image(
-                    bitmap = current.bitmap.asImageBitmap(),
-                    contentDescription = description,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxWidth().height(height)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                        .then(if (onOpen != null) Modifier.clickable { onOpen(url) } else Modifier),
-                )
-                if (alt.isNotBlank() && !alt.startsWith("http")) {
-                    Text(
-                        alt,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
+            is ImageState.Loaded -> BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val ratio = current.bitmap.width.toFloat() / current.bitmap.height.coerceAtLeast(1)
+                val height = (maxWidth / ratio).coerceIn(120.dp, 420.dp)
+                val openModifier = when {
+                    openImage != null -> Modifier.clickable { openImage(url) }
+                    onOpen != null -> Modifier.clickable { onOpen(sourceUrl ?: url) }
+                    else -> Modifier
+                }
+                Column(Modifier.fillMaxWidth().then(openModifier), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Image(
+                        bitmap = current.bitmap.asImageBitmap(),
+                        contentDescription = description,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxWidth().height(height)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerLow),
                     )
+                    if (!sourceHost.isNullOrBlank()) {
+                        Text(
+                            sourceHost,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun shimmerBrush(): Brush {
+    val transition = rememberInfiniteTransition(label = "image skeleton")
+    val shift by transition.animateFloat(
+        initialValue = -500f,
+        targetValue = 1_400f,
+        animationSpec = infiniteRepeatable(tween(1_200, easing = LinearEasing), RepeatMode.Restart),
+        label = "image skeleton shift",
+    )
+    val low = MaterialTheme.colorScheme.surfaceContainerLow
+    val high = MaterialTheme.colorScheme.surfaceContainerHigh
+    return Brush.linearGradient(
+        colors = listOf(low, high, low),
+        start = Offset(shift, 0f),
+        end = Offset(shift + 500f, 500f),
+    )
 }
 
 /** Open Graph card for a link that sits on its own line. */
