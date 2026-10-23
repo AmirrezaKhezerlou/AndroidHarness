@@ -371,9 +371,6 @@ private fun parseBlocks(text: String): List<Block> {
 // ---------------------------------------------------------------------------
 // Block rendering
 
-/** Answers may place up to five pictures inline; extra image links stay as text. */
-private const val MAX_INLINE_IMAGES = 5
-
 @Composable
 private fun MarkdownBlocks(
     text: String,
@@ -382,7 +379,6 @@ private fun MarkdownBlocks(
     media: Boolean = true,
 ) {
     val blocks = remember(text) { parseBlocks(text) }
-    var imageCards = 0
     var linkCards = 0
     blocks.forEachIndexed { index, block ->
         when (block) {
@@ -391,13 +387,10 @@ private fun MarkdownBlocks(
                     if (block.alt.isNotBlank()) "${block.alt}: ${block.url}" else block.url,
                     style = MaterialTheme.typography.bodyLarge,
                 )
-            } else if (imageCards < MAX_INLINE_IMAGES) {
-                imageCards++
+            } else {
                 Box(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                     RemoteImageCard(block.url, block.alt, onOpenUrl)
                 }
-            } else {
-                // Extra images beyond the cap stay out of the answer.
             }
 
             is Block.LinkPreview -> if (!media || plain) {
