@@ -7,15 +7,15 @@
 </p>
 
 [![Debug build](https://github.com/Sanuu7/AndroidHarness/actions/workflows/nightly.yml/badge.svg)](https://github.com/Sanuu7/AndroidHarness/actions/workflows/nightly.yml)
-[![Version](https://img.shields.io/badge/version-2.6-blue)](https://github.com/Sanuu7/AndroidHarness/releases/latest)
+[![Version](https://img.shields.io/badge/version-2.7-blue)](https://github.com/Sanuu7/AndroidHarness/releases/latest)
 [![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3ddc84)](https://developer.android.com/about/versions/oreo)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 
 **App Languages:** English · 简体中文 (Simplified Chinese)
 
-**An AI coding agent that lives on your Android phone.**
+**An AI coding agent and conversation partner that lives on your Android phone.**
 
-AndroidHarness is a native Android app, written in Kotlin with Jetpack Compose, that works on real code projects directly from the device. It reads and edits files, runs shell commands in a real Linux toolchain with bash, git, python, and node, pushes to GitHub, drives a browser, and streams the whole process into a chat you can inspect. No PC required, and No root.
+AndroidHarness is a native Android app, written in Kotlin with Jetpack Compose, that works on real code projects directly from the device. It reads and edits files, runs shell commands in a real Linux toolchain with bash, git, python, and node, pushes to GitHub, drives a browser, and streams the whole process into a chat you can inspect. A separate Chat section handles everyday questions, research, writing and brainstorming with automatic read-only tools, and hands project work to Code when you choose. No PC required, and No root.
 
 <!-- Screenshots: add two or three device captures to docs/images/ and uncomment this block.
 <p align="center">
@@ -27,18 +27,20 @@ AndroidHarness is a native Android app, written in Kotlin with Jetpack Compose, 
 
 ## Highlights
 
-- **A coding agent, not a chatbot.** File edits, shell, git, tests, browser control, subagents, and a card for every tool call that you can open and inspect.
+- **A coding agent, not just a chatbot.** File edits, shell, git, tests, browser control, subagents, and a card for every tool call that you can open and inspect.
+- **A conversation section that stays a conversation.** Chat answers questions, researches with sources, writes, and brainstorms without opening a workspace. Web and GitHub tools are read-only, memories are shared with Code, and a Continue in Code card hands project work over when you choose.
 - **Free to start.** The built-in keyless provider works with no sign-up, and local GGUF models run fully offline. Cloud keys and ChatGPT plans are optional.
 - **A real shell on a phone.** Commands route through Shizuku, optional direct root, a Termux toolchain, or a toybox fallback, with a shell policy and secret redactor on top.
 - **Long runs survive interruptions.** Foreground service, resume cards, a persistent message queue, and optional auto-continue keep work safe across screen-off stretches and connection drops.
 
-### New in 2.6
+### New in 2.7
 
-- **Speak replies aloud.** Read any assistant message with the device voice or a Groq voice, pick the model, voice and speed, and optionally read every new reply automatically.
-- **Simplified Chinese and a language picker.** The interface is translated into Simplified Chinese, and Settings → App language switches between the system language, English and 简体中文 immediately, without a restart.
-- **Live activities.** On Android 16 and up, the current run can appear as a Live Update on Pixel, a Now Bar card on Samsung and a Live alert on ColorOS and OxygenOS, with Approve and Deny on the card when the agent needs you.
-- **Full access behind device authentication.** Turning on Full access asks for your fingerprint, face or PIN, including when a settings backup would restore it.
-- **Honest root status.** Root enabled lights up only after the direct root service is verified; root through Shizuku keeps its own status line.
+- **Chat.** A separate conversation section for questions, research, writing, brainstorming and code snippets, with automatic read-only web, GitHub and memory tools, inline source citations, rich replies, answer versions, attachments, find, quote, regenerate and a Continue in Code handoff.
+- **Universal memory.** Chat and Code share one reviewable memory, with global or project entries, a Settings → Memory page, in-chat receipts, and inclusion in chat and settings backups.
+- **Durable file recovery.** `file_history` and `file_restore` keep hash-checked copies of workspace files through writes, undo and restarts, and recover a missing or older version safely.
+- **Start screen and section settings.** Choose Code, Chat or Last selected at launch, give each section its own New/Last behavior, and find options in the new Chat and Coding settings groups.
+- **Explicit Shizuku access.** `shell` can pin a command to Shizuku with `access="shizuku"`, app-workspace work uses the app UID by default, and Shizuku never silently falls back to root.
+- **Clearer DeepSeek vision support.** DeepSeek V4 Pro is treated as text-only, while V4 and V4.1 Flash keep image input.
 
 ## Quick start
 
@@ -47,11 +49,22 @@ AndroidHarness is a native Android app, written in Kotlin with Jetpack Compose, 
 3. Pick a model. Start instantly with the built-in keyless provider, add an API key in Settings, or download an on-device model from Settings → Local models.
 4. Optional but recommended: install [Shizuku](https://github.com/RikkaApps/Shizuku) or install linux environment inside the app, so shell commands run with proper permissions. On a rooted device, Settings → Terminal & device can also enable optional direct root.
 
-Open a workspace, point the agent at a project, and ask for a change. `/doctor` self-tests every tool family whenever something feels off.
+Open a workspace, point the agent at a project, and ask for a change, or open Chat for a question that does not need a project. `/doctor` self-tests every tool family whenever something feels off.
 
 ## Features
 
 ### Chat
+
+- **A separate conversation section.** Switch between Code and Chat from the drawer or desktop sidebar. Chat keeps its own recent conversations, drafts, model choice and start preference, and has no project files, shell, terminal or device tools.
+- **Automatic read-only tools.** Chat searches the web, reads pages, queries GitHub, reads user-supplied text and attachments, and uses universal memory without a tool toggle. GitHub tools cover repositories, issues, pull requests, commits, releases, users and code with the connected login or token, and never write.
+- **Research depth and sources.** Pick Instant (up to 5 sources), Deep (20), Auto, Deep research (50) or Max research (100). `web_search` enforces the per-turn budget, uses the selected keyless, Brave or Tavily search API, and the activity block keeps a Sources list that marks pages read versus results found. Answers cite sources inline.
+- **Rich replies and activity.** Markdown and native rich replies render inline, including offline interactive previews; Chat does not create saved artifacts. Thoughts, commentary, tool calls and sources stay in one chronological, expandable timeline with live thinking duration and token metrics. Thinking is collapsed by default and can stay that way in Settings → Chat, and the down button always points at the true bottom.
+- **Answers you can work with.** Attach images, text files and text-based PDFs up to 64 MB, with reading, ready, too-large, unsupported and failed states; sending waits until every attachment is ready. Find in chat, Quote the selected answer into the composer, Regenerate a reply, and browse earlier versions of an answer without replacing later history. Interrupted replies offer Continue reply, and draft markers show unsent drafts in the chat list.
+- **Continue in Code.** When a conversation turns into project work, the model can offer a Context card with a title, reason and workspace picker. Choosing it carries the Chat plan into a new Code conversation and runs nothing until you send. Only a successful offer in the current turn supplies card copy.
+- **Start screen and section settings.** Settings → Chat chooses Code, Chat or Last selected at launch, whether Chat opens a new or last conversation, and whether thinking stays collapsed. Code keeps its own New/Last choice, and Settings is split into Chat and Coding groups.
+- **Universal memory.** Chat and Code share the same memory, managed in Settings → Memory with global or project entries, categories, pinning, search, edit, delete and delete-all. In-chat receipts show which facts were supplied and let you edit or forget them.
+
+### Code conversations
 
 - **Telegram remote control.** Pair a private bot account in Settings → Telegram to continue real chats, choose projects and models, edit files, approve tools and answer agent questions while the app is minimized. A persistent notification offers Pause and Stop, and saved requests/replies remain recoverable after a connection failure.
 - Full markdown chat with streaming responses, thinking blocks that show the provider's summary (long reasoning renders lazily), and a tool call card for every action the agent takes.
@@ -95,8 +108,8 @@ Open a workspace, point the agent at a project, and ask for a change. `/doctor` 
 
 ### Agent tools
 
-- **Files.** read, write, edit, search, grep, list, move, delete, fuzzy multi-edit, and apply_patch, which checks every hunk header and line count before it touches a file and rolls back atomically on failure. Writes use a temporary file and atomic replace, preserve permissions, and refuse non-UTF-8 files instead of corrupting bytes. Search and grep page through sorted results with offset and limit, and `read_tool_output` pages through an earlier tool result without re-running it. Moves refuse to overwrite an existing destination unless you pass `overwrite=true`. The agent reads images by filename and extracts text from attached PDFs.
-- **Shell.** Run commands with timeouts, launch and manage background processes, install Linux packages, and query Android logs with package, tag, level, and pattern filters. Package installs show byte-level download progress and a package count, and background jobs record their real exit code and whether they exited or were killed. Commands follow the selected access mode: Auto, Normal, Shizuku, Root or Both. Both keeps Shizuku and direct root live together, using Shizuku for ordinary work and the root service for `access="root"` calls in the same task.
+- **Files.** read, write, edit, search, grep, list, move, delete, fuzzy multi-edit, and apply_patch, which checks every hunk header and line count before it touches a file and rolls back atomically on failure. Writes use a temporary file and atomic replace, preserve permissions, and refuse non-UTF-8 files instead of corrupting bytes. Search and grep page through sorted results with offset and limit, and `read_tool_output` pages through an earlier tool result without re-running it. Moves refuse to overwrite an existing destination unless you pass `overwrite=true`. The agent reads images by filename and extracts text from attached PDFs. `file_history` lists durable gzip copies saved before and after writes, undo and restore, and `file_restore` recovers a missing file or replaces an existing one only after checking its current SHA-256; copies survive restarts and chat truncation, up to 32 MB per file.
+- **Shell.** Run commands with timeouts, launch and manage background processes, install Linux packages, and query Android logs with package, tag, level, and pattern filters. Package installs report resolving, downloading, verifying, unpacking and configuring phases, the dependency closure, a completed-package count and byte-level totals in a dedicated card, and background jobs record their real exit code and whether they exited or were killed. Commands follow the selected access mode: Auto, Normal, Shizuku, Root or Both. Both keeps Shizuku and direct root live together, using Shizuku for ordinary work and the root service for `access="root"` calls in the same task. `access="shizuku"` pins a command to Shizuku and never falls back to the app UID or root; app-workspace development uses the app UID by default.
 - **Git.** status, diff, commit, log, show, branch, checkout, push, and pull, with git identity auto-configured so commits never fail on "author unknown".
 - **Web.** Search through keyless engines or the Brave and Tavily APIs with a key; fetch pages; make raw HTTP requests with JSON bodies, restricted to public addresses (localhost, private ranges, and other non-public destinations are refused, DNS answers are validated before connecting, and redirects are not followed); call the GitHub API with automatic authentication.
 - **Web preview and browser control.** A preview hub for localhost ports, workspace HTML files, and web links, with Eruda DevTools, console logs, and one-tap bug fixing. The agent drives the page itself through browser tools (navigate, snapshot, click, type, scroll, eval, screenshot). Each call renders as its own card with the page, site, action, and status; Watch opens the preview at that call's page even if a later call navigated elsewhere, saved history keeps the cards, and the preview can stop a running agent. Select any element to send its selector, computed styles, console errors, and a screenshot straight to the agent as a fix request.
@@ -105,6 +118,7 @@ Open a workspace, point the agent at a project, and ask for a change. `/doctor` 
 - **Subagents.** The task tool spawns subagents that work in parallel on independent chunks, each optionally on a different model. They research read-only by default; with subagent action tools enabled they also edit files and run commands in Act mode, always under the current permission mode.
 - **Subagent settings.** Settings → Sub-Agent settings gives all subagents a separate provider and model, or keeps them on the main agent's model. A saved subagent model takes priority over the task tool's model override.
 - **Skills, todos, and memory.** Skill tools list, view, and manage the markdown skills library from inside a run. A live todo list, a core memory file that loads at the start of every conversation, and searchable topic files for everything else.
+- **Universal memory.** Settings → Memory manages facts shared by Chat and Code: global or project scope, profile, preference, project, decision and fact categories, pinning, search, add, edit, delete and delete-all. `remember` and `recall` work in both sections, a bounded set of relevant memories is added to each request, in-chat receipts show which facts were supplied and let you edit or forget them, and memories travel in chat and encrypted settings backups.
 
 ### Files and editor
 
@@ -147,7 +161,9 @@ Commands route by path, so the agent always runs in the strongest environment th
 
 A shell policy and a secret redactor keep the agent from escaping the workspace, touching system paths without permission, or leaking API keys.
 
-**Optional root access.** Settings → Terminal & device adds opt-in root through a verified local service. Access modes are Auto, Normal, Shizuku, Root and Both, with an auto-fallback switch. Both keeps both connections live: ordinary commands use Shizuku and `access="root"` calls use the direct root service in the same task. Root is limited by default to an app session, one chat or one action and to projects you allow; a temporary root mode switch, behind a confirmation dialog, removes those limits for every project while the connection stays active. The root browser opens protected folders and text files up to 64 KB, and its saves refuse stale edits with a SHA-256 check. Tool cards show which backend ran (Normal, Shizuku · ADB, Shizuku · Root or Root), detached root jobs can be stopped or resumed, and tracked kills verify the process start time and log. KernelSU, KernelSU Next, SukiSU Ultra, APatch and Magisk are detected and named in the card and diagnostics. Root is granted once after each app start. The Root enabled chip appears only after the direct root service is verified; when a direct grant is denied but Shizuku runs as UID 0, the card says privileged commands will use Shizuku instead.
+**Explicit Shizuku access.** `access="shizuku"` pins a shell command to Shizuku and never falls back to the app UID or direct root. App-workspace development commands use the app UID by default, Android system commands can request Shizuku explicitly, and SSH workspaces refuse Shizuku and root because those transports are Android-local. Shizuku running as UID 0 no longer needs a separate root grant, tool cards name the transport (Normal, Shizuku or Root), and the verified UID stays in diagnostics.
+
+**Optional root access.** Settings → Terminal & device adds opt-in root through a verified local service. Access modes are Auto, Normal, Shizuku, Root and Both, with an auto-fallback switch. Both keeps both connections live: ordinary commands use Shizuku and `access="root"` calls use the direct root service in the same task. Root is limited by default to an app session, one chat or one action and to projects you allow; a temporary root mode switch, behind a confirmation dialog, removes those limits for every project while the connection stays active. The root browser opens protected folders and text files up to 64 KB, and its saves refuse stale edits with a SHA-256 check. Tool cards show which backend ran (Normal, Shizuku or Root), detached root jobs can be stopped or resumed, and tracked kills verify the process start time and log. KernelSU, KernelSU Next, SukiSU Ultra, APatch and Magisk are detected and named in the card and diagnostics. Root is granted once after each app start. The Root enabled chip appears only after the direct root service is verified; when a direct grant is denied but Shizuku runs as UID 0, the card says privileged commands will use Shizuku instead.
 
 The app-tier shell and the terminal run bundled Bash directly on Android 8 and 9, and through the system dynamic linker from Android 10 up, where Android requires it for app-storage binaries.
 
@@ -175,6 +191,7 @@ The app-tier shell and the terminal run bundled Bash directly on Android 8 and 9
 - **Continue with ChatGPT.** Add and select eligible ChatGPT accounts in Settings → Connected accounts. Picking another account refreshes its available models and keeps your current model when that account offers it. Thinking levels follow the chosen model's supported efforts. Refresh models, check newer models, reconnect, and sign out from each account's menu. Limits & usage opens ChatGPT's usage settings. Sign-ins stay encrypted on the device and are excluded from settings backups.
 - **Built-in keyless Harness provider.** Anonymous free models from Kilo and Pollinations served out of the box, fetched from Kilo's live catalog so retired models drop out on their own, with each model's rate limit shown in the picker and the kilo-auto/free router as the default. No API key needed to start.
 - Anthropic, Google Gemini, and any OpenAI-compatible endpoint with a custom base URL.
+- **Vision support follows the model.** DeepSeek V4 Flash and V4.1 Flash accept images; DeepSeek V4 Pro is text-only, so Chat and Code offer attachments that match the selected model.
 - Custom cloud model IDs typed directly into the model picker sheet.
 - Live model catalog fetch with latency check, per-model price tracking, and a running cost readout, plus a Usage screen with model activity, estimated cost, cache hit rate, a separate AI code changes card, the token breakdown, and a collapsible definitions section. DeepSeek estimates follow the request's UTC rate: peak 01:00-04:00 and 06:00-10:00 on weekdays, half price at all other times including weekends. Stats windows (Today, 1 week, 1 month, Lifetime) count requests by the day they were made on your local calendar, so continuing an old chat never moves earlier work into today.
 - **Thinking controls follow the model.** Levels come from the provider's own model list when it reports them, with models.dev and shipped family tables as fallback, and models without reasoning controls no longer show a fake ladder. The header shows the resolved level and how it was chosen. Custom levels can be added, renamed, reordered, and removed per provider and model, and an optional CEL expression maps them to request fields, with an inherited default for every remote API. Local models keep their native on/off control.
