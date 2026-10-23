@@ -308,17 +308,59 @@ private fun ChatActivityGlyph(name: String?, live: Boolean, motion: Boolean) {
     val scheme = MaterialTheme.colorScheme
     val animated = live && motion
     var angle = 0f
-    var spin = 0f
-    var pulse = 1f
-    var tilt = 0f
+    var sparkleHop = 0f
+    var starBlink = 1f
+    var searchX = 0f
+    var searchY = 0f
+    var codeX = 0f
+    var codeTilt = 0f
     var turn = 0f
     if (animated) {
+        // lucide-animated (MIT) loops: sparkles hop then blink, search lifts and settles,
+        // code nudges side to side. The earth icon draws itself in, which an ImageVector
+        // cannot do, so the globe keeps a slow turn instead.
         val transition = rememberInfiniteTransition(label = "Chat activity orbit")
         angle = transition.animateFloat(0f, 360f, infiniteRepeatable(tween(2200, easing = LinearEasing)), label = "Chat orbit rotation").value
-        spin = transition.animateFloat(0f, 360f, infiniteRepeatable(tween(8000, easing = LinearEasing)), label = "Chat sparkle spin").value
-        pulse = transition.animateFloat(0.92f, 1.1f, infiniteRepeatable(tween(950, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "Chat glyph pulse").value
-        tilt = transition.animateFloat(-12f, 12f, infiniteRepeatable(tween(1100, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "Chat glyph tilt").value
-        turn = transition.animateFloat(-18f, 18f, infiniteRepeatable(tween(1500, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "Chat globe turn").value
+        sparkleHop = transition.animateFloat(0f, 0f, infiniteRepeatable(keyframes {
+            durationMillis = 3000
+            0f at 150
+            -1f at 420
+            0f at 700
+        }), label = "Chat sparkle hop").value
+        starBlink = transition.animateFloat(1f, 1f, infiniteRepeatable(keyframes {
+            durationMillis = 3000
+            0.15f at 1250
+            1f at 1500
+        }), label = "Chat star blink").value
+        searchX = transition.animateFloat(0f, 0f, infiniteRepeatable(keyframes {
+            durationMillis = 3000
+            0f at 300
+            -3f at 480
+            0f at 760
+        }), label = "Chat search drift").value
+        searchY = transition.animateFloat(0f, 0f, infiniteRepeatable(keyframes {
+            durationMillis = 3000
+            0f at 260
+            -4f at 420
+            0f at 700
+        }), label = "Chat search lift").value
+        codeX = transition.animateFloat(0f, 0f, infiniteRepeatable(keyframes {
+            durationMillis = 3000
+            0f at 150
+            2f at 400
+            0f at 650
+            -2f at 900
+            0f at 1150
+        }), label = "Chat code nudge").value
+        codeTilt = transition.animateFloat(0f, 0f, infiniteRepeatable(keyframes {
+            durationMillis = 3000
+            0f at 150
+            -8f at 400
+            0f at 650
+            8f at 900
+            0f at 1150
+        }), label = "Chat code tilt").value
+        turn = transition.animateFloat(-16f, 16f, infiniteRepeatable(tween(1600, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "Chat globe turn").value
     }
     Box(Modifier.size(28.dp).background(scheme.surfaceContainerHigh.copy(alpha = .65f), CircleShape), contentAlignment = Alignment.Center) {
         if (live) Canvas(Modifier.fillMaxSize()) {
@@ -327,19 +369,24 @@ private fun ChatActivityGlyph(name: String?, live: Boolean, motion: Boolean) {
                 style = Stroke(1.3.dp.toPx(), cap = StrokeCap.Round))
         }
         Crossfade(name.orEmpty(), animationSpec = tween(if (motion) 180 else 0), label = "Chat activity icon") { phase ->
-            val glyph = Modifier.size(15.dp).graphicsLayer {
-                when (phase) {
-                    "web_search" -> rotationZ = tilt
-                    "web_fetch" -> rotationY = turn
-                    "github_api", "github_search", "github_file" -> { scaleX = pulse; scaleY = pulse }
-                    else -> { scaleX = pulse; scaleY = pulse; rotationZ = spin }
-                }
-            }
             when (phase) {
-                "web_search" -> Icon(Icons.Outlined.Search, null, glyph, tint = scheme.onSurfaceVariant)
-                "web_fetch" -> Icon(Icons.Outlined.Public, null, glyph, tint = scheme.onSurfaceVariant)
-                "github_api", "github_search", "github_file" -> Icon(Icons.Outlined.Code, null, glyph, tint = scheme.onSurfaceVariant)
-                else -> Icon(painterResource(R.drawable.ic_chat_sparkles), null, glyph, tint = scheme.onSurfaceVariant)
+                "web_search" -> Icon(Icons.Outlined.Search, null, Modifier.size(15.dp).graphicsLayer {
+                    translationX = searchX * size.width / 24f
+                    translationY = searchY * size.height / 24f
+                }, tint = scheme.onSurfaceVariant)
+                "web_fetch" -> Icon(Icons.Outlined.Public, null, Modifier.size(15.dp).graphicsLayer { rotationY = turn }, tint = scheme.onSurfaceVariant)
+                "github_api", "github_search", "github_file" -> Icon(Icons.Outlined.Code, null, Modifier.size(15.dp).graphicsLayer {
+                    translationX = codeX * size.width / 24f
+                    rotationZ = codeTilt
+                }, tint = scheme.onSurfaceVariant)
+                else -> Box(Modifier.size(15.dp)) {
+                    Icon(painterResource(R.drawable.ic_chat_sparkle), null, Modifier.fillMaxSize().graphicsLayer {
+                        translationY = sparkleHop * size.height / 24f
+                    }, tint = scheme.onSurfaceVariant)
+                    Icon(painterResource(R.drawable.ic_chat_sparkle_stars), null, Modifier.fillMaxSize().graphicsLayer {
+                        alpha = starBlink
+                    }, tint = scheme.onSurfaceVariant)
+                }
             }
         }
     }
