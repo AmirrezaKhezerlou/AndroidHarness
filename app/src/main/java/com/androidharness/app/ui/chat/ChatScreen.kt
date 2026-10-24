@@ -1976,15 +1976,19 @@ private fun ChatScreenContent(
                             }
                         }
                         state.streamingText?.let { streaming ->
-                            indexedItem(key = "streaming-$streamKey-text", contentType = ChatListContentType.AssistantText) {
-                                AssistantText(
-                                    if (state.conversation.isChat) com.androidharness.app.core.response.ChatRichResponse.normalize(streaming, !state.streamingCommitted) else streaming,
-                                    streaming = !state.streamingCommitted,
-                                    onOpenUrl = { url ->
-                                        webPreviewUrl = url
-                                        showWebPreview = true
-                                    },
-                                )
+                            // In chat the live disclosure above already shows
+                            // progress; a blank dots bubble under it is noise.
+                            if (streaming.isNotBlank() || !state.conversation.isChat) {
+                                indexedItem(key = "streaming-$streamKey-text", contentType = ChatListContentType.AssistantText) {
+                                    AssistantText(
+                                        if (state.conversation.isChat) com.androidharness.app.core.response.ChatRichResponse.normalize(streaming, !state.streamingCommitted) else streaming,
+                                        streaming = !state.streamingCommitted,
+                                        onOpenUrl = { url ->
+                                            webPreviewUrl = url
+                                            showWebPreview = true
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
