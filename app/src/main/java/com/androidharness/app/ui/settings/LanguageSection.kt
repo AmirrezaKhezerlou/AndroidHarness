@@ -27,18 +27,21 @@ internal fun LanguageSection() {
     val selected = when {
         locales.isEmpty -> ""
         locales[0]?.language == "zh" -> "zh-CN"
+        locales[0]?.language == "ru" -> "ru"
         else -> "en"
     }
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
+    val languages = listOf(
+        "" to R.string.settings_language_system,
+        "en" to R.string.settings_language_english,
+        "zh-CN" to R.string.settings_language_chinese,
+        "ru" to R.string.settings_language_russian,
+    )
 
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.selectableGroup()) {
-            listOf(
-                "" to R.string.settings_language_system,
-                "en" to R.string.settings_language_english,
-                "zh-CN" to R.string.settings_language_chinese,
-            ).forEachIndexed { index, (tag, title) ->
+            languages.forEachIndexed { index, (tag, title) ->
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = 64.dp)
                         .selectable(
@@ -65,7 +68,7 @@ internal fun LanguageSection() {
                     }
                     RadioButton(selected = tag == selected, onClick = null)
                 }
-                if (index < 2) HorizontalDivider(
+                if (index < languages.lastIndex) HorizontalDivider(
                     Modifier.padding(horizontal = 16.dp),
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
                 )

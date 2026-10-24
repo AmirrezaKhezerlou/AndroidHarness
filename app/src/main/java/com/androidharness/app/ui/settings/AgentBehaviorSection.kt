@@ -209,7 +209,7 @@ internal fun AgentBehaviorSection(
                 selected = settings.maxContextTokens.toString()
                 choices = (listOf(131_072, 262_144, 400_000, 1_000_000, 2_000_000) + settings.maxContextTokens)
                     .distinct().sorted().map {
-                        BehaviorChoice(it.toString(), "${formatTokenCount(it.toLong())} tokens", "")
+                        BehaviorChoice(it.toString(), stringResource(R.string.settings_agent_context_value, formatTokenCount(it.toLong())), "")
                     }
             }
             BehaviorPicker.ITERATIONS -> {

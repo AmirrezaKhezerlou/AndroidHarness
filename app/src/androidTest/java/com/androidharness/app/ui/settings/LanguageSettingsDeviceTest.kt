@@ -29,6 +29,10 @@ import com.androidharness.app.R
 import com.androidharness.app.ui.chat.ChatListTestActivity
 import com.androidharness.app.ui.theme.HarnessTheme
 import java.io.File
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import org.junit.Before
+import org.junit.After
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -38,6 +42,20 @@ class LanguageSettingsDeviceTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val target get() = instrumentation.targetContext
     private val container get() = (target.applicationContext as HarnessApp).container
+
+    private var previousOnboarding = false
+
+    @Before fun openAnAlreadyConfiguredApp() = runBlocking {
+        // First-launch notification prompts must not cover the language picker on Android 13+.
+        if (android.os.Build.VERSION.SDK_INT >= 33) instrumentation.uiAutomation.grantRuntimePermission(
+            target.packageName, android.Manifest.permission.POST_NOTIFICATIONS)
+        previousOnboarding = container.settings.settings.first().onboardingDone
+        container.settings.setOnboardingDone(true)
+    }
+
+    @After fun restoreSetupState() = runBlocking {
+        container.settings.setOnboardingDone(previousOnboarding)
+    }
 
     private fun label(id: Int, tags: String): String = target.createConfigurationContext(
         Configuration(target.resources.configuration).apply { setLocales(LocaleList.forLanguageTags(tags)) },
@@ -52,26 +70,39 @@ class LanguageSettingsDeviceTest {
             }
             try {
                 openLanguage(scenario)
-                awaitText(label(R.string.settings_language_contribute_title, "en"))
+                scrollTo(label(R.string.settings_language_contribute_title, "en"))
                 click("简体中文")
-                awaitText(label(R.string.settings_language_contribute_title, "zh-CN"))
+                scrollTo(label(R.string.settings_language_contribute_title, "zh-CN"))
                 scenario.onActivity {
                     assertEquals("zh", it.resources.configuration.locales[0].language)
                     assertEquals("zh-CN", AppCompatDelegate.getApplicationLocales().toLanguageTags())
                 }
                 screenshot("language-chinese-phone.png")
                 scenario.recreate()
-                awaitText(label(R.string.settings_language_contribute_title, "zh-CN"))
+                scrollTo(label(R.string.settings_language_contribute_title, "zh-CN"))
                 scenario.onActivity { assertEquals("zh", it.resources.configuration.locales[0].language) }
 
-                // Explicit English must work even after a Chinese override.
+                click("Русский")
+                scrollTo(label(R.string.settings_language_contribute_title, "ru"))
+                scenario.onActivity {
+                    assertEquals("ru", it.resources.configuration.locales[0].language)
+                    assertEquals("ru", AppCompatDelegate.getApplicationLocales().toLanguageTags())
+                }
+                screenshot("language-russian-phone.png")
+                scenario.recreate()
+                scrollTo(label(R.string.settings_language_contribute_title, "ru"))
+                scenario.onActivity { assertEquals("ru", it.resources.configuration.locales[0].language) }
+
+                // Explicit English must work even after Chinese and Russian overrides.
                 click("English")
-                awaitText(label(R.string.settings_language_contribute_title, "en"))
+                scrollTo(label(R.string.settings_language_contribute_title, "en"))
                 scenario.onActivity { assertEquals("en", it.resources.configuration.locales[0].language) }
-                click("简体中文")
-                awaitText(label(R.string.settings_language_system, "zh-CN"))
-                click(label(R.string.settings_language_system, "zh-CN"))
-                val systemTags = Resources.getSystem().configuration.locales.toLanguageTags()
+                click("Русский")
+                scrollTo(label(R.string.settings_language_system, "ru"))
+                click(label(R.string.settings_language_system, "ru"))
+                val systemTags = if (android.os.Build.VERSION.SDK_INT >= 33)
+                    target.getSystemService(android.app.LocaleManager::class.java).systemLocales.toLanguageTags()
+                else Resources.getSystem().configuration.locales.toLanguageTags()
                 awaitText(label(R.string.settings_language_contribute_title, systemTags))
                 scenario.onActivity {
                     assertTrue(AppCompatDelegate.getApplicationLocales().isEmpty)
@@ -140,21 +171,24 @@ class LanguageSettingsDeviceTest {
     }
 
     private fun scrollTo(text: String) {
-        repeat(6) {
-            if (find(text) != null) return
-            fun scroll(node: AccessibilityNodeInfo?): Boolean {
-                if (node == null) return false
-                if (node.isScrollable && node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) return true
-                for (index in 0 until node.childCount) if (scroll(node.getChild(index))) return true
-                return false
+        for (direction in listOf(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)) {
+            repeat(8) {
+                if (find(text) != null) return
+                fun scroll(node: AccessibilityNodeInfo?): Boolean {
+                    if (node == null) return false
+                    if (node.isScrollable && node.performAction(direction)) return true
+                    for (index in 0 until node.childCount) if (scroll(node.getChild(index))) return true
+                    return false
+                }
+                scroll(instrumentation.uiAutomation.rootInActiveWindow)
+                SystemClock.sleep(200)
             }
-            scroll(instrumentation.uiAutomation.rootInActiveWindow)
-            SystemClock.sleep(200)
         }
         awaitText(text)
     }
 
     private fun click(text: String) {
+        scrollTo(text)
         var node: AccessibilityNodeInfo? = awaitText(text)
         while (node != null) {
             if (node.isClickable && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {

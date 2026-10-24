@@ -927,4 +927,5 @@
     <string name="chat_personalization_on">Personalization on</string>
     <string name="chat_personalization_off">Personalization off</string>
     <string name="chat_image_frequency_inherit">Use app setting (%1$s)</string>
+    <string name="settings_language_russian">Русский</string>
 </resources>

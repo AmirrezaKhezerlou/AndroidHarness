@@ -925,4 +925,5 @@
     <string name="chat_personalization_on">个性化已开启</string>
     <string name="chat_personalization_off">个性化已关闭</string>
     <string name="chat_image_frequency_inherit">使用应用设置（%1$s）</string>
+    <string name="settings_language_russian">Русский</string>
 </resources>
