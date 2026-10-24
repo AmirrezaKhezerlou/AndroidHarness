@@ -504,17 +504,23 @@ private fun MarkdownBlocks(
             } else {
                 MermaidBlock(block.code)
             }
-            is Block.Heading -> Text(
-                block.content,
+            is Block.Heading -> {
                 // Calmer than a type-scale ladder: mobile summaries read best
                 // when headings stay close to body size and lean on weight.
-                style = when (block.level) {
+                val headingStyle = when (block.level) {
                     1 -> MaterialTheme.typography.titleMedium
                     2 -> MaterialTheme.typography.titleSmall
                     else -> MaterialTheme.typography.labelLarge
-                },
-                modifier = Modifier.padding(top = if (index == 0) 0.dp else 6.dp),
-            )
+                }
+                val styled = styledParagraph(block.content, onOpenUrl)
+                LinkedText(
+                    styled.text,
+                    headingStyle,
+                    onOpenUrl = onOpenUrl,
+                    inlineContent = styled.inlineContent,
+                    modifier = Modifier.padding(top = if (index == 0) 0.dp else 6.dp),
+                )
+            }
             is Block.Quote -> QuoteBlock(block.lines, onOpenUrl = onOpenUrl)
             is Block.Rule -> HorizontalDivider(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
@@ -1020,131 +1026,139 @@ private fun styled(
                     }
                 }
             }
-            var i = 0
-            while (i < normalized.length) {
-                val link = links[i]
-                when {
-                    link != null -> {
-                        val label = link.groupValues[1]
-                        val url = link.groupValues[2]
-                        if (linkIcons && isCitationLink(label, url)) {
-                            // A cited site becomes a small chain icon; the label
-                            // stays as alternate text for copying and selection.
-                            val id = "inline-link-${linkIndex++}"
-                            appendInlineContent(id, label.ifBlank { url })
-                            inlineContent[id] = InlineTextContent(
-                                Placeholder(
-                                    width = 18.sp,
-                                    height = 18.sp,
-                                    placeholderVerticalAlign = PlaceholderVerticalAlign.Center,
-                                ),
-                            ) {
-                                Box(
-                                    Modifier.fillMaxSize().clickable {
-                                        openMarkdownLink(context, url, currentOpenUrl)
-                                    },
-                                    contentAlignment = Alignment.Center,
+            // Nested spans recurse with the outer style pushed, so a link inside
+            // bold/italic/strikethrough still resolves instead of leaking as
+            // literal "[label](url)". Code spans stay literal on purpose.
+            fun walk(from: Int, to: Int) {
+                var i = from
+                while (i < to) {
+                    val link = links[i]
+                    when {
+                        // A link that starts inside but ends outside this span is
+                        // broken nesting; let it fall through as plain text.
+                        link != null && link.range.last < to -> {
+                            val label = link.groupValues[1]
+                            val url = link.groupValues[2]
+                            if (linkIcons && isCitationLink(label, url)) {
+                                // A cited site becomes a small chain icon; the label
+                                // stays as alternate text for copying and selection.
+                                val id = "inline-link-${linkIndex++}"
+                                appendInlineContent(id, label.ifBlank { url })
+                                inlineContent[id] = InlineTextContent(
+                                    Placeholder(
+                                        width = 18.sp,
+                                        height = 18.sp,
+                                        placeholderVerticalAlign = PlaceholderVerticalAlign.Center,
+                                    ),
                                 ) {
-                                    Icon(
-                                        Icons.Outlined.Link, contentDescription = openLinkLabel,
-                                        modifier = Modifier.size(13.dp), tint = linkColor,
-                                    )
+                                    Box(
+                                        Modifier.fillMaxSize().clickable {
+                                            openMarkdownLink(context, url, currentOpenUrl)
+                                        },
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Icon(
+                                            Icons.Outlined.Link, contentDescription = openLinkLabel,
+                                            modifier = Modifier.size(13.dp), tint = linkColor,
+                                        )
+                                    }
                                 }
+                            } else {
+                                pushStringAnnotation(tag = "url", annotation = url)
+                                pushStyle(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline))
+                                append(label)
+                                pop()
+                                pop()
                             }
-                        } else {
-                            pushStringAnnotation(tag = "url", annotation = url)
-                            pushStyle(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline))
-                            append(label)
-                            pop()
-                            pop()
+                            i = link.range.last + 1
                         }
-                        i = link.range.last + 1
-                    }
 
-                    normalized.startsWith("**", i) -> {
-                        val end = normalized.indexOf("**", i + 2)
-                        if (end > i + 2) {
-                            pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
-                            append(normalized.substring(i + 2, end))
-                            pop()
-                            i = end + 2
-                        } else {
-                            append(normalized[i]); i++
+                        normalized.startsWith("**", i) -> {
+                            val end = normalized.indexOf("**", i + 2)
+                            if (end > i + 2 && end + 2 <= to) {
+                                pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
+                                walk(i + 2, end)
+                                pop()
+                                i = end + 2
+                            } else {
+                                append(normalized[i]); i++
+                            }
                         }
-                    }
 
-                    normalized.startsWith("~~", i) -> {
-                        val end = normalized.indexOf("~~", i + 2)
-                        if (end > i + 2) {
-                            pushStyle(SpanStyle(textDecoration = TextDecoration.LineThrough))
-                            append(normalized.substring(i + 2, end))
-                            pop()
-                            i = end + 2
-                        } else {
-                            append(normalized[i]); i++
+                        normalized.startsWith("~~", i) -> {
+                            val end = normalized.indexOf("~~", i + 2)
+                            if (end > i + 2 && end + 2 <= to) {
+                                pushStyle(SpanStyle(textDecoration = TextDecoration.LineThrough))
+                                walk(i + 2, end)
+                                pop()
+                                i = end + 2
+                            } else {
+                                append(normalized[i]); i++
+                            }
                         }
-                    }
 
-                    normalized.startsWith("`", i) -> {
-                        val end = normalized.indexOf('`', i + 1)
-                        if (end > i + 1) {
-                            pushStyle(
-                                SpanStyle(
-                                    fontFamily = HarnessMono,
-                                    background = codeBackground,
-                                    color = codeColor,
+                        normalized.startsWith("`", i) -> {
+                            val end = normalized.indexOf('`', i + 1)
+                            if (end > i + 1 && end < to) {
+                                pushStyle(
+                                    SpanStyle(
+                                        fontFamily = HarnessMono,
+                                        background = codeBackground,
+                                        color = codeColor,
+                                    )
                                 )
-                            )
-                            // Hair spaces pad the chip visually, spans can't
-                            // take real padding inside a Text.
-                            append(" " + normalized.substring(i + 1, end) + " ")
-                            pop()
-                            i = end + 1
-                        } else {
+                                // Hair spaces pad the chip visually, spans can't
+                                // take real padding inside a Text.
+                                append(" " + normalized.substring(i + 1, end) + " ")
+                                pop()
+                                i = end + 1
+                            } else {
+                                append(normalized[i]); i++
+                            }
+                        }
+
+                        math && normalized.startsWith("\\(", i) -> {
+                            val end = normalized.indexOf("\\)", i + 2)
+                            val tex = if (end > i + 2 && end + 2 <= to) normalized.substring(i + 2, end) else null
+                            if (tex != null && isValidInlineMath(tex)) {
+                                appendMath(tex)
+                                i = end + 2
+                            } else {
+                                append(normalized[i]); i++
+                            }
+                        }
+
+                        math && normalized[i] == '$' && !normalized.startsWith("$$", i) &&
+                            (i == 0 || normalized[i - 1] != '\\') -> {
+                            val end = findDollarClose(normalized, i + 1)
+                            val tex = if (end in (i + 1) until to) normalized.substring(i + 1, end) else null
+                            if (tex != null && isValidInlineMath(tex)) {
+                                appendMath(tex)
+                                i = end + 1
+                            } else {
+                                append(normalized[i]); i++
+                            }
+                        }
+
+                        normalized.startsWith("*", i) -> {
+                            val end = normalized.indexOf('*', i + 1)
+                            if (end > i + 1 && end < to) {
+                                pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
+                                walk(i + 1, end)
+                                pop()
+                                i = end + 1
+                            } else {
+                                append(normalized[i]); i++
+                            }
+                        }
+
+                        else -> {
                             append(normalized[i]); i++
                         }
-                    }
-
-                    math && normalized.startsWith("\\(", i) -> {
-                        val end = normalized.indexOf("\\)", i + 2)
-                        val tex = if (end > i + 2) normalized.substring(i + 2, end) else null
-                        if (tex != null && isValidInlineMath(tex)) {
-                            appendMath(tex)
-                            i = end + 2
-                        } else {
-                            append(normalized[i]); i++
-                        }
-                    }
-
-                    math && normalized[i] == '$' && !normalized.startsWith("$$", i) &&
-                        (i == 0 || normalized[i - 1] != '\\') -> {
-                        val end = findDollarClose(normalized, i + 1)
-                        val tex = if (end > i + 1) normalized.substring(i + 1, end) else null
-                        if (tex != null && isValidInlineMath(tex)) {
-                            appendMath(tex)
-                            i = end + 1
-                        } else {
-                            append(normalized[i]); i++
-                        }
-                    }
-
-                    normalized.startsWith("*", i) -> {
-                        val end = normalized.indexOf('*', i + 1)
-                        if (end > i + 1) {
-                            pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
-                            append(normalized.substring(i + 1, end))
-                            pop()
-                            i = end + 1
-                        } else {
-                            append(normalized[i]); i++
-                        }
-                    }
-
-                    else -> {
-                        append(normalized[i]); i++
                     }
                 }
             }
+            walk(0, normalized.length)
         }
         StyledResult(result, inlineContent)
     }
