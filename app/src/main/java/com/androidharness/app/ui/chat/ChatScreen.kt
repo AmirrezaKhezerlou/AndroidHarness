@@ -1521,6 +1521,7 @@ private fun ChatScreenContent(
                             if (state.messages.isEmpty() && state.streamingText == null) {
                                 indexedItem(key = "empty-state", contentType = ChatListContentType.Empty) {
                                     EmptyState(
+                                        modifier = Modifier.fillParentMaxHeight(),
                                         hasProvider = state.activeProvider != null,
                                         chatOnly = state.conversation.isChat,
                                         personalizationEnabled = state.conversation.personalizationEnabled,

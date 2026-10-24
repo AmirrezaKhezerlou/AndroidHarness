@@ -88,6 +88,8 @@ internal fun EmptyState(
     personalizationEnabled: Boolean = true,
     personalizationChangeEnabled: Boolean = true,
     onPersonalizationChange: ((Boolean) -> Unit)? = null,
+    /** Fill the chat list's viewport (fillParentMaxHeight) so content can center. */
+    modifier: Modifier = Modifier,
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
@@ -110,7 +112,7 @@ internal fun EmptyState(
 
     // The personalization pill stays pinned to the top of the chat area; the
     // mark, headline and suggestions sit in the absolute vertical center.
-    Box(Modifier.fillMaxWidth().fillMaxHeight()) {
+    Box(modifier.fillMaxWidth().fillMaxHeight()) {
         if (chatOnly && onPersonalizationChange != null) {
             Box(Modifier.fillMaxWidth().padding(top = 12.dp), contentAlignment = Alignment.TopCenter) {
                 Surface(
