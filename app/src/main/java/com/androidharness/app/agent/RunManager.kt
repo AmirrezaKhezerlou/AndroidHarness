@@ -98,6 +98,8 @@ class RunManager(
         val retryStatus: String? = null,
         val thinkingTiming: ThinkingTiming = ThinkingTiming(),
         val reasoningTokens: Int? = null,
+        /** Wall-clock start of the current turn; drives the unified live thinking+tools timer. */
+        val turnStartedAt: Long? = null,
         val queuedMessage: String? = null,
         val pendingPlan: String? = null,
         val estimate: ContextEstimate? = null,
@@ -416,6 +418,7 @@ class RunManager(
                 running = true, cancelled = false, error = null, turnId = turnId,
                 streamingText = "", streamingThinking = null,
                 thinkingTiming = ThinkingTiming(), reasoningTokens = null,
+                turnStartedAt = ThinkingTiming.now(),
                 codeDrafts = emptyMap(), packageProgress = emptyMap(),
                 liveMessageId = UUID.randomUUID().toString(), lastCommittedId = null,
                 queuedMessage = null, pendingPlan = null,
@@ -575,6 +578,7 @@ class RunManager(
                         turnId = null,
                         streamingText = null,
                         streamingThinking = null,
+                        turnStartedAt = null,
                         // Keep lastCommittedId: the UI's hold needs it to know
                         // which committed row it is waiting on.
                         liveMessageId = null,

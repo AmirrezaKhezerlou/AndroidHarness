@@ -1500,6 +1500,7 @@ private fun ChatScreenContent(
                                         showThinkingMetrics = true,
                                         thinkingTiming = state.thinkingTiming.takeIf { running && !committed },
                                         reasoningTokens = state.reasoningTokens.takeIf { running && !committed },
+                                        turnStartedAt = state.turnStartedAt.takeIf { running },
                                         autoExpand = !appSettings.chatKeepThinkingCollapsed,
                                         runningCalls = if (running) state.runningCalls else emptyList(),
                                         streamingThinking = if (running && !committed) state.streamingThinking.orEmpty() else "",

@@ -1,6 +1,7 @@
 package com.androidharness.app.core
 
 import com.androidharness.app.agent.ThinkingTiming
+import com.androidharness.app.agent.ThinkingTokenCount
 import com.androidharness.app.agent.thinkingTokenCount
 
 internal data class ChatThinkingTotals(val milliseconds: Long, val tokens: Long, val estimated: Boolean)
@@ -9,10 +10,28 @@ internal data class ChatThinkingTotals(val milliseconds: Long, val tokens: Long,
 internal fun chatThinkingTotals(messages: List<ChatMessage>, streamingThinking: String, timing: ThinkingTiming?,
     reasoningTokens: Int?, now: Long): ChatThinkingTotals {
     val parents = messages.filter { it.role == Role.ASSISTANT && it.toolCallId == null }
-    val counts = parents.mapNotNull { thinkingTokenCount(it.thinking, it.generation.reasoningTokens) } +
-        listOfNotNull(thinkingTokenCount(streamingThinking, reasoningTokens))
+
+    // A provider's reported count replaces the streamed estimate only when it
+    // is not smaller, so the header total never drops mid-turn.
+    fun count(text: String, reported: Int?): ThinkingTokenCount? {
+        val estimated = thinkingTokenCount(text, null)
+        val exact = reported?.takeIf { it >= 0 }?.let { ThinkingTokenCount(it, false) }
+        return when {
+            exact == null -> estimated
+            estimated == null -> exact
+            estimated.count > exact.count -> estimated
+            else -> exact
+        }
+    }
+    val counts = parents.mapNotNull { count(it.thinking, it.generation.reasoningTokens) } +
+        listOfNotNull(count(streamingThinking, reasoningTokens))
+
+    // With committed timestamps the turn shows its wall-clock span, thinking
+    // plus tool time; without them it falls back to summed reasoning spans.
+    val timestamps = messages.mapNotNull { m -> m.createdAt.takeIf { it > 0 } }
+    val spanMs = if (timestamps.size >= 2) timestamps.max() - timestamps.min() else null
     return ChatThinkingTotals(
-        parents.sumOf { it.thinkingMs.coerceAtLeast(0) } + (timing?.durationMs(now) ?: 0),
+        (spanMs ?: parents.sumOf { it.thinkingMs.coerceAtLeast(0) }) + (timing?.durationMs(now) ?: 0),
         counts.sumOf { it.count.toLong() },
         counts.isEmpty() || counts.any { it.estimated },
     )

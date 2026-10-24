@@ -59,6 +59,7 @@ internal fun ChatActivity(
     showThinkingMetrics: Boolean = false,
     thinkingTiming: com.androidharness.app.agent.ThinkingTiming? = null,
     reasoningTokens: Int? = null,
+    turnStartedAt: Long? = null,
     onOpenUrl: (String) -> Unit = {},
 ) {
     val entries = remember(messages, runningCalls, streamingThinking, streamId, streamingCommentary) {
@@ -84,7 +85,8 @@ internal fun ChatActivity(
     }
     ChatActivityRow(title, if (live) (active ?: lastTool?.call)?.name else null, live, entries.isNotEmpty(), followLatest = true, autoExpand = autoExpand,
         progress = research,
-        trailing = if (showThinkingMetrics) ({ ChatThinkingMetrics(messages, streamingThinking, thinkingTiming, reasoningTokens, live) }) else null) {
+        trailing = if (showThinkingMetrics) ({ ChatThinkingMetrics(messages, streamingThinking, thinkingTiming, reasoningTokens, live,
+            turnStartedAt = turnStartedAt, streamId = streamId) }) else null) {
         entries.forEach { entry ->
             when (entry) {
                 is ChatActivityPresentation.Entry.Thought -> {

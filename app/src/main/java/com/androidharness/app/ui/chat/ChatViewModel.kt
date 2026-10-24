@@ -145,6 +145,8 @@ data class ChatUiState(
     val subagentSteps: Map<String, List<String>> = emptyMap(),
     val thinkingTiming: com.androidharness.app.agent.ThinkingTiming = com.androidharness.app.agent.ThinkingTiming(),
     val reasoningTokens: Int? = null,
+    /** Wall-clock start of the running turn; null once the turn ends. */
+    val turnStartedAt: Long? = null,
     /** Per-turn file-edit stats ("+N −M" chips), keyed by turnId. */
     val fileEditsByTurn: Map<String, List<com.androidharness.app.data.db.FileEditEntity>> = emptyMap(),
     /** Per-request cache stats, grouped by the owning task turn. */
@@ -652,6 +654,7 @@ class ChatViewModel(
                 subagentSteps = live.subagentSteps,
                 thinkingTiming = if (committed) st.thinkingTiming.stop(com.androidharness.app.agent.ThinkingTiming.now()) else live.thinkingTiming,
                 reasoningTokens = if (committed) st.reasoningTokens else live.reasoningTokens,
+                turnStartedAt = live.turnStartedAt,
                 retryStatus = live.retryStatus,
                 queuedMessage = live.queuedMessage,
                 pendingPlan = live.pendingPlan,

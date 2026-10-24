@@ -13,11 +13,25 @@ class ChatThinkingMetricsTest {
         assertEquals(2500L, chatThinkingTotals(emptyList(), "abcd", stopped, null, 9000).milliseconds)
     }
 
-    @Test fun reportedReasoningUsageReplacesTheLiveEstimate() {
+    @Test fun reportedReasoningUsageNeverDropsBelowTheStreamedEstimate() {
         val estimate = chatThinkingTotals(emptyList(), "abcd".repeat(50), null, null, 0)
         assertEquals(50L, estimate.tokens); assertTrue(estimate.estimated)
-        val reported = chatThinkingTotals(emptyList(), "abcd".repeat(50), null, 42, 0)
-        assertEquals(42L, reported.tokens); assertFalse(reported.estimated)
+        val smaller = chatThinkingTotals(emptyList(), "abcd".repeat(50), null, 42, 0)
+        assertEquals(50L, smaller.tokens); assertTrue(smaller.estimated)
+        val larger = chatThinkingTotals(emptyList(), "abcd".repeat(50), null, 80, 0)
+        assertEquals(80L, larger.tokens); assertFalse(larger.estimated)
+    }
+
+    @Test fun committedTurnsWithTimestampsShowTheirWallClockSpan() {
+        val messages = listOf(
+            ChatMessage(Role.USER, text = "q", createdAt = 1_000),
+            ChatMessage(Role.ASSISTANT, thinkingMs = 2_000, createdAt = 6_000),
+            ChatMessage(Role.TOOL, toolCallId = "c", createdAt = 30_000),
+            ChatMessage(Role.ASSISTANT, thinkingMs = 1_000, createdAt = 45_000),
+        )
+        assertEquals(44_000L, chatThinkingTotals(messages, "", null, null, 0).milliseconds)
+        // Without a second timestamp the summed reasoning spans remain the answer.
+        assertEquals(2_000L, chatThinkingTotals(listOf(messages[1]), "", null, null, 0).milliseconds)
     }
 
     @Test fun savedRequestsAndLiveReasoningAreSummedWithoutToolOrUserTokens() {
