@@ -28,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -88,7 +89,7 @@ fun TerminalScreen(
     var historyIndex by remember { androidx.compose.runtime.mutableIntStateOf(history.size) }
     var historyDraft by remember { mutableStateOf("") }
     fun submit() {
-        if (input.isBlank() || state.busy || workspace == null) return
+        if (input.isBlank() || state.busy || state.stopping || workspace == null) return
         history = (history + input).takeLast(100)
         historyIndex = history.size
         terminal.send(input, workspace, sessionId, projectId)
@@ -214,6 +215,10 @@ fun TerminalScreen(
                                 .weight(1f)
                                 .onPreviewKeyEvent { event ->
                                     if (!desktopInput) false else when (event.key) {
+                                        Key.C -> if (event.isCtrlPressed && state.busy) {
+                                            if (event.type == KeyEventType.KeyDown) terminal.interrupt()
+                                            true
+                                        } else false
                                         Key.Enter, Key.NumPadEnter -> {
                                             if (event.type == KeyEventType.KeyUp) submit()
                                             true
@@ -260,14 +265,14 @@ fun TerminalScreen(
                         )
                         Spacer(Modifier.width(6.dp))
                         IconButton(
-                            onClick = { submit() },
-                            enabled = input.isNotBlank() && !state.busy,
+                            onClick = { if (state.busy) terminal.interrupt() else submit() },
+                            enabled = !state.stopping && (state.busy || input.isNotBlank()),
                         ) {
                             Icon(
-                                Icons.AutoMirrored.Filled.Send,
-                                contentDescription = uiContext.getString(R.string.ui_run),
+                                if (state.busy) Icons.Filled.Stop else Icons.AutoMirrored.Filled.Send,
+                                contentDescription = uiContext.getString(if (state.busy) R.string.settings_action_stop else R.string.ui_run),
                                 modifier = Modifier.size(18.dp),
-                                tint = if (input.isNotBlank() && !state.busy) scheme.primary
+                                tint = if (state.busy || input.isNotBlank()) scheme.primary
                                 else scheme.onSurfaceVariant,
                             )
                         }

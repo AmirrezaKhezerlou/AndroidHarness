@@ -186,7 +186,17 @@ class ChatPersonalizationDeviceTest {
         }
         var node = await(text)
         while (!node.isClickable && node.parent != null) node = node.parent
-        assertTrue(node.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+        // Exercise hit testing: accessibility ACTION_CLICK bypasses overlapping UI layers.
+        val bounds = Rect().also(node::getBoundsInScreen)
+        assertFalse("Empty touch target for $text", bounds.isEmpty)
+        val down = SystemClock.uptimeMillis()
+        for (action in listOf(android.view.MotionEvent.ACTION_DOWN, android.view.MotionEvent.ACTION_UP)) {
+            val event = android.view.MotionEvent.obtain(down, SystemClock.uptimeMillis(), action,
+                bounds.exactCenterX(), bounds.exactCenterY(), 0)
+            try { assertTrue(instrumentation.uiAutomation.injectInputEvent(event, true)) }
+            finally { event.recycle() }
+            SystemClock.sleep(50)
+        }
         instrumentation.waitForIdleSync()
     }
     private fun screenshot(name: String) {

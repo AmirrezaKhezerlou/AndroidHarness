@@ -39,6 +39,7 @@ class TerminalManager(
         val lines: List<String> = emptyList(),
         val cwd: String = "",
         val busy: Boolean = false,
+        val stopping: Boolean = false,
         val privileged: Boolean = false,
         val started: Boolean = false,
         val lastCommand: String? = null,
@@ -52,7 +53,7 @@ class TerminalManager(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     @Volatile private var process: Process? = null
     private var readJob: Job? = null
-    private var sshJob: Job? = null
+    @Volatile private var commandJob: Job? = null
     private var cwd: File = linuxEnv.shellFallbackRoot
     private var remoteWorkspace: com.androidharness.app.workspace.SshFs? = null
     private var workspacePath: String? = null
@@ -94,7 +95,7 @@ class TerminalManager(
     /** Starts the terminal if it isn't running yet. */
     @Synchronized
     fun ensureStarted() {
-        if (storageMaintenance) return
+        if (storageMaintenance || _state.value.stopping) return
         if (remoteWorkspace != null) {
             _state.update { it.copy(started = true, cwd = cwd.absolutePath) }
             return
@@ -104,7 +105,7 @@ class TerminalManager(
     }
 
     fun useWorkspace(fs: com.androidharness.app.workspace.WorkspaceFs) {
-        if (_state.value.busy) return
+        if (_state.value.busy || _state.value.stopping) return
         // cwd changes after `cd` and can use a different Android path alias.
         // Rebinding the same workspace must not restart the shell or erase output.
         if (workspacePath == fs.displayPath) return
@@ -138,9 +139,10 @@ class TerminalManager(
             return
         }
         runManager.acquireKeepalive()
-        resetLines()
+        val keepOutput = _state.value.lastExitCode == -130
+        if (!keepOutput) resetLines()
         _state.update {
-            it.copy(started = true, cwd = cwd.absolutePath, lines = emptyList())
+            it.copy(started = true, cwd = cwd.absolutePath, lines = if (keepOutput) it.lines else emptyList())
         }
         appendLines(listOf("# terminal ready: ${if (linuxEnv.bashExecutable() != null) "bash" else "toybox sh"} (app user)"))
 
@@ -237,7 +239,7 @@ class TerminalManager(
         if (storageMaintenance) { appendLines(listOf("# storage cleanup in progress; try again shortly")); return }
         val cmd = command.trimEnd()
         if (cmd.isEmpty()) return
-        if (_state.value.busy) {
+        if (_state.value.busy || _state.value.stopping) {
             appendLines(listOf("# still running: wait for it to finish"))
             return
         }
@@ -257,9 +259,16 @@ class TerminalManager(
         }
     }
 
+    private fun launchCommand(block: suspend CoroutineScope.() -> Unit) {
+        // Publish the handle before it can run, so Stop cannot miss a newly started worker.
+        val job = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY, block = block)
+        commandJob = job
+        job.start()
+    }
+
     private fun sendDevice(cmd: String, sessionId: String?, projectId: String?) {
         val access = router?.deviceAccess ?: return
-        scope.launch {
+        launchCommand {
             access.withRequest(projectId, sessionId, forceDevice = true, manual = true) {
                 try {
                     val decision = access.select()
@@ -293,7 +302,7 @@ class TerminalManager(
 
     private fun sendSsh(cmd: String) {
         val workspace = remoteWorkspace ?: return
-        sshJob = scope.launch {
+        launchCommand {
             runManager.acquireKeepalive()
             try {
                 // A fresh exec channel per command, with cwd tracked like the
@@ -317,7 +326,7 @@ class TerminalManager(
             _state.update { it.copy(busy = false, lastExitCode = -1) }
             return
         }
-        scope.launch {
+        launchCommand {
             try {
                 val out = p.outputStream
                 // The marker echoes the exit code and the new pwd in one shot.
@@ -331,7 +340,7 @@ class TerminalManager(
     }
 
     private fun sendPrivileged(cmd: String) {
-        scope.launch {
+        launchCommand {
             // Make sure the shell-user toolchain copy matches the package set
             // tmpProcessEnv() is built for before running from it: a copy from
             // an older set is missing the libraries that env names.
@@ -351,7 +360,7 @@ class TerminalManager(
             if (res == null) {
                 appendLines(listOf("# Shizuku unavailable: dropped to app tier"))
                 sendAppTier(cmd)
-                return@launch
+                return@launchCommand
             }
             val lines = res.output.lines().toMutableList()
             res.stderr.trim().takeIf { it.isNotEmpty() }?.let { err ->
@@ -387,6 +396,23 @@ class TerminalManager(
         _state.update { it.copy(lines = emptyList()) }
     }
 
+    /** Wait for this command's cleanup before allowing another command to use the terminal. */
+    fun interrupt() {
+        val running = synchronized(this) {
+            if (!_state.value.busy || _state.value.stopping) return
+            _state.update { it.copy(stopping = true) }
+            commandJob.also { it?.cancel() }
+        }
+        scope.launch {
+            running?.join()
+            synchronized(this@TerminalManager) {
+                stopProcess()
+                _state.update { it.copy(started = false, busy = false, stopping = false, lastExitCode = -130) }
+            }
+            appendLines(listOf("# command stopped"))
+        }
+    }
+
     /** Called when the terminal screen is left for good. */
     fun stopTerminal() {
         stopProcess()
@@ -395,8 +421,8 @@ class TerminalManager(
     }
 
     private fun stopProcess() {
-        sshJob?.cancel()
-        sshJob = null
+        commandJob?.cancel()
+        commandJob = null
         readJob?.cancel()
         readJob = null
         val previous = synchronized(this) { process.also { process = null } }

@@ -53,4 +53,9 @@ interface IHarnessService {
     void resumeCommands() = 12;
     /** Stop a recovered job only after verifying it still owns its unique log. */
     boolean killTrackedProcess(int pid, in String logPath) = 13;
+    /** Reserve before dispatch so cancellation can also prevent a queued command from starting. */
+    String registerCommand() = 14;
+    String execRegistered(in String id, in String[] cmd, in String[] env, in String dir, int maxBytes, int timeoutMs) = 15;
+    /** Cancels only this reservation/command; other chats and detached jobs keep running. */
+    void cancelCommand(in String id) = 16;
 }

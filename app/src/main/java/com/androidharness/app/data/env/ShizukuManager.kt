@@ -438,7 +438,9 @@ class ShizukuManager(
         val svc = service
         val raw = if (svc != null) {
             if (expectedUid != null && runCatching { svc.uid }.getOrNull() != expectedUid) return@withContext null
-            runCatching { svc.exec(cmd, withDeployPaths(env), dir, maxBytes, timeoutMs) }.getOrNull()
+            try { svc.execCancellable(cmd, withDeployPaths(env), dir, maxBytes, timeoutMs) }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { null }
                 ?: return@withContext PrivilegedResult(-1, false, "", "Shizuku connection lost after dispatch. The command may have run; it was not retried.")
         } else {
             val client = compatibility?.takeIf { it.isAlive } ?: return@withContext null

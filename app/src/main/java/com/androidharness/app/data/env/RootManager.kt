@@ -162,7 +162,7 @@ class RootManager(private val context: Context) {
     internal suspend fun run(cmd: Array<String>, env: Array<String>?, dir: String?, timeoutMs: Int, maxBytes: Int): PrivilegedResult? = withContext(Dispatchers.IO) {
         val svc = service ?: return@withContext null
         // Null means dispatch never happened. A binder failure after dispatch is an uncertain result.
-        try { parsePrivilegedResult(svc.exec(cmd, env, dir, maxBytes, timeoutMs)) }
+        try { parsePrivilegedResult(svc.execCancellable(cmd, env, dir, maxBytes, timeoutMs)) }
         catch (e: CancellationException) { throw e }
         catch (e: Exception) { unavailable("Root connection lost during execution."); PrivilegedResult(-1, false, "", "Root connection lost after dispatch. The command may have run; it was not retried.") }
     }

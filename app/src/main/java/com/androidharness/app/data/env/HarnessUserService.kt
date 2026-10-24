@@ -311,6 +311,29 @@ class HarnessUserService() : IHarnessService.Stub() {
     }
 
     private val activeCommands = java.util.concurrent.ConcurrentHashMap.newKeySet<Thread>()
+    // Protected by commandLock, including signalling: never interrupt a reused Binder worker.
+    private val registeredCommands = mutableMapOf<String, Thread?>()
+
+    override fun registerCommand(): String = synchronized(commandLock) {
+        check(acceptingCommands) { "Privileged access is paused." }
+        java.util.UUID.randomUUID().toString().also { registeredCommands[it] = null }
+    }
+
+    override fun cancelCommand(id: String) { synchronized(commandLock) {
+        registeredCommands.remove(id)?.interrupt()
+    } }
+
+    override fun execRegistered(id: String, cmd: Array<String>, env: Array<String>?, dir: String?, maxBytes: Int, timeoutMs: Int): String {
+        synchronized(commandLock) {
+            if (!registeredCommands.containsKey(id)) return "exit=-130\ntimeout=0\n$STDERR_SEPARATOR\nCancelled by user."
+            registeredCommands[id] = Thread.currentThread()
+        }
+        return try { exec(cmd, env, dir, maxBytes, timeoutMs) }
+        finally { synchronized(commandLock) {
+            registeredCommands.remove(id)
+            Thread.interrupted()
+        } }
+    }
 
     override fun getUid(): Int = android.os.Process.myUid()
     override fun rootList(path: String, offset: Int): String = synchronized(commandLock) {

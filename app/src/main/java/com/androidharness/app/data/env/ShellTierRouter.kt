@@ -3,6 +3,8 @@ package com.androidharness.app.data.env
 import android.content.Context
 import com.androidharness.app.tools.ShellPolicy
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -246,37 +248,54 @@ class ShellTierRouter(
         val deadline = System.currentTimeMillis() + timeoutMs
         var timedOut = false
         var exitCode = -1
-        while (true) {
-            if (process.waitFor(50, TimeUnit.MILLISECONDS)) {
-                exitCode = process.exitValue()
-                break
+        try {
+            while (true) {
+                currentCoroutineContext().ensureActive()
+                if (process.waitFor(50, TimeUnit.MILLISECONDS)) {
+                    exitCode = process.exitValue()
+                    break
+                }
+                if (System.currentTimeMillis() > deadline) {
+                    timedOut = true
+                    break
+                }
             }
-            if (System.currentTimeMillis() > deadline) {
-                timedOut = true
-                break
-            }
-        }
 
-        val pid = runCatching {
-            val f = process.javaClass.getDeclaredField("pid")
-            f.isAccessible = true
-            f.getInt(process)
-        }.getOrNull()
-        if (pid != null && pid > 0) {
-            if (timedOut) {
-                killGroup(pid)
-                process.destroyForcibly()
-                process.waitFor(200, TimeUnit.MILLISECONDS)
-            } else {
-                // Command finished normally: clean up any detached/orphan grandchildren in this process group
-                cleanOrphanGroup(pid)
+            val pid = runCatching {
+                val f = process.javaClass.getDeclaredField("pid")
+                f.isAccessible = true
+                f.getInt(process)
+            }.getOrNull()
+            if (pid != null && pid > 0) {
+                if (timedOut) {
+                    killGroup(pid)
+                    process.destroyForcibly()
+                    process.waitFor(200, TimeUnit.MILLISECONDS)
+                } else {
+                    // Command finished normally: clean up any detached/orphan grandchildren in this process group
+                    cleanOrphanGroup(pid)
+                }
             }
-        }
-        reapZombies()
+            reapZombies()
 
-        out.join(300)
-        err.join(300)
-        reapZombies()
+            out.join(300)
+            err.join(300)
+            reapZombies()
+
+        } finally {
+            // Cancellation must terminate the command before RunManager can finish or steer.
+            if (process.isAlive) {
+                val pid = runCatching {
+                    process.javaClass.getDeclaredField("pid").apply { isAccessible = true }.getInt(process)
+                }.getOrNull()
+                if (pid != null && pid > 0) killGroup(pid)
+                runCatching { process.destroyForcibly() }
+                runCatching { process.waitFor(200, TimeUnit.MILLISECONDS) }
+            }
+            runCatching { process.inputStream.close() }
+            runCatching { process.errorStream.close() }
+            runCatching { process.outputStream.close() }
+        }
 
         return ShellRunResult(
             exitCode,
