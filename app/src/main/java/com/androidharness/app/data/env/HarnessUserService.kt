@@ -251,6 +251,10 @@ class HarnessUserService() : IHarnessService.Stub() {
             }
         }
         for (child in toKill) {
+            // Explicit numeric validation: refuse to ever signal PID 0/1 or a
+            // negative value, even though `toKill` is already built solely
+            // from confirmed descendants of rootPid.
+            if (child <= 1) continue
             val killBin = if (File("/system/bin/kill").exists()) "/system/bin/kill" else "kill"
             runCatching {
                 val k1 = Runtime.getRuntime().exec(arrayOf(killBin, "-9", "-$child"))
