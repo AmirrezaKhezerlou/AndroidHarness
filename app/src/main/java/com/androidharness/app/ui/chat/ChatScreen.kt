@@ -1969,7 +1969,8 @@ private fun ChatScreenContent(
                                 indexedItem(key = "streaming-$streamKey-thinking", contentType = ChatListContentType.Thinking) {
                                     ThinkingBlock(thinking,
                                         live = !state.streamingCommitted && state.thinkingTiming.startedAt != null,
-                                        timing = state.thinkingTiming, reasoningTokens = state.reasoningTokens)
+                                        timing = state.thinkingTiming, reasoningTokens = state.reasoningTokens,
+                                        autoExpand = false)
                                 }
                             }
                         }
