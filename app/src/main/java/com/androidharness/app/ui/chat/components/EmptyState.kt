@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -30,7 +32,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
@@ -104,129 +108,137 @@ internal fun EmptyState(
         entered = true
     }
 
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-    Column(
-        modifier = Modifier
-            .widthIn(max = 520.dp)
-            .fillMaxWidth()
-            .padding(top = if (desktop) 24.dp else 72.dp, start = 8.dp, end = 8.dp, bottom = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
+    // The personalization pill stays pinned to the top of the chat area; the
+    // mark, headline and suggestions sit in the absolute vertical center.
+    Box(Modifier.fillMaxWidth().fillMaxHeight()) {
         if (chatOnly && onPersonalizationChange != null) {
-            Surface(
-                color = scheme.surfaceContainerLow,
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.5f)),
-                modifier = Modifier.widthIn(max = 320.dp),
-            ) {
-                Row(
-                    modifier = Modifier
-                        .toggleable(value = personalizationEnabled, enabled = personalizationChangeEnabled,
-                            role = Role.Switch, onValueChange = onPersonalizationChange)
-                        .heightIn(min = 48.dp)
-                        .padding(horizontal = 14.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+            Box(Modifier.fillMaxWidth().padding(top = 12.dp), contentAlignment = Alignment.TopCenter) {
+                Surface(
+                    color = scheme.surfaceContainerLow,
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.5f)),
+                    modifier = Modifier.widthIn(max = 320.dp),
                 ) {
-                    Text(uiContext.getString(if (personalizationEnabled) R.string.chat_personalization_on
+                    Row(
+                        modifier = Modifier
+                            .toggleable(value = personalizationEnabled, enabled = personalizationChangeEnabled,
+                                role = Role.Switch, onValueChange = onPersonalizationChange)
+                            .heightIn(min = 48.dp)
+                            .padding(horizontal = 14.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(uiContext.getString(if (personalizationEnabled) R.string.chat_personalization_on
                         else R.string.chat_personalization_off), modifier = Modifier.weight(1f, fill = false),
-                        style = MaterialTheme.typography.labelLarge)
-                    Switch(checked = personalizationEnabled, onCheckedChange = null, enabled = personalizationChangeEnabled)
+                            style = MaterialTheme.typography.labelLarge)
+                        Switch(checked = personalizationEnabled, onCheckedChange = null, enabled = personalizationChangeEnabled)
+                    }
                 }
             }
-            Spacer(Modifier.height(20.dp))
         }
-        HarnessMark(size = if (desktop) 40.dp else 52.dp)
-        Spacer(Modifier.height(20.dp))
-        Text(
-            if (hasProvider) uiContext.getString(if (chatOnly) R.string.chat_empty_title else R.string.ui_what_do_you_want_to_build) else uiContext.getString(R.string.ui_connect_a_provider),
-            style = MaterialTheme.typography.headlineSmallEmphasized,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(10.dp))
-        Text(
-            if (hasProvider) uiContext.getString(if (chatOnly) R.string.chat_empty_description else R.string.ui_start_with_an_idea_or_create_a)
-            else uiContext.getString(R.string.ui_add_an_api_key_for_openai_anthropic),
-            style = MaterialTheme.typography.bodyMedium,
-            color = scheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        if (hasProvider) {
-            Spacer(Modifier.height(28.dp))
-            Surface(
-                color = scheme.surface,
-                shape = MaterialTheme.shapes.large,
-                border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.5f)),
+        Box(
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
                 modifier = Modifier
+                    .widthIn(max = 520.dp)
                     .fillMaxWidth()
-                    .animateContentSize(),
+                    .padding(top = 56.dp, start = 8.dp, end = 8.dp, bottom = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Column {
-                    suggestions.forEachIndexed { index, (icon, suggestion) ->
-                        AnimatedVisibility(
-                            visible = entered,
-                            enter = fadeIn(tween(200, delayMillis = 90 * index)) +
-                                slideInVertically(tween(240, delayMillis = 90 * index)) { it / 6 },
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onSuggestion(suggestion) }
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                            ) {
-                                Box(
-                                    contentAlignment = Alignment.Center,
-                                    modifier = Modifier
-                                        .size(30.dp)
-                                        .clip(RoundedCornerShape(9.dp))
-                                        .background(scheme.surfaceContainerHigh),
+                HarnessMark(size = if (desktop) 40.dp else 52.dp)
+                Spacer(Modifier.height(20.dp))
+                Text(
+                    if (hasProvider) uiContext.getString(if (chatOnly) R.string.chat_empty_title else R.string.ui_what_do_you_want_to_build) else uiContext.getString(R.string.ui_connect_a_provider),
+                    style = MaterialTheme.typography.headlineSmallEmphasized,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    if (hasProvider) uiContext.getString(if (chatOnly) R.string.chat_empty_description else R.string.ui_start_with_an_idea_or_create_a)
+                    else uiContext.getString(R.string.ui_add_an_api_key_for_openai_anthropic),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                if (hasProvider) {
+                    Spacer(Modifier.height(28.dp))
+                    Surface(
+                        color = scheme.surface,
+                        shape = MaterialTheme.shapes.large,
+                        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.5f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .animateContentSize(),
+                    ) {
+                        Column {
+                            suggestions.forEachIndexed { index, (icon, suggestion) ->
+                                AnimatedVisibility(
+                                    visible = entered,
+                                    enter = fadeIn(tween(200, delayMillis = 90 * index)) +
+                                        slideInVertically(tween(240, delayMillis = 90 * index)) { it / 6 },
                                 ) {
-                                    Icon(
-                                        icon,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
-                                        tint = scheme.onSurfaceVariant,
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { onSuggestion(suggestion) }
+                                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    ) {
+                                        Box(
+                                            contentAlignment = Alignment.Center,
+                                            modifier = Modifier
+                                                .size(30.dp)
+                                                .clip(RoundedCornerShape(9.dp))
+                                                .background(scheme.surfaceContainerHigh),
+                                        ) {
+                                            Icon(
+                                                icon,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp),
+                                                tint = scheme.onSurfaceVariant,
+                                            )
+                                        }
+                                        Spacer(Modifier.width(12.dp))
+                                        Text(
+                                            suggestion,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.ArrowForward,
+                                            contentDescription = null,
+                                            tint = scheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                    }
+                                }
+                                if (index != suggestions.lastIndex) {
+                                    HorizontalDivider(
+                                        color = scheme.outlineVariant.copy(alpha = 0.5f),
+                                        modifier = Modifier.padding(start = 56.dp),
                                     )
                                 }
-                                Spacer(Modifier.width(12.dp))
-                                Text(
-                                    suggestion,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Icon(
-                                    Icons.AutoMirrored.Filled.ArrowForward,
-                                    contentDescription = null,
-                                    tint = scheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                    modifier = Modifier.size(16.dp),
-                                )
                             }
-                        }
-                        if (index != suggestions.lastIndex) {
                             HorizontalDivider(
                                 color = scheme.outlineVariant.copy(alpha = 0.5f),
                                 modifier = Modifier.padding(start = 56.dp),
                             )
+                            DonationRow()
                         }
                     }
-                    HorizontalDivider(
-                        color = scheme.outlineVariant.copy(alpha = 0.5f),
-                        modifier = Modifier.padding(start = 56.dp),
-                    )
-                    DonationRow()
+                } else {
+                    Spacer(Modifier.height(26.dp))
+                    Button(onClick = onAddProvider) {
+                        Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(uiContext.getString(R.string.settings_providers_add))
+                    }
                 }
             }
-        } else {
-            Spacer(Modifier.height(26.dp))
-            Button(onClick = onAddProvider) {
-                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(uiContext.getString(R.string.settings_providers_add))
-            }
         }
-    }
     }
 }
 
