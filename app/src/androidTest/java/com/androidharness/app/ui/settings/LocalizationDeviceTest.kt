@@ -280,6 +280,70 @@ class LocalizationDeviceTest {
         } finally { target.deleteSharedPreferences(preference) }
     }
 
+    @Test fun indonesianSearchAndPermissionControlsWorkWithLargeText() {
+        val indo = context("id")
+        var selected: Pair<SettingsPage, Int?>? = null
+        val state = mutableStateOf(AppSettings())
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            scenario.onActivity { activity -> show(activity, locale = "id") {
+                SettingsHome(indo.getString(R.string.settings_search_max_context_title), {},
+                    { page, anchor -> selected = page to anchor }, Modifier.fillMaxSize().verticalScroll(rememberScrollState()))
+            } }
+            click(indo.getString(R.string.settings_search_max_context_desc))
+            assertEquals(SettingsPage.AGENT to R.string.settings_anchor_max_context, selected)
+            screenshot("indonesian-settings-search.png")
+            scenario.onActivity { activity -> show(activity, scale = 1.5f, locale = "id") {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+                    AgentBehaviorSection(state.value,
+                        onPermissionMode = { state.value = state.value.copy(permissionMode = it) },
+                        onContextLimit = { state.value = state.value.copy(maxContextTokens = it) },
+                        onIterationLimit = { state.value = state.value.copy(maxIterations = it) },
+                        onProjectInstructions = {}, onLiveUpdates = {})
+                }
+            } }
+            click(indo.getString(R.string.settings_anchor_default_permission))
+            click(indo.localizedOptionLabel(PermissionMode.FULL_AUTO.label))
+            assertEquals(PermissionMode.FULL_AUTO, state.value.permissionMode)
+            awaitText(indo.localizedOptionLabel(PermissionMode.FULL_AUTO.label))
+            screenshot("indonesian-agent-150-percent.png")
+        }
+    }
+
+    @Test fun indonesianPrimaryScreensAndModelPickerPreserveModelIds() {
+        val container = (target.applicationContext as HarnessApp).container
+        val indo = context("id")
+        val preference = "indonesian-picker-${System.nanoTime()}"
+        val shortcuts = ModelShortcuts(target, preference)
+        val provider = ProviderConfig("indonesian-provider", "Provider unchanged", ProviderType.OPENAI_COMPAT,
+            "https://unused.invalid/v1", "first-model")
+        var chosen: Pair<String, String?>? = null
+        try {
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { activity -> show(activity, locale = "id") { SetupScreen(container, onFinish = {}) } }
+                awaitText(indo.getString(R.string.ui_welcome_to_androidharness)); screenshot("indonesian-setup.png")
+                scenario.onActivity { activity -> show(activity, locale = "id") { StatsScreen(container, onBack = {}) } }
+                awaitText(indo.getString(R.string.ui_model_activity)); screenshot("indonesian-usage.png")
+                scenario.onActivity { activity -> show(activity, locale = "id") { AutomationScreen(container, onBack = {}, onOpenSession = {}) } }
+                awaitText(indo.getString(R.string.ui_automation)); screenshot("indonesian-automation.png")
+                scenario.onActivity { activity -> show(activity, locale = "id") { FilesScreen(container, onBack = {}, onOpenFile = {}) } }
+                awaitText(indo.getString(R.string.ui_files)); screenshot("indonesian-files.png")
+                scenario.onActivity { activity -> show(activity, locale = "id") {
+                    ModelPickerSheet(listOf(provider), provider.id, provider.model,
+                        mapOf(provider.id to listOf(ModelEntry("first-model", displayName = "First model"),
+                            ModelEntry("second-model", displayName = "Second model"))),
+                        onDismiss = {}, onSelect = { id, model -> chosen = id to model }, onRefreshCatalog = { null },
+                        onManageProviders = {}, modelShortcuts = shortcuts)
+                } }
+                awaitText(indo.getString(R.string.ui_all_models))
+                awaitText(indo.getString(R.string.ui_search_models_or_providers))
+                awaitText("${provider.name} · ${indo.getString(R.string.ui_current)}")
+                click("Second model")
+                screenshot("indonesian-model-picker.png"); click(indo.getString(R.string.ui_use_model))
+                assertEquals(provider.id to "second-model", chosen)
+            }
+        } finally { target.deleteSharedPreferences(preference) }
+    }
+
     @Test fun arabicSearchAndPermissionControlsWorkWithLargeText() {
         val ar = context("ar")
         var selected: Pair<SettingsPage, Int?>? = null
@@ -427,6 +491,77 @@ class LocalizationDeviceTest {
                 assertTrue(copied.contains("/src/ملف.kt"))
                 assertTrue(copied.contains("https://example.com/a?x=1&y=2"))
             }
+        }
+    }
+
+    @Test fun indonesianRichRepliesKeepMixedContentAndCopyOriginalCodeAndTableValues() {
+        val indo = context("id")
+        val code = "const path = \"/src/ملف.kt\";\nconsole.log(path);"
+        val answer = "# Penjelasan dalam bahasa Indonesia\n\nModel GPT-5 · jalur /src/Main.kt · [Sumber](https://example.com/a?x=1&y=2)\n\n```javascript\n$code\n```\n\nMatematika: ${'$'}x^2 = 4${'$'}"
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            scenario.onActivity { activity -> show(activity, locale = "id") {
+                com.androidharness.app.ui.chat.components.ChatAppearance {
+                    Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
+                        com.androidharness.app.ui.chat.components.AssistantText(answer)
+                    }
+                }
+            } }
+            awaitText("Penjelasan dalam bahasa Indonesia")
+            val rendered = java.util.concurrent.atomic.AtomicBoolean(false)
+            val ready = java.util.concurrent.CountDownLatch(1)
+            scenario.onActivity { activity ->
+                fun inspect(view: android.view.View) {
+                    if (view is android.webkit.WebView) view.evaluateJavascript("document.querySelector('.katex') !== null") {
+                        rendered.set(it == "true"); ready.countDown()
+                    }
+                    if (view is android.view.ViewGroup) for (i in 0 until view.childCount) inspect(view.getChildAt(i))
+                }
+                // Equations render asynchronously from bundled assets.
+                activity.window.decorView.postDelayed({ inspect(activity.window.decorView) }, 2500)
+            }
+            assertTrue("Indonesian reply must contain rendered math", ready.await(5, java.util.concurrent.TimeUnit.SECONDS) && rendered.get())
+            screenshot("indonesian-markdown-code-math.png")
+            click(indo.getString(R.string.settings_telegram_copy_code))
+            instrumentation.runOnMainSync {
+                val clipboard = target.getSystemService(android.content.ClipboardManager::class.java)
+                assertEquals(code, clipboard.primaryClip!!.getItemAt(0).text.toString())
+            }
+            val table = """```harness-ui
+                {"type":"table","title":"Perbandingan model","columns":["Model","Jalur"],"rows":[["GPT-5","/src/ملف.kt"],["Claude","https://example.com/a?x=1&y=2"]]}
+                ```""".trimIndent()
+            scenario.onActivity { activity -> show(activity, scale = 1.5f, locale = "id") {
+                com.androidharness.app.ui.chat.components.ChatAppearance {
+                    Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(12.dp)) {
+                        com.androidharness.app.ui.chat.components.AssistantText(table)
+                    }
+                }
+            } }
+            awaitText(indo.getString(R.string.rich_filter_rows))
+            screenshot("indonesian-rich-table-150-percent.png")
+            click(indo.getString(R.string.rich_copy))
+            instrumentation.runOnMainSync {
+                val copied = target.getSystemService(android.content.ClipboardManager::class.java).primaryClip!!.getItemAt(0).text.toString()
+                assertTrue(copied.contains("GPT-5"))
+                assertTrue(copied.contains("/src/ملف.kt"))
+                assertTrue(copied.contains("https://example.com/a?x=1&y=2"))
+            }
+        }
+    }
+
+    @Test fun indonesianResourcesUseInvariantPluralsAndPreserveDomainValues() {
+        for (tag in listOf("id", "in", "id-ID")) {
+            val indo = context(tag)
+            assertEquals("Model & penyedia", indo.getString(R.string.settings_page_models_title))
+            assertEquals(context("en").getString(R.string.app_name), indo.getString(R.string.app_name))
+            assertEquals(android.view.View.LAYOUT_DIRECTION_LTR, indo.resources.configuration.layoutDirection)
+            assertEquals("Confirm everything", PermissionMode.CONFIRM_ALL.label)
+            assertEquals("Konfirmasi semua tindakan", indo.localizedOptionLabel(PermissionMode.CONFIRM_ALL.label))
+            for (count in listOf(0, 1, 2, 5, 11, 21, 100, 101)) {
+                assertEquals("$count model", indo.resources.getQuantityString(R.plurals.ui_model_count, count, count))
+                assertEquals("$count model tersedia", indo.resources.getQuantityString(R.plurals.settings_accounts_models_available, count, count))
+            }
+            assertEquals("2 berkas diperbarui", indo.getString(R.string.ui_updated, "2", "files"))
+            assertEquals("3 referensi di 2 berkas", indo.getString(R.string.ui_in, "3", "references", "2", "files"))
         }
     }
 

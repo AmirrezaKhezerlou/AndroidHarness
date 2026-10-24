@@ -29,7 +29,7 @@ internal enum class SettingsPage(
         R.string.settings_page_language_title,
         R.string.settings_page_language_desc,
         R.string.settings_group_language,
-        "language locale translation translate system default english chinese russian русский язык arabic العربية عربي اللغة 中文 简体 语言 poeditor contribute",
+        "language locale translation translate system default english chinese russian русский язык arabic العربية عربي اللغة indonesian indonesia bahasa 中文 简体 语言 poeditor contribute",
     ),
     CHAT_OPTIONS(
         R.string.settings_page_chat_options_title,

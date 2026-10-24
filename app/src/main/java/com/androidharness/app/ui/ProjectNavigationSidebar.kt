@@ -205,7 +205,7 @@ internal fun ProjectNavigationSidebar(
                                 Surface(onClick = { onProjectsViewChange(projectTab) }, shape = RoundedCornerShape(tabCorner),
                                     color = tabColor,
                                     modifier = Modifier.weight(1f).semantics { role = Role.Tab; selected = selectedTab }) {
-                                    Box(Modifier.heightIn(min = 42.dp).padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
+                                    Box(Modifier.heightIn(min = 42.dp).padding(horizontal = 2.dp), contentAlignment = Alignment.Center) {
                                         Text(label, style = MaterialTheme.typography.labelLarge,
                                             color = if (selectedTab) scheme.onSecondaryContainer else scheme.onSurfaceVariant)
                                     }

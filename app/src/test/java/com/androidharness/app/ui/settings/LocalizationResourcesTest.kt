@@ -98,6 +98,59 @@ class LocalizationResourcesTest {
         }
     }
 
+    @Test fun indonesianCoversEveryTranslatableUiString() {
+        assertEquals(strings("values").keys, strings("values-in").keys)
+    }
+
+    @Test fun indonesianTemplatesPreserveValuesWithoutEnglishGrammarSuffixes() {
+        val english = strings("values")
+        val indonesian = strings("values-in")
+        // These arguments contain English words (file/files, reference/references) or the suffix s.
+        // Indonesian supplies its own grammar; every count and user value is still required.
+        val grammarOnly = mapOf("ui_in" to setOf(2, 4), "ui_use_workspace" to setOf(2),
+            "ui_updated" to setOf(2), "ui_replace_in" to setOf(2),
+            "ui_renamed_in_review_the_open_drafts_and" to setOf(2), "ui_rename_in" to setOf(2))
+        val argument = Regex("%(\\d+)\\$([sdf])")
+        english.forEach { (name, format) ->
+            val expected = argument.findAll(format).associate { it.groupValues[1].toInt() to it.groupValues[2] }
+            val translated = indonesian.getValue(name)
+            val actual = argument.findAll(translated).associate { it.groupValues[1].toInt() to it.groupValues[2] }
+            assertEquals("Format arguments in $name", expected.filterKeys { it !in grammarOnly[name].orEmpty() }, actual)
+            if (expected.isNotEmpty()) {
+                val args = Array<Any>(expected.keys.max()) { index ->
+                    when (expected[index + 1]) { "d" -> 21; "f" -> 2.5; else -> "sample" }
+                }
+                String.format(Locale.forLanguageTag("id"), translated, *args)
+            }
+        }
+    }
+
+    @Test fun indonesianPluralsCoverEveryCountResourceAndIndonesianForms() {
+        fun plurals(locale: String): Map<String, Map<String, String>> = buildMap {
+            File("src/main/res/$locale").listFiles().orEmpty().filter { it.extension == "xml" }.forEach { file ->
+                val nodes = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file).getElementsByTagName("plurals")
+                for (index in 0 until nodes.length) {
+                    val node = nodes.item(index) as Element
+                    val items = node.getElementsByTagName("item")
+                    put(node.getAttribute("name"), (0 until items.length).associate { item ->
+                        val entry = items.item(item) as Element
+                        entry.getAttribute("quantity") to entry.textContent
+                    })
+                }
+            }
+        }
+        val english = plurals("values")
+        val indonesian = plurals("values-in")
+        assertEquals(english.keys, indonesian.keys)
+        indonesian.forEach { (name, forms) ->
+            assertEquals(name, setOf("other"), forms.keys)
+            forms.values.forEach { form ->
+                assertTrue(name, form.contains("%1\$d"))
+                String.format(Locale.forLanguageTag("id"), form, 21)
+            }
+        }
+    }
+
     @Test fun arabicCoversEveryTranslatableUiString() {
         assertEquals(strings("values").keys, strings("values-ar").keys)
     }
@@ -155,7 +208,7 @@ class LocalizationResourcesTest {
         val locales = DocumentBuilderFactory.newInstance().newDocumentBuilder()
             .parse(File("src/main/res/xml/locales_config.xml")).getElementsByTagName("locale")
         val tags = (0 until locales.length).map { (locales.item(it) as Element).getAttribute("android:name") }
-        assertTrue(tags.containsAll(listOf("en", "zh-CN", "ru", "ar")))
+        assertTrue(tags.containsAll(listOf("en", "zh-CN", "ru", "ar", "id")))
     }
 
 }

@@ -106,13 +106,35 @@ class LanguageSettingsDeviceTest {
                 scrollTo(label(R.string.settings_language_contribute_title, "ar"))
                 scenario.onActivity { assertEquals("ar", it.resources.configuration.locales[0].language) }
 
-                // Explicit English must work even after Chinese, Russian and Arabic overrides.
+                // Indonesian must restore LTR layout after Arabic, including on legacy Android.
+                click("Bahasa Indonesia")
+                scrollTo(label(R.string.settings_language_contribute_title, "id"))
+                scenario.onActivity {
+                    assertEquals("id", it.resources.configuration.locales[0].toLanguageTag().substringBefore('-'))
+                    assertEquals("id", AppCompatDelegate.getApplicationLocales().toLanguageTags())
+                    assertEquals(android.view.View.LAYOUT_DIRECTION_LTR, it.resources.configuration.layoutDirection)
+                    assertEquals(android.view.View.LAYOUT_DIRECTION_LTR, it.window.decorView.layoutDirection)
+                }
+                screenshot("language-indonesian.png")
+                scenario.recreate()
+                scrollTo(label(R.string.settings_language_contribute_title, "id"))
+                scenario.onActivity {
+                    assertEquals("id", it.resources.configuration.locales[0].toLanguageTag().substringBefore('-'))
+                    // Older Android uses the legacy language code internally.
+                    AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags("in"))
+                }
+                scrollTo(label(R.string.settings_language_contribute_title, "id"))
+                var chosen = find("Bahasa Indonesia")
+                while (chosen != null && !chosen.isCheckable) chosen = chosen.parent
+                assertTrue("Indonesian remains selected with the legacy locale code", chosen?.isChecked == true)
+
+                // Explicit English must work even after Chinese, Russian, Arabic and Indonesian overrides.
                 click("English")
                 scrollTo(label(R.string.settings_language_contribute_title, "en"))
                 scenario.onActivity { assertEquals("en", it.resources.configuration.locales[0].language) }
-                click("العربية")
-                scrollTo(label(R.string.settings_language_system, "ar"))
-                click(label(R.string.settings_language_system, "ar"))
+                click("Bahasa Indonesia")
+                scrollTo(label(R.string.settings_language_system, "id"))
+                click(label(R.string.settings_language_system, "id"))
                 val systemTags = if (android.os.Build.VERSION.SDK_INT >= 33)
                     target.getSystemService(android.app.LocaleManager::class.java).systemLocales.toLanguageTags()
                 else Resources.getSystem().configuration.locales.toLanguageTags()
