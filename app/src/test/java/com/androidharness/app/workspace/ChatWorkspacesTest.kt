@@ -153,4 +153,49 @@ class ChatWorkspacesTest {
         assertTrue(workspacePathsOverlap(listOf("/data/project"), listOf("/data/project/sub")))
         assertFalse(workspacePathsOverlap(listOf("/data/project"), listOf("/data/project-two")))
     }
+    @Test fun `document trees omit command tools and stale connection tools fail before execution`() {
+        val disk = FileFs(tmp.newFolder("document-fixture"))
+        val documents = object : WorkspaceFs by disk {
+            override val shellRoot: File? = null
+            override val isSaf = true
+        }
+        var ready = true
+        fun tool(toolName: String, readOnly: Boolean = true) = object : Tool {
+            override val name = toolName
+            override val description = "Fixture"
+            override val parametersSchema = Schema.obj(emptyMap())
+            override val isReadOnly = readOnly
+            override fun isAvailable(ctx: ToolContext) = ready
+            override suspend fun execute(args: JsonObject, ctx: ToolContext) = ToolResult(true, "")
+        }
+        val shell = tool("shell", false)
+        val git = tool("git_status")
+        val skill = tool("skill_view")
+        val extension = tool("mcp__fixture__lookup")
+        val registry = ToolRegistry(listOf(shell, git, skill, extension, ReadFileTool()))
+        assertEquals(setOf("skill_view", "mcp__fixture__lookup", "read_file"),
+            registry.schemas(context = ToolContext(documents)).map { it.name }.toSet())
+        blocked { WorkspaceToolRouting.route(shell, args(), documents) }
+        blocked { WorkspaceToolRouting.route(git, args(), documents) }
+        val selection = ChatWorkspaceFs("docs", listOf(ChatWorkspaceBinding("docs", "Docs", false, documents)))
+        assertTrue(WorkspaceToolRouting.available(skill, ToolContext(selection)))
+        assertFalse(WorkspaceToolRouting.available(shell, ToolContext(selection)))
+        assertSame(selection, WorkspaceToolRouting.route(skill, args(), selection).workspace)
+        assertTrue(WorkspaceToolRouting.available(extension, ToolContext(disk)))
+        ready = false
+        assertFalse(registry.schemas(context = ToolContext(disk)).any { it.name == extension.name })
+        blocked { WorkspaceToolRouting.route(extension, args(), disk) }
+    }
+
+    @Test fun `availability routing preserves session scoped artifact tools`() = runBlocking {
+        val fs = FileFs(tmp.newFolder("artifact-routing"))
+        val artifact = CreateArtifactTool { emptyList() }
+        val context = ToolContext(fs, sessionId = "current-chat")
+        assertTrue(WorkspaceToolRouting.available(artifact, context))
+        assertSame(fs, WorkspaceToolRouting.route(artifact, args(), fs, context).workspace)
+        val selected = ChatWorkspaceFs("a", listOf(ChatWorkspaceBinding("a", "Alpha", false, fs)))
+        assertSame(selected, WorkspaceToolRouting.route(artifact, args(), selected, context.copy(workspace = selected)).workspace)
+        blocked { WorkspaceToolRouting.route(artifact, args(), fs) }
+    }
+
 }

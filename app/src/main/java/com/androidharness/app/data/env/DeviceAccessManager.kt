@@ -175,6 +175,18 @@ class DeviceAccessManager(
         else -> if (linuxEnv.isReady) ExecutionTier.APP_LINUX else ExecutionTier.TOYBOX
     }
 
+    internal suspend fun environmentForAgent(projectId: String?, sessionId: String?): AgentDeviceEnvironment {
+        val prefs = store.preferences.first()
+        val project = projectId ?: sessionId?.let { projectForSession(it) }
+        val state = root.state.value
+        return AgentDeviceEnvironment(prefs,
+            rootReady = state.status == RootStatus.READY && root.service != null,
+            rootState = state.status.label + state.provider?.let { " (${it.label})" }.orEmpty(),
+            rootAllowed = rootAllowed(AccessRequest(project, sessionId), prefs),
+            shizukuState = shizuku.state.value, shizukuService = shizuku.serviceState.value,
+            shizukuReady = shizuku.isServiceReady(), shizukuUid = szUid.value, paused = stopped.value)
+    }
+
     internal suspend fun runRoot(command: String, cwd: File, timeoutMs: Int, maxOutput: Int): ShellRunResult? {
         val builder = linuxEnv.shellProcessBuilder(command)
         val rootEnv = linuxEnv.processEnv() + mapOf("HARNESS_TMP_LIB" to "${linuxEnv.prefix}/lib", "HARNESS_TMP_BIN" to "${linuxEnv.prefix}/bin")
@@ -188,7 +200,7 @@ class DeviceAccessManager(
         val project = (workspace as? com.androidharness.app.workspace.ChatWorkspaceFs)?.primaryId ?: sessionId?.let { projectForSession(it) }
         val allowed = rootAllowed(AccessRequest(project, sessionId), prefs)
         val modeHint = when (prefs.mode) {
-            AccessMode.BOTH -> "Both transports are connected and usable in the same task: ordinary shell and file work uses Shizuku, while shell access=\"root\" uses the direct root service. Run normal calls for ordinary work and add access=\"root\" only to the calls that need UID 0; do not switch the whole session just for one root call."
+            AccessMode.BOTH -> "Both mode prefers Shizuku for ordinary work and the direct root service for root requests, subject to the live connection and grant states above. Add access=\"root\" only to calls that need UID 0; do not switch the whole session just for one root call."
             AccessMode.AUTO -> "Auto prefers direct root when it is allowed and ready, then Shizuku, then the app shell."
             AccessMode.ROOT -> "Direct root is preferred. Shizuku or the app shell is used only when fallback is on and root is unavailable."
             AccessMode.SHIZUKU -> "Shizuku is preferred. The app shell is used only when fallback is on and Shizuku is unavailable."

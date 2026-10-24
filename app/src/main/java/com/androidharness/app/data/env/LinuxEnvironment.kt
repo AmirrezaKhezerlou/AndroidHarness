@@ -339,6 +339,7 @@ class LinuxEnvironmentManager(
      * uses this to decide which tier can reach the working directory.
      */
     val internalDataRoot: File = context.dataDir
+    internal val storageAccessGranted: Boolean get() = StorageAccess.isGranted(context)
 
     init {
         runCatching { toolStore.recover(installedPackages().toSet()) }.onFailure { Log.e(TAG, "Package removal recovery is incomplete", it) }

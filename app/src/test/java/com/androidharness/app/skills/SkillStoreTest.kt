@@ -145,4 +145,40 @@ class SkillStoreTest {
 
     private fun sError(result: Result<SkillView>): String =
         result.exceptionOrNull()?.message.orEmpty()
+    @Test fun `multi workspace skills use the captured primary project`() {
+        val alpha = tmp.newFolder("skill-alpha")
+        val beta = tmp.newFolder("skill-beta")
+        fun guide(root: java.io.File, body: String) {
+            root.resolve(".harness/skills/androidharness-environment").mkdirs()
+            root.resolve(".harness/skills/androidharness-environment/SKILL.md")
+                .writeText(skill("androidharness-environment", "environment", body))
+        }
+        guide(alpha, "Alpha guide")
+        guide(beta, "Beta guide")
+        val bindings = listOf(
+            com.androidharness.app.workspace.ChatWorkspaceBinding("a", "Alpha", false, com.androidharness.app.workspace.FileFs(alpha)),
+            com.androidharness.app.workspace.ChatWorkspaceBinding("b", "Beta", true, com.androidharness.app.workspace.FileFs(beta)))
+        val base = store()
+        val captured = base.forWorkspace(com.androidharness.app.workspace.ChatWorkspaceFs("a", bindings))
+        assertTrue(captured.view("androidharness-environment").getOrThrow().content.contains("Alpha guide"))
+        assertTrue(base.forWorkspace(com.androidharness.app.workspace.ChatWorkspaceFs("b", bindings))
+            .view("androidharness-environment").getOrThrow().content.contains("Beta guide"))
+        assertTrue(captured.view("androidharness-environment").getOrThrow().content.contains("Alpha guide"))
+    }
+
+    @Test fun `bundled environment guide references all load through the app skill parser`() {
+        val folder = java.io.File("src/main/assets/skills/androidharness-environment")
+        val raw = folder.resolve("SKILL.md").readText()
+        val parsed = SkillParser.parse(raw)
+        assertEquals("androidharness-environment", parsed.name)
+        val files = folder.walkTopDown().filter { it.isFile && it.name != "SKILL.md" }
+            .associate { it.relativeTo(folder).invariantSeparatorsPath to it.readText() }
+        val base = store(bundled = mapOf(parsed.name to SkillStore.BundledSkill(parsed.name, raw, files)))
+        assertTrue(base.view(parsed.name).isSuccess)
+        val paths = Regex("`((?:references|templates)/[^`]+)`").findAll(raw).map { it.groupValues[1] }.toList()
+        assertEquals(7, paths.size)
+        assertEquals(files.keys, paths.toSet())
+        paths.forEach { assertTrue(it, base.view(parsed.name, it).getOrThrow().content.isNotBlank()) }
+    }
+
 }

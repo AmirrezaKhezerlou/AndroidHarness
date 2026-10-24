@@ -10,14 +10,16 @@ object WorkspaceToolRouting {
     private val fileTools = setOf("list_dir", "read_file", "file_info", "write_file", "edit_file", "multi_edit",
         "apply_patch", "search_files", "grep", "create_dir", "delete_file", "move_file", "read_image",
         "memory_write", "memory_read", "memory_search", "file_history", "file_restore")
-    private val independentTools = setOf("read_chat_text", "offer_code_handoff", "create_artifact", "read_artifact", "read_tool_output", "ask_user", "task", "todo_write", "web_fetch", "web_search", "http_request", "read_logcat", "browser_open_external", "remember", "recall", "github_api", "github_search", "github_file")
+    private val independentTools = setOf("read_chat_text", "offer_code_handoff", "create_artifact", "read_artifact", "read_tool_output", "ask_user", "task", "todo_write", "web_fetch", "web_search", "http_request", "read_logcat", "browser_open_external", "remember", "recall", "github_api", "github_search", "github_file", "skill_view", "skills_list")
+    private fun requiresCommandPath(name: String) = name == "shell" || name == "shell_background" || name.startsWith("git_")
 
     fun available(tool: Tool, ctx: ToolContext): Boolean {
-        val selected = ctx.workspace as? ChatWorkspaceFs ?: return tool.isAvailable(ctx)
+        val selected = ctx.workspace as? ChatWorkspaceFs ?: return tool.isAvailable(ctx) &&
+            (!requiresCommandPath(tool.name) || ctx.workspace.shellRoot != null || ctx.workspace is com.androidharness.app.workspace.SshFs)
         if (tool.name in independentTools) return tool.isAvailable(ctx)
         if (selected.hasReadOnly && tool.name !in fileTools) return false
         return selected.bindings.any { binding ->
-            (tool.isReadOnly || binding.canEdit) && tool.isAvailable(ctx.copy(workspace = binding.fs, sandboxOff = false))
+            (tool.isReadOnly || binding.canEdit) && available(tool, ctx.copy(workspace = binding.fs, sandboxOff = false))
         }
     }
 
@@ -38,9 +40,14 @@ object WorkspaceToolRouting {
         val label: String? get() = binding?.name
     }
 
-    fun route(tool: Tool, args: JsonObject, workspace: WorkspaceFs): Route {
-        val selected = workspace as? ChatWorkspaceFs ?: return Route(workspace)
-        if (tool.name in independentTools) return Route(workspace)
+    fun route(tool: Tool, args: JsonObject, workspace: WorkspaceFs, context: ToolContext = ToolContext(workspace)): Route {
+        val selected = workspace as? ChatWorkspaceFs ?: return Route(workspace).also {
+            if (!available(tool, context)) throw ToolFailure("${tool.name} is unavailable in this workspace or its connection is no longer ready.")
+        }
+        if (tool.name in independentTools) {
+            if (!tool.isAvailable(context)) throw ToolFailure("${tool.name} is unavailable in this chat or its connection is no longer ready.")
+            return Route(workspace)
+        }
         val id = args["workspace_id"]?.let {
             (it as? JsonPrimitive)?.takeIf { value -> value.isString }?.content
                 ?: throw ToolFailure("workspace_id must be a selected workspace id.")
@@ -52,7 +59,7 @@ object WorkspaceToolRouting {
         )
         // File tools get grant-preserving nodes; executable tools need their actual SSH/local identity.
         val target = if (tool.name in fileTools) selected.fileAccess(binding) else binding.fs
-        if (!tool.isAvailable(ToolContext(binding.fs))) throw ToolFailure("${tool.name} is unavailable in ${binding.name}.")
+        if (!available(tool, context.copy(workspace = binding.fs, sandboxOff = false))) throw ToolFailure("${tool.name} is unavailable in ${binding.name}.")
         return Route(target, binding, selected)
     }
 

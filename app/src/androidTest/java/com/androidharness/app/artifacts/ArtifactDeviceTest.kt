@@ -98,13 +98,23 @@ class ArtifactDeviceTest {
                     val vm = ChatViewModel(c, sid); store.put("chat", vm)
                     host.setContent { HarnessTheme(dynamicColor = false) { ChatScreen(vm, {}, { _, _ -> }, {}, {}, onOpenSubagent = {}) } }
                 }
-                await("Interactive concept")
+                // Opening a finished transcript follows its end; the concept header can be above it.
+                awaitCondition("Concept header can be reached in the transcript") {
+                    val root = instrumentation.uiAutomation.rootInActiveWindow
+                    if (find(root, "Interactive concept") != null) true
+                    else { scrollTranscript(root, AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD); false }
+                }
                 tap("Expand concept")
                 await("Focus workspace")
                 tap("Start focus")
                 await("Focus is on")
                 screenshot("artifact-chat-expanded")
                 tap("Close concept")
+                awaitCondition("Concept revision control can be reached in the transcript") {
+                    val root = instrumentation.uiAutomation.rootInActiveWindow
+                    if (find(root, "Revise") != null) true
+                    else { scrollTranscript(root, AccessibilityNodeInfo.ACTION_SCROLL_FORWARD); false }
+                }
                 tap("Revise")
                 await("Concept · Focus workspace"); await("Revise this concept:", contains = true)
                 assertEquals("Revise only prefills the composer", 2, round)
@@ -257,6 +267,14 @@ class ArtifactDeviceTest {
         while (!node.isClickable && node.parent != null) node = node.parent
         assertTrue("Tap $text", node.performAction(AccessibilityNodeInfo.ACTION_CLICK))
         SystemClock.sleep(120)
+    }
+    private fun scrollTranscript(node: AccessibilityNodeInfo?, action: Int): Boolean {
+        node ?: return false
+        if (node.isScrollable && node.actionList.any { it.id == action }) {
+            return node.performAction(action)
+        }
+        for (index in 0 until node.childCount) if (scrollTranscript(node.getChild(index), action)) return true
+        return false
     }
     private fun awaitCondition(message: String, condition: () -> Boolean) {
         val deadline = SystemClock.uptimeMillis() + 8_000

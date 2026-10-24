@@ -15,6 +15,10 @@ class SkillStore(
 ) {
     /** A fixed project directory keeps one chat's catalog independent of the selected workspace. */
     fun forProject(directory: File?): SkillStore = SkillStore(bundled, userDir, { directory }, disabled, optionalBundled)
+    fun forWorkspace(workspace: com.androidharness.app.workspace.WorkspaceFs): SkillStore {
+        val primary = (workspace as? com.androidharness.app.workspace.ChatWorkspaceFs)?.primary?.fs ?: workspace
+        return forProject(primary.shellRoot?.resolve(".harness/skills"))
+    }
 
     data class BundledSkill(
         val relativeDir: String,

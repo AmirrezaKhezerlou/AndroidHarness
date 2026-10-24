@@ -29,6 +29,7 @@ class McpToolAdapter(
         }
     override val parametersSchema: JsonObject = normalizeMcpSchema(info.inputSchema)
     override val isReadOnly: Boolean = false
+    override fun isAvailable(ctx: ToolContext): Boolean = connection.isAlive
 
     override suspend fun execute(args: JsonObject, ctx: ToolContext): ToolResult {
         if (!connection.isAlive) {
