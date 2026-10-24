@@ -220,6 +220,12 @@ internal fun ProviderSheetContent(
     }
     val displayModels = entries ?: devModelEntries.takeIf { devChoice != null && it.isNotEmpty() }
 
+    // The key alone is enough to add a provider: the first catalog model is
+    // preselected so Save always has a model to fall back to.
+    LaunchedEffect(displayModels) {
+        if (model.isBlank()) model = displayModels?.firstOrNull()?.id ?: ""
+    }
+
     fun continueToModels() {
         scope.launch {
             fetching = true

@@ -1998,10 +1998,9 @@ class ChatViewModel(
         viewModelScope.launch {
             if (existing == null) {
                 val created = c.providers.add(name, type, baseUrl, model, apiKey, headers)
-                if (_state.value.activeProviderId == null) {
-                    if (_state.value.sameModelAcrossChats) c.settings.setActiveProvider(created.id)
-                    else c.chatModels.select(ensureSession(), com.androidharness.app.data.ChatModelTarget.ACTIVE, created.id, null)
-                }
+                // Adding a provider switches to it; the user just set it up.
+                if (_state.value.sameModelAcrossChats) c.settings.setActiveProvider(created.id)
+                else c.chatModels.select(ensureSession(), com.androidharness.app.data.ChatModelTarget.ACTIVE, created.id, null)
             } else {
                 c.providers.update(
                     existing.copy(name = name, type = type, baseUrl = baseUrl, model = model, headers = headers),

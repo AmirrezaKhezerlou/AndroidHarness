@@ -192,9 +192,8 @@ fun ProvidersScreen(
                     val existingConfig = editing
                     if (existingConfig == null) {
                         val created = container.providers.add(name, type, baseUrl, model, apiKey, headers)
-                        if (settings.activeProviderId == null) {
-                            container.settings.setActiveProvider(created.id)
-                        }
+                        // Adding a provider switches to it; the user just set it up.
+                        container.settings.setActiveProvider(created.id)
                     } else {
                         container.providers.update(
                             existingConfig.copy(
