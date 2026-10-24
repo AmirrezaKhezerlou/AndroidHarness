@@ -1,6 +1,5 @@
 name: Feature request
 description: Suggest something you'd like AndroidHarness to do.
-title: "[Feature] "
 labels: ["enhancement"]
 body:
   - type: markdown
