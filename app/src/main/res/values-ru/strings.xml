@@ -898,4 +898,5 @@
     <string name="chat_personalization_off">"Персонализация выключена"</string>
     <string name="chat_image_frequency_inherit">"Настройка приложения (%1$s)"</string>
     <string name="settings_language_russian">Русский</string>
+    <string name="settings_language_arabic">العربية</string>
 </resources>

@@ -63,7 +63,7 @@ internal fun ResponseTable(table: RichResponse.Node.Table, onFollowUp: ((RichRes
                         contextChange?.invoke(table.title, context())
                     }), verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(selected[index], null, Modifier.size(48.dp))
-                        table.rows[index].forEach { cell -> Text(cell, Modifier.width(cellWidth).padding(8.dp), style = MaterialTheme.typography.bodySmall) }
+                        table.rows[index].forEach { cell -> Text(cell, Modifier.width(cellWidth).padding(8.dp), style = MaterialTheme.typography.bodySmall.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Content)) }
                     }
                 } }
             }

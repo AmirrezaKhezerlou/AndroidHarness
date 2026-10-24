@@ -102,10 +102,12 @@ internal fun LiveCodeCard(draft: LiveCodeDraft, awaitingApproval: Boolean = fals
                             Text("${codeLanguage(file.path)} · ${file.path}", style = MaterialTheme.typography.labelSmall,
                                 color = scheme.onSurfaceVariant)
                             Surface(color = scheme.surfaceContainerLow, shape = MaterialTheme.shapes.small) {
-                                SelectionContainer {
-                                    Column(Modifier.fillMaxWidth().heightIn(max = 220.dp).nestedScroll(observer)
-                                        .verticalScroll(vertical).horizontalScroll(horizontal).padding(vertical = 6.dp)) {
-                                        file.lines.forEach { CodePreviewLine(it, file.path) }
+                                com.androidharness.app.ui.common.LeftToRightContent {
+                                    SelectionContainer {
+                                        Column(Modifier.fillMaxWidth().heightIn(max = 220.dp).nestedScroll(observer)
+                                            .verticalScroll(vertical).horizontalScroll(horizontal).padding(vertical = 6.dp)) {
+                                            file.lines.forEach { CodePreviewLine(it, file.path) }
+                                        }
                                     }
                                 }
                             }

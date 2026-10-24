@@ -18,6 +18,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -92,6 +94,7 @@ class LocalizationDeviceTest {
             fontScale = scale
         }
         resources.updateConfiguration(configuration, resources.displayMetrics)
+        activity.window.decorView.layoutDirection = configuration.layoutDirection
         val localized = activity.createConfigurationContext(configuration)
         activity.setContent {
             val density = LocalDensity.current.density
@@ -101,6 +104,7 @@ class LocalizationDeviceTest {
                 LocalActivityResultRegistryOwner provides activity,
                 LocalOnBackPressedDispatcherOwner provides activity,
                 LocalConfiguration provides localized.resources.configuration,
+                LocalLayoutDirection provides if (configuration.layoutDirection == android.view.View.LAYOUT_DIRECTION_RTL) LayoutDirection.Rtl else LayoutDirection.Ltr,
                 LocalDensity provides Density(density, scale),
                 LocalDesktopLayout provides false,
             ) { HarnessTheme(dynamicColor = false, content = content) }
@@ -274,6 +278,156 @@ class LocalizationDeviceTest {
                 assertEquals(provider.id to "second-model", chosen)
             }
         } finally { target.deleteSharedPreferences(preference) }
+    }
+
+    @Test fun arabicSearchAndPermissionControlsWorkWithLargeText() {
+        val ar = context("ar")
+        var selected: Pair<SettingsPage, Int?>? = null
+        val state = mutableStateOf(AppSettings())
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            scenario.onActivity { activity -> show(activity, locale = "ar") {
+                SettingsHome(ar.getString(R.string.settings_search_max_context_title), {},
+                    { page, anchor -> selected = page to anchor }, Modifier.fillMaxSize().verticalScroll(rememberScrollState()))
+            } }
+            click(ar.getString(R.string.settings_search_max_context_desc))
+            assertEquals(SettingsPage.AGENT to R.string.settings_anchor_max_context, selected)
+            screenshot("arabic-settings-search.png")
+            scenario.onActivity { activity -> show(activity, scale = 1.5f, locale = "ar") {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+                    AgentBehaviorSection(state.value,
+                        onPermissionMode = { state.value = state.value.copy(permissionMode = it) },
+                        onContextLimit = { state.value = state.value.copy(maxContextTokens = it) },
+                        onIterationLimit = { state.value = state.value.copy(maxIterations = it) },
+                        onProjectInstructions = {}, onLiveUpdates = {})
+                }
+            } }
+            click(ar.getString(R.string.settings_anchor_default_permission))
+            click(ar.localizedOptionLabel(PermissionMode.FULL_AUTO.label))
+            assertEquals(PermissionMode.FULL_AUTO, state.value.permissionMode)
+            awaitText(ar.localizedOptionLabel(PermissionMode.FULL_AUTO.label))
+            screenshot("arabic-agent-150-percent.png")
+        }
+    }
+
+    @Test fun arabicPrimaryScreensAndModelPickerPreserveModelIds() {
+        val container = (target.applicationContext as HarnessApp).container
+        val ar = context("ar")
+        val preference = "arabic-picker-${System.nanoTime()}"
+        val shortcuts = ModelShortcuts(target, preference)
+        val provider = ProviderConfig("arabic-provider", "Provider unchanged", ProviderType.OPENAI_COMPAT,
+            "https://unused.invalid/v1", "first-model")
+        var chosen: Pair<String, String?>? = null
+        try {
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { activity -> show(activity, locale = "ar") { SetupScreen(container, onFinish = {}) } }
+                awaitText(ar.getString(R.string.ui_welcome_to_androidharness)); screenshot("arabic-setup.png")
+                scenario.onActivity { activity -> show(activity, locale = "ar") { StatsScreen(container, onBack = {}) } }
+                awaitText(ar.getString(R.string.ui_model_activity)); screenshot("arabic-usage.png")
+                scenario.onActivity { activity -> show(activity, locale = "ar") { AutomationScreen(container, onBack = {}, onOpenSession = {}) } }
+                awaitText(ar.getString(R.string.ui_automation)); screenshot("arabic-automation.png")
+                scenario.onActivity { activity -> show(activity, locale = "ar") { FilesScreen(container, onBack = {}, onOpenFile = {}) } }
+                awaitText(ar.getString(R.string.ui_files)); screenshot("arabic-files.png")
+                scenario.onActivity { activity -> show(activity, locale = "ar") {
+                    ModelPickerSheet(listOf(provider), provider.id, provider.model,
+                        mapOf(provider.id to listOf(ModelEntry("first-model", displayName = "First model"),
+                            ModelEntry("second-model", displayName = "Second model"))),
+                        onDismiss = {}, onSelect = { id, model -> chosen = id to model }, onRefreshCatalog = { null },
+                        onManageProviders = {}, modelShortcuts = shortcuts)
+                } }
+                awaitText(ar.getString(R.string.ui_all_models))
+                awaitText(ar.getString(R.string.ui_search_models_or_providers))
+                awaitText("${provider.name} · ${ar.getString(R.string.ui_current)}")
+                click("Second model")
+                screenshot("arabic-model-picker.png"); click(ar.getString(R.string.ui_use_model))
+                assertEquals(provider.id to "second-model", chosen)
+            }
+        } finally { target.deleteSharedPreferences(preference) }
+    }
+
+    @Test fun arabicResourcesSelectAllPluralFormsAndKeepDomainValues() {
+        val ar = context("ar")
+        assertEquals("النماذج والمزوّدون", ar.getString(R.string.settings_page_models_title))
+        assertEquals(context("en").getString(R.string.app_name), ar.getString(R.string.app_name))
+        assertEquals(android.view.View.LAYOUT_DIRECTION_RTL, ar.resources.configuration.layoutDirection)
+        assertEquals("Confirm everything", PermissionMode.CONFIRM_ALL.label)
+        assertEquals("تأكيد كل إجراء", ar.localizedOptionLabel(PermissionMode.CONFIRM_ALL.label))
+        for (count in listOf(0, 1, 2, 3, 10, 11, 99, 100, 101, 102, 103)) {
+            val number = String.format(java.util.Locale.forLanguageTag("ar"), "%d", count)
+            val expected = when {
+                count == 0 -> "لا نماذج ($number)"
+                count == 1 -> "نموذج واحد ($number)"
+                count == 2 -> "نموذجان ($number)"
+                count % 100 in 3..10 -> "$number نماذج"
+                count % 100 in 11..99 -> "$number نموذجاً"
+                else -> "$number نموذج"
+            }
+            assertEquals("Count $count", expected, ar.resources.getQuantityString(R.plurals.ui_model_count, count, count))
+            val available = when {
+                count == 0 -> "لا توجد نماذج متاحة ($number)"
+                count == 1 -> "نموذج واحد متاح ($number)"
+                count == 2 -> "نموذجان متاحان ($number)"
+                count % 100 in 3..10 -> "$number نماذج متاحة"
+                count % 100 in 11..99 -> "$number نموذجاً متاحاً"
+                else -> "$number نموذج متاح"
+            }
+            assertEquals(available, ar.resources.getQuantityString(R.plurals.settings_accounts_models_available, count, count))
+        }
+        assertEquals("عدد الملفات المحدّثة: 2", ar.getString(R.string.ui_updated, "2", "files"))
+        assertEquals("المراجع: 3 · الملفات: 2", ar.getString(R.string.ui_in, "3", "references", "2", "files"))
+    }
+
+    @Test fun arabicRichRepliesKeepMixedContentAndCopyOriginalCodeAndTableValues() {
+        val ar = context("ar")
+        val code = "const path = \"/src/ملف.kt\";\nconsole.log(path);"
+        val answer = "# شرح بالعربية\n\nالنموذج GPT-5 · المسار /src/Main.kt · [المصدر](https://example.com/a?x=1&y=2)\n\n```javascript\n$code\n```\n\nرياضيات: ${'$'}x^2 = 4${'$'}"
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            scenario.onActivity { activity -> show(activity, locale = "ar") {
+                com.androidharness.app.ui.chat.components.ChatAppearance {
+                    Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
+                        com.androidharness.app.ui.chat.components.AssistantText(answer)
+                    }
+                }
+            } }
+            awaitText("شرح بالعربية")
+            val rendered = java.util.concurrent.atomic.AtomicBoolean(false)
+            val ready = java.util.concurrent.CountDownLatch(1)
+            scenario.onActivity { activity ->
+                fun inspect(view: android.view.View) {
+                    if (view is android.webkit.WebView) view.evaluateJavascript("document.querySelector('.katex') !== null") {
+                        rendered.set(it == "true"); ready.countDown()
+                    }
+                    if (view is android.view.ViewGroup) for (i in 0 until view.childCount) inspect(view.getChildAt(i))
+                }
+                // Equations render asynchronously from bundled assets.
+                activity.window.decorView.postDelayed({ inspect(activity.window.decorView) }, 2500)
+            }
+            assertTrue("Arabic reply must contain rendered math", ready.await(5, java.util.concurrent.TimeUnit.SECONDS) && rendered.get())
+            screenshot("arabic-markdown-code-math.png")
+            click(ar.getString(R.string.settings_telegram_copy_code))
+            instrumentation.runOnMainSync {
+                val clipboard = target.getSystemService(android.content.ClipboardManager::class.java)
+                assertEquals(code, clipboard.primaryClip!!.getItemAt(0).text.toString())
+            }
+            val table = """```harness-ui
+                {"type":"table","title":"مقارنة النماذج","columns":["النموذج","المسار"],"rows":[["GPT-5","/src/ملف.kt"],["Claude","https://example.com/a?x=1&y=2"]]}
+                ```""".trimIndent()
+            scenario.onActivity { activity -> show(activity, scale = 1.5f, locale = "ar") {
+                com.androidharness.app.ui.chat.components.ChatAppearance {
+                    Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(12.dp)) {
+                        com.androidharness.app.ui.chat.components.AssistantText(table)
+                    }
+                }
+            } }
+            awaitText(ar.getString(R.string.rich_filter_rows))
+            screenshot("arabic-rich-table-150-percent.png")
+            click(ar.getString(R.string.rich_copy))
+            instrumentation.runOnMainSync {
+                val copied = target.getSystemService(android.content.ClipboardManager::class.java).primaryClip!!.getItemAt(0).text.toString()
+                assertTrue(copied.contains("GPT-5"))
+                assertTrue(copied.contains("/src/ملف.kt"))
+                assertTrue(copied.contains("https://example.com/a?x=1&y=2"))
+            }
+        }
     }
 
     private fun node(text: String): AccessibilityNodeInfo? {

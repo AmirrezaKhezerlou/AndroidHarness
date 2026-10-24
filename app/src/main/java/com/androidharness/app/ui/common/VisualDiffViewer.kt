@@ -144,7 +144,7 @@ fun VisualDiffViewer(
                                 modifier = Modifier.padding(vertical = 2.dp),
                             )
                         }
-                        DiffHunkSection(hunk = hunk)
+                        LeftToRightContent { DiffHunkSection(hunk = hunk) }
                     }
 
                     if (parsed.isTruncated) {

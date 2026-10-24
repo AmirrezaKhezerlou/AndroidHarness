@@ -152,123 +152,125 @@ fun TerminalScreen(
             )
         },
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .imePadding(),
-        ) {
-            LazyColumn(
-                state = listState,
+        com.androidharness.app.ui.common.LeftToRightContent {
+            Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+                    .fillMaxSize()
+                    .padding(padding)
+                    .imePadding(),
             ) {
-                items(state.lines) { line ->
-                    Text(
-                        line,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = HarnessMono,
-                        color = if (line.startsWith("\$ ") || line.startsWith("# ")) {
-                            scheme.primary
-                        } else {
-                            scheme.onSurface
-                        },
-                        softWrap = false,
-                    )
-                }
-            }
-
-            Text(
-                state.cwd,
-                style = MaterialTheme.typography.labelSmall,
-                fontFamily = HarnessMono,
-                color = scheme.onSurfaceVariant,
-                maxLines = 1,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            )
-
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = scheme.surfaceContainerLow,
-                border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.6f)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(start = 14.dp, end = 4.dp, top = 3.dp, bottom = 3.dp),
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    BasicTextField(
-                        value = inputValue,
-                        onValueChange = { next ->
-                            if (next.text != inputValue.text) { historyIndex = history.size; historyDraft = next.text }
-                            inputValue = next
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .onPreviewKeyEvent { event ->
-                                if (!desktopInput) false else when (event.key) {
-                                    Key.Enter, Key.NumPadEnter -> {
-                                        if (event.type == KeyEventType.KeyUp) submit()
-                                        true
-                                    }
-                                    Key.DirectionUp -> if (history.isNotEmpty()) {
-                                        if (event.type == KeyEventType.KeyDown) {
-                                            historyIndex = (historyIndex - 1).coerceAtLeast(0)
-                                            setInput(history[historyIndex])
-                                        }
-                                        true
-                                    } else false
-                                    Key.DirectionDown -> if (history.isNotEmpty()) {
-                                        if (event.type == KeyEventType.KeyDown) {
-                                            historyIndex = (historyIndex + 1).coerceAtMost(history.size)
-                                            setInput(if (historyIndex == history.size) historyDraft else history[historyIndex])
-                                        }
-                                        true
-                                    } else false
-                                    else -> false
-                                }
-                            }
-                            .padding(vertical = 8.dp),
-                        decorationBox = { inner ->
-                            Box(contentAlignment = Alignment.CenterStart) {
-                                if (input.isEmpty()) {
-                                    Text(
-                                        uiContext.getString(R.string.ui_command),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontFamily = HarnessMono,
-                                        color = scheme.onSurfaceVariant,
-                                    )
-                                }
-                                inner()
-                            }
-                        },
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(
-                            color = scheme.onSurface,
+                    items(state.lines) { line ->
+                        Text(
+                            line,
+                            style = MaterialTheme.typography.bodySmall,
                             fontFamily = HarnessMono,
-                        ),
-                        cursorBrush = SolidColor(scheme.primary),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                        keyboardActions = KeyboardActions(onSend = { submit() }),
-                        maxLines = 1,
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    IconButton(
-                        onClick = { submit() },
-                        enabled = input.isNotBlank() && !state.busy,
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.Send,
-                            contentDescription = uiContext.getString(R.string.ui_run),
-                            modifier = Modifier.size(18.dp),
-                            tint = if (input.isNotBlank() && !state.busy) scheme.primary
-                            else scheme.onSurfaceVariant,
+                            color = if (line.startsWith("\$ ") || line.startsWith("# ")) {
+                                scheme.primary
+                            } else {
+                                scheme.onSurface
+                            },
+                            softWrap = false,
                         )
+                    }
+                }
+
+                Text(
+                    state.cwd,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = HarnessMono,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = scheme.surfaceContainerLow,
+                    border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.6f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(start = 14.dp, end = 4.dp, top = 3.dp, bottom = 3.dp),
+                    ) {
+                        BasicTextField(
+                            value = inputValue,
+                            onValueChange = { next ->
+                                if (next.text != inputValue.text) { historyIndex = history.size; historyDraft = next.text }
+                                inputValue = next
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .onPreviewKeyEvent { event ->
+                                    if (!desktopInput) false else when (event.key) {
+                                        Key.Enter, Key.NumPadEnter -> {
+                                            if (event.type == KeyEventType.KeyUp) submit()
+                                            true
+                                        }
+                                        Key.DirectionUp -> if (history.isNotEmpty()) {
+                                            if (event.type == KeyEventType.KeyDown) {
+                                                historyIndex = (historyIndex - 1).coerceAtLeast(0)
+                                                setInput(history[historyIndex])
+                                            }
+                                            true
+                                        } else false
+                                        Key.DirectionDown -> if (history.isNotEmpty()) {
+                                            if (event.type == KeyEventType.KeyDown) {
+                                                historyIndex = (historyIndex + 1).coerceAtMost(history.size)
+                                                setInput(if (historyIndex == history.size) historyDraft else history[historyIndex])
+                                            }
+                                            true
+                                        } else false
+                                        else -> false
+                                    }
+                                }
+                                .padding(vertical = 8.dp),
+                            decorationBox = { inner ->
+                                Box(contentAlignment = Alignment.CenterStart) {
+                                    if (input.isEmpty()) {
+                                        Text(
+                                            uiContext.getString(R.string.ui_command),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontFamily = HarnessMono,
+                                            color = scheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    inner()
+                                }
+                            },
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                color = scheme.onSurface,
+                                fontFamily = HarnessMono,
+                            ),
+                            cursorBrush = SolidColor(scheme.primary),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                            keyboardActions = KeyboardActions(onSend = { submit() }),
+                            maxLines = 1,
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        IconButton(
+                            onClick = { submit() },
+                            enabled = input.isNotBlank() && !state.busy,
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Send,
+                                contentDescription = uiContext.getString(R.string.ui_run),
+                                modifier = Modifier.size(18.dp),
+                                tint = if (input.isNotBlank() && !state.busy) scheme.primary
+                                else scheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
             }

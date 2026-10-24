@@ -93,13 +93,26 @@ class LanguageSettingsDeviceTest {
                 scrollTo(label(R.string.settings_language_contribute_title, "ru"))
                 scenario.onActivity { assertEquals("ru", it.resources.configuration.locales[0].language) }
 
-                // Explicit English must work even after Chinese and Russian overrides.
+                click("العربية")
+                scrollTo(label(R.string.settings_language_contribute_title, "ar"))
+                scenario.onActivity {
+                    assertEquals("ar", it.resources.configuration.locales[0].language)
+                    assertEquals("ar", AppCompatDelegate.getApplicationLocales().toLanguageTags())
+                    assertEquals(android.view.View.LAYOUT_DIRECTION_RTL, it.resources.configuration.layoutDirection)
+                    assertEquals(android.view.View.LAYOUT_DIRECTION_RTL, it.window.decorView.layoutDirection)
+                }
+                screenshot("language-arabic.png")
+                scenario.recreate()
+                scrollTo(label(R.string.settings_language_contribute_title, "ar"))
+                scenario.onActivity { assertEquals("ar", it.resources.configuration.locales[0].language) }
+
+                // Explicit English must work even after Chinese, Russian and Arabic overrides.
                 click("English")
                 scrollTo(label(R.string.settings_language_contribute_title, "en"))
                 scenario.onActivity { assertEquals("en", it.resources.configuration.locales[0].language) }
-                click("Русский")
-                scrollTo(label(R.string.settings_language_system, "ru"))
-                click(label(R.string.settings_language_system, "ru"))
+                click("العربية")
+                scrollTo(label(R.string.settings_language_system, "ar"))
+                click(label(R.string.settings_language_system, "ar"))
                 val systemTags = if (android.os.Build.VERSION.SDK_INT >= 33)
                     target.getSystemService(android.app.LocaleManager::class.java).systemLocales.toLanguageTags()
                 else Resources.getSystem().configuration.locales.toLanguageTags()

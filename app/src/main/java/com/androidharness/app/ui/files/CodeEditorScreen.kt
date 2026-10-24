@@ -549,98 +549,101 @@ internal fun CodeEditorScreen(
                         }
                     }
                     androidx.compose.runtime.key(draftKey) {
-                        AndroidView(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
-                                .imePadding()
-                                .background(scheme.surface),
-                            factory = { ctx ->
-                                CodeEditor(ctx).apply {
-                                    setOnKeyListener { _, keyCode, event ->
-                                        val smartKeyAction = when {
-                                            smart == null -> null
-                                            keyCode == android.view.KeyEvent.KEYCODE_F12 && SmartEditorSupport.navigation(path) -> if (event.isShiftPressed) SmartEditorAction.REFERENCES else SmartEditorAction.DEFINITION
-                                            keyCode == android.view.KeyEvent.KEYCODE_F2 && SmartEditorSupport.rename(path) -> SmartEditorAction.RENAME
-                                            event.isCtrlPressed && event.isShiftPressed && keyCode == android.view.KeyEvent.KEYCODE_I && SmartEditorSupport.format(path) -> SmartEditorAction.FORMAT
-                                            else -> null
+                        com.androidharness.app.ui.common.LeftToRightContent {
+                            AndroidView(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                                    .imePadding()
+                                    .background(scheme.surface),
+                                factory = { ctx ->
+                                    CodeEditor(ctx).apply {
+                                        textDirection = android.view.View.TEXT_DIRECTION_LTR
+                                        setOnKeyListener { _, keyCode, event ->
+                                            val smartKeyAction = when {
+                                                smart == null -> null
+                                                keyCode == android.view.KeyEvent.KEYCODE_F12 && SmartEditorSupport.navigation(path) -> if (event.isShiftPressed) SmartEditorAction.REFERENCES else SmartEditorAction.DEFINITION
+                                                keyCode == android.view.KeyEvent.KEYCODE_F2 && SmartEditorSupport.rename(path) -> SmartEditorAction.RENAME
+                                                event.isCtrlPressed && event.isShiftPressed && keyCode == android.view.KeyEvent.KEYCODE_I && SmartEditorSupport.format(path) -> SmartEditorAction.FORMAT
+                                                else -> null
+                                            }
+                                            if (smartKeyAction != null) {
+                                                if (event.action == android.view.KeyEvent.ACTION_UP && !saving) smartAction = smartKeyAction
+                                                true
+                                            } else if (event.isCtrlPressed && keyCode == android.view.KeyEvent.KEYCODE_S) {
+                                                if (event.action == android.view.KeyEvent.ACTION_UP) keyboardSave()
+                                                true
+                                            } else if (event.isCtrlPressed && keyCode == android.view.KeyEvent.KEYCODE_P && onQuickOpen != null) {
+                                                if (event.action == android.view.KeyEvent.ACTION_UP) { if (event.isShiftPressed) onCommands?.invoke() else onQuickOpen.invoke() }
+                                                true
+                                            } else if (event.isCtrlPressed && event.isShiftPressed && keyCode == android.view.KeyEvent.KEYCODE_F && onProjectSearch != null) {
+                                                if (event.action == android.view.KeyEvent.ACTION_UP) onProjectSearch.invoke()
+                                                true
+                                            } else false
                                         }
-                                        if (smartKeyAction != null) {
-                                            if (event.action == android.view.KeyEvent.ACTION_UP && !saving) smartAction = smartKeyAction
-                                            true
-                                        } else if (event.isCtrlPressed && keyCode == android.view.KeyEvent.KEYCODE_S) {
-                                            if (event.action == android.view.KeyEvent.ACTION_UP) keyboardSave()
-                                            true
-                                        } else if (event.isCtrlPressed && keyCode == android.view.KeyEvent.KEYCODE_P && onQuickOpen != null) {
-                                            if (event.action == android.view.KeyEvent.ACTION_UP) { if (event.isShiftPressed) onCommands?.invoke() else onQuickOpen.invoke() }
-                                            true
-                                        } else if (event.isCtrlPressed && event.isShiftPressed && keyCode == android.view.KeyEvent.KEYCODE_F && onProjectSearch != null) {
-                                            if (event.action == android.view.KeyEvent.ACTION_UP) onProjectSearch.invoke()
-                                            true
-                                        } else false
-                                    }
-                                    typefaceText = Typeface.MONOSPACE
-                                    typefaceLineNumber = Typeface.MONOSPACE
-                                    isHighlightCurrentLine = false
-                                    props.stickyScroll = false
-                                    getComponent(EditorAutoCompletion::class.java)?.setEnabled(smart != null && SmartEditorSupport.completion(path))
-                                    if (smart != null && SmartEditorSupport.completion(path)) getComponent(EditorAutoCompletion::class.java)?.setAdapter(MaterialCompletionAdapter())
-                                    isEditable = editing
-                                    setWordwrap(wordwrapOn)
-                                    setEditorLanguage(BasicCodeLanguage(path, smart))
-                                    setText(buffer.document ?: io.github.rosemoe.sora.text.Content(buffer.text.value ?: decoded.value!!.text), true, null)
-                                    buffer.document = text
-                                    val left = text.indexer.getCharPosition(buffer.selectionStart.coerceIn(0, text.length))
-                                    val right = text.indexer.getCharPosition(buffer.selectionEnd.coerceIn(0, text.length))
-                                    setSelectionRegion(left.line, left.column, right.line, right.column, false)
-                                    val savedX = buffer.offsetX
-                                    val savedY = buffer.offsetY
-                                    post {
-                                        if (!isReleased && initialLine == null) {
-                                            scroller.startScroll(0, 0, savedX.coerceAtMost(scrollMaxX), savedY.coerceAtMost(scrollMaxY), 0)
-                                            scroller.setEditorOffsets(); invalidate()
-                                        }
-                                    }
-                                    applyEditorTheme(this, scheme)
-                                    // Dirty flag via the event bus, survives setText
-                                    // swapping out the Content object.
-                                    subscribeEvent(
-                                        io.github.rosemoe.sora.event.ContentChangeEvent::class.java,
-                                    ) { event, _ ->
-                                        editRevision++
+                                        typefaceText = Typeface.MONOSPACE
+                                        typefaceLineNumber = Typeface.MONOSPACE
+                                        isHighlightCurrentLine = false
+                                        props.stickyScroll = false
+                                        getComponent(EditorAutoCompletion::class.java)?.setEnabled(smart != null && SmartEditorSupport.completion(path))
+                                        if (smart != null && SmartEditorSupport.completion(path)) getComponent(EditorAutoCompletion::class.java)?.setAdapter(MaterialCompletionAdapter())
+                                        isEditable = editing
+                                        setWordwrap(wordwrapOn)
+                                        setEditorLanguage(BasicCodeLanguage(path, smart))
+                                        setText(buffer.document ?: io.github.rosemoe.sora.text.Content(buffer.text.value ?: decoded.value!!.text), true, null)
                                         buffer.document = text
-                                        buffer.text.value = text.toString()
-                                        dirty = buffer.text.value != lastSavedText.value
-                                        persistDraft()
-                                        if (smart != null && smartAction == null && SmartEditorSupport.completion(path) && isEditable && hasFocus() &&
-                                            event.action == io.github.rosemoe.sora.event.ContentChangeEvent.ACTION_INSERT &&
-                                            !event.isCausedByUndoManager && event.changedText.length in 1..2) {
-                                            completionAt = event.changeEnd.index
-                                            completionRevision++
+                                        val left = text.indexer.getCharPosition(buffer.selectionStart.coerceIn(0, text.length))
+                                        val right = text.indexer.getCharPosition(buffer.selectionEnd.coerceIn(0, text.length))
+                                        setSelectionRegion(left.line, left.column, right.line, right.column, false)
+                                        val savedX = buffer.offsetX
+                                        val savedY = buffer.offsetY
+                                        post {
+                                            if (!isReleased && initialLine == null) {
+                                                scroller.startScroll(0, 0, savedX.coerceAtMost(scrollMaxX), savedY.coerceAtMost(scrollMaxY), 0)
+                                                scroller.setEditorOffsets(); invalidate()
+                                            }
                                         }
+                                        applyEditorTheme(this, scheme)
+                                        // Dirty flag via the event bus, survives setText
+                                        // swapping out the Content object.
+                                        subscribeEvent(
+                                            io.github.rosemoe.sora.event.ContentChangeEvent::class.java,
+                                        ) { event, _ ->
+                                            editRevision++
+                                            buffer.document = text
+                                            buffer.text.value = text.toString()
+                                            dirty = buffer.text.value != lastSavedText.value
+                                            persistDraft()
+                                            if (smart != null && smartAction == null && SmartEditorSupport.completion(path) && isEditable && hasFocus() &&
+                                                event.action == io.github.rosemoe.sora.event.ContentChangeEvent.ACTION_INSERT &&
+                                                !event.isCausedByUndoManager && event.changedText.length in 1..2) {
+                                                completionAt = event.changeEnd.index
+                                                completionRevision++
+                                            }
+                                        }
+                                        subscribeEvent(io.github.rosemoe.sora.event.SelectionChangeEvent::class.java) { _, _ ->
+                                            selectedLength = cursor.right - cursor.left
+                                            buffer.selectionStart = cursor.left
+                                            buffer.selectionEnd = cursor.right
+                                        }
+                                        subscribeEvent(io.github.rosemoe.sora.event.ScrollEvent::class.java) { _, _ ->
+                                            buffer.offsetX = offsetX; buffer.offsetY = offsetY
+                                        }
+                                        editorRef = this
                                     }
-                                    subscribeEvent(io.github.rosemoe.sora.event.SelectionChangeEvent::class.java) { _, _ ->
-                                        selectedLength = cursor.right - cursor.left
-                                        buffer.selectionStart = cursor.left
-                                        buffer.selectionEnd = cursor.right
-                                    }
-                                    subscribeEvent(io.github.rosemoe.sora.event.ScrollEvent::class.java) { _, _ ->
-                                        buffer.offsetX = offsetX; buffer.offsetY = offsetY
-                                    }
-                                    editorRef = this
-                                }
-                            },
-                            onRelease = { ed ->
-                                buffer.document = ed.text
-                                buffer.selectionStart = ed.cursor.left; buffer.selectionEnd = ed.cursor.right
-                                buffer.offsetX = ed.offsetX; buffer.offsetY = ed.offsetY
-                                ed.release()
-                            },
-                            update = { ed ->
-                                applyEditorTheme(ed, scheme)
-                                if (ed.isWordwrap != wordwrapOn) ed.setWordwrap(wordwrapOn)
-                            },
-                        )
+                                },
+                                onRelease = { ed ->
+                                    buffer.document = ed.text
+                                    buffer.selectionStart = ed.cursor.left; buffer.selectionEnd = ed.cursor.right
+                                    buffer.offsetX = ed.offsetX; buffer.offsetY = ed.offsetY
+                                    ed.release()
+                                },
+                                update = { ed ->
+                                    applyEditorTheme(ed, scheme)
+                                    if (ed.isWordwrap != wordwrapOn) ed.setWordwrap(wordwrapOn)
+                                },
+                            )
+                        }
                     }
 
                     if (searchOpen) {

@@ -889,15 +889,19 @@ private fun CodeBlock(code: String, language: String) {
                     )
                 }
             }
-            Text(
-                highlighted ?: AnnotatedString(shown),
-                fontFamily = HarnessMono,
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurface,
-                modifier = Modifier
-                    .padding(start = 12.dp, end = 12.dp, bottom = 12.dp)
-                    .horizontalScroll(rememberScrollState()),
-            )
+            com.androidharness.app.ui.common.LeftToRightContent {
+                Text(
+                    highlighted ?: AnnotatedString(shown),
+                    softWrap = false,
+                    fontFamily = HarnessMono,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 12.dp, end = 12.dp, bottom = 12.dp)
+                        .horizontalScroll(rememberScrollState()),
+                )
+            }
             if (collapsed) {
                 TextButton(
                     onClick = { expanded = true },

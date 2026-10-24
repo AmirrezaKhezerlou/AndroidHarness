@@ -28,6 +28,7 @@ internal fun LanguageSection() {
         locales.isEmpty -> ""
         locales[0]?.language == "zh" -> "zh-CN"
         locales[0]?.language == "ru" -> "ru"
+        locales[0]?.language == "ar" -> "ar"
         else -> "en"
     }
     val context = LocalContext.current
@@ -37,6 +38,7 @@ internal fun LanguageSection() {
         "en" to R.string.settings_language_english,
         "zh-CN" to R.string.settings_language_chinese,
         "ru" to R.string.settings_language_russian,
+        "ar" to R.string.settings_language_arabic,
     )
 
     SettingsPanel(Modifier.fillMaxWidth()) {
