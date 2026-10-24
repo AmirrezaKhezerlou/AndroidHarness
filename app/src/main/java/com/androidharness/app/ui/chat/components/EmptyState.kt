@@ -146,7 +146,12 @@ internal fun EmptyState(
                 modifier = Modifier
                     .widthIn(max = 520.dp)
                     .fillMaxWidth()
-                    .padding(top = 56.dp, start = 8.dp, end = 8.dp, bottom = 24.dp),
+                    // Extra top clearance only where the personalization pill
+                    // overlaps; without it the group is truly centered.
+                    .padding(
+                        top = if (chatOnly && onPersonalizationChange != null) 56.dp else 24.dp,
+                        start = 8.dp, end = 8.dp, bottom = 24.dp,
+                    ),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 HarnessMark(size = if (desktop) 40.dp else 52.dp)
