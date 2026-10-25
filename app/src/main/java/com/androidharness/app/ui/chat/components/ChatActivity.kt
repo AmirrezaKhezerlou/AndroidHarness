@@ -205,8 +205,7 @@ private fun ChatActivityRow(
         }
     }
     val scroll = rememberChatListState()
-    // Retain a Chat reader's position across the live-to-saved handoff.
-    // Code keeps its existing follow lifecycle.
+    // Retain the reader's follow preference when this disclosure survives a stream commit.
     val followingState = if (detailScroll == null) remember { mutableStateOf(true) }
         else rememberSaveable { mutableStateOf(true) }
     var following by followingState

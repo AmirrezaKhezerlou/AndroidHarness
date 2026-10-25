@@ -12,7 +12,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Velocity
 
-/** Chat's disclosure owns its gestures, including drags/flings at the ends of its content. */
+/** An expanded disclosure owns its gestures, including drags/flings at the ends of its content. */
 internal class ChatDetailScroll(private val pauseTranscriptFollow: () -> Unit) {
     private val readers = mutableStateMapOf<Any, Boolean>()
     val reading: Boolean get() = readers.isNotEmpty()
@@ -29,10 +29,24 @@ internal object ContainDetailScroll : NestedScrollConnection {
 
 @Composable
 internal fun Modifier.containChatDetailScroll(): Modifier {
-    val owner = LocalChatDetailScroll.current ?: return this
+    val owner = LocalChatDetailScroll.current
+    // Containment is useful even in standalone previews without a transcript owner.
+    if (owner == null) return this.nestedScroll(ContainDetailScroll)
+    val boundary = remember(owner) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (source == NestedScrollSource.UserInput && available.y != 0f) owner.pause()
+                return Offset.Zero
+            }
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset =
+                ContainDetailScroll.onPostScroll(consumed, available, source)
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity =
+                ContainDetailScroll.onPostFling(consumed, available)
+        }
+    }
     val key = remember { Any() }
     DisposableEffect(owner, key) { onDispose { owner.end(key) } }
-    return this.nestedScroll(ContainDetailScroll).pointerInput(owner, key) {
+    return this.nestedScroll(boundary).pointerInput(owner, key) {
         awaitEachGesture {
             awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             owner.begin(key)

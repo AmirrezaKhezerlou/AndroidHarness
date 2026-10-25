@@ -515,12 +515,12 @@ private fun ChatScreenContent(
     val gestureActive = remember { mutableStateOf(false) }
     var mainListDragged by remember(state.sessionId) { mutableStateOf(false) }
     var lastDragTowardBottom by remember(state.sessionId) { mutableStateOf(false) }
-    val detailScroll = remember(state.sessionId) { ChatDetailScroll { pinnedToBottom = false } }
-    val userScrollObserver = remember(state.sessionId) { UserScrollObserver { deltaY ->
-        if (detailScroll.reading) return@UserScrollObserver
+    var userReachedBottom by remember(state.sessionId) { mutableStateOf(false) }
+    val detailScroll = remember(state.sessionId) { ChatDetailScroll {
         returnToQuestion = false
         pinnedToBottom = false
-        lastDragTowardBottom = deltaY < 0f
+        mainListDragged = false
+        userReachedBottom = false
     } }
     val density = LocalDensity.current
     // Only the unused part of the latest turn is filled, so its question
@@ -535,6 +535,26 @@ private fun ChatScreenContent(
         (chatViewportHeight - chatPaddingPx - keys.sumOf { chatItemHeights[it] ?: 0 } - chatGapPx * keys.size).coerceAtLeast(0)
     val previewOffset = with(density) { 64.dp.roundToPx() }
     val hideJumpAt = with(density) { 96.dp.toPx() }
+    val currentTail = androidx.compose.runtime.rememberUpdatedState(liveTailPx)
+    val userScrollObserver = remember(state.sessionId) {
+        UserScrollObserver { deltaY ->
+            if (detailScroll.reading) return@UserScrollObserver
+            returnToQuestion = false
+            pinnedToBottom = false
+            // DragInteraction.Start arrives asynchronously; it must not erase
+            // the direction already observed on the first pointer movement.
+            if (!mainListDragged || deltaY > 0f) userReachedBottom = false
+            lastDragTowardBottom = deltaY < 0f
+        }.apply {
+            onUserScrollApplied = {
+                if (!detailScroll.reading && lastDragTowardBottom &&
+                    isAtBottom(listState.layoutInfo, listState.canScrollForward, tolerance = 1, tail = currentTail.value)) {
+                    userReachedBottom = true
+                }
+            }
+        }
+    }
+
     // Filled while the LazyColumn registers its items, so the newest question
     // can be anchored before it has ever been on screen.
     val userItemIndexes = remember(state.sessionId) { HashMap<String, Int>() }
@@ -1087,7 +1107,6 @@ private fun ChatScreenContent(
                     pinnedToBottom = false
                     gestureActive.value = true
                     mainListDragged = true
-                    lastDragTowardBottom = false
                 }
                 is DragInteraction.Stop, is DragInteraction.Cancel -> gestureActive.value = false
             }
@@ -1096,15 +1115,19 @@ private fun ChatScreenContent(
 
     // Only a direct drag settling at the bottom may resume following.
     LaunchedEffect(listState) {
-        snapshotFlow { Triple(listState.isScrollInProgress, gestureActive.value, mainListDragged) }
+        snapshotFlow { Triple(listState.isScrollInProgress, gestureActive.value, mainListDragged to !listState.canScrollForward) }
             .distinctUntilChanged()
-            .collect { (inProgress, dragging, dragged) ->
+            .collect { (inProgress, dragging, position) ->
+                val (dragged, atBottom) = position
+                // A fling can reach the edge before the next stream update extends it.
+                if (dragged && lastDragTowardBottom && atBottom) userReachedBottom = true
                 if (inProgress || dragging || !dragged) return@collect
                 mainListDragged = false
-                if (lastDragTowardBottom && !listState.canScrollForward) {
+                if (lastDragTowardBottom && (userReachedBottom || atBottom)) {
                     returnToQuestion = false
                     pinnedToBottom = true
                 }
+                userReachedBottom = false
             }
     }
 
@@ -1202,7 +1225,7 @@ private fun ChatScreenContent(
     }
 
     CompositionLocalProvider(
-        LocalChatDetailScroll provides (if (state.conversation.isChat) detailScroll else null),
+        LocalChatDetailScroll provides detailScroll,
         com.androidharness.app.ui.chat.rich.LocalResponseFileOpen provides (if (state.conversation.isChat) null else onOpenFile),
         com.androidharness.app.ui.chat.rich.LocalResponseContext provides { title, context ->
             attachedConceptJson = null
@@ -1974,11 +1997,13 @@ private fun ChatScreenContent(
                         val streamKey = state.streamingMessageId ?: state.currentTurnId ?: "idle"
                         if (!state.conversation.isChat) state.streamingThinking?.let { thinking ->
                             if (thinking.isNotBlank()) {
-                                indexedItem(key = "streaming-$streamKey-thinking", contentType = ChatListContentType.Thinking) {
-                                    ThinkingBlock(thinking,
-                                        live = !state.streamingCommitted && state.thinkingTiming.startedAt != null,
-                                        timing = state.thinkingTiming, reasoningTokens = state.reasoningTokens,
-                                        autoExpand = false)
+                                indexedItem(key = "message-$streamKey-thinking", contentType = ChatListContentType.Thinking) {
+                                    Box(Modifier.animateItem(fadeInSpec = fastEffectsSpec(), placementSpec = null, fadeOutSpec = null)) {
+                                        ThinkingBlock(thinking,
+                                            live = !state.streamingCommitted && state.thinkingTiming.startedAt != null,
+                                            timing = state.thinkingTiming, reasoningTokens = state.reasoningTokens,
+                                            autoExpand = false)
+                                    }
                                 }
                             }
                         }
@@ -1986,7 +2011,9 @@ private fun ChatScreenContent(
                             // In chat the live disclosure above already shows
                             // progress; a blank dots bubble under it is noise.
                             if (streaming.isNotBlank() || !state.conversation.isChat) {
-                                indexedItem(key = "streaming-$streamKey-text", contentType = ChatListContentType.AssistantText) {
+                                // Preserve the item identity and scroll offset when the same response is saved.
+                                val answerKey = if (state.conversation.isChat) "chat-$streamKey-answer" else "message-$streamKey-text"
+                                indexedItem(key = answerKey, contentType = ChatListContentType.AssistantText) {
                                     AssistantText(
                                         if (state.conversation.isChat) com.androidharness.app.core.response.ChatRichResponse.normalize(streaming, !state.streamingCommitted) else streaming,
                                         streaming = !state.streamingCommitted,

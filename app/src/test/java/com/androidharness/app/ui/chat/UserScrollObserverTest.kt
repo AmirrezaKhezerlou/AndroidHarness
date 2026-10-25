@@ -32,4 +32,18 @@ class UserScrollObserverTest {
         observer.onPreScroll(Offset.Zero, NestedScrollSource.UserInput)
         assertEquals(0, calls)
     }
+    @Test fun `applied input reports the reached edge but ignores animations and horizontal motion`() {
+        var calls = 0
+        val observer = UserScrollObserver {}.apply { onUserScrollApplied = { calls++ } }
+        assertEquals(Offset.Zero, observer.onPostScroll(Offset(0f, -8f), Offset.Zero, NestedScrollSource.UserInput))
+        assertEquals(1, calls)
+        // An attempted drag at the edge still records that the user returned there.
+        observer.onPostScroll(Offset.Zero, Offset(0f, -8f), NestedScrollSource.UserInput)
+        assertEquals(2, calls)
+        observer.onPostScroll(Offset(0f, -8f), Offset.Zero, NestedScrollSource.SideEffect)
+        observer.onPostScroll(Offset(8f, 0f), Offset(4f, 0f), NestedScrollSource.UserInput)
+        observer.onPostScroll(Offset.Zero, Offset.Zero, NestedScrollSource.UserInput)
+        assertEquals(2, calls)
+    }
+
 }

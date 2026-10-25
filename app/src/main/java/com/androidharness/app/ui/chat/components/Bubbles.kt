@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -195,14 +196,12 @@ internal fun AssistantText(
                 )
             }
         } else {
-            Row(verticalAlignment = Alignment.Top) {
-                Box(Modifier.weight(1f)) {
-                    com.androidharness.app.ui.chat.rich.RichResponseContent(text, streaming, onOpenUrl, onFollowUp)
-                }
-                if (streaming) {
-                    Spacer(Modifier.width(4.dp))
-                    BlinkingCursor()
-                }
+            // The cursor sits in the transcript's end gutter. Reserving a column only
+            // while streaming changes every paragraph's width at completion, which
+            // can shrink a long answer enough to clamp a reader back to the bottom.
+            Box(Modifier.fillMaxWidth()) {
+                com.androidharness.app.ui.chat.rich.RichResponseContent(text, streaming, onOpenUrl, onFollowUp)
+                if (streaming) BlinkingCursor(Modifier.align(Alignment.TopEnd).offset(x = 12.dp))
             }
 
             if (showPreviewChip && primaryTarget != null && targetLive == true && onOpenUrl != null) {
@@ -287,7 +286,7 @@ fun WebPreviewActionChip(
 }
 
 @Composable
-private fun BlinkingCursor() {
+private fun BlinkingCursor(modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "cursor")
     val cursorAlpha by transition.animateFloat(
         initialValue = 0.15f,
@@ -299,7 +298,7 @@ private fun BlinkingCursor() {
         "▏",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier
+        modifier = modifier
             .padding(top = 2.dp)
             .graphicsLayer { alpha = cursorAlpha },
     )
