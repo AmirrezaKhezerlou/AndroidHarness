@@ -350,6 +350,20 @@ fun AppNav(container: AppContainer) {
         val target = availablePrevious ?: last?.let { "chat/${it.id}" } ?: "chat?kind=${kind.name}"
         if (!nav.popBackStack(target, inclusive = false)) nav.navigate(target)
     }
+    val sectionRtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
+    fun sectionMotion(from: androidx.navigation.NavBackStackEntry, to: androidx.navigation.NavBackStackEntry): Int {
+        fun kind(entry: androidx.navigation.NavBackStackEntry): com.androidharness.app.data.ConversationKind? {
+            if (entry.destination.route?.startsWith("chat") != true) return null
+            return entry.arguments?.getString("kind")?.let {
+                runCatching { com.androidharness.app.data.ConversationKind.valueOf(it) }.getOrNull()
+            } ?: sessions.firstOrNull { it.id == entry.arguments?.getString("sessionId") }
+                ?.let { com.androidharness.app.data.ConversationConfig.decode(it.conversationJson).kind }
+        }
+        val origin = kind(from) ?: return 0
+        val destination = kind(to) ?: return 0
+        val direction = if (origin == destination) 0 else if (destination == com.androidharness.app.data.ConversationKind.CHAT) 1 else -1
+        return direction * if (sectionRtl) -1 else 1
+    }
     @Composable fun Sidebar(onCollapse: () -> Unit) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
         val changes by remember(currentSessionId) {
@@ -515,17 +529,34 @@ fun AppNav(container: AppContainer) {
             modifier = Modifier.weight(1f),
             navController = nav,
             startDestination = startDestination,
-            // Quiet transitions: a short fade with a small rise. No shared-element
-            // theatrics, screens should feel instant.
+            // Section changes share an expressive fade-through and a short directional move.
             enterTransition = {
-                fadeIn(tween(220, easing = FastOutSlowInEasing)) +
+                val direction = sectionMotion(initialState, targetState)
+                if (direction == 0) fadeIn(tween(220, easing = FastOutSlowInEasing)) +
                     slideInVertically(tween(240, easing = FastOutSlowInEasing)) { it / 28 }
+                else fadeIn(com.androidharness.app.ui.theme.expressiveEffectsSpec()) +
+                    androidx.compose.animation.scaleIn(com.androidharness.app.ui.theme.expressiveSpatialSpec(), initialScale = .98f) +
+                    androidx.compose.animation.slideInHorizontally(com.androidharness.app.ui.theme.expressiveSpatialSpec()) { it / 10 * direction }
             },
-            exitTransition = { fadeOut(tween(180, easing = FastOutSlowInEasing)) },
-            popEnterTransition = { fadeIn(tween(220, easing = FastOutSlowInEasing)) },
+            exitTransition = {
+                val direction = sectionMotion(initialState, targetState)
+                if (direction == 0) fadeOut(tween(180, easing = FastOutSlowInEasing))
+                else fadeOut(com.androidharness.app.ui.theme.expressiveEffectsSpec()) +
+                    androidx.compose.animation.slideOutHorizontally(com.androidharness.app.ui.theme.expressiveSpatialSpec()) { -it / 20 * direction }
+            },
+            popEnterTransition = {
+                val direction = sectionMotion(initialState, targetState)
+                if (direction == 0) fadeIn(tween(220, easing = FastOutSlowInEasing))
+                else fadeIn(com.androidharness.app.ui.theme.expressiveEffectsSpec()) +
+                    androidx.compose.animation.scaleIn(com.androidharness.app.ui.theme.expressiveSpatialSpec(), initialScale = .98f) +
+                    androidx.compose.animation.slideInHorizontally(com.androidharness.app.ui.theme.expressiveSpatialSpec()) { it / 10 * direction }
+            },
             popExitTransition = {
-                fadeOut(tween(180, easing = FastOutSlowInEasing)) +
+                val direction = sectionMotion(initialState, targetState)
+                if (direction == 0) fadeOut(tween(180, easing = FastOutSlowInEasing)) +
                     slideOutVertically(tween(200, easing = FastOutSlowInEasing)) { it / 28 }
+                else fadeOut(com.androidharness.app.ui.theme.expressiveEffectsSpec()) +
+                    androidx.compose.animation.slideOutHorizontally(com.androidharness.app.ui.theme.expressiveSpatialSpec()) { -it / 20 * direction }
             },
         ) {
             composable("chat?kind={kind}", arguments = listOf(navArgument("kind") { defaultValue = "CODE" })) { entry ->

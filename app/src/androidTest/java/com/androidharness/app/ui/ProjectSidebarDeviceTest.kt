@@ -330,10 +330,17 @@ class ProjectSidebarDeviceTest {
     }
     private fun scrollTo(text: String) {
         for (direction in listOf(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)) {
+            var unsettled = 0
             for (attempt in 0 until 18) {
                 if (find(text) != null) return
-                val list = nodes().firstOrNull { it.isScrollable && it.actionList.any { action -> action.id == direction } } ?: break
-                if (!list.performAction(direction)) break
+                // A menu closing or a pin moving a row can temporarily remove scroll actions.
+                val list = nodes().firstOrNull { it.isVisibleToUser && it.isScrollable && it.actionList.any { action -> action.id == direction } }
+                if (list == null || !list.performAction(direction)) {
+                    if (++unsettled >= 4) break
+                    SystemClock.sleep(150)
+                    continue
+                }
+                unsettled = 0
                 instrumentation.waitForIdleSync(); SystemClock.sleep(150)
             }
         }

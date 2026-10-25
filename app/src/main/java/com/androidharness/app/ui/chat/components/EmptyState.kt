@@ -66,7 +66,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.androidharness.app.R
-import com.androidharness.app.ui.common.HarnessMark
 import kotlinx.coroutines.delay
 
 /**
@@ -88,7 +87,6 @@ internal fun EmptyState(
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
-    val desktop = com.androidharness.app.ui.LocalDesktopLayout.current
     val suggestions = if (chatOnly) listOf(
         Icons.Outlined.School to uiContext.getString(R.string.chat_suggestion_explain),
         Icons.Outlined.Lightbulb to uiContext.getString(R.string.chat_suggestion_ideas),
@@ -120,8 +118,6 @@ internal fun EmptyState(
                     ),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                HarnessMark(size = if (desktop) 40.dp else 52.dp)
-                Spacer(Modifier.height(20.dp))
                 Text(
                     if (hasProvider) uiContext.getString(if (chatOnly) R.string.chat_empty_title else R.string.ui_what_do_you_want_to_build) else uiContext.getString(R.string.ui_connect_a_provider),
                     style = MaterialTheme.typography.headlineSmallEmphasized,

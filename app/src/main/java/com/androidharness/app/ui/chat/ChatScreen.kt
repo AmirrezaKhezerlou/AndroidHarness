@@ -2414,10 +2414,10 @@ internal fun ResponseActions(onFork: () -> Unit, onUndo: (() -> Unit)?, details:
             Icon(painterResource(R.drawable.ic_chat_ellipsis), uiContext.getString(R.string.ui_more_response_actions), Modifier.size(18.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        androidx.compose.material3.DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            androidx.compose.material3.DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_fork_from_this_message)) },
+        com.androidharness.app.ui.common.ExpressiveDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            com.androidharness.app.ui.common.ExpressiveDropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_fork_from_this_message)) },
                 onClick = { expanded = false; onFork() })
-            if (onUndo != null) androidx.compose.material3.DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_undo_file_changes_from_this_turn)) },
+            if (onUndo != null) com.androidharness.app.ui.common.ExpressiveDropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_undo_file_changes_from_this_turn)) },
                 onClick = { expanded = false; onUndo() })
             HorizontalDivider()
             details()

@@ -1,10 +1,17 @@
 package com.androidharness.app.ui
 
+import com.androidharness.app.ui.common.ExpressiveDropdownMenu as DropdownMenu
+import com.androidharness.app.ui.common.ExpressiveDropdownMenuItem as DropdownMenuItem
+
 import com.androidharness.app.R
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material3.ripple
+import com.androidharness.app.ui.common.ExpressiveIconButton
+import com.androidharness.app.ui.common.expressivePressFeedback
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
@@ -152,7 +159,7 @@ internal fun ProjectNavigationSidebar(
                         HarnessMark(26.dp, Modifier.semantics { contentDescription = uiContext.getString(R.string.ui_androidharness_icon) })
                         Text("AndroidHarness", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        IconButton(onClick = onCollapse) { Icon(Icons.AutoMirrored.Outlined.MenuOpen, uiContext.getString(R.string.ui_collapse_sidebar), Modifier.size(19.dp)) }
+                        ExpressiveIconButton(onClick = onCollapse) { Icon(Icons.AutoMirrored.Outlined.MenuOpen, uiContext.getString(R.string.ui_collapse_sidebar), Modifier.size(19.dp)) }
                     }
                     com.androidharness.app.ui.chat.components.ConversationSectionSwitcher(
                         com.androidharness.app.data.ConversationConfig(
@@ -179,12 +186,12 @@ internal fun ProjectNavigationSidebar(
                                         style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant, maxLines = 1)
                                     field()
                                 }
-                                if (chatOnly) IconButton(onClick = { onQueryChange(""); showArchived = !showArchived }) {
+                                if (chatOnly) ExpressiveIconButton(onClick = { onQueryChange(""); showArchived = !showArchived }) {
                                     Icon(if (showArchived) Icons.AutoMirrored.Outlined.ArrowBack else Icons.Outlined.Archive,
                                         uiContext.getString(if (showArchived) R.string.ui_back_to_active else R.string.ui_show_archived, "chats"),
                                         Modifier.size(19.dp), tint = if (showArchived) scheme.primary else scheme.onSurfaceVariant)
                                 }
-                                if (query.isNotEmpty()) IconButton(onClick = { onQueryChange("") }) {
+                                if (query.isNotEmpty()) ExpressiveIconButton(onClick = { onQueryChange("") }) {
                                     Icon(Icons.Outlined.Close, uiContext.getString(R.string.settings_search_clear), Modifier.size(17.dp))
                                 }
                             }
@@ -212,7 +219,7 @@ internal fun ProjectNavigationSidebar(
                                 }
                             }
                         }
-                        IconButton(onClick = { onQueryChange(""); showArchived = !showArchived }) {
+                        ExpressiveIconButton(onClick = { onQueryChange(""); showArchived = !showArchived }) {
                             Icon(if (showArchived) Icons.AutoMirrored.Outlined.ArrowBack else Icons.Outlined.Archive,
                                 if (showArchived) uiContext.getString(R.string.ui_back_to_active, (if (projectsView) "projects" else "chats").toString()) else uiContext.getString(R.string.ui_show_archived, (if (projectsView) "projects" else "chats").toString()),
                                 Modifier.size(19.dp), tint = if (showArchived) scheme.primary else scheme.onSurfaceVariant)
@@ -317,11 +324,13 @@ private fun SidebarProjectRow(project: ProjectEntity, expanded: Boolean, pinned:
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     var menu by remember { mutableStateOf(false) }
+    val press = remember { MutableInteractionSource() }
     Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp)
         .background(if (selected) scheme.surfaceContainer else scheme.surface, RoundedCornerShape(10.dp)),
         verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).secondaryClick { menu = true }
-            .combinedClickable(onClick = onExpand, onLongClick = { menu = true })
+        Row(Modifier.weight(1f).expressivePressFeedback(press).clip(RoundedCornerShape(10.dp)).secondaryClick { menu = true }
+            .combinedClickable(interactionSource = press, indication = ripple(color = scheme.primary),
+                onClick = onExpand, onLongClick = { menu = true })
             .semantics { contentDescription = "${if (expanded) uiContext.getString(R.string.ui_collapse) else uiContext.getString(R.string.ui_expand)} ${project.name}"; stateDescription = if (expanded) uiContext.getString(R.string.ui_expanded) else uiContext.getString(R.string.ui_collapsed) }
             .heightIn(min = 48.dp).padding(start = 8.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -336,7 +345,7 @@ private fun SidebarProjectRow(project: ProjectEntity, expanded: Boolean, pinned:
             Text(count.toString(), style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
         }
         Box {
-            IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreHoriz, uiContext.getString(R.string.ui_actions_for_project, (project.name).toString()), Modifier.size(18.dp), tint = scheme.onSurfaceVariant) }
+            ExpressiveIconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreHoriz, uiContext.getString(R.string.ui_actions_for_project, (project.name).toString()), Modifier.size(18.dp), tint = scheme.onSurfaceVariant) }
             DropdownMenu(menu, { menu = false }) {
                 if (!archived) DropdownMenuItem(text = { Text(uiContext.getString(R.string.settings_telegram_new_chat)) }, leadingIcon = { Icon(Icons.Outlined.Add, null) },
                     enabled = creationEnabled, modifier = Modifier.semantics { contentDescription = uiContext.getString(R.string.ui_new_chat_in, (project.name).toString()) },
@@ -404,6 +413,7 @@ private fun SidebarNavRow(label: String, icon: ImageVector, selected: Boolean = 
 private fun SidebarChatRow(chat: SessionEntity, selected: Boolean, pinned: Boolean, archived: Boolean,
     activity: SidebarActivity?, projectName: String?, indented: Boolean, onClick: () -> Unit,
     onActions: () -> Unit, onAction: (SidebarChatAction) -> Unit) {
+    val press = remember { MutableInteractionSource() }
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val statusColors = LocalStatusColors.current
@@ -417,12 +427,12 @@ private fun SidebarChatRow(chat: SessionEntity, selected: Boolean, pinned: Boole
         Row(Modifier.weight(1f).padding(start = if (indented) 5.dp else 0.dp)
             .background(if (selected) scheme.primary.copy(alpha = .07f) else if (focused) scheme.surfaceContainerHigh else scheme.surface, RoundedCornerShape(10.dp)),
             verticalAlignment = Alignment.CenterVertically) {
-            Row(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).secondaryClick(onActions).pointerHoverIcon(PointerIcon.Hand)
+            Row(Modifier.weight(1f).expressivePressFeedback(press).clip(RoundedCornerShape(10.dp)).secondaryClick(onActions).pointerHoverIcon(PointerIcon.Hand)
                 .onFocusChanged { focused = it.isFocused }.onPreviewKeyEvent { event ->
                     if (event.key == Key.Menu || event.key == Key.F10 && event.isShiftPressed) {
                         if (event.type == KeyEventType.KeyUp) onActions(); true
                     } else false
-                }.combinedClickable(onClick = onClick, onLongClick = onActions, onLongClickLabel = uiContext.getString(R.string.ui_chat_actions))
+                }.combinedClickable(interactionSource = press, indication = ripple(color = scheme.primary), onClick = onClick, onLongClick = onActions, onLongClickLabel = uiContext.getString(R.string.ui_chat_actions))
                 .semantics { this.selected = selected; contentDescription = uiContext.getString(R.string.ui_open_1656, (chat.title).toString()) }
                 .heightIn(min = 56.dp).padding(start = 10.dp, end = 2.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -446,7 +456,7 @@ private fun SidebarChatRow(chat: SessionEntity, selected: Boolean, pinned: Boole
                 if (selected) Icon(Icons.Outlined.Check, uiContext.getString(R.string.ui_current_chat), Modifier.size(15.dp), tint = scheme.primary)
             }
             Box {
-                IconButton(onClick = { menu = true }, modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)) {
+                ExpressiveIconButton(onClick = { menu = true }, modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)) {
                     Icon(Icons.Outlined.MoreHoriz, uiContext.getString(R.string.settings_provider_actions_cd, (chat.title).toString()), Modifier.size(18.dp), tint = scheme.onSurfaceVariant)
                 }
                 DropdownMenu(menu, { menu = false }) {

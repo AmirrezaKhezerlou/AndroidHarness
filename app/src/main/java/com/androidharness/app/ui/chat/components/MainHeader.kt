@@ -1,5 +1,8 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.ui.common.ExpressiveDropdownMenu as DropdownMenu
+import com.androidharness.app.ui.common.ExpressiveDropdownMenuItem as DropdownMenuItem
+
 import com.androidharness.app.ui.common.localizedOption
 import com.androidharness.app.ui.common.localizedThinkingOption
 import androidx.compose.material3.TextButton
@@ -35,11 +38,8 @@ import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.TravelExplore
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -156,7 +156,7 @@ internal fun MainHeader(
                         .heightIn(min = 48.dp)
                         .padding(start = 10.dp, end = 10.dp),
                 ) {
-                    IconButton(onClick = onOpenDrawer) {
+                    ExpressiveIconButton(onClick = onOpenDrawer) {
                         Icon(painterResource(R.drawable.ic_chat_menu), contentDescription = uiContext.getString(R.string.ui_open_navigation), modifier = Modifier.size(18.dp))
                     }
                     Column(Modifier.weight(1f).padding(horizontal = 6.dp, vertical = 6.dp)) {
@@ -174,7 +174,7 @@ internal fun MainHeader(
 
                     // Workspace files explorer, migrated here from the drawer;
                     // workspace switching itself lives inside the file manager.
-                    if (!conversation.isChat) IconButton(onClick = onOpenFiles) {
+                    if (!conversation.isChat) ExpressiveIconButton(onClick = onOpenFiles) {
                         Icon(
                             painterResource(R.drawable.ic_chat_folder),
                             modifier = Modifier.size(18.dp),
@@ -187,7 +187,7 @@ internal fun MainHeader(
                         Spacer(Modifier.width(2.dp))
                     }
                     Box {
-                        IconButton(onClick = { menu = true }) {
+                        ExpressiveIconButton(onClick = { menu = true }) {
                             Icon(painterResource(R.drawable.ic_chat_ellipsis_vertical), contentDescription = uiContext.getString(R.string.ui_more_options), modifier = Modifier.size(18.dp))
                         }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
@@ -417,7 +417,7 @@ private fun DesktopConversationHeader(
     Column {
         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            if (chatOnly) IconButton(onClick = onOpenDrawer, modifier = Modifier.size(36.dp)) {
+            if (chatOnly) ExpressiveIconButton(onClick = onOpenDrawer, modifier = Modifier.size(36.dp)) {
                 Icon(painterResource(R.drawable.ic_chat_menu), uiContext.getString(R.string.ui_open_navigation), Modifier.size(18.dp))
             }
             Column(Modifier.weight(1f)) {
@@ -443,7 +443,7 @@ private fun DesktopConversationHeader(
                 SearchDepthControl(searchDepth, onSetSearchDepth)
             }
             Box {
-                IconButton(onClick = { menu = true }, modifier = Modifier.size(36.dp)) {
+                ExpressiveIconButton(onClick = { menu = true }, modifier = Modifier.size(36.dp)) {
                     Icon(Icons.Filled.MoreVert, uiContext.getString(R.string.ui_conversation_actions), Modifier.size(18.dp))
                 }
                 DropdownMenu(menu, { menu = false }) {

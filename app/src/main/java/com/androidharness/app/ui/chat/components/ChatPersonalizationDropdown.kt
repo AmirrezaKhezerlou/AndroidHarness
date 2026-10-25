@@ -1,6 +1,15 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.ui.common.ExpressiveDropdownMenu as DropdownMenu
+import com.androidharness.app.ui.common.ExpressiveDropdownMenuItem as DropdownMenuItem
+
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import com.androidharness.app.ui.theme.expressiveSpatialSpec
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -22,6 +31,7 @@ internal fun ChatPersonalizationDropdown(
     onSelect: (Boolean) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val chevron by animateFloatAsState(if (expanded) 180f else 0f, expressiveSpatialSpec(), label = "personalizationChevron")
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         Box {
             TextButton(onClick = { expanded = true }, enabled = enabled,
@@ -30,7 +40,7 @@ internal fun ChatPersonalizationDropdown(
                 Text(stringResource(if (personalized) R.string.chat_personalized else R.string.chat_unpersonalized),
                     style = MaterialTheme.typography.bodyLarge)
                 Spacer(Modifier.width(8.dp))
-                Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(20.dp))
+                Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(20.dp).graphicsLayer { rotationZ = chevron })
             }
             DropdownMenu(expanded = expanded && enabled, onDismissRequest = { expanded = false }) {
                 for (option in listOf(true, false)) {
@@ -42,7 +52,8 @@ internal fun ChatPersonalizationDropdown(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         } },
                         leadingIcon = { if (option == personalized) Icon(Icons.Filled.Check, null) else Spacer(Modifier.size(24.dp)) },
-                        modifier = Modifier.semantics { selected = option == personalized },
+                        modifier = Modifier.background(if (option == personalized) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent, RoundedCornerShape(16.dp))
+                            .semantics { selected = option == personalized },
                         onClick = { expanded = false; onSelect(option) },
                     )
                 }

@@ -1,5 +1,8 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.ui.common.ExpressiveDropdownMenu as DropdownMenu
+import com.androidharness.app.ui.common.ExpressiveDropdownMenuItem as DropdownMenuItem
+
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
@@ -65,8 +68,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LoadingIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -544,9 +545,17 @@ internal fun MessageComposer(
             verticalAlignment = inputAlignment,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Box(Modifier.padding(bottom = 6.dp)) { if (!isGroqActive || isGroqLocked) leading() }
+            // The 36dp glyph buttons keep distinct 48dp touch targets in compact layouts.
+            if (!isGroqActive || isGroqLocked) {
+                Box(Modifier.width(48.dp).padding(bottom = 6.dp), contentAlignment = Alignment.Center) { leading() }
+            }
             field()
-            Box(Modifier.padding(bottom = 6.dp)) { if (!isGroqTranscribing) trailing() }
+            if (!isGroqActive && (canSend || showStopOnly)) {
+                Box(Modifier.width(48.dp).padding(bottom = 6.dp), contentAlignment = Alignment.Center) { voice() }
+            }
+            if (!isGroqTranscribing) {
+                Box(Modifier.width(48.dp).padding(bottom = 6.dp), contentAlignment = Alignment.Center) { trailing() }
+            }
         }
     } else if (!desktop) {
         val scheme = MaterialTheme.colorScheme
@@ -615,7 +624,12 @@ internal fun MessageComposer(
                     .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f), RoundedCornerShape(14.dp))
                     .padding(horizontal = 8.dp, vertical = 6.dp) else Modifier),
             verticalAlignment = inputAlignment, horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) { if (!isGroqActive || isGroqLocked) leading(); field(); if (!isGroqTranscribing) trailing() }
+        ) {
+            if (!isGroqActive || isGroqLocked) leading()
+            field()
+            if (!isGroqActive && (canSend || showStopOnly)) voice()
+            if (!isGroqTranscribing) trailing()
+        }
     }
 
 }

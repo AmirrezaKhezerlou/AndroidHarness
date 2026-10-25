@@ -7,6 +7,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,6 +34,9 @@ import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ripple
+import androidx.compose.ui.draw.clip
+import com.androidharness.app.ui.common.expressivePressFeedback
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -73,6 +77,7 @@ internal fun UserBubble(
     onOpenImage: ((ImageRef) -> Unit)? = null,
     onLongPress: (() -> Unit)? = null,
 ) {
+    val press = remember { MutableInteractionSource() }
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -84,7 +89,9 @@ internal fun UserBubble(
                 shape = RoundedCornerShape(18.dp, 18.dp, 5.dp, 18.dp),
                 modifier = Modifier.widthIn(max = bubbleMaxWidth).let { m ->
                     if (onLongPress != null) {
-                        m.combinedClickable(onClick = {}, onLongClick = onLongPress)
+                        m.expressivePressFeedback(press).clip(RoundedCornerShape(18.dp, 18.dp, 5.dp, 18.dp))
+                            .combinedClickable(interactionSource = press, indication = ripple(color = scheme.primary),
+                                onClick = {}, onLongClick = onLongPress)
                     } else m
                 },
             ) {
