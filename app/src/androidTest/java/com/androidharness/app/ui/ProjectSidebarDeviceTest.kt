@@ -243,6 +243,64 @@ class ProjectSidebarDeviceTest {
         } while (SystemClock.uptimeMillis() < deadline)
     }
 
+    @Test fun settingsRejectsDrawerSwipesAndBackRestoresChatSwipes() = runBlocking {
+        if (android.os.Build.VERSION.SDK_INT >= 33) instrumentation.uiAutomation.grantRuntimePermission(
+            instrumentation.targetContext.packageName, android.Manifest.permission.POST_NOTIFICATIONS)
+        val saved = c.settings.settings.first()
+        c.settings.setWorkspaceLayout(WorkspaceLayoutMode.PHONE)
+        c.settings.setOnboardingDone(true)
+        c.settings.setResumeLastChat(false)
+        c.settings.setLastActiveSessionId(null)
+        val activity = instrumentation.startActivitySync(Intent(c.appContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+        fun click(label: String) {
+            await { find(label) != null }
+            var node = requireNotNull(find(label))
+            while (!node.isClickable) node = node.parent ?: error("No click target for $label")
+            assertTrue(node.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            SystemClock.sleep(350)
+        }
+        fun swipeFrom(startFraction: Float) {
+            val display = instrumentation.targetContext.resources.displayMetrics
+            val from = display.widthPixels * startFraction
+            val to = display.widthPixels * .85f
+            val y = display.heightPixels * .42f
+            val down = SystemClock.uptimeMillis()
+            fun send(action: Int, x: Float) {
+                val event = android.view.MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, x, y, 0)
+                try { instrumentation.sendPointerSync(event) } finally { event.recycle() }
+            }
+            send(android.view.MotionEvent.ACTION_DOWN, from)
+            repeat(12) { i -> SystemClock.sleep(20); send(android.view.MotionEvent.ACTION_MOVE, from + (to - from) * (i + 1) / 12) }
+            send(android.view.MotionEvent.ACTION_UP, to)
+            SystemClock.sleep(500)
+        }
+        fun assertDrawerClosed() {
+            assertNull("Settings swipes must not expose drawer search", find("Search chats and messages"))
+            assertNull("Settings swipes must not expose the sidebar", find("Collapse sidebar"))
+        }
+        try {
+            await { find("Open navigation") != null }
+            click("Open navigation")
+            click("Settings")
+            await { find("Search settings") != null }
+            for (start in listOf(.02f, .2f)) { swipeFrom(start); assertDrawerClosed() }
+            click("Chat Option")
+            SystemClock.sleep(350)
+            for (start in listOf(.02f, .2f)) { swipeFrom(start); assertDrawerClosed() }
+            instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+            await { find("Search settings") != null }
+            instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+            await { find("Open navigation") != null }
+            swipeFrom(.08f)
+            await { find("Search chats and messages") != null }
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+            c.settings.restorePortable(saved)
+            c.settings.setOnboardingDone(saved.onboardingDone)
+            c.settings.setLastActiveSessionId(saved.lastActiveSessionId)
+        }
+    }
+
     private fun nodes(): List<AccessibilityNodeInfo> = buildList {
         if (android.os.Build.VERSION.SDK_INT >= 33) instrumentation.uiAutomation.clearCache()
         fun visit(node: AccessibilityNodeInfo) { add(node); for (i in 0 until node.childCount) node.getChild(i)?.let(::visit) }

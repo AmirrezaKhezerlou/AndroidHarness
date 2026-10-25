@@ -247,13 +247,12 @@ fun AppNav(container: AppContainer) {
             container.settings.setLastActiveSessionId(currentSessionId)
         }
     }
-    // The code editor fights the drawer's edge-swipe for every gesture:
-    // horizontal scrolling inside the editor opens the sidebar mid-edit.
-    // The drawer keeps its menu button; only the swipe gesture is disabled
-    // while an editor is on screen.
     val currentRoute = currentEntry?.destination?.route
-    val drawerGesturesEnabled = currentRoute?.startsWith("viewer/") != true &&
-        currentRoute?.endsWith("/memory") != true
+    val drawerGesturesEnabled = drawerSwipeAllowed(currentRoute)
+    // A drawer that was opening on the previous screen must not cover Settings.
+    androidx.compose.runtime.LaunchedEffect(drawerGesturesEnabled) {
+        if (!drawerGesturesEnabled) drawerState.close()
+    }
     val runningSessionIds by container.runManager.runningSessionIds.collectAsStateWithLifecycle()
 
     var actionsSession by remember { mutableStateOf<SessionEntity?>(null) }
