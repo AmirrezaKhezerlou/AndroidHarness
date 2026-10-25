@@ -95,8 +95,6 @@ import com.androidharness.app.ui.terminal.TerminalScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -1110,5 +1108,4 @@ private fun SessionAction(
     }
 }
 
-private fun encode(value: String): String =
-    URLEncoder.encode(value, StandardCharsets.UTF_8.toString())
+private fun encode(value: String): String = android.net.Uri.encode(value)

@@ -1,5 +1,11 @@
 package com.androidharness.app.ui.chat
 
+import com.androidharness.app.core.WorkspaceFileReference
+import com.androidharness.app.ui.chat.rich.LocalResponseFileOpen
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.withLink
+
 import com.androidharness.app.R
 import android.content.Intent
 import android.net.Uri
@@ -884,7 +890,7 @@ private fun CodeBlock(code: String, language: String, copySource: (() -> String)
 // ---------------------------------------------------------------------------
 // Inline styling
 
-private val linkRegex = Regex("\\[([^\\]]+)]\\(([^)\\s]+)\\)")
+private val linkRegex = Regex("""\[([^\]]+)]\((?:<([^>\n]+)>|([^\s)]+))\)""")
 
 /**
  * Inline links are citations by default, so they collapse to a link icon. A
@@ -901,6 +907,7 @@ private fun isCitationLink(label: String, url: String): Boolean {
 
 /** External links go to the system browser; chats route localhost to their preview. */
 private fun openMarkdownLink(context: android.content.Context, url: String, onOpenUrl: ((String) -> Unit)?) {
+    if (WorkspaceFileReference.fromLink(url) != null || url.startsWith("file:", ignoreCase = true)) return
     if (onOpenUrl != null && com.androidharness.app.core.LocalPortProbe.isLocalhostUrl(url)) onOpenUrl(url)
     else runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
 }
@@ -942,6 +949,9 @@ private fun styled(
     val density = LocalDensity.current
     val context = LocalContext.current
     val currentOpenUrl by androidx.compose.runtime.rememberUpdatedState(onOpenUrl)
+    val fileOpen = LocalResponseFileOpen.current
+    val currentFileOpen by androidx.compose.runtime.rememberUpdatedState(fileOpen)
+    val fileLinks = fileOpen != null
     val openLinkLabel = stringResource(R.string.chat_open_link)
     // Measurements belong to this paragraph and font scale. A global revision made
     // every paragraph rebuild whenever any equation reported its dimensions.
@@ -957,12 +967,20 @@ private fun styled(
             "[$label](${match.groupValues[2]})"
         }
     }
-    return remember(normalized, codeColor, codeBackground, linkColor, mathColor, density, measuredMath, math, linkIcons, openLinkLabel) {
+    return remember(normalized, codeColor, codeBackground, linkColor, mathColor, density, measuredMath, math, linkIcons, openLinkLabel, fileLinks) {
         val links = linkRegex.findAll(normalized).associateBy { it.range.first }
+        val files = if (fileLinks) WorkspaceFileReference.findInText(normalized).associateBy { it.range.first } else emptyMap()
         val inlineContent = LinkedHashMap<String, InlineTextContent>()
         var mathIndex = 0
         var linkIndex = 0
         val result = buildAnnotatedString {
+            fun appendFile(label: String, reference: WorkspaceFileReference) {
+                withLink(LinkAnnotation.Clickable(
+                    tag = "workspace-file:${reference.path}:${reference.line ?: 0}",
+                    styles = TextLinkStyles(style = SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)),
+                    linkInteractionListener = { currentFileOpen?.invoke(reference.path, reference.line) },
+                )) { append(label) }
+            }
             fun appendMath(tex: String) {
                 val id = "inline-math-${mathIndex++}"
                 val size = measuredMath[tex]
@@ -998,8 +1016,11 @@ private fun styled(
                         // broken nesting; let it fall through as plain text.
                         link != null && link.range.last < to -> {
                             val label = link.groupValues[1]
-                            val url = link.groupValues[2]
-                            if (linkIcons && isCitationLink(label, url)) {
+                            val url = link.groupValues[2].ifEmpty { link.groupValues[3] }
+                            val file = if (fileLinks) WorkspaceFileReference.fromLink(url) else null
+                            if (file != null) {
+                                appendFile(label, file)
+                            } else if (linkIcons && isCitationLink(label, url)) {
                                 // A cited site becomes a small chain icon; the label
                                 // stays as alternate text for copying and selection.
                                 val id = "inline-link-${linkIndex++}"
@@ -1069,12 +1090,22 @@ private fun styled(
                                 )
                                 // Hair spaces pad the chip visually, spans can't
                                 // take real padding inside a Text.
-                                append(" " + normalized.substring(i + 1, end) + " ")
+                                val code = normalized.substring(i + 1, end)
+                                val file = if (fileLinks) WorkspaceFileReference.fromText(code) else null
+                                append(" ")
+                                if (file != null) appendFile(code, file) else append(code)
+                                append(" ")
                                 pop()
                                 i = end + 1
                             } else {
                                 append(normalized[i]); i++
                             }
+                        }
+
+                        files[i]?.let { it.range.last < to } == true -> {
+                            val file = files.getValue(i)
+                            appendFile(normalized.substring(file.range), file.reference)
+                            i = file.range.last + 1
                         }
 
                         math && normalized.startsWith("\\(", i) -> {

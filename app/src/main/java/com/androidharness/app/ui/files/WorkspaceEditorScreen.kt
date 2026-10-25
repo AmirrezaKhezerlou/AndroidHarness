@@ -77,6 +77,7 @@ internal fun WorkspaceEditorScreen(
             val state = container.editorTabs.workspace(key, identity.orEmpty())
             if (state.requestId != requestId) {
                 state.requestId = requestId; state.open(path); jumpLine = initialLine
+                jumpColumn = null; jumpRequest++
                 container.editorTabs.persist(state)
             }
             // Recover inactive dirty dots as well as the active draft, without native editor views.
