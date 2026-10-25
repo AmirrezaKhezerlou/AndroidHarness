@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat.rich
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -14,6 +15,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
+import com.androidharness.app.ui.chat.AnswerTableSurface
+import com.androidharness.app.ui.chat.AnswerTableScrollHint
 import com.androidharness.app.R
 import com.androidharness.app.core.response.RichResponse
 
@@ -30,6 +35,8 @@ internal fun ResponseTable(table: RichResponse.Node.Table, onFollowUp: ((RichRes
     var page by rememberSaveable(table) { mutableIntStateOf(0) }
     val contextChange = LocalResponseContext.current
     val ui = LocalContext.current
+    val colors = MaterialTheme.colorScheme
+    val tableScroll = rememberScrollState()
     fun context(): String = buildString {
         append("Filter: ").append(query.ifBlank { "all" }).append("\n")
         if (sort >= 0) append("Sort: ${table.columns[sort]} ${if (ascending) "ascending" else "descending"}\n")
@@ -39,35 +46,38 @@ internal fun ResponseTable(table: RichResponse.Node.Table, onFollowUp: ((RichRes
     }
     val filtered = remember(table, query, sort, ascending) { com.androidharness.app.core.response.ResponseTableData.indices(table, query, sort, ascending) }
     val pages = ((filtered.size + 9) / 10).coerceAtLeast(1)
-    ResponsePanel {
+    AnswerTableSurface {
+      Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(table.title, style = MaterialTheme.typography.titleSmall)
         OutlinedTextField(query, { query = it.take(120); page = 0; contextChange?.invoke(table.title, context()) },
             label = { Text(stringResource(R.string.rich_filter_rows)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
             val cellWidth = maxOf((96 * fontScale).dp, (maxWidth - 48.dp) / table.columns.size)
-            Column(Modifier.horizontalScroll(rememberScrollState()).width(48.dp + cellWidth * table.columns.size)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.horizontalScroll(tableScroll).width(48.dp + cellWidth * table.columns.size)) {
+                Row(Modifier.fillMaxWidth().background(colors.secondaryContainer.copy(alpha = .55f)), verticalAlignment = Alignment.CenterVertically) {
                     Spacer(Modifier.width(48.dp))
                     table.columns.forEachIndexed { index, label ->
                         TextButton(onClick = {
                             if (sort == index) ascending = !ascending else { sort = index; ascending = true }
                             page = 0; contextChange?.invoke(table.title, context())
-                        }, modifier = Modifier.width(cellWidth)) { Text(label + if (sort == index) (if (ascending) " ↑" else " ↓") else " ↕") }
+                        }, modifier = Modifier.width(cellWidth)) { Text(label + if (sort == index) (if (ascending) " ↑" else " ↓") else " ↕", fontWeight = FontWeight.SemiBold) }
                     }
                 }
                 filtered.drop(page.coerceAtMost(pages - 1) * 10).take(10).forEach { index -> key(index) {
-                    HorizontalDivider()
-                    Row(Modifier.toggleable(selected[index], role = Role.Checkbox, onValueChange = { checked ->
+                    HorizontalDivider(color = colors.outlineVariant.copy(alpha = .4f))
+                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).background(if (selected[index]) colors.secondaryContainer.copy(alpha = .4f)
+                        else if (filtered.indexOf(index) % 2 == 1) colors.surfaceContainerHigh.copy(alpha = .4f) else colors.surfaceContainerLow).toggleable(selected[index], role = Role.Checkbox, onValueChange = { checked ->
                         selected = selected.toMutableList().also { it[index] = checked }
                         contextChange?.invoke(table.title, context())
                     }), verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(selected[index], null, Modifier.size(48.dp))
-                        table.rows[index].forEach { cell -> Text(cell, Modifier.width(cellWidth).padding(8.dp), style = MaterialTheme.typography.bodySmall.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Content)) }
+                        table.rows[index].forEach { cell -> Text(cell, Modifier.width(cellWidth).padding(8.dp), style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp, textDirection = androidx.compose.ui.text.style.TextDirection.Content)) }
                     }
                 } }
             }
         }
+        AnswerTableScrollHint(tableScroll)
         if (filtered.isEmpty()) Text(stringResource(R.string.rich_no_rows))
         if (selected.any { it }) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Text(stringResource(R.string.rich_selected_count, selected.count { it }), style = MaterialTheme.typography.labelMedium)
@@ -85,6 +95,7 @@ internal fun ResponseTable(table: RichResponse.Node.Table, onFollowUp: ((RichRes
         onFollowUp?.let { follow -> TextButton(onClick = {
             follow(RichResponse.followUp(ui.getString(R.string.rich_discuss_rows_prompt), table.title, context()))
         }, enabled = selected.any { it }) { Text(stringResource(R.string.rich_discuss_rows)) } }
+    }
     }
 }
 

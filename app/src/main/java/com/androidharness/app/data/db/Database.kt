@@ -93,7 +93,7 @@ data class ProjectEntity(
     val lastUsedAt: Long,
 )
 
-/** One remembered fact, shared by Chat and Code. Scope is GLOBAL or PROJECT. */
+/** A saved fact or reviewed digest, owned by a section and optionally scoped to a project. */
 @Entity(tableName = "memories", indices = [Index("scope"), Index("projectId"), Index("enabled")])
 data class MemoryEntity(
     @PrimaryKey val id: String,
@@ -108,6 +108,9 @@ data class MemoryEntity(
     val updatedAt: Long,
     val lastUsedAt: Long = 0,
     val useCount: Int = 0,
+    @ColumnInfo(defaultValue = "'SHARED'") val section: String = "SHARED",
+    val consolidatedInto: String? = null,
+    @ColumnInfo(defaultValue = "0") val isSummary: Boolean = false,
 )
 
 @Entity(tableName = "checkpoints", indices = [Index("sessionId")])
@@ -623,10 +626,10 @@ interface HarnessDao {
     @Query("SELECT * FROM memories ORDER BY pinned DESC, updatedAt DESC")
     suspend fun allMemories(): List<MemoryEntity>
 
-    @Query("SELECT * FROM memories WHERE enabled = 1 AND (scope = 'GLOBAL' OR (scope = 'PROJECT' AND projectId = :projectId)) ORDER BY pinned DESC, lastUsedAt DESC, updatedAt DESC")
+    @Query("SELECT * FROM memories WHERE enabled = 1 AND consolidatedInto IS NULL AND (scope = 'GLOBAL' OR (scope = 'PROJECT' AND projectId = :projectId)) ORDER BY pinned DESC, lastUsedAt DESC, updatedAt DESC")
     suspend fun activeMemories(projectId: String?): List<MemoryEntity>
 
-    @Query("SELECT * FROM memories WHERE enabled = 1")
+    @Query("SELECT * FROM memories WHERE enabled = 1 AND consolidatedInto IS NULL")
     suspend fun enabledMemories(): List<MemoryEntity>
 
     @Query("SELECT * FROM memories WHERE lower(text) = lower(:text) AND scope = :scope AND ((projectId IS NULL AND :projectId IS NULL) OR projectId = :projectId) LIMIT 1")
@@ -658,6 +661,12 @@ interface HarnessDao {
 
     @Query("UPDATE memories SET text = :text, category = :category, scope = :scope, projectId = :projectId, updatedAt = :now WHERE id = :id")
     suspend fun updateMemory(id: String, text: String, category: String, scope: String, projectId: String?, now: Long)
+
+    @Query("UPDATE memories SET consolidatedInto = :summaryId WHERE id IN (:ids)")
+    suspend fun consolidateMemories(ids: List<String>, summaryId: String)
+
+    @Query("UPDATE memories SET consolidatedInto = NULL WHERE consolidatedInto = :summaryId")
+    suspend fun restoreConsolidatedMemories(summaryId: String)
 
     // session file changes (GitHub-style "Files changed" per chat)
     @Query(
@@ -691,13 +700,21 @@ interface HarnessDao {
         MemoryEntity::class,
         ChatAnswerVersionEntity::class,
     ],
-    version = 22,
+    version = 23,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun dao(): HarnessDao
 
     companion object {
+        val MIGRATION_22_23 = object : androidx.room.migration.Migration(22, 23) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE memories ADD COLUMN section TEXT NOT NULL DEFAULT 'SHARED'")
+                db.execSQL("ALTER TABLE memories ADD COLUMN consolidatedInto TEXT")
+                db.execSQL("ALTER TABLE memories ADD COLUMN isSummary INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         val MIGRATION_21_22 = object : androidx.room.migration.Migration(21, 22) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE IF NOT EXISTS chat_answer_versions (id TEXT NOT NULL PRIMARY KEY, sessionId TEXT NOT NULL, groupKey TEXT NOT NULL, messagesJson TEXT NOT NULL, createdAt INTEGER NOT NULL)")

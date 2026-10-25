@@ -27,6 +27,37 @@ class ChatOptionsDeviceTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val c get() = (instrumentation.targetContext.applicationContext as HarnessApp).container
 
+    @Test fun globalInstructionsCanBeEditedFromChatOptionsAndSurviveReloadAndRestore(): Unit = runBlocking {
+        val saved = c.settings.settings.first()
+        val instruction = "GLOBAL_SETTINGS_INSTRUCTION_613: keep answers concise."
+        fun show(scenario: ActivityScenario<ChatListTestActivity>) = scenario.onActivity { host -> host.setContent {
+            HarnessTheme(themeMode = ThemeMode.DARK, dynamicColor = false) { SettingsScreen(c, {}) }
+        } }
+        try {
+            c.settings.setChatInstructions("")
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                show(scenario)
+                tap("Chat Option"); tap("Global Chat instructions")
+                await("Chat instructions")
+                val editor = nodes().first { it.isEditable }
+                assertTrue(editor.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, android.os.Bundle().apply {
+                    putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, instruction)
+                }))
+                screenshot("global-chat-instructions-editor")
+                tap("Save"); awaitPreference { it.chatInstructions == instruction }
+            }
+            assertEquals(instruction, SettingsRepository(c.appContext).settings.first().chatInstructions)
+            val portable = SettingsBackupPolicy.exportSettings(c.settings.settings.first(), emptySet())
+            c.settings.setChatInstructions("Changed after export")
+            c.settings.restorePortable(portable)
+            assertEquals(instruction, c.settings.settings.first().chatInstructions)
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                show(scenario); tap("Chat Option"); await(instruction)
+                screenshot("global-chat-instructions-settings")
+            }
+        } finally { c.settings.restorePortable(saved) }
+    }
+
     @Test fun optionIsBelowLanguageAndRadioChoicePersistsWithLargeText(): Unit = runBlocking {
         val saved = c.settings.settings.first()
         val scale = mutableStateOf(1f)
@@ -171,7 +202,13 @@ class ChatOptionsDeviceTest {
     private fun find(text: String) = nodes().firstOrNull { it.isVisibleToUser && (it.text?.toString() == text || it.contentDescription?.toString() == text) }
     private fun await(text: String): AccessibilityNodeInfo {
         val deadline = SystemClock.uptimeMillis() + 15_000
-        do { find(text)?.let { return it }; SystemClock.sleep(100) } while (SystemClock.uptimeMillis() < deadline)
+        var attempts = 0
+        do {
+            find(text)?.let { return it }
+            if (++attempts % 4 == 0) nodes().lastOrNull { it.isScrollable }
+                ?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+            SystemClock.sleep(100)
+        } while (SystemClock.uptimeMillis() < deadline)
         screenshot("failure"); throw AssertionError("Expected $text; visible ${nodes().mapNotNull { it.text }}")
     }
     private fun selected(text: String): Boolean {
@@ -181,6 +218,7 @@ class ChatOptionsDeviceTest {
     }
     private fun assertSelected(text: String) = assertTrue("Selected: $text", selected(text))
     private fun awaitSelected(text: String) {
+        await(text)
         val deadline = SystemClock.uptimeMillis() + 10_000
         do { if (selected(text)) return; SystemClock.sleep(100) } while (SystemClock.uptimeMillis() < deadline)
         throw AssertionError("Not selected: $text")
@@ -192,6 +230,8 @@ class ChatOptionsDeviceTest {
         instrumentation.waitForIdleSync()
     }
     private fun screenshot(name: String) {
+        instrumentation.waitForIdleSync()
+        SystemClock.sleep(500)
         val folder = File(c.appContext.getExternalFilesDir(null), "chat-options").apply { mkdirs() }
         instrumentation.uiAutomation.takeScreenshot()!!.let { bitmap ->
             File(folder, "$name.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }

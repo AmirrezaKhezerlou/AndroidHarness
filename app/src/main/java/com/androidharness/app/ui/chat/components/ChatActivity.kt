@@ -370,7 +370,7 @@ internal fun ChatSources(messages: List<ChatMessage>, onOpenUrl: (String) -> Uni
 
 /** Quiet confirmation below a reply that saved something to memory. */
 @Composable
-internal fun ChatMemorySaved(onClick: () -> Unit = {}) {
+internal fun ChatMemorySaved(label: Int = R.string.chat_memory_saved, onClick: () -> Unit = {}) {
     val scheme = MaterialTheme.colorScheme
     Surface(onClick = onClick, shape = RoundedCornerShape(50), color = scheme.secondaryContainer.copy(alpha = 0.65f)) {
         Row(
@@ -379,7 +379,7 @@ internal fun ChatMemorySaved(onClick: () -> Unit = {}) {
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Icon(Icons.Outlined.Check, null, Modifier.size(13.dp), tint = scheme.onSecondaryContainer)
-            Text(stringResource(R.string.chat_memory_saved), style = MaterialTheme.typography.labelSmall, color = scheme.onSecondaryContainer)
+            Text(stringResource(label), style = MaterialTheme.typography.labelSmall, color = scheme.onSecondaryContainer)
         }
     }
 }

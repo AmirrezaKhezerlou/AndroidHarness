@@ -9,6 +9,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -39,6 +40,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -60,6 +62,17 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.CollectionInfo
+import androidx.compose.ui.semantics.CollectionItemInfo
+import androidx.compose.ui.semantics.collectionInfo
+import androidx.compose.ui.semantics.collectionItemInfo
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
+import com.androidharness.app.ui.common.ExpressiveIconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -87,10 +100,10 @@ internal val LocalChatImagesEnabled = compositionLocalOf { true }
  * bullet/numbered lists (one nesting level), blockquotes with a hairline rail,
  * horizontal rules, and inline bold / italic / strikethrough / code / links.
  *
- * While [streaming], only completed paragraphs (up to the last blank line, or
- * the whole text when it ends inside an open code fence) render as markdown;
- * the in-progress tail renders plain. This prevents flicker from half-formed
- * markers and keeps re-parse cost bounded while text streams in.
+ * While [streaming], completed blocks are cached and the short live tail keeps
+ * inline formatting. Both share one composition path so completion preserves
+ * renderer identity and scroll position. Very long live paragraphs use a plain
+ * fast path until their block completes.
  *
  * A live open code fence is additionally capped to its last ~1500 chars:
  * the fence body re-lays-out every frame while streaming, so an unbounded
@@ -116,77 +129,31 @@ fun MarkdownText(
         }
     }
 
-    // The fence tracker is a composable (remember), it must be invoked
-    // unconditionally, so the `streaming` gate sits on the result.
-    val openFence = rememberEndsInsideOpenFence(cleanText) && streaming
-    val cut = if (!streaming || openFence) -1 else cleanText.lastIndexOf("\n\n")
-    // Key the stable prefix on `cut` (not the ever-growing `text`): while the
-    // in-progress tail grows, the completed-paragraph prefix string is reused
-    // instead of being re-allocated on every typewriter tick.
-    val safeText = remember(streaming, openFence, cut, if (!streaming || openFence) cleanText else null) {
-        when {
-            !streaming -> cleanText
-            openFence -> if (cleanText.length > STREAM_FENCE_CAP) {
-                "…" + cleanText.takeLast(STREAM_FENCE_CAP)
-            } else cleanText
-            cut > 0 -> cleanText.substring(0, cut)
-            else -> ""
-        }
+    val tracker = remember { MarkdownStreamTracker() }
+    val window = remember(cleanText) { tracker.update(cleanText) }
+    val cut = if (streaming) window.stableEnd else cleanText.length
+    val stableText = remember(cut, streaming, window.revision, if (!streaming) cleanText else null) { cleanText.substring(0, cut) }
+    val stableBlocks = remember(stableText) { parseBlocks(stableText) }
+    val cappedFence = streaming && window.fenceBodyStart != null && cleanText.length - window.fenceBodyStart > STREAM_FENCE_CAP
+    val tail = remember(cleanText, cut, cappedFence) {
+        if (!streaming) "" else if (cappedFence) {
+            // Keep preceding prose and the language header; cap only the live code body.
+            cleanText.substring(cut, window.fenceBodyStart!!) + "…\n" + cleanText.takeLast(STREAM_FENCE_CAP)
+        } else cleanText.substring(cut)
     }
-    // The fence path renders the (capped) whole text; only paragraph streaming
-    // has a separate plain tail.
-    val tail = remember(cleanText, safeText, openFence) {
-        if (openFence) "" else cleanText.substring(safeText.length)
-    }
-
+    val tailBlocks = remember(tail) { parseBlocks(tail) }
     Column(Modifier.fillMaxWidth()) {
-        // Capped fence text still parses to a real CodeBlock (language header,
-        // copy button); the cap bounds the per-frame layout cost.
-        if (safeText.isNotEmpty()) MarkdownBlocks(safeText, onOpenUrl = onOpenUrl, media = media)
-        if (tail.isNotEmpty()) MarkdownBlocks(tail, plain = true, onOpenUrl = onOpenUrl)
+        // One composition path keeps table scrolling and completed math stable
+        // when the live tail becomes a completed block or the message commits.
+        MarkdownBlocks(stableBlocks + tailBlocks, liveFrom = if (streaming) stableBlocks.size else Int.MAX_VALUE,
+            onOpenUrl = onOpenUrl, media = media,
+            codeCopy = if (cappedFence) ({ cleanText.substring(window.fenceBodyStart!!).trimEnd('\n') }) else null)
     }
 }
 
-/** Live open-fence bodies longer than this render only their tail. */
+/** Live code is bounded for layout; Copy still uses its full source. */
 private const val STREAM_FENCE_CAP = 1_500
-
-/**
- * Incremental open-fence scan. Streaming text only appends within a message,
- * so fence parity is folded per COMPLETED line and only new lines are scanned
- * instead of rescanning the full accumulated text on every typewriter tick.
- */
-private class FenceTracker {
-    /** Offset such that [0, safePos) has been folded into [open]; always at a line boundary. */
-    var safePos = 0
-    var open = false
-    /** Last text seen; used to detect a wholesale (non-append) replacement. */
-    var prefixRef: String = ""
-}
-
-@Composable
-private fun rememberEndsInsideOpenFence(text: String): Boolean {
-    val tracker = remember { FenceTracker() }
-    return remember(text) {
-        if (!text.startsWith(tracker.prefixRef)) {
-            tracker.safePos = 0
-            tracker.open = false
-        }
-        var open = tracker.open
-        var pos = tracker.safePos
-        while (true) {
-            val nl = text.indexOf('\n', pos)
-            if (nl < 0) break
-            if (text.substring(pos, nl).trimStart().startsWith("```")) open = !open
-            pos = nl + 1
-        }
-        tracker.open = open
-        tracker.safePos = pos
-        tracker.prefixRef = text
-        // The trailing partial line counts for the answer but is NOT folded:
-        // it may still grow into (or out of) a fence marker.
-        if (text.substring(pos).trimStart().startsWith("```")) !open else open
-    }
-}
+private const val STREAM_INLINE_CAP = 4_000
 
 // ---------------------------------------------------------------------------
 // Block parsing
@@ -312,10 +279,14 @@ private fun parseBlocks(text: String): List<Block> {
         when {
             trimmed.startsWith("```") -> {
                 flushParagraph()
-                val lang = trimmed.removePrefix("```").trim()
+                val fenceSize = trimmed.takeWhile { it == '`' }.length
+                val lang = trimmed.drop(fenceSize).trim()
                 val body = StringBuilder()
                 i++
-                while (i < lines.size && !lines[i].trimStart().startsWith("```")) {
+                while (i < lines.size && !(lines[i].trim().let { closing ->
+                    val ticks = closing.takeWhile { it == '`' }.length
+                    ticks >= fenceSize && closing.drop(ticks).isBlank()
+                })) {
                     body.appendLine(lines[i])
                     i++
                 }
@@ -451,18 +422,20 @@ private fun parseBlocks(text: String): List<Block> {
 
 @Composable
 private fun MarkdownBlocks(
-    text: String,
-    plain: Boolean = false,
+    blocks: List<Block>,
+    liveFrom: Int = Int.MAX_VALUE,
     onOpenUrl: ((String) -> Unit)? = null,
     media: Boolean = true,
+    codeCopy: (() -> String)? = null,
 ) {
-    val blocks = remember(text) { parseBlocks(text) }
     val imagesEnabled = LocalChatImagesEnabled.current
     var linkCards = 0
-    blocks.forEachIndexed { index, block ->
+    blocks.forEachIndexed { index, block -> key(index) {
+        val live = index >= liveFrom
+        val plain = live && block is Block.Paragraph && block.text.length > STREAM_INLINE_CAP
         when (block) {
             is Block.Image -> when {
-                !media || plain -> Text(
+                !media || live -> Text(
                     if (block.alt.isNotBlank()) "${block.alt}: ${block.url}" else block.url,
                     style = MaterialTheme.typography.bodyLarge,
                 )
@@ -476,7 +449,7 @@ private fun MarkdownBlocks(
                 }
             }
 
-            is Block.LinkPreview -> if (!media || plain) {
+            is Block.LinkPreview -> if (!media || live) {
                 Text(
                     if (block.label.isNotBlank()) "${block.label}: ${block.url}" else block.url,
                     style = MaterialTheme.typography.bodyLarge,
@@ -490,8 +463,8 @@ private fun MarkdownBlocks(
                 // Beyond the preview cards a standalone link stays visible as a link.
                 ParagraphText("[${block.label.ifBlank { "link" }}](${block.url})", onOpenUrl, linkIcons = false)
             }
-            is Block.Code -> CodeBlock(block.text.trimEnd('\n'), block.language)
-            is Block.Math -> if (!media || plain) {
+            is Block.Code -> CodeBlock(block.text.trimEnd('\n'), block.language, copySource = if (index == blocks.lastIndex) codeCopy else null)
+            is Block.Math -> if (!media || live) {
                 Text(
                     if (block.display) "\$\$${block.tex}\$\$" else "\$${block.tex}\$",
                     style = MaterialTheme.typography.bodyLarge,
@@ -499,8 +472,8 @@ private fun MarkdownBlocks(
             } else {
                 MathBlock(block.tex)
             }
-            is Block.Mermaid -> if (!media || plain) {
-                CodeBlock(block.code, "mermaid")
+            is Block.Mermaid -> if (!media || live) {
+                CodeBlock(block.code, "mermaid", copySource = if (index == blocks.lastIndex) codeCopy else null)
             } else {
                 MermaidBlock(block.code)
             }
@@ -508,17 +481,18 @@ private fun MarkdownBlocks(
                 // Calmer than a type-scale ladder: mobile summaries read best
                 // when headings stay close to body size and lean on weight.
                 val headingStyle = when (block.level) {
-                    1 -> MaterialTheme.typography.titleMedium
-                    2 -> MaterialTheme.typography.titleSmall
-                    else -> MaterialTheme.typography.labelLarge
+                    1 -> MaterialTheme.typography.titleMedium.copy(fontSize = 20.sp, lineHeight = 28.sp)
+                    2 -> MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, lineHeight = 26.sp)
+                    else -> MaterialTheme.typography.titleSmall.copy(fontSize = 16.sp, lineHeight = 24.sp)
                 }
-                val styled = styledParagraph(block.content, onOpenUrl)
+                val styled = styledParagraph(block.content, onOpenUrl, math = !live, linkIcons = !live)
                 LinkedText(
                     styled.text,
                     headingStyle,
                     onOpenUrl = onOpenUrl,
                     inlineContent = styled.inlineContent,
-                    modifier = Modifier.padding(top = if (index == 0) 0.dp else 6.dp),
+                    modifier = Modifier,
+
                 )
             }
             is Block.Quote -> QuoteBlock(block.lines, onOpenUrl = onOpenUrl)
@@ -526,59 +500,44 @@ private fun MarkdownBlocks(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                 modifier = Modifier.padding(vertical = 4.dp),
             )
-            is Block.Bullets -> ListBlock(block.items, plain = plain, onOpenUrl = onOpenUrl)
+            is Block.Bullets -> ListBlock(block.items, onOpenUrl = onOpenUrl)
             is Block.Table -> TableBlock(block, onOpenUrl = onOpenUrl)
             is Block.Paragraph -> if (plain) {
-                Text(block.text, style = MaterialTheme.typography.bodyLarge)
+                Text(block.text, style = answerBodyStyle())
             } else {
-                ParagraphText(block.text, onOpenUrl = onOpenUrl)
+                ParagraphText(block.text, onOpenUrl = onOpenUrl, linkIcons = !live, math = !live)
             }
         }
-        if (index != blocks.lastIndex) Spacer(Modifier.height(5.dp))
-    }
+        if (index != blocks.lastIndex) Spacer(Modifier.height(when {
+            blocks[index + 1] is Block.Heading -> 20.dp
+            block is Block.Heading -> 8.dp
+            else -> 14.dp
+        }))
+    } }
 }
 
 @Composable
-private fun ListBlock(items: List<ListItem>, plain: Boolean, onOpenUrl: ((String) -> Unit)? = null) {
-    Column(Modifier.fillMaxWidth()) {
+private fun ListBlock(items: List<ListItem>, onOpenUrl: ((String) -> Unit)? = null) {
+    val style = answerBodyStyle()
+    val fontScale = LocalDensity.current.fontScale
+    val markerWidth = (maxOf(22f, (items.filter { item -> item.marker.all { it.isDigit() } }.maxOfOrNull { it.marker.length + 1 } ?: 1) * 9f) * fontScale).dp
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items.forEach { item ->
-            Row {
-                Text(
-                    if (item.marker.length == 1 && item.marker[0].isDigit()) "${item.marker}." else "•",
-                    style = MaterialTheme.typography.bodyLarge,
+            val numbered = item.marker.all { it.isDigit() }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(if (numbered) "${item.marker}." else "•", style = style,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.width(16.dp),
-                )
-                Column(Modifier.weight(1f)) {
-                    if (plain) {
-                        Text(item.content, style = MaterialTheme.typography.bodyLarge)
-                    } else {
-                        val styled = styledLine(item.content, onOpenUrl)
-                        Text(styled.text, style = MaterialTheme.typography.bodyLarge, inlineContent = styled.inlineContent)
-                    }
+                    textAlign = if (numbered) TextAlign.End else TextAlign.Start,
+                    modifier = Modifier.width(markerWidth))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val styled = styledLine(item.content, onOpenUrl)
+                    LinkedText(styled.text, style, onOpenUrl = onOpenUrl, inlineContent = styled.inlineContent)
                     item.nested.forEach { nested ->
-                        Row {
-                            Text(
-                                "◦",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.width(20.dp),
-                            )
-                            if (plain) {
-                                Text(
-                                    nested.content,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            } else {
-                                val styled = styledLine(nested.content, onOpenUrl)
-                                Text(
-                                    styled.text,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    inlineContent = styled.inlineContent,
-                                )
-                            }
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("◦", style = style, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(16.dp))
+                            val nestedText = styledLine(nested.content, onOpenUrl)
+                            LinkedText(nestedText.text, style, onOpenUrl = onOpenUrl, inlineContent = nestedText.inlineContent,
+                                modifier = Modifier.weight(1f))
                         }
                     }
                 }
@@ -630,49 +589,38 @@ private fun TableBlock(
     var copied by remember { mutableStateOf(false) }
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
-    val bodyStyle = MaterialTheme.typography.bodyMedium
+    val bodyStyle = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp)
     val headerStyle = bodyStyle.copy(fontWeight = FontWeight.SemiBold)
     val rows = listOf(table.headers) + table.rows
     val styledRows = rows.map { row ->
         table.headers.indices.map { styledText(row.getOrElse(it) { "" }) }
     }
 
-    Surface(
-        color = scheme.surfaceContainerLowest,
-        shape = MaterialTheme.shapes.medium,
-        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.6f)),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-    ) {
+    AnswerTableSurface(Modifier.padding(vertical = 2.dp).testTag("answer-table")) {
         Column {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    uiContext.getString(R.string.ui_table_rows, (table.rows.size).toString()),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = scheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = {
+                val columns = pluralStringResource(R.plurals.answer_table_columns, table.headers.size, table.headers.size)
+                val count = pluralStringResource(R.plurals.answer_table_rows, table.rows.size, table.rows.size)
+                Text("$columns · $count", style = MaterialTheme.typography.labelMedium,
+                    color = scheme.onSurfaceVariant, modifier = Modifier.weight(1f).padding(vertical = 10.dp))
+                ExpressiveIconButton(onClick = {
                     clipboard.setText(AnnotatedString(tableAsTsv(styledRows.map { row -> row.map { it.text } })))
                     copied = true
                     scope.launch { delay(1500); copied = false }
-                }) {
-                    Icon(
-                        if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (copied) uiContext.getString(R.string.settings_shizuku_copied) else uiContext.getString(R.string.ui_copy_table))
+                }, modifier = Modifier.size(44.dp).semantics {
+                    contentDescription = uiContext.getString(if (copied) R.string.settings_shizuku_copied else R.string.ui_copy_table)
+                }, colors = IconButtonDefaults.iconButtonColors(contentColor = if (copied) scheme.primary else scheme.onSurfaceVariant)) {
+                    Icon(if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy, null, modifier = Modifier.size(18.dp))
                 }
             }
             HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.4f))
             BoxWithConstraints(Modifier.fillMaxWidth()) {
                 val viewport = with(density) { maxWidth.roundToPx() }
                 val padding = with(density) { 24.dp.roundToPx() }
-                val minWidth = with(density) { 88.dp.roundToPx() }
+                val minWidth = with(density) { (88.dp * fontScale.coerceAtMost(1.6f)).roundToPx() }
                 val maxColumnWidth = with(density) { 280.dp.roundToPx() }
                 val widths = remember(styledRows, bodyStyle, headerStyle, density, viewport, measurer) {
                     val natural = table.headers.indices.map { column ->
@@ -687,14 +635,14 @@ private fun TableBlock(
                     markdownColumnWidths(natural, viewport, minWidth, maxColumnWidth)
                 }
                 val tableWidth = with(density) { widths.sum().toDp() }
-                Column(Modifier.horizontalScroll(scrollState)) {
-                    Column(Modifier.width(tableWidth)) {
+                Column(Modifier.horizontalScroll(scrollState).testTag("answer-table-scroll")) {
+                    Column(Modifier.width(tableWidth).semantics { collectionInfo = CollectionInfo(styledRows.size, table.headers.size) }) {
                         styledRows.forEachIndexed { rowIndex, row ->
                             Row(
                                 modifier = Modifier.fillMaxWidth().background(
                                     when {
-                                        rowIndex == 0 -> scheme.surfaceContainerHigh
-                                        rowIndex % 2 == 0 -> scheme.surfaceContainerLow.copy(alpha = 0.5f)
+                                        rowIndex == 0 -> scheme.secondaryContainer.copy(alpha = .55f)
+                                        rowIndex % 2 == 0 -> scheme.surfaceContainerHigh.copy(alpha = .4f)
                                         else -> Color.Transparent
                                     }
                                 ),
@@ -707,6 +655,10 @@ private fun TableBlock(
                                         textAlign = table.alignments.getOrElse(column) { TextAlign.Start },
                                         onOpenUrl = onOpenUrl,
                                         modifier = Modifier
+                                            .semantics {
+                                                if (rowIndex == 0) heading()
+                                                collectionItemInfo = CollectionItemInfo(rowIndex, 1, column, 1)
+                                            }
                                             .width(with(density) { widths[column].toDp() })
                                             .padding(horizontal = 12.dp, vertical = 12.dp),
                                     )
@@ -721,8 +673,14 @@ private fun TableBlock(
                     }
                 }
             }
+            AnswerTableScrollHint(scrollState)
         }
     }
+}
+
+@Composable
+private fun answerBodyStyle(): TextStyle = MaterialTheme.typography.bodyLarge.let {
+    it.copy(lineHeight = it.fontSize * 1.6f)
 }
 
 /** Paragraph text with tap-to-open links (annotations set by [styledText]). */
@@ -731,11 +689,12 @@ private fun ParagraphText(
     text: String,
     onOpenUrl: ((String) -> Unit)? = null,
     linkIcons: Boolean = true,
+    math: Boolean = true,
 ) {
-    val styled = styledParagraph(text, onOpenUrl, linkIcons)
+    val styled = styledParagraph(text, onOpenUrl, linkIcons, math)
     LinkedText(
         styled.text,
-        MaterialTheme.typography.bodyLarge,
+        answerBodyStyle(),
         onOpenUrl = onOpenUrl,
         inlineContent = styled.inlineContent,
     )
@@ -823,7 +782,7 @@ private fun highlightedCode(
 }
 
 @Composable
-private fun CodeBlock(code: String, language: String) {
+private fun CodeBlock(code: String, language: String, copySource: (() -> String)? = null) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     var copied by remember { mutableStateOf(false) }
@@ -879,7 +838,7 @@ private fun CodeBlock(code: String, language: String) {
                 )
                 IconButton(
                     onClick = {
-                        clipboard.setText(AnnotatedString(code))
+                        clipboard.setText(AnnotatedString(copySource?.invoke() ?: code))
                         copied = true
                         scope.launch {
                             delay(1500)
@@ -961,7 +920,8 @@ private fun styledParagraph(
     text: String,
     onOpenUrl: ((String) -> Unit)? = null,
     linkIcons: Boolean = true,
-): StyledResult = styled(text, math = true, linkIcons = linkIcons, onOpenUrl = onOpenUrl)
+    math: Boolean = true,
+): StyledResult = styled(text, math = math, linkIcons = linkIcons, onOpenUrl = onOpenUrl)
 
 /** One list item or quote line with citation icons and no math. */
 @Composable

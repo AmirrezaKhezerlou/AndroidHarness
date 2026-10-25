@@ -46,4 +46,18 @@ class MarkdownTableLayoutTest {
         assertFalse(isTableStart(listOf("| Name | Price |", "| --- |"), 0))
         assertFalse(isTableStart(listOf("| Name | Price |", "| ::: | --- |"), 0))
     }
+    @Test fun `two column explanations wrap within the phone viewport`() {
+        val widths = markdownColumnWidths(listOf(220, 900), 320, 88, 280)
+        assertEquals(320, widths.sum())
+        assertTrue(widths.all { it >= 88 })
+        assertTrue(widths[1] > widths[0])
+        assertEquals(listOf(360), markdownColumnWidths(listOf(900), 360, 88, 280))
+    }
+
+    @Test fun `large font minimums remain readable even if scrolling is required`() {
+        val widths = markdownColumnWidths(listOf(600, 600), 260, 132, 280)
+        assertTrue(widths.sum() > 260)
+        assertTrue(widths.all { it >= 132 })
+    }
+
 }

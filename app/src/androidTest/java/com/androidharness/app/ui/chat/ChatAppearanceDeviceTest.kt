@@ -185,6 +185,7 @@ class ChatAppearanceDeviceTest {
             scenario.onActivity { busy.value = true }
             tap("Queue message"); assertEquals(2, sent.get())
             scenario.onActivity { value.value = TextFieldValue("") }
+            await(voiceLabel)
             tap("Stop"); assertEquals(1, stopped.get())
             scenario.onActivity { busy.value = false }
             await(voiceLabel)

@@ -25,7 +25,7 @@ class SettingsBackupValidationTest {
     }
 
     @Test fun unknownVersionRejected() {
-        assertThrows(IllegalArgumentException::class.java) { SettingsBackupValidation.validate(SettingsBackupFile(version = 3, settings = AppSettings())) }
+        assertThrows(IllegalArgumentException::class.java) { SettingsBackupValidation.validate(SettingsBackupFile(version = SettingsBackupFile.VERSION + 1, settings = AppSettings())) }
     }
 
     @Test fun memoriesSurviveASettingsBackupAndOldVersionsStayReadable() {
@@ -42,7 +42,7 @@ class SettingsBackupValidationTest {
         val restored = json.decodeFromString(SettingsBackupFile.serializer(), json.encodeToString(SettingsBackupFile.serializer(), file))
         SettingsBackupValidation.validate(restored)
         assertEquals(file.memories, restored.memories)
-        assertEquals(2, SettingsBackupFile.VERSION)
+        assertEquals(3, SettingsBackupFile.VERSION)
     }
 
     @Test fun invalidMemoriesRejected() {

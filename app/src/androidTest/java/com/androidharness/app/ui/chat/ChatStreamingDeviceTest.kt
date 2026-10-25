@@ -93,10 +93,10 @@ class ChatStreamingDeviceTest {
         state.value = base.copy(streamingText = "A first streamed sentence.")
         awaitText("A first streamed sentence.")
         state.value = state.value.copy(streamingText = answer)
-        awaitText("Answer end marker.")
+        awaitText("Paragraph 1 explains one part of the result in enough detail to fill the conversation.")
         state.value = state.value.copy(busy = false, currentTurnId = null, streamingText = null, streamingMessageId = null,
             messages = base.messages + ChatMessage(Role.ASSISTANT, answer, id = "answer", turnId = "turn"))
-        instrumentation.waitForIdleSync(); SystemClock.sleep(300)
+        SystemClock.sleep(300)
         val question = awaitText("Explain the results clearly.")
         assertTrue(bounds(question).top > 0 && bounds(question).top < instrumentation.targetContext.resources.displayMetrics.heightPixels / 2)
         screenshot("completed-at-question")
@@ -116,7 +116,7 @@ class ChatStreamingDeviceTest {
         val beforeText = requireNotNull(before).text.toString()
         val beforeTop = bounds(before).top
         state.value = state.value.copy(messages = base.messages + ChatMessage(Role.ASSISTANT, "$answer\n\n$late\n\nAnother delayed footer.", id = "answer", turnId = "turn"))
-        instrumentation.waitForIdleSync(); SystemClock.sleep(250)
+        SystemClock.sleep(250)
         assertNull(find("Another delayed footer."))
         assertEquals(beforeTop.toFloat(), bounds(awaitText(beforeText)).top.toFloat(), 6f)
     }
@@ -124,7 +124,8 @@ class ChatStreamingDeviceTest {
     @Test fun explicitBottomChoiceWhileStreamingPreventsCompletionFromJumpingBack() = exercise { state, base ->
         val answer = (1..40).joinToString("\n\n") { "Section $it contains a longer explanation of the answer for this streaming test." } + "\n\nFinal answer marker."
         state.value = base.copy(streamingText = answer)
-        awaitText("Final answer marker.")
+        awaitText("Section 1 contains a longer explanation of the answer for this streaming test.")
+        assertNotNull(find("Explain the results clearly."))
         swipeTowardOlderMessages()
         await { find("Final answer marker.") == null }
         tap(c.appContext.getString(R.string.ui_scroll_to_latest))
@@ -132,7 +133,7 @@ class ChatStreamingDeviceTest {
         state.value = state.value.copy(busy = false, currentTurnId = null, streamingText = null, streamingMessageId = null,
             messages = base.messages + ChatMessage(Role.ASSISTANT, answer, id = "answer", turnId = "turn"))
         awaitText("Final answer marker.")
-        instrumentation.waitForIdleSync(); SystemClock.sleep(250)
+        SystemClock.sleep(250)
         assertNull(find("Explain the results clearly."))
     }
 
@@ -172,11 +173,11 @@ class ChatStreamingDeviceTest {
         var node = awaitText(text)
         while (!node.isClickable && node.parent != null) node = node.parent
         assertTrue(node.performAction(AccessibilityNodeInfo.ACTION_CLICK))
-        instrumentation.waitForIdleSync()
+        SystemClock.sleep(150) // Infinite UI animations need not become idle.
     }
     private fun screenshot(name: String) {
         val folder = File(c.appContext.getExternalFilesDir(null), "chat-streaming").apply { mkdirs() }
-        instrumentation.waitForIdleSync()
+        SystemClock.sleep(150) // Infinite UI animations need not become idle.
         instrumentation.uiAutomation.takeScreenshot()!!.let { bitmap ->
             File(folder, "$name.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
             bitmap.recycle()

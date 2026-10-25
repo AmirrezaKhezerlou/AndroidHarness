@@ -19,6 +19,9 @@ data class BackupMemory(
     val updatedAt: Long = 0,
     val lastUsedAt: Long = 0,
     val useCount: Int = 0,
+    val section: String = "SHARED",
+    val consolidatedInto: String? = null,
+    val isSummary: Boolean = false,
 )
 
 /** A saved prompt snippet, the chat's custom slash commands. */
@@ -38,6 +41,9 @@ internal fun MemoryEntity.toBackupMemory(): BackupMemory = BackupMemory(
     updatedAt = updatedAt,
     lastUsedAt = lastUsedAt,
     useCount = useCount,
+    section = section,
+    consolidatedInto = consolidatedInto,
+    isSummary = isSummary,
 )
 
 internal fun SnippetEntity.toBackupSnippet(): BackupSnippet = BackupSnippet(id, name, body)
@@ -57,13 +63,21 @@ internal object MemoryBackupMerge {
         remapProject: (String?) -> String? = { it },
     ): List<BackupMemory> {
         val ids = existing.mapTo(mutableSetOf()) { it.id }
-        val facts = existing.mapTo(mutableSetOf()) { key(it.text, it.scope, it.projectId) }
-        return incoming.mapNotNull { normalize(it, remapProject) }
-            .filter { ids.add(it.id) && facts.add(key(it.text, it.scope, it.projectId)) }
+        val facts = existing.mapTo(mutableSetOf()) { key(it.text, it.scope, it.projectId, it.section, it.consolidatedInto, it.isSummary) }
+        val plan = incoming.mapNotNull { normalize(it, remapProject) }
+            .filter { entry ->
+                val fact = key(entry.text, entry.scope, entry.projectId, entry.section, entry.consolidatedInto, entry.isSummary)
+                if (entry.id in ids || fact in facts) false else { ids += entry.id; facts += fact; true }
+            }
+        val summaries = (existing.filter { it.isSummary } .map { it.id } + plan.filter { it.isSummary }.map { it.id }).toSet()
+        return plan.map { it.copy(consolidatedInto = it.consolidatedInto?.takeIf { id -> id in summaries && id != it.id }) }
     }
 
     fun normalize(entry: BackupMemory, remapProject: (String?) -> String? = { it }): BackupMemory? {
-        val text = MemoryText.normalize(entry.text) ?: return null
+        if (entry.section !in MemorySection.entries.map { it.name }) return null
+        val text = if (entry.isSummary) entry.text.trim().takeIf { it.isNotBlank() && it.length <= MemoryConsolidation.MAX_CHARS }
+            else MemoryText.normalize(entry.text)
+        text ?: return null
         if (entry.id.isBlank() || entry.id.length > MAX_ID) return null
         val projectId = remapProject(entry.projectId)?.takeIf { it.isNotBlank() }
         val scope = if (entry.scope == MemoryScope.PROJECT.name && projectId != null) {
@@ -74,6 +88,7 @@ internal object MemoryBackupMerge {
             category = MemoryCategory.fromStored(entry.category).name,
             scope = scope,
             projectId = projectId.takeIf { scope == MemoryScope.PROJECT.name },
+            section = MemorySection.fromStored(entry.section).name,
             lastUsedAt = entry.lastUsedAt.coerceAtLeast(0),
             useCount = entry.useCount.coerceAtLeast(0),
         )
@@ -92,10 +107,14 @@ internal object MemoryBackupMerge {
         updatedAt = entry.updatedAt.takeIf { it > 0 } ?: entry.createdAt.takeIf { it > 0 } ?: now,
         lastUsedAt = entry.lastUsedAt,
         useCount = entry.useCount,
+        section = entry.section,
+        consolidatedInto = entry.consolidatedInto,
+        isSummary = entry.isSummary,
     )
 
-    private fun key(text: String, scope: String, projectId: String?): String =
-        (MemoryText.normalize(text) ?: text.trim()).lowercase() + "\u0000" + scope + "\u0000" + projectId.orEmpty()
+    private fun key(text: String, scope: String, projectId: String?, section: String, parent: String?, summary: Boolean): String =
+        MemoryMatch.key(text) + "\u0000" + scope + "\u0000" + projectId.orEmpty() + "\u0000" + section + "\u0000" + parent.orEmpty() + "\u0000" + summary
+
 }
 
 /** Snippets are matched by id and by name, since a name is the slash command. */

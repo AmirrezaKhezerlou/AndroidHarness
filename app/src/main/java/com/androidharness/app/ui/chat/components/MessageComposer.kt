@@ -16,7 +16,9 @@ import androidx.compose.ui.input.key.KeyEventType
 
 import androidx.compose.ui.input.key.Key
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -33,6 +35,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,6 +52,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
@@ -56,7 +63,8 @@ import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Description
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -65,6 +73,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -72,11 +81,15 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -88,13 +101,15 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.AwaitPointerEventScope
-import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
@@ -108,8 +123,6 @@ import androidx.compose.ui.unit.dp
 import com.androidharness.app.data.AppSettings
 import com.androidharness.app.ui.chat.GroqRecordState
 import com.androidharness.app.ui.theme.defaultEffectsSpec
-import com.androidharness.app.ui.theme.defaultSpatialSpec
-import com.androidharness.app.ui.theme.fastEffectsSpec
 import com.androidharness.app.ui.theme.fastSpatialSpec
 import com.androidharness.app.ui.common.ExpressiveIconButton
 import com.androidharness.app.ui.theme.expressiveEffectsSpec
@@ -123,13 +136,14 @@ private val CancelDistance = 92.dp
 private val LockDistance = 68.dp
 
 /**
- * The message composer styled with the Hulia floating layout:
- * - Floating pill input with focus border
+ * The message composer with a floating mobile pill that gently opens on focus:
+ * - Theme-colored Send, separate voice and attachment controls
  * - Soft-square leading button for attachments & skills
  * - Morphing send/mic action button
  * - LockRail and RecordingStrip animations for Groq Whisper
  * - Inbuilt audio fallback
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun MessageComposer(
     busy: Boolean,
@@ -223,7 +237,7 @@ internal fun MessageComposer(
     val actionSize = if (desktopInput) 36.dp else if (desktop) 52.dp else 44.dp
     val leading: @Composable () -> Unit = {
         // Leading button: discard recording when locked, otherwise attachments/skills
-        if (isGroqActive && isGroqLocked) {
+        if (isGroqLocked) {
             DiscardRecordingButton(
                 size = actionSize,
                 onClick = {
@@ -245,32 +259,20 @@ internal fun MessageComposer(
     val field: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
         if (isGroqActive) {
             if (isGroqTranscribing) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 52.dp)
-                        .clip(RoundedCornerShape(26.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                    contentAlignment = Alignment.CenterStart,
+                Row(
+                    modifier = Modifier.weight(1f).heightIn(min = 80.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .semantics { liveRegion = LiveRegionMode.Polite },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.padding(horizontal = 18.dp),
-                    ) {
-                        CircularProgressIndicator(
-                            strokeWidth = 2.dp,
-                            modifier = Modifier.size(16.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Text(
-                            uiContext.getString(R.string.ui_transcribing_audio_with_groq_whisper),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+                    LoadingIndicator(modifier = Modifier.size(40.dp))
+                    Text(
+                        uiContext.getString(R.string.ui_transcribing_audio_with_groq_whisper),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
             } else {
                 RecordingStrip(
@@ -415,9 +417,9 @@ internal fun MessageComposer(
         when {
             isGroq -> {
                 // Groq Whisper mode: Hold to talk, swipe up to lock, swipe left to cancel
-                Box(contentAlignment = Alignment.Center) {
+                Box(Modifier.size(actionSize), contentAlignment = Alignment.Center) {
                     LockRail(
-                        visible = isGroqActive && !cancelArmed && !isGroqLocked,
+                        visible = isGroqActive && !isGroqTranscribing && !cancelArmed && !isGroqLocked,
                         progress = lockProgress,
                     )
                     HuliaMicButton(
@@ -465,6 +467,26 @@ internal fun MessageComposer(
         // Native press feedback changes the painted shape, keeping actionSize
         // and the clickable area steady while the input grows or shrinks.
         when {
+            isGroqActive && isGroqLocked -> {
+                ExpressiveIconButton(
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                        onStopAndTranscribeGroq()
+                    },
+                    modifier = Modifier.size(actionSize)
+                        .semantics { contentDescription = uiContext.getString(R.string.ui_transcribe_voice_message) },
+                    shape = CircleShape,
+                    colors = IconButtonDefaults.iconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                    ),
+                ) {
+                    StopGlyph(color = MaterialTheme.colorScheme.onPrimary)
+                }
+            }
+
+            isGroqActive -> voice()
+
             showQueueSend -> {
                 ExpressiveIconButton(
                     onClick = { if (sendAllowed) { haptics.performHapticFeedback(HapticFeedbackType.Confirm); onSend() } },
@@ -481,29 +503,6 @@ internal fun MessageComposer(
                 }
             }
 
-            isGroqActive && isGroqLocked -> {
-                Box(
-                    modifier = Modifier
-                        .size(actionSize)
-                        .clip(CircleShape)
-                        .clickable {
-                            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-                            onStopAndTranscribeGroq()
-                        }
-                        .semantics { contentDescription = uiContext.getString(R.string.ui_transcribe_voice_message) },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(actionSize)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(painterResource(R.drawable.ic_chat_arrow_up), null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onPrimary)
-                    }
-                }
-            }
 
             showStopOnly -> {
                 ExpressiveIconButton(
@@ -545,28 +544,65 @@ internal fun MessageComposer(
             verticalAlignment = inputAlignment,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Box(Modifier.padding(bottom = 6.dp)) { leading() }
+            Box(Modifier.padding(bottom = 6.dp)) { if (!isGroqActive || isGroqLocked) leading() }
             field()
-            Box(Modifier.padding(bottom = 6.dp)) { trailing() }
+            Box(Modifier.padding(bottom = 6.dp)) { if (!isGroqTranscribing) trailing() }
         }
     } else if (!desktop) {
         val scheme = MaterialTheme.colorScheme
+        val expanded = focused && !isGroqActive
+        val inset by animateDpAsState(if (expanded) 10.dp else 16.dp,
+            expressiveSpatialSpec(), label = "composerInset")
+        val pillCorner by animateDpAsState(if (isGroqActive) 32.dp else if (expanded) 30.dp else 28.dp,
+            expressiveSpatialSpec(), label = "composerCorner")
+        val elevation by animateDpAsState(if (expanded) 2.dp else 0.dp,
+            expressiveSpatialSpec(), label = "composerElevation")
+        val outline by animateColorAsState(
+            when {
+                isGroqActive && cancelArmed -> scheme.error.copy(alpha = 0.65f)
+                expanded || isGroqActive -> scheme.primary.copy(alpha = 0.55f)
+                else -> scheme.outlineVariant.copy(alpha = 0.55f)
+            },
+            expressiveEffectsSpec(), label = "composerOutline")
+        // Keep recording rails and drag feedback free to draw outside the pill.
         Column(
-            modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
-                .background(scheme.surfaceContainerHigh, RoundedCornerShape(21.dp))
-                .border(1.dp, if (focused) scheme.primary else scheme.outlineVariant, RoundedCornerShape(21.dp))
-                .padding(4.dp),
+            modifier = modifier.fillMaxWidth().padding(horizontal = inset, vertical = 8.dp)
+                .testTag("message-composer")
+                .shadow(elevation, RoundedCornerShape(pillCorner), clip = false)
+                .background(scheme.surfaceContainerHigh, RoundedCornerShape(pillCorner))
+                .border(1.dp, outline, RoundedCornerShape(pillCorner)),
         ) {
-            attachments()
-            Row(Modifier.fillMaxWidth(), verticalAlignment = inputAlignment) {
-                leading()
-                field()
-                if (!isGroqLocked && !showStopOnly) voice()
-                if (canSend || showStopOnly || isGroqLocked) trailing()
-                else IconButton(onClick = {}, enabled = false, modifier = Modifier.size(44.dp)) {
-                    Surface(shape = CircleShape, color = scheme.primary.copy(alpha = 0.45f)) {
-                        Icon(painterResource(R.drawable.ic_chat_arrow_up), uiContext.getString(R.string.ui_send_message), Modifier.padding(9.dp).size(18.dp), tint = scheme.onPrimary)
+            Column(Modifier.then(if (isGroqActive) Modifier else
+                Modifier.animateContentSize(animationSpec = expressiveSpatialSpec(), alignment = Alignment.BottomCenter))
+                .padding(horizontal = 4.dp, vertical = if (expanded) 8.dp else 4.dp)) {
+                if (!isGroqActive) attachments()
+                Row(Modifier.fillMaxWidth(), verticalAlignment = if (isGroqActive) Alignment.CenterVertically else inputAlignment) {
+                    if (!isGroqActive || isGroqLocked) leading()
+                    field()
+                    if (!isGroqLocked && !isGroqTranscribing) voice()
+                    if (isGroqLocked || (!isGroqActive && (canSend || showStopOnly))) trailing()
+                    else if (!isGroqActive) ExpressiveIconButton(onClick = {}, enabled = false,
+                        modifier = Modifier.size(actionSize).semantics { contentDescription = uiContext.getString(R.string.ui_send_message) },
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.iconButtonColors(
+                            disabledContainerColor = scheme.primary.copy(alpha = 0.38f),
+                            disabledContentColor = scheme.onPrimary,
+                        )) {
+                        Icon(painterResource(R.drawable.ic_chat_arrow_up), null, Modifier.size(20.dp))
                     }
+                }
+                if (isGroqActive && !isGroqTranscribing) {
+                    Text(
+                        text = uiContext.getString(when {
+                            cancelArmed -> R.string.ui_release_to_cancel
+                            isGroqLocked -> R.string.ui_voice_finish_hint
+                            else -> R.string.ui_voice_gesture_hint
+                        }),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (cancelArmed) scheme.error else scheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
                 }
             }
         }
@@ -579,7 +615,7 @@ internal fun MessageComposer(
                     .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f), RoundedCornerShape(14.dp))
                     .padding(horizontal = 8.dp, vertical = 6.dp) else Modifier),
             verticalAlignment = inputAlignment, horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) { leading(); field(); trailing() }
+        ) { if (!isGroqActive || isGroqLocked) leading(); field(); if (!isGroqTranscribing) trailing() }
     }
 
 }
@@ -630,7 +666,8 @@ private fun LockRail(
                 scaleX = 0.9f + 0.1f * appear + 0.08f * progress
                 scaleY = scaleX
             }
-            .size(width = 42.dp, height = 76.dp)
+            .requiredSize(width = 42.dp, height = 76.dp)
+            .shadow(3.dp, RoundedCornerShape(21.dp), clip = false)
             .clip(RoundedCornerShape(21.dp))
             .background(track),
         contentAlignment = Alignment.BottomCenter,
@@ -670,114 +707,39 @@ private fun RecordingStrip(
     modifier: Modifier = Modifier,
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
-    val container by animateColorAsState(
-        targetValue = when {
-            cancelArmed -> MaterialTheme.colorScheme.errorContainer
-            locked -> MaterialTheme.colorScheme.primaryContainer
-            else -> MaterialTheme.colorScheme.surfaceContainerHigh
-        },
-        animationSpec = defaultEffectsSpec(),
-        label = "recordingContainer",
-    )
+    val scheme = MaterialTheme.colorScheme
     val accent by animateColorAsState(
-        targetValue = when {
-            cancelArmed -> MaterialTheme.colorScheme.error
-            locked -> MaterialTheme.colorScheme.primary
-            else -> MaterialTheme.colorScheme.primary
-        },
-        animationSpec = defaultEffectsSpec(),
-        label = "recordingAccent",
+        if (cancelArmed) scheme.error else scheme.primary,
+        expressiveEffectsSpec(), label = "recordingAccent",
     )
-    val onContainer by animateColorAsState(
-        targetValue = when {
-            cancelArmed -> MaterialTheme.colorScheme.onErrorContainer
-            locked -> MaterialTheme.colorScheme.onPrimaryContainer
-            else -> MaterialTheme.colorScheme.onSurface
-        },
-        animationSpec = defaultEffectsSpec(),
-        label = "recordingOnContainer",
-    )
-    val corner by animateDpAsState(
-        targetValue = if (locked) 20.dp else 26.dp,
-        animationSpec = defaultSpatialSpec(),
-        label = "recordingCorner",
-    )
-
-    Box(
-        modifier = modifier
-            .heightIn(min = 52.dp)
-            .clip(RoundedCornerShape(corner))
-            .background(container),
-        contentAlignment = Alignment.Center,
+    Column(
+        modifier = modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            HuliaRecordingDot(color = accent, steady = locked)
-
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (locked) LockGlyph(color = accent, size = 18.dp, open = 0f)
+            else HuliaRecordingDot(color = accent)
             Text(
                 text = formatClipDuration(elapsedMillis),
-                style = MaterialTheme.typography.labelLarge,
-                color = onContainer,
+                style = MaterialTheme.typography.titleSmall.copy(fontFeatureSettings = "tnum"),
+                color = scheme.onSurface,
             )
-
-            Box(
-                modifier = Modifier.weight(1f),
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                if (cancelArmed) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        TrashGlyph(color = onContainer, size = 18.dp)
-                        Text(
-                            text = uiContext.getString(R.string.ui_release_to_cancel),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = onContainer,
-                        )
-                    }
-                } else {
-                    HuliaLiveLevels(
-                        levels = levels,
-                        color = accent,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
-
-            if (locked) {
-                Text(
-                    text = uiContext.getString(R.string.ui_hands_free),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = onContainer.copy(alpha = 0.8f),
-                )
-            } else if (!cancelArmed) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(1.dp),
-                    modifier = Modifier.graphicsLayer {
-                        translationX = -cancelProgress * 22.dp.toPx()
-                        alpha = 1f - cancelProgress
-                    },
-                ) {
-                    BackGlyph(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        size = 13.dp,
-                    )
-                    Text(
-                        text = uiContext.getString(R.string.ui_cancel),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = uiContext.getString(if (locked) R.string.ui_hands_free else R.string.ui_listening),
+                style = MaterialTheme.typography.labelMedium,
+                color = accent,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
+        HuliaLiveLevels(
+            levels = levels,
+            color = accent,
+            modifier = Modifier.fillMaxWidth().graphicsLayer {
+                alpha = 1f - 0.65f * cancelProgress
+            },
+        )
     }
 }
 
@@ -842,32 +804,31 @@ private fun HuliaLiveLevels(
     color: Color,
     modifier: Modifier = Modifier,
 ) {
-    val slide = remember { Animatable(1f) }
+    // Keep a fixed bar spacing: the first few samples no longer stretch across
+    // the whole strip. Quiet audio still has a visible baseline.
+    val slide = remember { Animatable(0f) }
     LaunchedEffect(levels) {
         slide.snapTo(1f)
-        slide.animateTo(0f, tween(durationMillis = 160, easing = LinearEasing))
+        slide.animateTo(0f, tween(durationMillis = 60, easing = LinearEasing))
     }
-
-    Canvas(modifier.fillMaxWidth().height(24.dp)) {
-        if (levels.isEmpty()) return@Canvas
-        val step = size.width / levels.size
-        val weight = (step * 0.46f).coerceIn(2f, 4f)
+    Canvas(modifier.fillMaxWidth().height(36.dp).clip(RoundedCornerShape(12.dp))) {
+        val step = 6.dp.toPx()
+        val count = (size.width / step).toInt().coerceAtLeast(1)
+        val samples = levels.takeLast(count + 1)
         val shift = step * slide.value
-
-        levels.forEachIndexed { index, level ->
+        for (index in 0..count) {
+            val level = samples.getOrNull(index - (count + 1 - samples.size)) ?: 0f
             val scaled = kotlin.math.sqrt(level.coerceIn(0f, 1f))
-            val position = (index + 1f) / levels.size
-            val presence = 0.55f + 0.45f * position
-            val extent = (0.16f + 0.84f * scaled) * size.height * presence
-            val x = step * (index + 0.5f) + shift
-
+            val position = index.toFloat() / count
+            val extent = 3.dp.toPx() + scaled * (size.height - 6.dp.toPx())
+            val x = size.width - (count - index) * step + shift
             drawLine(
                 color = color,
                 start = Offset(x, (size.height - extent) / 2f),
                 end = Offset(x, (size.height + extent) / 2f),
-                strokeWidth = weight * (0.8f + 0.2f * position),
+                strokeWidth = 3.dp.toPx(),
                 cap = StrokeCap.Round,
-                alpha = (0.30f + 0.70f * position) * if (index == 0) 1f - slide.value else 1f,
+                alpha = 0.22f + 0.78f * position,
             )
         }
     }
@@ -897,6 +858,17 @@ private fun HuliaMicButton(
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val haptics = LocalHapticFeedback.current
 
+    val interactions = remember { MutableInteractionSource() }
+    val pressed by interactions.collectIsPressedAsState()
+    var windowPosition by remember { mutableStateOf(Offset.Zero) }
+    val start by rememberUpdatedState(onStart)
+    val tapLock by rememberUpdatedState(onTapLock)
+    val finish by rememberUpdatedState(onFinish)
+    val cancel by rememberUpdatedState(onCancel)
+    val lock by rememberUpdatedState(onLock)
+    val armCancel by rememberUpdatedState(onCancelArmedChange)
+    val drag by rememberUpdatedState(onDrag)
+
     val background by animateColorAsState(
         targetValue = when {
             cancelArmed -> MaterialTheme.colorScheme.error
@@ -921,13 +893,13 @@ private fun HuliaMicButton(
         label = "micCorner",
     )
     val buttonScale by animateFloatAsState(
-        targetValue = if (recording) 1.12f else 0.86f,
-        animationSpec = fastSpatialSpec(),
+        targetValue = if (recording) 1.08f else if (pressed) 1f else 0.86f,
+        animationSpec = expressiveSpatialSpec(),
         label = "micScale",
     )
 
     val haloScale by animateFloatAsState(
-        targetValue = if (recording) 1f + 0.55f * kotlin.math.sqrt(level.coerceIn(0f, 1f)) else 1f,
+        targetValue = if (recording) 1f + 0.35f * kotlin.math.sqrt(level.coerceIn(0f, 1f)) else 1f,
         animationSpec = fastSpatialSpec(),
         label = "micHalo",
     )
@@ -938,87 +910,94 @@ private fun HuliaMicButton(
 
     Box(contentAlignment = Alignment.Center) {
         if (recording) {
-Box(
-            modifier = Modifier
-                .size(size)
-                // Scale the ghost only: it must sit behind the real button's
-                // 48dp+ touch area, not participate in it.
-                .graphicsLayer {
-                    scaleX = haloScale * 1.25f
-                    scaleY = haloScale * 1.25f
-                    alpha = 0.22f
-                    translationX = dragX.coerceIn(-cancelDistancePx * 1.15f, 0f)
-                    translationY = dragY.coerceIn(-lockDistancePx, 0f)
-                }
-                .clip(CircleShape)
-                .background(background),
-        )
+            Box(
+                modifier = Modifier
+                    .size(size)
+                    .graphicsLayer {
+                        scaleX = haloScale * 1.12f
+                        scaleY = haloScale * 1.12f
+                        alpha = 0.22f
+                        translationX = dragX.coerceIn(-cancelDistancePx * 1.15f, 0f)
+                        translationY = dragY.coerceIn(-lockDistancePx, 0f)
+                    }
+                    .clip(CircleShape)
+                    .background(background),
+            )
         }
 
         Box(
             modifier = Modifier
                 .size(size)
-                // Drag translation stays on the interactive node so the button
-                // follows the finger, but the idle scale does not, otherwise the
-                // gesture area shrinks to ~45dp along with the artwork.
-                .graphicsLayer {
-                    translationX = dragX.coerceIn(-cancelDistancePx * 1.15f, 0f)
-                    translationY = dragY.coerceIn(-lockDistancePx, 0f)
-                }
+                // Track window coordinates because opening the recording panel
+                // moves the composer while this gesture is still in progress.
+                .onGloballyPositioned { windowPosition = it.positionInWindow() }
                 .pointerInput(available) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
 
+                        if (!available) return@awaitEachGesture
+                        val press = PressInteraction.Press(down.position)
+                        interactions.tryEmit(press)
+                        val origin = down.position + windowPosition
+                        val deadline = down.uptimeMillis + viewConfiguration.longPressTimeoutMillis
                         var armed = false
                         var locked = false
-                        var moved = false
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (!change.pressed) break
-
-                            val dy = change.position.y - down.position.y
-                            val dx = change.position.x - down.position.x
-                            if (!moved && (abs(dx) > 4f || abs(dy) > 4f)) {
-                                moved = true
+                        var started = false
+                        try {
+                            while (true) {
+                                val event = if (started) awaitPointerEvent() else withTimeoutOrNull(
+                                    (deadline - android.os.SystemClock.uptimeMillis()).coerceAtLeast(1L)
+                                ) { awaitPointerEvent() }
+                                if (event == null) {
+                                    started = true
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    start()
+                                    continue
+                                }
+                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                if (!change.pressed) break
+                                val delta = change.position + windowPosition - origin
+                                if (!started && delta.getDistance() > viewConfiguration.touchSlop) {
+                                    started = true
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    start()
+                                }
+                                if (!started) continue
                                 change.consume()
+                                drag(delta.x, delta.y)
+                                val vertical = -delta.y > abs(delta.x)
+                                if (vertical && -delta.y >= lockDistancePx) {
+                                    locked = true
+                                    haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                                    lock()
+                                    break
+                                }
+                                val away = !vertical && delta.x <= -cancelDistancePx
+                                if (away != armed) {
+                                    armed = away
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    armCancel(away)
+                                }
+                            }
+                            if (!started) {
+                                down.consume()
                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onStart()
+                                tapLock()
+                            } else if (!locked) {
+                                if (armed) cancel() else finish()
                             }
-                            if (!moved) continue
-                            change.consume()
-                            onDrag(dx, dy)
-
-                            val vertical = -dy > abs(dx)
-
-                            if (vertical && -dy >= lockDistancePx) {
-                                locked = true
-                                haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-                                if (armed) onCancelArmedChange(false)
-                                onLock()
-                                break
-                            }
-
-                            val away = !vertical && dx <= -cancelDistancePx
-                            if (away != armed) {
-                                armed = away
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onCancelArmedChange(away)
-                            }
-                        }
-
-                        onDrag(0f, 0f)
-                        if (!moved) {
-                            down.consume()
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onTapLock()
-                        } else if (!locked) {
-                            if (armed) onCancel() else onFinish()
-                            onCancelArmedChange(false)
+                        } finally {
+                            interactions.tryEmit(PressInteraction.Release(press))
+                            drag(0f, 0f)
+                            armCancel(false)
                         }
                     }
                 }
                 .semantics {
+                    onClick {
+                        if (available && !recording) onTapLock()
+                        available && !recording
+                    }
                     contentDescription = if (recording) {
                         uiContext.getString(R.string.ui_recording_release_to_send_slide_left_to)
                     } else {
@@ -1033,12 +1012,17 @@ Box(
                     .graphicsLayer {
                         scaleX = buttonScale
                         scaleY = buttonScale
+                        translationX = dragX.coerceIn(-cancelDistancePx * 1.15f, 0f)
+                        translationY = dragY.coerceIn(-lockDistancePx, 0f)
                     }
                     .clip(RoundedCornerShape(corner))
-                    .background(background),
+                    .background(background)
+                    .indication(interactions, ripple(color = glyphColor)),
                 contentAlignment = Alignment.Center,
             ) {
-                MicGlyph(color = glyphColor)
+                Crossfade(targetState = cancelArmed, animationSpec = expressiveEffectsSpec(), label = "micCancelGlyph") { cancelling ->
+                    if (cancelling) TrashGlyph(color = glyphColor) else MicGlyph(color = glyphColor)
+                }
             }
         }
     }
@@ -1115,14 +1099,15 @@ private fun ComposerLeadingButton(
 @Composable
 private fun DiscardRecordingButton(onClick: () -> Unit, size: Dp = 52.dp) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
-    Box(
-        modifier = Modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.errorContainer)
-            .clickable(onClick = onClick)
+    ExpressiveIconButton(
+        onClick = onClick,
+        modifier = Modifier.size(size)
             .semantics { contentDescription = uiContext.getString(R.string.ui_discard_recording) },
-        contentAlignment = Alignment.Center,
+        shape = CircleShape,
+        colors = IconButtonDefaults.iconButtonColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        ),
     ) {
         TrashGlyph(color = MaterialTheme.colorScheme.onErrorContainer)
     }

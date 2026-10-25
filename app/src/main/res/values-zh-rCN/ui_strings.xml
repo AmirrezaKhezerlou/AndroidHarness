@@ -1624,4 +1624,9 @@
     <string name="ui_close_image">"关闭图片"</string>
     <string name="ui_open_image">"打开图片"</string>
     <string name="ui_image_not_available">"此图片已不在设备上。"</string>
+    <string name="ui_voice_gesture_hint">"向左滑动取消 · 向上滑动锁定"</string>
+    <string name="ui_voice_finish_hint">"点按停止以转写录音"</string>
+    <string name="answer_table_swipe_hint">"左右滑动查看更多列"</string>
+    <plurals name="answer_table_columns"><item quantity="one">%1$d 列</item><item quantity="other">%1$d 列</item></plurals>
+    <plurals name="answer_table_rows"><item quantity="one">%1$d 行</item><item quantity="other">%1$d 行</item></plurals>
 </resources>

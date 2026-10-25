@@ -87,6 +87,7 @@ data class ChatUiState(
     val conversation: com.androidharness.app.data.ConversationConfig = com.androidharness.app.data.ConversationConfig(),
     val conversationReady: Boolean = true,
     val conversationSaving: Boolean = false,
+    val chatSettingsError: String? = null,
     val messages: List<ChatMessage> = emptyList(),
     /** True while messages are being initially loaded from Room for this session. */
     val isLoadingMessages: Boolean = false,
@@ -518,7 +519,8 @@ class ChatViewModel(
                 if (s != null) {
                     _state.update {
                         it.copy(sessionTitle = s.title, usage = s.toUsageStats(),
-                            conversation = com.androidharness.app.data.ConversationConfig.decode(s.conversationJson), conversationReady = true)
+                            conversation = if (it.conversationSaving) it.conversation else
+                                com.androidharness.app.data.ConversationConfig.decode(s.conversationJson), conversationReady = true)
                     }
                 }
             }
@@ -560,7 +562,8 @@ class ChatViewModel(
                     it.copy(
                         sessionId = initialSessionId,
                         sessionTitle = sess?.title ?: "Chat",
-                        conversation = com.androidharness.app.data.ConversationConfig.decode(sess?.conversationJson),
+                        conversation = if (it.conversationReady) it.conversation else
+                            com.androidharness.app.data.ConversationConfig.decode(sess?.conversationJson),
                         conversationReady = true,
                         turnsWithCheckpoints = refreshCheckpoints(initialSessionId),
                     )
@@ -579,6 +582,7 @@ class ChatViewModel(
                         conversation = _state.value.conversation,
                         sessionId = initialSessionId,
                         searchDepth = _state.value.searchDepth,
+                        chatInstructions = c.settings.settings.first().chatInstructions,
                     )
                     _state.update { it.copy(estimate = fresh) }
                 }
@@ -1433,23 +1437,29 @@ class ChatViewModel(
         instructions: String,
         personalization: Boolean,
         imageFrequency: com.androidharness.app.data.ImageFrequency,
+        useGlobalInstructions: Boolean = _state.value.conversation.useGlobalInstructions,
+        onSaved: () -> Unit = {},
     ) {
+        if (!_state.value.conversationReady || _state.value.conversationSaving || !_state.value.conversation.isChat) return
         val current = _state.value.conversation
         val updated = current.copy(
             instructions = instructions.trim()
                 .take(com.androidharness.app.data.ConversationConfig.MAX_INSTRUCTIONS_CHARS),
             personalizationEnabled = personalization,
             imageFrequency = imageFrequency,
+            useGlobalInstructions = useGlobalInstructions,
         )
-        if (updated == current) return
-        _state.update { it.copy(conversation = updated, conversationSaving = true) }
+        if (updated == current) { onSaved(); return }
+        _state.update { it.copy(conversation = updated, conversationSaving = true, chatSettingsError = null) }
         viewModelScope.launch {
             try {
                 c.sessions.saveConversation(ensureSession(), updated)
+                onSaved()
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(error = e.message) }
+                val reason = e.message ?: c.appContext.getString(R.string.chat_settings_save_failed)
+                _state.update { it.copy(conversation = current, chatSettingsError = reason, error = reason) }
             } finally {
                 _state.update { it.copy(conversationSaving = false) }
             }
@@ -1890,7 +1900,8 @@ class ChatViewModel(
                 val fresh = c.engine.estimateFor(com.androidharness.app.agent.ContextHygiene.forModel(
                     c.sessions.historyFor(sid).second), chatWorkspace(), current.mode,
                     current.permissionMode == PermissionMode.FULL_ACCESS, conversation = current.conversation,
-                    sessionId = sid, searchDepth = current.searchDepth)
+                    sessionId = sid, searchDepth = current.searchDepth,
+                    chatInstructions = c.settings.settings.first().chatInstructions)
                 if (sessionId == sid) _state.update { it.copy(estimate = fresh) }
             }
         } catch (e: kotlinx.coroutines.CancellationException) {

@@ -2,11 +2,16 @@ package com.androidharness.app.ui.settings
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -17,6 +22,8 @@ import com.androidharness.app.data.AppSettings
 import com.androidharness.app.data.ChatStartMode
 import com.androidharness.app.data.CodeStartMode
 import com.androidharness.app.data.ImageFrequency
+import com.androidharness.app.data.ConversationConfig
+import kotlinx.coroutines.launch
 import com.androidharness.app.data.StartScreen
 import com.androidharness.app.ui.common.imageFrequencyDescription
 import com.androidharness.app.ui.common.imageFrequencyLabel
@@ -28,7 +35,52 @@ internal fun ChatOptionsSection(
     onChatStart: (ChatStartMode) -> Unit,
     onKeepThinkingCollapsed: (Boolean) -> Unit,
     onImageFrequency: (ImageFrequency) -> Unit,
+    onInstructions: suspend (String) -> Unit,
 ) {
+    SettingsAnchor(R.string.chat_global_instructions) {
+        val scope = rememberCoroutineScope()
+        var editing by rememberSaveable { mutableStateOf(false) }
+        var text by rememberSaveable(settings.chatInstructions) { mutableStateOf(settings.chatInstructions) }
+        var saving by remember { mutableStateOf(false) }
+        var error by remember { mutableStateOf<String?>(null) }
+        val saveFailed = stringResource(R.string.chat_settings_save_failed)
+        SettingsPanel(Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth().clickable { text = settings.chatInstructions; error = null; editing = true }
+                .padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(stringResource(R.string.chat_global_instructions), style = MaterialTheme.typography.titleSmall)
+                    Text(settings.chatInstructions.ifBlank { stringResource(R.string.chat_global_instructions_summary) },
+                        maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Icon(androidx.compose.material.icons.Icons.Outlined.Edit, null, Modifier.padding(start = 12.dp).size(20.dp))
+            }
+        }
+        if (editing) AlertDialog(
+            onDismissRequest = { if (!saving) editing = false },
+            title = { Text(stringResource(R.string.chat_global_instructions)) },
+            text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(R.string.chat_global_instructions_desc), style = MaterialTheme.typography.bodySmall)
+                OutlinedTextField(value = text, onValueChange = { text = it.take(ConversationConfig.MAX_INSTRUCTIONS_CHARS) },
+                    enabled = !saving, label = { Text(stringResource(R.string.chat_settings_instructions)) },
+                    placeholder = { Text(stringResource(R.string.chat_settings_instructions_hint)) },
+                    minLines = 3, maxLines = 8, modifier = Modifier.fillMaxWidth())
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            } },
+            confirmButton = { TextButton(onClick = {
+                saving = true; error = null
+                scope.launch {
+                    try { onInstructions(text); editing = false }
+                    catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                    catch (e: Exception) { error = e.message ?: saveFailed }
+                    finally { saving = false }
+                }
+            }, enabled = !saving) { Text(stringResource(R.string.settings_action_save)) } },
+            dismissButton = { TextButton(onClick = { editing = false }, enabled = !saving) {
+                Text(stringResource(R.string.settings_action_cancel))
+            } },
+        )
+    }
     SettingsPanel(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().toggleable(value = settings.chatKeepThinkingCollapsed, role = Role.Switch, onValueChange = onKeepThinkingCollapsed).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f).padding(end = 12.dp)) {

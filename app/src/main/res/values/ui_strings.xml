@@ -277,8 +277,10 @@
     <string name="ui_transcribe_voice_message">"Transcribe voice message"</string>
     <string name="ui_send_message">"Send message"</string>
     <string name="ui_release_to_cancel">"Release to cancel"</string>
+    <string name="ui_voice_gesture_hint">Slide left to cancel · Slide up to lock</string>
+    <string name="ui_voice_finish_hint">Tap stop to transcribe your recording</string>
     <string name="ui_hands_free">"Hands free"</string>
-    <string name="ui_recording_release_to_send_slide_left_to">"Recording. Release to send, slide left to cancel, slide up to lock"</string>
+    <string name="ui_recording_release_to_send_slide_left_to">"Recording. Release to transcribe, slide left to cancel, slide up to lock"</string>
     <string name="ui_tap_to_lock_recording_hold_to_record">"Tap to lock recording, hold to record a voice message"</string>
     <string name="ui_message_actions">"Message actions"</string>
     <string name="ui_photo_or_image">"Photo or image"</string>
@@ -1624,4 +1626,7 @@
     <string name="ui_close_image">"Close image"</string>
     <string name="ui_open_image">"Open image"</string>
     <string name="ui_image_not_available">"This image is no longer on the device."</string>
+    <string name="answer_table_swipe_hint">Swipe sideways to see more columns</string>
+    <plurals name="answer_table_columns"><item quantity="one">%1$d column</item><item quantity="other">%1$d columns</item></plurals>
+    <plurals name="answer_table_rows"><item quantity="one">%1$d row</item><item quantity="other">%1$d rows</item></plurals>
 </resources>

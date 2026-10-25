@@ -507,6 +507,7 @@ class RunManager(
                     conversation = conversation,
                     searchDepth = reasoningPrefs.searchDepth,
                     chatImageFrequency = reasoningPrefs.chatImageFrequency,
+                    chatInstructions = reasoningPrefs.chatInstructions,
                     maxIterations = maxIterations,
                     // Connected MCP servers ride into this run; a failing
                     // server must never block the run itself.

@@ -1624,4 +1624,19 @@
     <string name="ui_close_image">"Закрыть изображение"</string>
     <string name="ui_open_image">"Открыть изображение"</string>
     <string name="ui_image_not_available">"Этого изображения больше нет на устройстве."</string>
+    <string name="ui_voice_gesture_hint">"Сдвиньте влево, чтобы отменить · Сдвиньте вверх, чтобы закрепить"</string>
+    <string name="ui_voice_finish_hint">"Нажмите стоп, чтобы расшифровать запись"</string>
+    <string name="answer_table_swipe_hint">"Сдвиньте в сторону, чтобы увидеть больше столбцов"</string>
+    <plurals name="answer_table_columns">
+        <item quantity="one">"%1$d столбец"</item>
+        <item quantity="few">"%1$d столбца"</item>
+        <item quantity="many">"%1$d столбцов"</item>
+        <item quantity="other">"%1$d столбца"</item>
+    </plurals>
+    <plurals name="answer_table_rows">
+        <item quantity="one">"%1$d строка"</item>
+        <item quantity="few">"%1$d строки"</item>
+        <item quantity="many">"%1$d строк"</item>
+        <item quantity="other">"%1$d строки"</item>
+    </plurals>
 </resources>

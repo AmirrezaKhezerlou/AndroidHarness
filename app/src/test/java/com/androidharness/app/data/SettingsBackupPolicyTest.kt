@@ -10,6 +10,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SettingsBackupPolicyTest {
+    @Test fun globalChatInstructionsArePortableAndOlderSettingsDefaultToEmpty() {
+        val original = AppSettings(chatInstructions = "Answer clearly in German.")
+        val exported = SettingsBackupPolicy.exportSettings(original, emptySet())
+        val json = Json { encodeDefaults = true }
+        val restored = json.decodeFromString(AppSettings.serializer(), json.encodeToString(AppSettings.serializer(), exported))
+        assertEquals(original.chatInstructions, restored.chatInstructions)
+        assertEquals("", json.decodeFromString(AppSettings.serializer(), "{}").chatInstructions)
+    }
     private fun api(id: String = "api") = ProviderConfig(id, "API", ProviderType.OPENAI_COMPAT, "https://example.com/v1", "remote-model")
     private fun local(id: String) = ProviderConfig("local-model:$id", "Local", ProviderType.OPENAI_COMPAT, "local://$id", "local-model:$id")
 
@@ -110,7 +118,7 @@ class SettingsBackupPolicyTest {
 
     @Test fun olderBackupStillRejectsInvalidRemoteConnectionsAndVersions() {
         for (old in listOf(
-            SettingsBackupFile(version = 3, settings = AppSettings(), providers = listOf(BackupProvider(local("custom-import")))),
+            SettingsBackupFile(version = SettingsBackupFile.VERSION + 1, settings = AppSettings(), providers = listOf(BackupProvider(local("custom-import")))),
             SettingsBackupFile(settings = AppSettings(), providers = listOf(BackupProvider(api().copy(baseUrl = "file:///secret")))),
             SettingsBackupFile(settings = AppSettings(planningProviderId = "missing-api")),
             SettingsBackupFile(settings = AppSettings(), providers = listOf(BackupProvider(api("chatgpt:test-account")))),

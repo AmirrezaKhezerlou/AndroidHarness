@@ -36,6 +36,13 @@ internal object ChatActivityPresentation {
         return messages.any { it.role == Role.TOOL && it.toolCallId in rememberIds && !it.isError }
     }
 
+    fun memoryAction(messages: List<ChatMessage>): String {
+        val ids = calls(messages).filter { it.name == "remember" }.map { it.id }.toSet()
+        val actions = messages.filter { it.role == Role.TOOL && !it.isError && it.toolCallId in ids }
+            .map { Regex("\\[memory_action:(saved|updated|unchanged)]").find(it.text)?.groupValues?.get(1) ?: "saved" }
+        return when { "updated" in actions -> "updated"; "saved" in actions -> "saved"; else -> "unchanged" }
+    }
+
     fun savedMemoryIds(messages: List<ChatMessage>): Set<String> {
         val ids = calls(messages).filter { it.name == "remember" }.map { it.id }.toSet()
         return messages.filter { it.role == Role.TOOL && !it.isError && it.toolCallId in ids }

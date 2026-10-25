@@ -238,6 +238,13 @@ private val searchableSettingsEntries = SettingsPage.entries.map { page ->
 
 private val subSettingsEntries = listOfNotNull(
     SettingsSearchEntry(
+        R.string.chat_global_instructions,
+        R.string.chat_global_instructions_desc,
+        SettingsPage.CHAT_OPTIONS,
+        "global chat instructions custom personalization prompt default override replace",
+        anchor = R.string.chat_global_instructions,
+    ),
+    SettingsSearchEntry(
         R.string.settings_start_screen,
         R.string.settings_page_chat_options_desc,
         SettingsPage.CHAT_OPTIONS,

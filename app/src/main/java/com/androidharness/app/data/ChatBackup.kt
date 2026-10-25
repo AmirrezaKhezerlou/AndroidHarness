@@ -111,7 +111,7 @@ data class BackupMessage(
 /** Pure encode/decode plus file validation; no Android types, so JVM-testable. */
 object ChatBackupCodec {
     const val FORMAT = "androidharness-chats"
-    const val VERSION = 4
+    const val VERSION = 5
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 

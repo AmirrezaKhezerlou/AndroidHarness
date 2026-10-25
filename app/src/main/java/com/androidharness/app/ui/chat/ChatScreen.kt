@@ -489,7 +489,7 @@ private fun ChatScreenContent(
     var showUndoDialog by remember { mutableStateOf(false) }
     // Chosen checkpoint awaiting confirmation with a per-file preview.
     var confirmRewindTurn by remember { mutableStateOf<String?>(null) }
-    var showChatSettings by remember(state.sessionId) { mutableStateOf(false) }
+    var showChatSettings by rememberSaveable(viewModel) { mutableStateOf(false) }
     var showChatSources by remember(state.sessionId) { mutableStateOf(false) }
     var chatSources by remember(state.sessionId) {
         mutableStateOf<List<com.androidharness.app.core.ChatActivityPresentation.Source>?>(null)
@@ -565,13 +565,15 @@ private fun ChatScreenContent(
     if (showChatSettings) {
         com.androidharness.app.ui.chat.components.ChatSettingsSheet(
             instructions = state.conversation.instructions,
+            useGlobalInstructions = state.conversation.useGlobalInstructions,
+            globalInstructions = globalSettings.chatInstructions,
             personalization = state.conversation.personalizationEnabled,
             imageFrequency = state.conversation.imageFrequency,
             globalImageFrequency = globalSettings.chatImageFrequency,
             saving = state.conversationSaving,
-            onSave = { text, enabled, frequency ->
-                viewModel.setChatSettings(text, enabled, frequency)
-                showChatSettings = false
+            saveError = state.chatSettingsError,
+            onSave = { text, enabled, frequency, inherit ->
+                viewModel.setChatSettings(text, enabled, frequency, inherit, onSaved = { showChatSettings = false })
             },
             onDismiss = { showChatSettings = false },
         )
@@ -1296,6 +1298,16 @@ private fun ChatScreenContent(
                     pinnedToBottom = false
                 },
             )
+            if (state.conversation.isChat && state.conversationReady && !state.isLoadingMessages &&
+                state.messages.isEmpty() && !state.busy && state.streamingText == null) {
+                com.androidharness.app.ui.chat.components.ChatPersonalizationDropdown(
+                    personalized = state.conversation.personalizationEnabled,
+                    enabled = !state.conversationSaving,
+                    onSelect = { enabled ->
+                        viewModel.setChatSettings(state.conversation.instructions, enabled, state.conversation.imageFrequency)
+                    },
+                )
+            }
             if (findOpen) {
                 com.androidharness.app.ui.chat.components.FindInChatBar(
                     query = findQuery,
@@ -1524,11 +1536,6 @@ private fun ChatScreenContent(
                                         modifier = Modifier.fillParentMaxHeight(),
                                         hasProvider = state.activeProvider != null,
                                         chatOnly = state.conversation.isChat,
-                                        personalizationEnabled = state.conversation.personalizationEnabled,
-                                        personalizationChangeEnabled = state.conversationReady && !state.conversationSaving,
-                                        onPersonalizationChange = if (state.conversation.isChat && !state.busy) ({ enabled ->
-                                            viewModel.setChatSettings(state.conversation.instructions, enabled, state.conversation.imageFrequency)
-                                        }) else null,
                                         onSuggestion = { viewModel.send(it) },
                                         onAddProvider = { addProviderInitially = true; activeProviderManagerTarget = ModelSelectionTarget.ACTIVE },
                                     )

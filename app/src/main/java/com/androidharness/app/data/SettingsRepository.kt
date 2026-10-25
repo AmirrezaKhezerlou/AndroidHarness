@@ -118,12 +118,17 @@ data class AppSettings(
     val chatKeepThinkingCollapsed: Boolean = true,
     /** Default image appetite for chats that have not overridden it. */
     val chatImageFrequency: ImageFrequency = ImageFrequency.DEFAULT,
+    val chatInstructions: String = "",
     /** Code opens a fresh conversation unless the user asks to continue the latest one. */
     val codeStart: CodeStartMode = CodeStartMode.LAST_CODE,
     /** Web research effort for Chat turns. */
     val searchDepth: SearchDepth = SearchDepth.AUTO,
-    /** Universal memory shared by Chat and Code. */
+    /** Master switch for section memories and legacy project notes. */
     val memoryEnabled: Boolean = true,
+    val chatMemoryEnabled: Boolean = true,
+    val codeMemoryEnabled: Boolean = true,
+    val chatRecallCodeMemory: Boolean = false,
+    val codeRecallChatMemory: Boolean = false,
     /** Device-local section selection, including an empty Chat or Code draft. */
     val lastConversationKind: ConversationKind = ConversationKind.CODE,
     val showLiveCode: Boolean = true,
@@ -237,9 +242,14 @@ class SettingsRepository(private val context: Context) {
         val START_SCREEN = stringPreferencesKey("start_screen")
         val CHAT_KEEP_THINKING_COLLAPSED = booleanPreferencesKey("chat_keep_thinking_collapsed")
         val CHAT_IMAGE_FREQUENCY = stringPreferencesKey("chat_image_frequency")
+        val CHAT_INSTRUCTIONS = stringPreferencesKey("chat_instructions")
         val CHAT_START = stringPreferencesKey("chat_start")
         val CODE_START = stringPreferencesKey("code_start")
         val SEARCH_DEPTH = stringPreferencesKey("search_depth")
+        val CHAT_MEMORY_ENABLED = booleanPreferencesKey("chat_memory_enabled")
+        val CODE_MEMORY_ENABLED = booleanPreferencesKey("code_memory_enabled")
+        val CHAT_RECALL_CODE_MEMORY = booleanPreferencesKey("chat_recall_code_memory")
+        val CODE_RECALL_CHAT_MEMORY = booleanPreferencesKey("code_recall_chat_memory")
         val MEMORY_ENABLED = booleanPreferencesKey("memory_enabled")
         val LAST_CONVERSATION_KIND = stringPreferencesKey("last_conversation_kind")
         val SHOW_LIVE_CODE = booleanPreferencesKey("show_live_code")
@@ -319,12 +329,17 @@ class SettingsRepository(private val context: Context) {
             startScreen = StartScreen.fromStored(prefs[Keys.START_SCREEN]),
             chatStart = ChatStartMode.fromStored(prefs[Keys.CHAT_START]),
             chatKeepThinkingCollapsed = prefs[Keys.CHAT_KEEP_THINKING_COLLAPSED] ?: true,
+            chatInstructions = prefs[Keys.CHAT_INSTRUCTIONS].orEmpty(),
             chatImageFrequency = prefs[Keys.CHAT_IMAGE_FREQUENCY]?.let {
                 runCatching { ImageFrequency.valueOf(it) }.getOrNull()
             } ?: ImageFrequency.DEFAULT,
             codeStart = prefs[Keys.CODE_START]?.let { CodeStartMode.fromStored(it) }
                 ?: if (prefs[Keys.RESUME_LAST_CHAT] ?: true) CodeStartMode.LAST_CODE else CodeStartMode.NEW_CODE,
             searchDepth = SearchDepth.fromStored(prefs[Keys.SEARCH_DEPTH]),
+            chatMemoryEnabled = prefs[Keys.CHAT_MEMORY_ENABLED] ?: true,
+            codeMemoryEnabled = prefs[Keys.CODE_MEMORY_ENABLED] ?: true,
+            chatRecallCodeMemory = prefs[Keys.CHAT_RECALL_CODE_MEMORY] ?: false,
+            codeRecallChatMemory = prefs[Keys.CODE_RECALL_CHAT_MEMORY] ?: false,
             memoryEnabled = prefs[Keys.MEMORY_ENABLED] ?: true,
             lastConversationKind = ConversationKind.entries.firstOrNull { it.name == prefs[Keys.LAST_CONVERSATION_KIND] } ?: ConversationKind.CODE,
             showLiveCode = prefs[Keys.SHOW_LIVE_CODE] ?: true,
@@ -375,8 +390,13 @@ class SettingsRepository(private val context: Context) {
             p[Keys.CHAT_START] = s.chatStart.name
             p[Keys.CHAT_KEEP_THINKING_COLLAPSED] = s.chatKeepThinkingCollapsed
             p[Keys.CHAT_IMAGE_FREQUENCY] = s.chatImageFrequency.name
+            p[Keys.CHAT_INSTRUCTIONS] = s.chatInstructions.take(ConversationConfig.MAX_INSTRUCTIONS_CHARS)
             p[Keys.CODE_START] = s.codeStart.name
             p[Keys.SEARCH_DEPTH] = s.searchDepth.name
+            p[Keys.CHAT_MEMORY_ENABLED] = s.chatMemoryEnabled
+            p[Keys.CODE_MEMORY_ENABLED] = s.codeMemoryEnabled
+            p[Keys.CHAT_RECALL_CODE_MEMORY] = s.chatRecallCodeMemory
+            p[Keys.CODE_RECALL_CHAT_MEMORY] = s.codeRecallChatMemory
             p[Keys.MEMORY_ENABLED] = s.memoryEnabled
             p[Keys.SHOW_LIVE_CODE] = s.showLiveCode
             p[Keys.REPO_MAP_ENABLED] = s.repoMapEnabled
@@ -722,6 +742,10 @@ class SettingsRepository(private val context: Context) {
         context.settingsStore.edit { it[Keys.CHAT_IMAGE_FREQUENCY] = value.name }
     }
 
+    suspend fun setChatInstructions(value: String) {
+        context.settingsStore.edit { it[Keys.CHAT_INSTRUCTIONS] = value.trim().take(ConversationConfig.MAX_INSTRUCTIONS_CHARS) }
+    }
+
     suspend fun setChatStart(value: ChatStartMode) {
         context.settingsStore.edit { it[Keys.CHAT_START] = value.name }
     }
@@ -731,6 +755,14 @@ class SettingsRepository(private val context: Context) {
             it[Keys.CODE_START] = value.name
             it[Keys.RESUME_LAST_CHAT] = value == CodeStartMode.LAST_CODE
         }
+    }
+
+    suspend fun setSectionMemoryEnabled(section: MemorySection, enabled: Boolean) {
+        context.settingsStore.edit { it[if (section == MemorySection.CHAT) Keys.CHAT_MEMORY_ENABLED else Keys.CODE_MEMORY_ENABLED] = enabled }
+    }
+
+    suspend fun setCrossSectionMemory(section: MemorySection, enabled: Boolean) {
+        context.settingsStore.edit { it[if (section == MemorySection.CHAT) Keys.CHAT_RECALL_CODE_MEMORY else Keys.CODE_RECALL_CHAT_MEMORY] = enabled }
     }
 
     suspend fun setMemoryEnabled(enabled: Boolean) {

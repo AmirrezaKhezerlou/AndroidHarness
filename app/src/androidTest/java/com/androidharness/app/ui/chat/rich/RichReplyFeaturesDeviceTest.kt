@@ -198,6 +198,8 @@ class RichReplyFeaturesDeviceTest {
                         override fun streamChat(config: ProviderConfig, apiKey: String, systemPrompt: String, messages: List<ChatMessage>, tools: List<ToolSchema>, options: RequestOptions) = flow {
                             calls++
                             types.forEach { assertTrue("$kind knows $it", systemPrompt.contains("\"type\":\"$it\"")) }
+                            assertTrue("$kind receives answer layout guidance", systemPrompt.contains("Answer readability:"))
+                            assertTrue("$kind does not default to tables", systemPrompt.contains("tables are not the default answer format"))
                             ui(table).chunked(31).forEach { emit(StreamEvent.TextDelta(it)) }
                             emit(StreamEvent.Done("stop"))
                         }

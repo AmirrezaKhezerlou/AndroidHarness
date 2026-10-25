@@ -312,7 +312,8 @@ class ChatExperienceDeviceTest {
                                 streamingThinking = "A private reasoning detail", autoExpand = !prefs.chatKeepThinkingCollapsed)
                             com.androidharness.app.ui.settings.ChatOptionsSection(prefs, {}, {},
                                 onKeepThinkingCollapsed = { value -> runBlocking { c.settings.setChatKeepThinkingCollapsed(value) } },
-                                onImageFrequency = { value -> runBlocking { c.settings.setChatImageFrequency(value) } })
+                                onImageFrequency = { value -> runBlocking { c.settings.setChatImageFrequency(value) } },
+                                onInstructions = { c.settings.setChatInstructions(it) })
                         }
                     }
                 } } }

@@ -9,6 +9,14 @@ internal fun markdownColumnWidths(
 ): List<Int> {
     if (naturalWidths.isEmpty()) return emptyList()
     val widths = naturalWidths.map { it.coerceIn(minWidth, maxWidth) }
+    if (widths.size == 1) return listOf(viewportWidth.coerceAtLeast(minWidth))
+    // A label/value table should wrap within a phone instead of forcing a swipe.
+    if (widths.size == 2 && viewportWidth >= minWidth * 2 && widths.sum() > viewportWidth) {
+        val extra = viewportWidth - minWidth * 2
+        val weights = widths.map { it - minWidth }
+        val first = minWidth + (extra.toLong() * weights[0] / weights.sum()).toInt()
+        return listOf(first, viewportWidth - first)
+    }
     val extra = (viewportWidth - widths.sum()).coerceAtLeast(0)
     return widths.mapIndexed { index, width ->
         width + extra / widths.size + if (index < extra % widths.size) 1 else 0

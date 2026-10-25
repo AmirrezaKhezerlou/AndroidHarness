@@ -255,6 +255,7 @@ fun SettingsScreen(
                             onChatStart = { value -> scope.launch { container.settings.setChatStart(value) } },
                             onKeepThinkingCollapsed = { value -> scope.launch { container.settings.setChatKeepThinkingCollapsed(value) } },
                             onImageFrequency = { value -> scope.launch { container.settings.setChatImageFrequency(value) } },
+                            onInstructions = { container.settings.setChatInstructions(it) },
                         )
                         SettingsPage.MEMORY -> {
                             MemoryOptionsSection(

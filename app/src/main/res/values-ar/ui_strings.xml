@@ -1624,4 +1624,23 @@
     <string name="ui_close_image">"إغلاق الصورة"</string>
     <string name="ui_open_image">"فتح الصورة"</string>
     <string name="ui_image_not_available">"هذه الصورة لم تعد على الجهاز."</string>
+    <string name="ui_voice_gesture_hint">"اسحب لليسار للإلغاء · اسحب لأعلى للتثبيت"</string>
+    <string name="ui_voice_finish_hint">"اضغط إيقاف لتفريغ التسجيل"</string>
+    <string name="answer_table_swipe_hint">"اسحب جانبيًا لرؤية مزيد من الأعمدة"</string>
+    <plurals name="answer_table_columns">
+        <item quantity="zero">"لا أعمدة (%1$d)"</item>
+        <item quantity="one">"عمود واحد (%1$d)"</item>
+        <item quantity="two">"عمودان (%1$d)"</item>
+        <item quantity="few">"%1$d أعمدة"</item>
+        <item quantity="many">"%1$d عموداً"</item>
+        <item quantity="other">"%1$d عمود"</item>
+    </plurals>
+    <plurals name="answer_table_rows">
+        <item quantity="zero">"لا صفوف (%1$d)"</item>
+        <item quantity="one">"صف واحد (%1$d)"</item>
+        <item quantity="two">"صفان (%1$d)"</item>
+        <item quantity="few">"%1$d صفوف"</item>
+        <item quantity="many">"%1$d صفاً"</item>
+        <item quantity="other">"%1$d صف"</item>
+    </plurals>
 </resources>

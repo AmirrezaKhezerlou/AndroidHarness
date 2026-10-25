@@ -6,6 +6,28 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ConversationConfigTest {
+    @Test fun globalInstructionsAreInheritedUnlessReplacedAndAreExcludedFromCodeAndUnpersonalizedChat() {
+        val chat = ConversationConfig(ConversationKind.CHAT)
+        assertEquals("global", chat.effectiveInstructions("global"))
+        val custom = chat.copy(instructions = "local", useGlobalInstructions = false)
+        assertEquals("local", custom.effectiveInstructions("global"))
+        assertEquals("", custom.copy(instructions = "").effectiveInstructions("global"))
+        assertEquals("global", custom.copy(useGlobalInstructions = true).effectiveInstructions("global"))
+        assertEquals("", chat.copy(personalizationEnabled = false).effectiveInstructions("global"))
+        assertEquals("", custom.copy(personalizationEnabled = false).effectiveInstructions("global"))
+        assertEquals("", ConversationConfig().effectiveInstructions("global"))
+        assertEquals(custom, ConversationConfig.decode(ConversationConfig.encode(custom)))
+        assertEquals(chat, ConversationConfig.decode(ConversationConfig.encode(chat)))
+    }
+
+    @Test fun legacyChatInstructionsRemainReplacementsAndEmptyLegacyChatsInheritGlobalInstructions() {
+        val legacy = ConversationConfig.decode("""{"kind":"CHAT","instructions":"legacy custom"}""")
+        assertFalse(legacy.useGlobalInstructions)
+        assertEquals("legacy custom", legacy.effectiveInstructions("global"))
+        assertTrue(ConversationConfig.decode("""{"kind":"CHAT"}""").useGlobalInstructions)
+        assertEquals(ConversationConfig.MAX_INSTRUCTIONS_CHARS,
+            ConversationConfig(ConversationKind.CHAT).effectiveInstructions("x".repeat(5000)).length)
+    }
     @Test fun legacySessionsKeepCodeAndMalformedPreferencesDoNotUnlockCodeTools() {
         assertEquals(ConversationKind.CODE, ConversationConfig.decode(null).kind)
         assertNull(ConversationConfig.decode(null).allowedTools)

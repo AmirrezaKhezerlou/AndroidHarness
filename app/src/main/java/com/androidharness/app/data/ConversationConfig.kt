@@ -24,14 +24,20 @@ data class ConversationConfig(
     val selectedTools: Set<ChatTool> = setOf(ChatTool.WEB_SEARCH, ChatTool.WEB_PAGES),
     val sourceChatId: String? = null,
     val draftText: String = "",
-    /** Per-chat guidance appended to the Chat system prompt. */
+    /** Per-chat replacement for global Chat instructions. */
     val instructions: String = "",
     /** Off means no saved memory, no memory tools, and no chat instructions. */
     val personalizationEnabled: Boolean = true,
     /** Per-chat image appetite; the assistant decides the exact count. */
     val imageFrequency: ImageFrequency = ImageFrequency.DEFAULT,
+    /** Old nonempty per-chat instructions remain overrides; other chats inherit the app setting. */
+    val useGlobalInstructions: Boolean = instructions.isBlank(),
 ) {
     val isChat: Boolean get() = kind == ConversationKind.CHAT
+
+    fun effectiveInstructions(global: String): String =
+        if (!isChat || !personalizationEnabled) "" else
+            (if (useGlobalInstructions) global else instructions).trim().take(MAX_INSTRUCTIONS_CHARS)
 
     /** Legacy toggle fields remain readable in backups; Chat now has a fixed conversation-only tool set. */
     val allowedTools: Set<String>? get() = if (!isChat) null else com.androidharness.app.core.ChatExperience.tools

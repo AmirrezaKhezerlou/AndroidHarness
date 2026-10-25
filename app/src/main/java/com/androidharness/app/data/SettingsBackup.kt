@@ -25,8 +25,8 @@ data class SettingsBackupFile(
     val memories: List<BackupMemory> = emptyList(),
 ) {
     companion object {
-        /** v1 carried only settings and connections; v2 adds saved memories. */
-        const val VERSION = 2
+        /** v3 preserves section ownership and restorable consolidation metadata. */
+        const val VERSION = 3
     }
 }
 
@@ -158,8 +158,9 @@ object SettingsBackupValidation {
         val categories = MemoryCategory.entries.mapTo(mutableSetOf()) { it.name }
         file.memories.forEach { memory ->
             check(memory.id.isNotBlank() && memory.id.length <= 200, SettingsBackupProblem.MEMORY)
-            check(memory.text.isNotBlank() && memory.text.length <= MemoryText.MAX_ENTRY_CHARS, SettingsBackupProblem.MEMORY)
-            check(memory.category in categories && memory.scope in scopes, SettingsBackupProblem.MEMORY)
+            check(memory.text.isNotBlank() && memory.text.length <= if (memory.isSummary) MemoryConsolidation.MAX_CHARS else MemoryText.MAX_ENTRY_CHARS, SettingsBackupProblem.MEMORY)
+            check(memory.category in categories && memory.scope in scopes && memory.section in MemorySection.entries.map { it.name }, SettingsBackupProblem.MEMORY)
+            check((memory.consolidatedInto?.length ?: 0) <= 200 && memory.consolidatedInto != memory.id, SettingsBackupProblem.MEMORY)
             check(memory.scope != MemoryScope.PROJECT.name || !memory.projectId.isNullOrBlank(), SettingsBackupProblem.MEMORY)
             check((memory.projectId?.length ?: 0) <= 500 && (memory.sourceSessionId?.length ?: 0) <= 200, SettingsBackupProblem.MEMORY)
             check(memory.useCount >= 0, SettingsBackupProblem.MEMORY)
