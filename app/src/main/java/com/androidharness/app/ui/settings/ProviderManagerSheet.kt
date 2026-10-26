@@ -60,6 +60,8 @@ fun ProviderManagerSheet(
     catalogs: Map<String, List<ModelEntry>> = emptyMap(),
     onRefreshCatalog: suspend (String) -> String? = { "Open model selection to refresh this provider." },
     addProviderInitially: Boolean = false,
+    onControls: ((ProviderConfig) -> Unit)? = null,
+    onGlobalProxy: (() -> Unit)? = null,
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -92,6 +94,7 @@ fun ProviderManagerSheet(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         item {
+                        onGlobalProxy?.let { open -> TextButton(onClick = open) { Text(stringResource(R.string.provider_global_proxy_action)) } }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(stringResource(R.string.settings_providers_title), style = MaterialTheme.typography.titleMediumEmphasized, modifier = Modifier.weight(1f))
                                 TextButton(enabled = !selection.busy, onClick = {
@@ -120,6 +123,7 @@ fun ProviderManagerSheet(
                                 onEnabledChange = { enabled -> scope.launch { onEnabledChange(provider.id, enabled) } },
                                 onMove = { onMove(provider.id, it, visibleIds) },
                                 onEdit = { editing = provider; showForm = true },
+                                onControls = if (com.androidharness.app.local.LocalModelCatalog.isLocal(provider.id)) null else onControls?.let { controls -> { controls(provider) } },
                                 onDelete = { selection.requestDelete(listOf(provider.id)) },
                                 onBrowseModels = { manageModelsFor = provider.id },
                                 catalogSize = ProviderModelSearch.models(provider, catalogs[provider.id].orEmpty()).size,

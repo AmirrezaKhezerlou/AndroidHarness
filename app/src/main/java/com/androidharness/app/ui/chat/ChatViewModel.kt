@@ -2007,17 +2007,20 @@ class ChatViewModel(
         headers: List<com.androidharness.app.llm.ProviderHeader>,
     ) {
         viewModelScope.launch {
-            if (existing == null) {
-                val created = c.providers.add(name, type, baseUrl, model, apiKey, headers)
-                // Adding a provider switches to it on its own default model; a
-                // stale model override from the previous one must not survive.
-                c.chatModels.select(ensureSession(), com.androidharness.app.data.ChatModelTarget.ACTIVE, created.id, null)
-            } else {
-                c.providers.update(
-                    existing.copy(name = name, type = type, baseUrl = baseUrl, model = model, headers = headers),
-                    apiKey,
-                )
-            }
+            try {
+                if (existing == null) {
+                    val created = c.providers.add(name, type, baseUrl, model, apiKey, headers)
+                    // Adding a provider switches to it on its own default model; a
+                    // stale model override from the previous one must not survive.
+                    c.chatModels.select(ensureSession(), com.androidharness.app.data.ChatModelTarget.ACTIVE, created.id, null)
+                } else {
+                    c.providers.update(
+                        existing.copy(name = name, type = type, baseUrl = baseUrl, model = model, headers = headers),
+                        apiKey,
+                    )
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { _state.update { it.copy(error = c.appContext.getString(R.string.provider_save_failed)) } }
         }
     }
 

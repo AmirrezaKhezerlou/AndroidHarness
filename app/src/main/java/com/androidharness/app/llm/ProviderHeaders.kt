@@ -48,7 +48,9 @@ object ProviderHeaders {
     }
 
     /** Custom headers can contain credentials; never forward them through a redirect. */
-    fun client(config: ProviderConfig, client: OkHttpClient): OkHttpClient =
-        if (editable(config) && config.headers.any { it.enabled }) client.newBuilder()
-            .followRedirects(false).followSslRedirects(false).build() else client
+    fun client(config: ProviderConfig, client: OkHttpClient): OkHttpClient {
+        val routed = ProviderNetwork.client(client, config.id)
+        return if (editable(config) && config.headers.any { it.enabled }) routed.newBuilder()
+            .followRedirects(false).followSslRedirects(false).build() else routed
+    }
 }

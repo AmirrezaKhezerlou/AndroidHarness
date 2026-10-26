@@ -124,7 +124,17 @@ class ProviderRepository(
             automaticCatalogChecks[connection] = now
             val key = if (providerId == HarnessProvider.ID) harnessApiKey()
                 else provider.effectiveApiKey(apiKey(providerId))
-            val result = try { ModelCatalog.listModels(provider, key) }
+            val pool = if (com.androidharness.app.llm.ProviderHeaders.editable(provider)) keys.providerKeyPool(providerId) else null
+            if (pool?.keys?.isNotEmpty() == true && pool.keys.none { it.enabled }) return@withLock "Enable an API key in connection controls."
+            val candidates = pool?.let { com.androidharness.app.llm.RotatingKeyProvider.orderedKeys(providerId, it).map { entry -> entry.value } }.orEmpty().ifEmpty { listOf(key) }
+            val result = try {
+                var response: ModelCatalog.Result = ModelCatalog.Result.Failed("Provider unavailable")
+                for (candidate in candidates) {
+                    response = ModelCatalog.listModels(provider, candidate)
+                    if (response !is ModelCatalog.Result.Failed || response.status !in setOf(401, 402, 403, 429)) break
+                }
+                response
+            }
             catch (e: kotlinx.coroutines.CancellationException) {
                 automaticCatalogChecks.remove(connection)
                 throw e
@@ -252,10 +262,34 @@ class ProviderRepository(
         }
         val headers = com.androidharness.app.llm.ProviderHeaders.normalized(config.headers)
         if (apiKey != null) {
-            if (apiKey.isBlank()) keys.removeKey(config.id) else keys.putKey(config.id, apiKey)
+            keys.putKey(config.id, apiKey)
         }
         keys.putProviderHeaders(config.id, headers)
         save(current().map { if (it.id == config.id) config else it })
+    }
+
+    suspend fun controls(config: ProviderConfig): com.androidharness.app.llm.ProviderKeyPool? {
+        if (!com.androidharness.app.llm.ProviderHeaders.editable(config)) return null
+        val live = current().firstOrNull { it.id == config.id } ?: return null
+        check(live.type == config.type && live.baseUrl.trimEnd('/') == config.baseUrl.trimEnd('/')) {
+            "Provider connection changed. Choose its model again before continuing."
+        }
+        return keys.providerKeyPool(config.id)
+    }
+
+    suspend fun saveGlobalProxy(proxy: com.androidharness.app.llm.ProviderProxy) {
+        keys.putGlobalProviderProxy(proxy)
+        automaticCatalogChecks.clear()
+        context.providerStore.edit { it[headersRevision] = (it[headersRevision] ?: 0L) + 1L }
+    }
+
+    suspend fun saveControls(config: ProviderConfig, pool: com.androidharness.app.llm.ProviderKeyPool?, proxy: com.androidharness.app.llm.ProviderProxy) {
+        val live = current().firstOrNull { it.id == config.id }
+        check(live != null && live.type == config.type && live.baseUrl == config.baseUrl) { "Provider connection changed. Reopen its controls." }
+        check(!com.androidharness.app.local.LocalModelCatalog.isLocal(config.id)) { "On-device models do not use provider controls." }
+        keys.putProviderControls(config.id, if (com.androidharness.app.llm.ProviderHeaders.editable(config)) pool else null, proxy)
+        automaticCatalogChecks.keys.removeIf { it.id == config.id }
+        context.providerStore.edit { it[headersRevision] = (it[headersRevision] ?: 0L) + 1L }
     }
 
     suspend fun delete(id: String) {

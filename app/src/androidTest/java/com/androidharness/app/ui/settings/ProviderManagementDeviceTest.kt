@@ -135,7 +135,7 @@ class ProviderManagementDeviceTest {
                 screenshot("provider-inline-headers")
                 assertVisibleWithinWindow("Continue")
                 tap("Continue")
-                await { find("Choose a model") != null }
+                await { find(c.appContext.getString(com.androidharness.app.R.string.settings_provider_choose_model_title)) != null }
                 tap("Save")
                 await { saved.get() != null && observed.get()?.headers?.firstOrNull()?.value == "edited-fixture-header" }
             }
@@ -157,7 +157,7 @@ class ProviderManagementDeviceTest {
                 scrollTo("Show header 1 value"); tap("Show header 1 value")
                 await { find("edited-fixture-header") != null }
                 tap("Remove header 2"); tap("Remove header 1")
-                tap("Continue"); await { find("Choose a model") != null }; tap("Save")
+                tap("Continue"); await { find(c.appContext.getString(com.androidharness.app.R.string.settings_provider_choose_model_title)) != null }; tap("Save")
                 await { saved.get() != null && observed.get()?.headers?.isEmpty() == true }
             }
             assertTrue(KeyStoreManager(c.appContext).providerHeaders(provider.id).isEmpty())

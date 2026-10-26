@@ -184,7 +184,7 @@ class ChatGptAccounts(
         // Check the session again before publishing, so logout cannot resurrect access.
         val token = accessToken(providerId)
         val request = Request.Builder().url(ChatGptProtocol.RESOURCE + "/models").header("Authorization", "Bearer $token").build()
-        val models = execute(request).use {
+        val models = execute(request, providerId).use {
             if (!it.isSuccessful) throw IOException(ChatGptProtocol.requestError(errorCode(it.body?.string()), it.code))
             ChatGptProtocol.models(it.body?.string() ?: error("ChatGPT returned an empty model list."))
         }
@@ -259,13 +259,13 @@ class ChatGptAccounts(
                 var revoked = account.refreshToken == null
                 if (!revoked) {
                     try {
-                        val endpoint = discovery()["revocation_endpoint"]?.jsonPrimitive?.content ?: error("Missing revocation endpoint.")
+                        val endpoint = discovery(providerId)["revocation_endpoint"]?.jsonPrimitive?.content ?: error("Missing revocation endpoint.")
                         trustedAuthUrl(endpoint)
                         val request = Request.Builder().url(endpoint).post(FormBody.Builder()
                             .add("token", account.refreshToken!!).add("token_type_hint", "refresh_token").add("client_id", account.clientId).build()).build()
                         repeat(2) { attempt ->
                             if (!revoked) {
-                                revoked = try { execute(request).use { it.code == 200 } }
+                                revoked = try { execute(request, providerId).use { it.code == 200 } }
                                     catch (e: CancellationException) { throw e } catch (_: IOException) { false }
                                 if (!revoked && attempt == 0) delay(1000)
                             }
@@ -280,7 +280,7 @@ class ChatGptAccounts(
     private fun ChatGptRegistration.withoutTokens() = copy(accessToken = null, refreshToken = null, idToken = null,
         expiresAt = 0, earliestRefreshAt = 0, scopes = emptySet(), models = emptyList(), verifiedModels = emptyList())
 
-    private suspend fun discovery(): JsonObject = getJson(ChatGptProtocol.DISCOVERY).also {
+    private suspend fun discovery(providerId: String? = null): JsonObject = getJson(ChatGptProtocol.DISCOVERY, providerId).also {
         require(it["issuer"]?.jsonPrimitive?.content == ChatGptProtocol.ISSUER) { "Unexpected ChatGPT authentication server." }
     }
 
@@ -289,9 +289,9 @@ class ChatGptAccounts(
         require(parsed.scheme == "https" && parsed.host == "auth.openai.com" && parsed.port == 443 && parsed.username.isEmpty() && parsed.password.isEmpty()) { "Unexpected ChatGPT authentication endpoint." }
     }
 
-    private suspend fun getJson(url: String): JsonObject {
+    private suspend fun getJson(url: String, providerId: String? = null): JsonObject {
         trustedAuthUrl(url)
-        return execute(Request.Builder().url(url).build()).use {
+        return execute(Request.Builder().url(url).build(), providerId).use {
             check(it.isSuccessful) { "Could not verify ChatGPT sign-in. Please try again." }
             json.parseToJsonElement(it.body?.string() ?: error("Empty authentication response.")).jsonObject
         }
@@ -300,8 +300,8 @@ class ChatGptAccounts(
     private suspend fun credentials(previous: ChatGptRegistration, token: JsonObject, nonce: String?): ChatGptRegistration {
         val idToken = token["id_token"]?.jsonPrimitive?.contentOrNull
         val identity = if (idToken != null) {
-            val jwksUrl = discovery()["jwks_uri"]?.jsonPrimitive?.content ?: error("Missing identity signing keys.")
-            ChatGptProtocol.validateIdToken(idToken, getJson(jwksUrl), previous.clientId, nonce, System.currentTimeMillis() / 1000)
+            val jwksUrl = discovery(ChatGptProtocol.providerId(previous.clientId))["jwks_uri"]?.jsonPrimitive?.content ?: error("Missing identity signing keys.")
+            ChatGptProtocol.validateIdToken(idToken, getJson(jwksUrl, ChatGptProtocol.providerId(previous.clientId)), previous.clientId, nonce, System.currentTimeMillis() / 1000)
         } else {
             check(nonce == null && previous.subject != null && previous.issuer != null) { "ChatGPT did not return a verified identity." }
             ChatGptProtocol.Identity(previous.issuer, previous.subject, previous.email)
@@ -320,14 +320,15 @@ class ChatGptAccounts(
             earliestRefreshAt = token["earliest_refresh_at"]?.jsonPrimitive?.longOrNull ?: 0, scopes = granted)
     }
 
-    private suspend fun tokenRequest(body: FormBody): JsonObject = execute(Request.Builder().url(ChatGptProtocol.TOKEN).post(body).build()).use {
+    private suspend fun tokenRequest(body: FormBody): JsonObject = execute(Request.Builder().url(ChatGptProtocol.TOKEN).post(body).build(),
+        (0 until body.size).firstOrNull { body.name(it) == "client_id" }?.let { ChatGptProtocol.providerId(body.value(it)) }).use {
         val text = it.body?.string().orEmpty()
         if (!it.isSuccessful) throw OAuthException(errorCode(text), it.code)
         json.parseToJsonElement(text).jsonObject
     }
 
-    private suspend fun execute(request: Request): Response = suspendCancellableCoroutine { continuation ->
-        val call = http.newCall(request)
+    private suspend fun execute(request: Request, providerId: String? = null): Response = suspendCancellableCoroutine { continuation ->
+        val call = com.androidharness.app.llm.ProviderNetwork.client(http, providerId).newCall(request)
         continuation.invokeOnCancellation { call.cancel() }
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {

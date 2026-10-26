@@ -60,6 +60,7 @@ class AppContainer(val appContext: Context) {
     val pendingSettingsScroll = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 
     val keys = KeyStoreManager(appContext)
+    init { com.androidharness.app.llm.ProviderNetwork.settings = keys::providerProxy }
     val settings = SettingsRepository(appContext)
     /** Reads assistant replies with Android TTS or Groq PlayAI. */
     val tts = com.androidharness.app.data.audio.TtsController(appContext, settings, keys)
@@ -82,6 +83,7 @@ class AppContainer(val appContext: Context) {
     val providers: ProviderRepository = ProviderRepository(appContext, keys, localModels, chatGpt, settings)
 
     init {
+        com.androidharness.app.llm.RotatingKeyProvider.pools = providers::controls
         ProviderFactory.chatGptProvider = com.androidharness.app.chatgpt.ChatGptProvider(chatGpt::accessToken,
             modelEntry = { id, model -> chatGpt.state.value.accounts.firstOrNull { it.providerId == id }?.models?.firstOrNull { it.id == model } })
         com.androidharness.app.llm.ModelCatalog.chatGptModels = { chatGpt.refreshModels(it) }

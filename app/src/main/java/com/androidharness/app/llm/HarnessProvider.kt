@@ -140,7 +140,7 @@ object HarnessProvider {
             .post(body.toRequestBody("application/json".toMediaType()))
         withSession(builder, sessionId)
         if (key != null) builder.header("Authorization", "Bearer $key")
-        probeClient.newCall(builder.build()).execute().use { resp ->
+        ProviderNetwork.client(probeClient, ID).newCall(builder.build()).execute().use { resp ->
             val text = resp.body?.string()
             resp.isSuccessful && text != null && !looksAnthropicError(text)
         }

@@ -253,11 +253,12 @@ private fun ChatScreenContent(
     }
     var activeModelPickerTarget by remember { mutableStateOf<ModelSelectionTarget?>(null) }
     var activeProviderManagerTarget by remember { mutableStateOf<ModelSelectionTarget?>(null) }
+    var providerControlRoute by remember { mutableStateOf<Pair<com.androidharness.app.llm.ProviderConfig?, ModelSelectionTarget>?>(null) }
     var addProviderInitially by remember { mutableStateOf(false) }
     var showFallbacks by rememberSaveable { mutableStateOf(false) }
     var fallbackProviderId by rememberSaveable { mutableStateOf<String?>(null) }
     val showModelPicker = activeModelPickerTarget != null
-    val showProviderManager = activeProviderManagerTarget != null
+    val showProviderManager = activeProviderManagerTarget != null || providerControlRoute != null
     var showWebPreview by remember { mutableStateOf(false) }
     var webPreviewUrl by remember { mutableStateOf<String?>(null) }
     val imageSources = remember(state.messages) {
@@ -717,8 +718,15 @@ private fun ChatScreenContent(
             onDismiss = viewModel::dismissEnvSheet,
         )
     }
+    providerControlRoute?.let { route ->
+        com.androidharness.app.ui.settings.ProviderControlsSheet(viewModel.container, route.first) {
+            providerControlRoute = null; activeProviderManagerTarget = route.second
+        }
+    }
     activeProviderManagerTarget?.let { target ->
         ProviderManagerSheet(
+            onControls = { config -> activeProviderManagerTarget = null; providerControlRoute = config to target },
+            onGlobalProxy = { activeProviderManagerTarget = null; providerControlRoute = null to target },
             providers = state.providers,
             addProviderInitially = addProviderInitially,
             activeProviderId = state.selectedProviderIdFor(target) ?: state.activeProviderId,

@@ -8,6 +8,33 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class SettingsBackupValidationTest {
+    @Test fun providerControlsRoundTripAndInvalidControlsBlockRestore() {
+        val json = kotlinx.serialization.json.Json { encodeDefaults = true }
+        val pool = com.androidharness.app.llm.ProviderKeyPool(listOf(
+            com.androidharness.app.llm.ProviderApiKey("a", "Primary", "key-one"),
+            com.androidharness.app.llm.ProviderApiKey("b", "Spare", "key-two", false)), rotate = false)
+        val proxy = com.androidharness.app.llm.ProviderProxy(com.androidharness.app.llm.ProviderProxyMode.CUSTOM,
+            host = "proxy.example", port = 3128, username = "user", password = "proxy-secret")
+        val entry = BackupProvider(provider().config, keyPool = pool, proxy = proxy)
+        val original = SettingsBackupFile(settings = AppSettings(), providers = listOf(entry), providerProxy = proxy)
+        val restored = json.decodeFromString(SettingsBackupFile.serializer(), json.encodeToString(SettingsBackupFile.serializer(), original))
+        SettingsBackupValidation.validate(restored)
+        assertEquals(pool, restored.providers.single().keyPool)
+        assertEquals(proxy, restored.providers.single().proxy)
+        assertEquals(proxy, restored.providerProxy)
+        for (invalid in listOf(
+            original.copy(providerProxy = proxy.copy(port = 0)),
+            original.copy(providers = listOf(BackupProvider(entry.config, proxy = proxy.copy(host = "https://proxy.example")))),
+            original.copy(providers = listOf(BackupProvider(entry.config, keyPool = pool.copy(keys = pool.keys + pool.keys.first())))))
+        ) {
+            val error = assertThrows(SettingsBackupValidationException::class.java) { SettingsBackupValidation.validate(invalid) }
+            org.junit.Assert.assertFalse(settingsBackupExportError(error).contains("proxy-secret"))
+        }
+        val old = json.decodeFromString(SettingsBackupFile.serializer(), """{"version":3,"settings":{}}""")
+        SettingsBackupValidation.validate(old)
+        assertEquals(com.androidharness.app.llm.ProviderProxy(), old.providerProxy)
+    }
+
     private fun provider(id: String = "test", url: String = "https://example.com/v1") =
         BackupProvider(ProviderConfig(id, "Test", ProviderType.OPENAI_COMPAT, url, "model"))
 
@@ -42,7 +69,7 @@ class SettingsBackupValidationTest {
         val restored = json.decodeFromString(SettingsBackupFile.serializer(), json.encodeToString(SettingsBackupFile.serializer(), file))
         SettingsBackupValidation.validate(restored)
         assertEquals(file.memories, restored.memories)
-        assertEquals(3, SettingsBackupFile.VERSION)
+        assertEquals(4, SettingsBackupFile.VERSION)
     }
 
     @Test fun invalidMemoriesRejected() {

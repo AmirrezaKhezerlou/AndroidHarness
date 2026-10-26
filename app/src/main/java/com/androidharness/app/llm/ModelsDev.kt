@@ -219,7 +219,7 @@ object ModelsDev {
                 System.currentTimeMillis() - file.lastModified() < STALE_MS
             ) return@withContext null
             try {
-                client.newCall(Request.Builder().url(API_URL).build()).execute().use { resp ->
+                ProviderNetwork.client(client, null).newCall(Request.Builder().url(API_URL).build()).execute().use { resp ->
                     if (!resp.isSuccessful) return@withContext "HTTP ${resp.code}"
                     val body = resp.body?.string() ?: return@withContext "Empty response"
                     val parsed = parse(body)

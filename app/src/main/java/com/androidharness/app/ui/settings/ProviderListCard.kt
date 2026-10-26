@@ -9,6 +9,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
+import com.androidharness.app.ui.common.ExpressiveDropdownMenu as DropdownMenu
+import com.androidharness.app.ui.common.ExpressiveDropdownMenuItem as DropdownMenuItem
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +37,7 @@ internal fun ProviderListCard(
     catalogSize: Int? = null, selectedModelCount: Int? = null,
     selectionMode: Boolean = false, selected: Boolean = false,
     onToggleSelection: () -> Unit = {}, onLongPress: () -> Unit = {},
+    onControls: (() -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     var menu by remember { mutableStateOf(false) }
@@ -86,6 +89,7 @@ internal fun ProviderListCard(
                         DropdownMenuItem(text = { Text(stringResource(R.string.settings_provider_select)) }, onClick = { menu = false; onLongPress() })
                         DropdownMenuItem(text = { Text(stringResource(R.string.settings_action_move_up)) }, enabled = canMoveUp, onClick = { menu = false; onMove(-1) })
                         DropdownMenuItem(text = { Text(stringResource(R.string.settings_action_move_down)) }, enabled = canMoveDown, onClick = { menu = false; onMove(1) })
+                        onControls?.let { controls -> DropdownMenuItem(text = { Text(stringResource(R.string.provider_controls_title)) }, onClick = { menu = false; controls() }) }
                         if (editable) {
                             DropdownMenuItem(text = { Text(stringResource(R.string.settings_action_edit)) }, onClick = { menu = false; onEdit() })
                             DropdownMenuItem(text = { Text(stringResource(R.string.settings_action_delete), color = scheme.error) }, onClick = { menu = false; onDelete() })

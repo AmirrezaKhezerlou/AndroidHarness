@@ -215,7 +215,7 @@ object ProviderFactory {
         com.androidharness.app.local.LocalModelCatalog.isLocal(config.id) || config.baseUrl.startsWith("local://") ->
             checkNotNull(localProvider) { "Local inference is not initialized." }
         config.id == HarnessProvider.ID -> HarnessProvider.create()
-        else -> create(config.type)
+        else -> RotatingKeyProvider.wrap(config, create(config.type))
     }
 
     fun create(type: ProviderType): LlmProvider = when (type) {
