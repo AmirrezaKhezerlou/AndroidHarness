@@ -80,6 +80,7 @@ data class MemoryConsolidation(
             if (facts.isEmpty()) null else when (category) {
                 MemoryCategory.PROFILE -> "Profile"; MemoryCategory.PREFERENCE -> "Preferences"
                 MemoryCategory.FACT -> "Facts"; MemoryCategory.DECISION -> "Decisions"; MemoryCategory.PROJECT -> "Project"
+                MemoryCategory.GOAL -> "Goals"
             } + ":\n" +
                 facts.joinToString("\n") { "• ${it.text}" }
         }.joinToString("\n\n")

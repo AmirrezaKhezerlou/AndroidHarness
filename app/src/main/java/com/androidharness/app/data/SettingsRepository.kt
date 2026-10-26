@@ -26,6 +26,8 @@ enum class ProgressBarStyle { FLAT, SQUIGGLY }
 data class AppSettings(
     val permissionMode: PermissionMode = PermissionMode.CONFIRM_RISKY,
     val subagentFullAccess: Boolean = false,
+    val backgroundSubagents: Boolean = false,
+    val subagentCompletionNotifications: Boolean = true,
     val subagentProviderId: String? = null,
     val subagentModel: String? = null,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
@@ -188,6 +190,8 @@ class SettingsRepository(private val context: Context) {
     private object Keys {
         val PERMISSION_MODE = stringPreferencesKey("permission_mode")
         val SUBAGENT_FULL_ACCESS = booleanPreferencesKey("subagent_full_access")
+        val BACKGROUND_SUBAGENTS = booleanPreferencesKey("background_subagents")
+        val SUBAGENT_COMPLETION_NOTIFICATIONS = booleanPreferencesKey("subagent_completion_notifications")
         val SUBAGENT_PROVIDER = stringPreferencesKey("subagent_provider_id")
         val SUBAGENT_MODEL = stringPreferencesKey("subagent_model")
         val THEME_MODE = stringPreferencesKey("theme_mode")
@@ -277,6 +281,8 @@ class SettingsRepository(private val context: Context) {
                 ?.let { runCatching { PermissionMode.valueOf(it) }.getOrNull() }
                 ?: PermissionMode.CONFIRM_RISKY,
             subagentFullAccess = prefs[Keys.SUBAGENT_FULL_ACCESS] ?: false,
+            backgroundSubagents = prefs[Keys.BACKGROUND_SUBAGENTS] ?: false,
+            subagentCompletionNotifications = prefs[Keys.SUBAGENT_COMPLETION_NOTIFICATIONS] ?: true,
             themeMode = prefs[Keys.THEME_MODE]
                 ?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
                 ?: ThemeMode.SYSTEM,
@@ -385,6 +391,8 @@ class SettingsRepository(private val context: Context) {
             p[Keys.KEEP_ALIVE] = s.keepAlive
             p[Keys.LIVE_UPDATES_ENABLED] = s.liveUpdatesEnabled
             p[Keys.SUBAGENT_FULL_ACCESS] = s.subagentFullAccess
+            p[Keys.BACKGROUND_SUBAGENTS] = s.backgroundSubagents
+            p[Keys.SUBAGENT_COMPLETION_NOTIFICATIONS] = s.subagentCompletionNotifications
             p[Keys.DISABLED_SKILLS] = s.disabledSkills
             p[Keys.WEB_SEARCH_PROVIDER] = s.webSearchProvider
             p[Keys.VOICE_ENGINE] = s.voiceEngine
@@ -451,6 +459,14 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setSubagentFullAccess(enabled: Boolean) {
         context.settingsStore.edit { it[Keys.SUBAGENT_FULL_ACCESS] = enabled }
+    }
+
+    suspend fun setBackgroundSubagents(enabled: Boolean) {
+        context.settingsStore.edit { it[Keys.BACKGROUND_SUBAGENTS] = enabled }
+    }
+
+    suspend fun setSubagentCompletionNotifications(enabled: Boolean) {
+        context.settingsStore.edit { it[Keys.SUBAGENT_COMPLETION_NOTIFICATIONS] = enabled }
     }
 
     suspend fun setThemeMode(mode: ThemeMode) {

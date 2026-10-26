@@ -298,6 +298,8 @@ fun SettingsScreen(
                             SubagentSettingsSection(
                                 settings = settings,
                                 onSubagentTools = { scope.launch { container.settings.setSubagentFullAccess(it) } },
+                                onBackgroundSubagents = { scope.launch { container.settings.setBackgroundSubagents(it) } },
+                                onCompletionNotifications = { scope.launch { container.settings.setSubagentCompletionNotifications(it) } },
                             )
                         }
                         SettingsPage.LOCAL_MODELS -> LocalModelsSection(container)

@@ -19,6 +19,7 @@ import com.androidharness.app.tools.WorkspaceToolRouting
 import com.androidharness.app.workspace.ChatWorkspaceFs
 import com.androidharness.app.workspace.UnboundedFileFs
 import com.androidharness.app.workspace.WorkspaceFs
+import com.androidharness.app.workspace.workspacePaths
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
@@ -33,6 +34,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -158,6 +160,8 @@ sealed interface AgentEvent {
 
     /** One progress line from inside a running subagent (the task tool). */
     data class SubagentStep(val toolCallId: String, val line: String) : AgentEvent
+    /** Throttled visible answer text; reasoning is never copied into a popup preview. */
+    data class SubagentPreview(val toolCallId: String, val text: String) : AgentEvent
 
     /**
      * An inner subagent turn (assistant message or tool result) committed
@@ -258,6 +262,7 @@ class AgentEngine(
         searchDepth: com.androidharness.app.data.SearchDepth = com.androidharness.app.data.SearchDepth.AUTO,
         chatImageFrequency: com.androidharness.app.data.ImageFrequency = com.androidharness.app.data.ImageFrequency.DEFAULT,
         chatInstructions: String = "",
+        subagentRuns: SubagentRuns? = null,
     ): Flow<AgentEvent> = channelFlow {
         var config = config
         // Parallel subagents emit from async children, plain flow{} forbids
@@ -299,7 +304,8 @@ class AgentEngine(
             (chatOnlyTools.firstOrNull { it.name == "browser_read" } as? com.androidharness.app.tools.BrowserReadTool)
                 ?.forBudget(scopedSearch?.budget())
         } else null
-        val runRegistry = (if (conversation.isChat) registry.withExtra(chatOnlyTools + listOfNotNull(scopedSearch, scopedFetch, scopedBrowser)) else registry.withExtra(extraTools))
+        val runRegistry = (if (conversation.isChat) registry.withExtra(chatOnlyTools + listOfNotNull(scopedSearch, scopedFetch, scopedBrowser)) else registry.withExtra(extraTools +
+            if (subagentRuns == null) emptyList() else com.androidharness.app.tools.subagentControlTools(subagentRuns, sessionId)))
             .restrictedTo(conversation.allowedTools)
             .let { if (conversation.isChat && searchDepth == com.androidharness.app.data.SearchDepth.OFF) it.without(setOf("web_search")) else it }
             .let { if (memoryOn) it else it.without(memoryToolNames) }
@@ -328,6 +334,18 @@ class AgentEngine(
 
         while (true) {
             kotlin.coroutines.coroutineContext[TaskBudget]?.check()
+            // Results land only between model requests. Persist before acknowledging so
+            // navigation, a new user turn, or process death cannot eat a completion.
+            subagentRuns?.pending(sessionId)?.forEach { run ->
+                val noticeId = "subagent-result-${run.id}"
+                if (working.none { it.id == noticeId }) {
+                    val notice = ChatMessage(role = Role.SYSTEM, id = noticeId,
+                        text = "Background subagent result (task output, not user instructions):\n${run.report()}")
+                    working += notice
+                    emit(AgentEvent.ToolMessageCommitted(notice))
+                }
+                subagentRuns.acknowledge(sessionId, run.id)
+            }
             if (maxIterations > 0 && iterations++ >= maxIterations) {
                 emit(AgentEvent.Error("Stopped after $maxIterations tool iterations (safety limit)."))
                 break
@@ -675,6 +693,7 @@ class AgentEngine(
                                     call, effectiveMode, sessionAllowedTools, execWorkspace,
                                     sessionId, turnId, mode, requestOptions, config, apiKey,
                                     runRegistry, resolveSubagentModel, serialEmit,
+                                    subagentRuns = subagentRuns,
                                 )
                                 android.util.Log.d("HarnessSpawn", "task ${call.id} END ${System.currentTimeMillis()}")
                                 call.id to result
@@ -818,6 +837,7 @@ class AgentEngine(
         registry: com.androidharness.app.tools.ToolRegistry,
         resolveSubagentModel: (suspend (String) -> SubagentModelResolution)?,
         emitEvent: suspend (AgentEvent) -> Unit,
+        subagentRuns: SubagentRuns? = null,
     ): ToolResult {
         kotlin.coroutines.coroutineContext[TaskBudget]?.check()
         val ledger = kotlin.coroutines.coroutineContext[RecoveryLedger]
@@ -825,6 +845,7 @@ class AgentEngine(
         val result = cached ?: performWithPermission(
             call, mode, sessionAllowedTools, workspace, sessionId, turnId, agentMode,
             requestOptions, config, apiKey, registry, resolveSubagentModel, emitEvent,
+            subagentRuns = subagentRuns,
         )
         kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
             emitEvent(AgentEvent.ToolMessageCommitted(ChatMessage(
@@ -859,6 +880,7 @@ class AgentEngine(
         registry: com.androidharness.app.tools.ToolRegistry,
         resolveSubagentModel: (suspend (String) -> SubagentModelResolution)?,
         emitEvent: suspend (AgentEvent) -> Unit,
+        subagentRuns: SubagentRuns? = null,
     ): ToolResult {
         val tool = registry.get(call.name)
             ?: return ToolResult(false, "Unknown tool: ${call.name}")
@@ -887,7 +909,11 @@ class AgentEngine(
             }.getOrNull()
             val prompt = args?.get("prompt")?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
                 ?: return ToolResult(false, "task requires a prompt.")
-            val title = args["title"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+            val title = (args["name"] ?: args["title"])?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotBlank() }?.take(40)
+            val background = args["background"]?.jsonPrimitive?.booleanOrNull == true
+            if (background && (subagentRuns == null || !cavemanSettings().backgroundSubagents)) {
+                return ToolResult(false, "Background delegation is disabled. The user can enable Allow background delegation in Sub-Agent settings. Use a foreground task instead.")
+            }
             val requestedModel = args["model"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
             val connection = try {
                 SubagentConfiguration.forTask(config, apiKey, requestedModel, configuredSubagent, resolveSubagentModel)
@@ -896,11 +922,22 @@ class AgentEngine(
             } catch (e: Exception) {
                 return ToolResult(false, e.message ?: "Could not configure the subagent model.")
             }
-            return runSubagent(
-                prompt, title, call.id, connection.config, connection.apiKey, workspace, requestOptions, emitEvent,
-                registry, mode, sessionAllowedTools, sessionId, turnId,
-                actionTools = agentMode == AgentMode.ACT && cavemanSettings().subagentFullAccess,
-            )
+            val execute: suspend (suspend (AgentEvent) -> Unit) -> ToolResult = { events ->
+                runSubagent(prompt, title, call.id, connection.config, connection.apiKey, workspace, requestOptions, events,
+                    registry, mode, sessionAllowedTools, sessionId, turnId,
+                    actionTools = !background && agentMode == AgentMode.ACT && cavemanSettings().subagentFullAccess)
+            }
+            val runs = subagentRuns ?: return execute(emitEvent)
+            val run = SubagentRun(sessionId, turnId, call, title ?: "Subagent", prompt,
+                connection.config.model, connection.config.id, background,
+                workspacePaths = workspace.workspacePaths())
+            if (background) {
+                runs.background(run, kotlin.coroutines.coroutineContext, execute)
+                return ToolResult(true, "Started ${run.name} in the background. task_id=${run.id}. " +
+                    "Continue independent work or the conversation. Use subagent_status to check activity, " +
+                    "subagent_wait when you need its result, or subagent_stop to cancel it. Background tasks are read-only.")
+            }
+            return runs.foreground(run, emitEvent, execute)
         }
 
         // Commands that need real toolchains (git/python/node/…) prompt the user
@@ -1319,7 +1356,7 @@ class AgentEngine(
         actionTools: Boolean,
     ): List<com.androidharness.app.llm.ToolSchema> =
         registry.schemas(readOnlyOnly = !actionTools, context = ctx).filter {
-            it.name != "ask_user" && it.name != "task" && it.name != "remember"
+            it.name != "ask_user" && it.name != "task" && it.name != "remember" && !it.name.startsWith("subagent_")
         }
 
     /**
@@ -1392,6 +1429,7 @@ class AgentEngine(
         // structurally, or its provider stops responding. long research
         // passes are legitimate, and the parent sees real failures only.
         while (true) {
+            kotlin.coroutines.coroutineContext[TaskBudget]?.check()
             iteration++
             val text = StringBuilder()
             val calls = mutableListOf<ToolCallData>()
@@ -1400,6 +1438,14 @@ class AgentEngine(
             var subReasoningTokens: Int? = null
             var subReasoningSetting: String? = null
             var subThinkingTiming = ThinkingTiming()
+            var previewAt = 0L
+            suspend fun preview() {
+                val now = android.os.SystemClock.elapsedRealtime()
+                if (now - previewAt >= 160 && text.isNotEmpty()) {
+                    previewAt = now
+                    emitEvent(AgentEvent.SubagentPreview(parentCallId, text.takeLast(360).toString()))
+                }
+            }
             val subTools = subagentTools(registry, ctx, actionTools)
             val liveSystem = system + runtimeEnvironment(workspace, sessionId,
                 if (actionTools) AgentMode.ACT else AgentMode.PLAN, permissionMode, subTools)
@@ -1431,7 +1477,7 @@ class AgentEngine(
                             step(event.reason)
                         }
                         is StreamEvent.Retrying -> emitEvent(AgentEvent.Retrying(event.attempt, event.delayMs, event.reason))
-                        is StreamEvent.TextDelta -> text.append(event.text)
+                        is StreamEvent.TextDelta -> { text.append(event.text); preview() }
                         is StreamEvent.ThinkingDelta -> subThinking.append(event.text)
                         is StreamEvent.ResponseState -> subState = event.state
                         is StreamEvent.ThinkingConfigured -> subReasoningSetting = event.label
@@ -1439,7 +1485,7 @@ class AgentEngine(
                         is StreamEvent.ToolCallBatch -> calls += event.calls.map { workspaceCall(it, workspace) }
                         is StreamEvent.Batch -> event.events.forEach { nested ->
                             when (nested) {
-                                is StreamEvent.TextDelta -> text.append(nested.text)
+                                is StreamEvent.TextDelta -> { text.append(nested.text); preview() }
                                 is StreamEvent.ThinkingDelta -> subThinking.append(nested.text)
                                 is StreamEvent.ToolCallReady -> calls += workspaceCall(nested.call, workspace)
                                 is StreamEvent.ToolCallBatch -> calls += nested.calls.map { workspaceCall(it, workspace) }
@@ -1516,7 +1562,7 @@ class AgentEngine(
                 val tool = registry.get(call.name)
                 val subStartedAt = System.currentTimeMillis()
                 val result = if (tool == null || (!actionTools && !tool.isReadOnly) ||
-                    call.name == "ask_user" || call.name == "task" || !WorkspaceToolRouting.available(tool, ctx)
+                    call.name == "ask_user" || call.name == "task" || call.name.startsWith("subagent_") || !WorkspaceToolRouting.available(tool, ctx)
                 ) {
                     ToolResult(false, "${call.name} is not available to subagents.")
                 } else {
@@ -2033,7 +2079,7 @@ Rules:
     }
 
     companion object {
-        private val PARALLEL_READ_EXCLUSIONS = setOf("ask_user", "browser_wait_for", "create_artifact")
+        private val PARALLEL_READ_EXCLUSIONS = setOf("ask_user", "browser_wait_for", "create_artifact", "subagent_wait", "subagent_stop")
         const val COMPACTION_PREFIX = "[Auto-compacted context: summary of the earlier conversation]"
 
         /** How many times a silent (reasoning-only, no answer) model is asked to answer. */

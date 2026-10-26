@@ -287,6 +287,18 @@ fun AppNav(container: AppContainer) {
 
     // Run-result notifications deep-link into the session's chat.
     androidx.compose.runtime.LaunchedEffect(Unit) {
+        container.pendingSubagentChat.collect { destination ->
+            if (destination != null) {
+                val (sid, callId) = destination
+                if (container.sessions.session(sid) != null) {
+                    nav.navigate("chat/${encode(sid)}") { launchSingleTop = true }
+                    nav.navigate("subagent/${encode(sid)}/${encode(callId)}") { launchSingleTop = true }
+                }
+                container.pendingSubagentChat.compareAndSet(destination, null)
+            }
+        }
+    }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
         container.pendingSessionId.collect { sid -> nav.navigate("chat/$sid") }
     }
     androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -401,6 +413,7 @@ fun AppNav(container: AppContainer) {
             onAutomation = { navigateFromSidebar { nav.navigate("automation") { launchSingleTop = true } } },
             onProviders = { navigateFromSidebar { nav.navigate("providers") { launchSingleTop = true } } },
             onSettings = { navigateFromSidebar { nav.navigate("settings") { launchSingleTop = true } } },
+            onMyAi = { navigateFromSidebar { nav.navigate("my-ai") { launchSingleTop = true } } },
             workspaceLabel = if (chatWorkspaceContext) uiContext.getString(R.string.ui_workspaces_for_this_chat) else uiContext.getString(R.string.ui_workspace), workspaceSummary = workspaceSummary,
             onWorkspaces = { scope.launch { drawerState.close() }; showWorkspaceSheet = true }, onCollapse = onCollapse,
             currentRoute = currentRoute, projectCreationEnabled = !creatingProjectChat,
@@ -818,6 +831,14 @@ fun AppNav(container: AppContainer) {
                             finally { creatingProjectChat = false }
                         }
                     },
+                )
+            }
+            composable("my-ai") {
+                com.androidharness.app.ui.personal.MyAiScreen(
+                    container = container,
+                    onBack = { nav.popBackStack() },
+                    onChat = { openChat(null, kind = com.androidharness.app.data.ConversationKind.CHAT) },
+                    onSettings = { nav.navigate("settings") },
                 )
             }
             composable("settings") {

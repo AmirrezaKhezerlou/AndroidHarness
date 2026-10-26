@@ -129,6 +129,7 @@ data class RunResultNotification(
     val ok: Boolean,
     val summary: String,
     val notificationTitle: String? = null,
+    val subagentCallId: String? = null,
 )
 
 /** Posts completed-run notifications even when [AgentService] has already stopped. */
@@ -142,7 +143,7 @@ object RunResultNotifications {
                 NotificationManager.IMPORTANCE_DEFAULT,
             ).apply { description = context.getString(R.string.ui_notified_when_a_background_agent_run_finishes) },
         )
-        manager.notify(notificationId(result.sessionId), build(context, result))
+        manager.notify(notificationId(result.subagentCallId?.let { "${result.sessionId}:$it" } ?: result.sessionId), build(context, result))
     }
 
     private fun build(context: Context, result: RunResultNotification): Notification {
@@ -150,10 +151,11 @@ object RunResultNotifications {
         val compactPreview = preview.replace('\n', ' ').take(180)
         val intent = Intent(context, MainActivity::class.java)
             .putExtra(AgentService.EXTRA_SESSION_ID, result.sessionId)
+            .putExtra(AgentService.EXTRA_SUBAGENT_CALL_ID, result.subagentCallId)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         val pendingIntent = PendingIntent.getActivity(
             context,
-            result.sessionId.hashCode(),
+            (result.subagentCallId?.let { "${result.sessionId}:$it" } ?: result.sessionId).hashCode(),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -515,6 +517,7 @@ class AgentService : Service() {
         const val MAX_OPTION_BUTTONS = 3
 
         const val EXTRA_SESSION_ID = "session_id"
+        const val EXTRA_SUBAGENT_CALL_ID = "subagent_call_id"
 
         private const val ACTION_START = "com.androidharness.app.action.START_BACKGROUND"
         private const val ACTION_ACQUIRE_WAKELOCK = "com.androidharness.app.action.ACQUIRE_WAKELOCK"

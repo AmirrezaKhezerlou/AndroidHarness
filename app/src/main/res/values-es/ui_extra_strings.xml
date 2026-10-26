@@ -345,4 +345,36 @@
     <string name="transfer_workspace">"Espacio de trabajo"</string>
     <string name="transfer_choose_workspace">"Elegir espacio de trabajo"</string>
     <string name="transfer_port">"Puerto"</string>
+    <string name="subagents_allow_background">Permitir delegación en segundo plano</string>
+    <string name="subagents_background_description">Sigue conversando mientras los subagentes exploran en segundo plano. Las tareas usan herramientas de solo lectura; se ejecutan dos a la vez.</string>
+    <string name="subagents_notify_completion">Notificar al terminar</string>
+    <string name="subagents_notify_description">Recibe una notificación con el resultado. Tócala para abrir el chat del subagente.</string>
+    <string name="subagents_deck_title">Subagentes</string>
+    <string name="subagents_open_chat">Abrir chat</string>
+    <string name="subagents_collapse">Contraer ventana de subagentes</string>
+    <string name="subagents_expand">Expandir ventana de subagentes</string>
+    <string name="subagents_previous">Subagente anterior</string>
+    <string name="subagents_next">Siguiente subagente</string>
+    <string name="subagents_latest_activity">ACTIVIDAD RECIENTE</string>
+    <string name="subagents_working">Trabajando</string>
+    <string name="subagents_queued">En cola</string>
+    <string name="subagents_completed">Completado</string>
+    <string name="subagents_failed">Falló</string>
+    <string name="subagents_stopped">Detenido</string>
+    <string name="subagents_interrupted">Interrumpido</string>
+    <string name="subagents_stop">Detener</string>
+    <string name="subagents_waiting_slot">Esperando un espacio en segundo plano</string>
+    <string name="subagents_starting">Iniciando subagente…</string>
+    <string name="subagents_all_finished">Todos terminados</string>
+    <string name="subagents_active_count">%1$d trabajando</string>
+    <string name="subagents_queued_count">%1$d en cola</string>
+    <string name="subagents_page_count">%1$d / %2$d</string>
+    <string name="subagents_elapsed">%1$s transcurridos</string>
+    <string name="subagents_main_chat">Chat principal</string>
+    <string name="subagents_results_return">Los resultados vuelven al agente principal.</string>
+    <string name="ui_back">@string/settings_action_back</string>
+    <plurals name="subagents_count">
+        <item quantity="one">%1$d subagente</item>
+        <item quantity="other">%1$d subagentes</item>
+    </plurals>
 </resources>

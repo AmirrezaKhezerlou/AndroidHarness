@@ -18,9 +18,15 @@ import com.androidharness.app.data.AppSettings
 internal fun SubagentSettingsSection(
     settings: AppSettings,
     onSubagentTools: (Boolean) -> Unit,
+    onBackgroundSubagents: (Boolean) -> Unit = {},
+    onCompletionNotifications: (Boolean) -> Unit = {},
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     SettingsPanel(Modifier.fillMaxWidth()) {
+        SubagentSettingSwitch(R.string.subagents_allow_background, R.string.subagents_background_description,
+            settings.backgroundSubagents, onBackgroundSubagents)
+        SubagentSettingSwitch(R.string.subagents_notify_completion, R.string.subagents_notify_description,
+            settings.subagentCompletionNotifications, onCompletionNotifications)
         SettingsAnchor(R.string.settings_anchor_subagent_tools) {
             Row(
                 Modifier.fillMaxWidth()
@@ -40,5 +46,18 @@ internal fun SubagentSettingsSection(
                 Switch(checked = settings.subagentFullAccess, onCheckedChange = null)
             }
         }
+    }
+}
+
+@Composable
+private fun SubagentSettingSwitch(title: Int, description: Int, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().toggleable(checked, role = Role.Switch, onValueChange = onChange).padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(stringResource(title), style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(description), style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Switch(checked, onCheckedChange = null)
     }
 }

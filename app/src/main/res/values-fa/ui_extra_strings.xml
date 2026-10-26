@@ -345,4 +345,36 @@
     <string name="transfer_workspace">فضای کاری</string>
     <string name="transfer_choose_workspace">انتخاب فضای کاری</string>
     <string name="transfer_port">درگاه</string>
+    <string name="subagents_allow_background">اجازهٔ واگذاری در پس‌زمینه</string>
+    <string name="subagents_background_description">هنگام بررسی پروژه توسط زیرعامل‌ها در پس‌زمینه، گفتگو را ادامه دهید. ابزارها فقط خواندنی هستند و دو کار هم‌زمان اجرا می‌شود.</string>
+    <string name="subagents_notify_completion">اعلان پس از پایان</string>
+    <string name="subagents_notify_description">اعلانی با نتیجه دریافت کنید. برای باز کردن گفتگوی زیرعامل روی آن بزنید.</string>
+    <string name="subagents_deck_title">زیرعامل‌ها</string>
+    <string name="subagents_open_chat">باز کردن گفتگو</string>
+    <string name="subagents_collapse">جمع کردن پنجرهٔ زیرعامل‌ها</string>
+    <string name="subagents_expand">باز کردن پنجرهٔ زیرعامل‌ها</string>
+    <string name="subagents_previous">زیرعامل قبلی</string>
+    <string name="subagents_next">زیرعامل بعدی</string>
+    <string name="subagents_latest_activity">آخرین فعالیت</string>
+    <string name="subagents_working">در حال کار</string>
+    <string name="subagents_queued">در صف</string>
+    <string name="subagents_completed">تکمیل شد</string>
+    <string name="subagents_failed">ناموفق</string>
+    <string name="subagents_stopped">متوقف شد</string>
+    <string name="subagents_interrupted">قطع شد</string>
+    <string name="subagents_stop">توقف</string>
+    <string name="subagents_waiting_slot">در انتظار جای خالی در پس‌زمینه</string>
+    <string name="subagents_starting">در حال راه‌اندازی زیرعامل…</string>
+    <string name="subagents_all_finished">همه تمام شدند</string>
+    <string name="subagents_active_count">در حال کار: %1$d</string>
+    <string name="subagents_queued_count">در صف: %1$d</string>
+    <string name="subagents_page_count">%1$d / %2$d</string>
+    <string name="subagents_elapsed">زمان سپری‌شده: %1$s</string>
+    <string name="subagents_main_chat">گفتگوی اصلی</string>
+    <string name="subagents_results_return">نتایج به عامل اصلی برگردانده می‌شوند.</string>
+    <string name="ui_back">@string/settings_action_back</string>
+    <plurals name="subagents_count">
+        <item quantity="one">%1$d زیرعامل</item>
+        <item quantity="other">%1$d زیرعامل</item>
+    </plurals>
 </resources>

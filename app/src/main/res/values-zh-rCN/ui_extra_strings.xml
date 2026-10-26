@@ -342,4 +342,35 @@
     <string name="transfer_workspace">工作区</string>
     <string name="transfer_choose_workspace">选择工作区</string>
     <string name="transfer_port">端口</string>
+    <string name="subagents_allow_background">允许后台委派</string>
+    <string name="subagents_background_description">子代理在后台进行只读探索时可继续聊天，同时最多运行两个任务。</string>
+    <string name="subagents_notify_completion">完成时通知</string>
+    <string name="subagents_notify_description">收到包含结果的通知，点按即可打开子代理对话。</string>
+    <string name="subagents_deck_title">子代理</string>
+    <string name="subagents_open_chat">打开对话</string>
+    <string name="subagents_collapse">收起子代理弹窗</string>
+    <string name="subagents_expand">展开子代理弹窗</string>
+    <string name="subagents_previous">上一个子代理</string>
+    <string name="subagents_next">下一个子代理</string>
+    <string name="subagents_latest_activity">最新活动</string>
+    <string name="subagents_working">工作中</string>
+    <string name="subagents_queued">排队中</string>
+    <string name="subagents_completed">已完成</string>
+    <string name="subagents_failed">失败</string>
+    <string name="subagents_stopped">已停止</string>
+    <string name="subagents_interrupted">已中断</string>
+    <string name="subagents_stop">停止</string>
+    <string name="subagents_waiting_slot">正在等待后台任务空位</string>
+    <string name="subagents_starting">正在启动子代理…</string>
+    <string name="subagents_all_finished">全部完成</string>
+    <string name="subagents_active_count">%1$d 个工作中</string>
+    <string name="subagents_queued_count">%1$d 个排队中</string>
+    <string name="subagents_page_count">%1$d / %2$d</string>
+    <string name="subagents_elapsed">已用时 %1$s</string>
+    <string name="subagents_main_chat">主对话</string>
+    <string name="subagents_results_return">结果会返回主代理。</string>
+    <string name="ui_back">@string/settings_action_back</string>
+    <plurals name="subagents_count">
+        <item quantity="other">%1$d 个子代理</item>
+    </plurals>
 </resources>

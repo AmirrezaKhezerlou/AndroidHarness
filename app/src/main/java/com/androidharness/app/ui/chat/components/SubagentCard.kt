@@ -189,7 +189,7 @@ internal fun SubagentDetailBody(
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val taskInfo = remember(call.argumentsJson) { taskArgsObject(call.argumentsJson) }
     val prompt = taskInfo?.get("prompt")?.jsonPrimitive?.contentOrNull
-    val title = taskInfo?.get("title")?.jsonPrimitive?.contentOrNull
+    val title = (taskInfo?.get("name") ?: taskInfo?.get("title"))?.jsonPrimitive?.contentOrNull
     val invocation = remember(prompt, title) {
         buildString {
             if (!title.isNullOrBlank() && prompt?.contains(title) != true) {

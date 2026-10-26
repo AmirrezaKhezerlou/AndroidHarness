@@ -14,6 +14,7 @@ import com.androidharness.app.data.SessionRepository
 import com.androidharness.app.data.env.LinuxEnvironmentManager
 import com.androidharness.app.llm.ProviderConfig
 import com.androidharness.app.llm.RequestOptions
+import com.androidharness.app.llm.effectiveApiKey
 import com.androidharness.app.workspace.WorkspaceManager
 import com.androidharness.app.workspace.ChatWorkspaceSelection
 import com.androidharness.app.workspace.ChatWorkspaceFs
@@ -34,6 +35,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -130,7 +132,7 @@ class RunManager(
 
     /** Maintenance holds the same gate as run starts and workspace mutations. */
     suspend fun <T> withIdleStorage(action: suspend () -> T): T = workspaceGuard.withLock {
-        check(runningSessionIds.value.isEmpty()) { "Wait for running tasks to finish before cleaning storage." }
+        check(runningSessionIds.value.isEmpty() && mainRunningSessionIds.value.isEmpty() && subagents.runs.value.none { it.status.active }) { "Wait for running tasks to finish before cleaning storage." }
         action()
     }
 
@@ -144,7 +146,7 @@ class RunManager(
 
     suspend fun assignWorkspace(sessionId: String, projectId: String) = workspaceGuard.withLock {
         if (sessions.session(sessionId)?.projectId == projectId) return@withLock
-        check(!isRunning(sessionId)) { "Wait for this chat's task to finish before changing its workspace." }
+        check(!isRunning(sessionId) && !hasActiveSubagents(sessionId)) { "Wait for this chat's task to finish before changing its workspace." }
         check(!controls.flow(sessionId).value.resumable) { "Resume or stop this chat's saved task before changing its workspace." }
         check(checkpoints.turnsWithCheckpoints(sessionId).isEmpty() && sessions.fileChangesFor(sessionId).first().isEmpty()) {
             "This chat has saved file changes. Start a new chat to work in another workspace."
@@ -153,13 +155,13 @@ class RunManager(
     }
 
     private fun workspaceBusy(fs: com.androidharness.app.workspace.WorkspaceFs, except: String? = null): Boolean =
-        runningSessionIds.value.any { sid -> sid != except && controls.flow(sid).value.let {
+        (mainRunningSessionIds.value + runningSessionIds.value).any { sid -> sid != except && controls.flow(sid).value.let {
             workspacePathsOverlap(fs.workspacePaths(), it.workspacePaths.ifEmpty { listOf(it.workspacePath) })
-        } }
+        } } || subagents.runs.value.any { it.status.active && it.sessionId != except && workspacePathsOverlap(fs.workspacePaths(), it.workspacePaths) }
 
     suspend fun assignWorkspaces(sessionId: String, selection: ChatWorkspaceSelection) = workspaceGuard.withLock {
         selection.validated()
-        check(!isRunning(sessionId)) { "Wait for this chat's task to finish before changing workspace access." }
+        check(!isRunning(sessionId) && !hasActiveSubagents(sessionId)) { "Wait for this chat's task to finish before changing workspace access." }
         check(!controls.flow(sessionId).value.resumable) { "Resume or stop this chat's saved task before changing workspace access." }
         val saved = requireNotNull(sessions.session(sessionId)) { "This chat no longer exists." }
         val prior = saved.workspaceSelectionJson?.let { runCatching { ChatWorkspaceSelection.decode(it) }.getOrNull() }
@@ -188,7 +190,79 @@ class RunManager(
 
     private val keepaliveCount = AtomicInteger(0)
 
+    val subagents = SubagentRuns(
+        java.io.File(context.noBackupFilesDir, "subagent-runs.json"), appScope,
+        onEvent = { run, event ->
+            when (event) {
+                is AgentEvent.SubagentMessageCommitted -> sessions.addMessage(run.sessionId, event.message, run.turnId)
+                is AgentEvent.Usage -> {
+                    val price = if (event.providerName.startsWith("ChatGPT · ")) null else com.androidharness.app.llm.ModelPrices.estimateAt(
+                        model = event.model, totalInputTokens = event.inputTokens.toLong(), outputTokens = event.outputTokens.toLong(),
+                        cachedTokens = event.cachedInputTokens.toLong(), cacheWriteTokens = event.cacheWriteTokens.toLong(),
+                        providerKey = event.providerKey, atMillis = System.currentTimeMillis())
+                    kotlin.coroutines.coroutineContext[TaskBudget]?.let { budget ->
+                        budget.add(event.inputTokens, event.outputTokens, price)
+                        val usage = budget.usage()
+                        controls.update(run.sessionId) {
+                            if (it.turnId != run.turnId) it else it.copy(usedTokens = usage.first, usedCost = usage.second, elapsedMs = usage.third)
+                        }
+                    }
+                    handleEvent(run.sessionId, event, run.turnId)
+                }
+                is AgentEvent.ProviderUsed -> controls.update(run.sessionId) { it.copy(usedProviderIds = it.usedProviderIds + event.providerId) }
+                is AgentEvent.SubagentStep -> if (mainRunningSessionIds.value.isEmpty()) RuntimeNotifier.update("${run.name}: ${event.line.take(120)}")
+                else -> Unit
+            }
+        },
+        onFinished = { run ->
+            if (settings.settings.first().subagentCompletionNotifications && run.status != SubagentStatus.STOPPED) {
+                runCatching { com.androidharness.app.RunResultNotifications.post(context, RunResultNotification(
+                    sessionId = run.sessionId, title = run.name, ok = run.status == SubagentStatus.COMPLETED,
+                    summary = run.output.take(4000), notificationTitle = run.name, subagentCallId = run.id)) }
+            }
+            if (run.status != SubagentStatus.STOPPED) scheduleSubagentFollowUp(run.sessionId)
+        },
+        acquireKeepalive = ::acquireKeepalive,
+        releaseKeepalive = ::releaseKeepalive,
+    )
+    private val mainRunningSessionIds = MutableStateFlow<Set<String>>(emptySet())
     val runningSessionIds = MutableStateFlow<Set<String>>(emptySet())
+    init {
+        appScope.launch {
+            combine(mainRunningSessionIds, subagents.activeSessionIds) { main, delegates -> main + delegates }
+                .collect { runningSessionIds.value = it }
+        }
+    }
+    private val subagentFollowUps = java.util.concurrent.ConcurrentHashMap<String, Job>()
+    private val stoppedSubagentSessions = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    private fun scheduleSubagentFollowUp(sessionId: String) {
+        if (sessionId in stoppedSubagentSessions) return
+        val next = appScope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
+            delay(200)
+            synchronized(lock) { jobs[sessionId] }?.join()
+            subagents.forSession(sessionId).first { list -> list.none { it.background && it.status.active } }
+            if (subagents.pending(sessionId).isEmpty() || sessions.session(sessionId) == null) return@launch
+            try {
+                workspaceGuard.withLock {
+                    if (sessionId in stoppedSubagentSessions || isRunning(sessionId) || subagents.pending(sessionId).isEmpty()) return@withLock
+                    val saved = controls.flow(sessionId).value
+                    if (!saved.completed || saved.status != "idle" || saved.queue.isNotEmpty() || saved.automationRunId != null) return@withLock
+                    val config = saved.provider ?: return@withLock
+                    val key = if (config.id == com.androidharness.app.llm.HarnessProvider.ID) providers.harnessApiKey()
+                        else config.effectiveApiKey(providers.apiKey(config.id))
+                    startRunLocked(sessionId, "", emptyList(), config, key, settings.settings.first().permissionMode,
+                        AgentMode.valueOf(saved.mode), saved.maxOutput, saved.maxContext,
+                        ThinkingLevel.valueOf(saved.thinking), saved.maxIterations, onlyIfIdle = true, notifyOnFinish = false,
+                        subagentContinuation = true)
+                }
+            } catch (ce: CancellationException) { throw ce }
+            catch (_: Exception) { /* Results remain pending for the next user turn. */ }
+        }
+        subagentFollowUps.put(sessionId, next)?.cancel()
+        next.invokeOnCompletion { subagentFollowUps.remove(sessionId, next) }
+        next.start()
+    }
 
     private fun stateOf(sessionId: String): MutableStateFlow<LiveRunState> =
         synchronized(lock) {
@@ -238,7 +312,9 @@ class RunManager(
     fun isRunning(sessionId: String?): Boolean =
         sessionId != null && synchronized(lock) { jobs[sessionId]?.isActive == true }
 
-    fun hasPendingFollowUp(sessionId: String): Boolean = synchronized(lock) {
+    private fun hasActiveSubagents(sessionId: String) = subagents.runs.value.any { it.sessionId == sessionId && it.status.active }
+
+    fun hasPendingFollowUp(sessionId: String): Boolean = hasActiveSubagents(sessionId) || synchronized(lock) {
         followUpJobs[sessionId]?.isActive == true || jobs[sessionId]?.let { !it.isCompleted } == true
     }
 
@@ -316,12 +392,17 @@ class RunManager(
         onlyIfIdle: Boolean = false,
         automationRunId: String? = null,
         allowModelFallback: Boolean = true,
+        subagentContinuation: Boolean = false,
     ): String {
         val sid = sessionId ?: sessions.createSession(
             text.take(48),
             projectId = workspace.currentProjectOnce().id,
         )
         if (onlyIfIdle && isRunning(sid)) throw RunBusyException()
+        if (!subagentContinuation) {
+            stoppedSubagentSessions.remove(sid)
+            subagentFollowUps.remove(sid)?.cancel()
+        }
         if (resume && automationRunId != null) {
             check(controls.flow(sid).value.automationRunId == automationRunId) { "This chat has moved on. Open it to review the interrupted schedule." }
         }
@@ -366,7 +447,7 @@ class RunManager(
             else followUps.advance(sid, followUpRunId) ?: return sid
         val prior = controls.flow(sid).value
         require(!resume || prior.workspacePath == runWorkspace.displayPath) { "Open the original workspace to resume this task" }
-        val turnId = if (resume) prior.turnId else UUID.randomUUID().toString()
+        val turnId = if (resume || subagentContinuation) prior.turnId else UUID.randomUUID().toString()
         val record = controls.update(sid) { it.copy(
             status = "running", reason = null, provider = runConfig, workspacePath = runWorkspace.displayPath,
             workspacePaths = runWorkspace.workspacePaths(),
@@ -375,14 +456,14 @@ class RunManager(
             usedProviderIds = (if (resume) it.usedProviderIds else emptySet()) + runConfig.id,
             mode = mode.name, thinking = thinking.name, maxOutput = maxOutputTokens,
             maxContext = maxContextTokens, maxIterations = maxIterations, turnId = turnId,
-            initialPrompt = if (resume) it.initialPrompt else text,
-            initialPromptId = if (resume) it.initialPromptId else queuedPromptId ?: "$turnId-user",
+            initialPrompt = if (resume || subagentContinuation) it.initialPrompt else text,
+            initialPromptId = if (resume || subagentContinuation) it.initialPromptId else queuedPromptId ?: "$turnId-user",
             automationRunId = if (resume) it.automationRunId else automationRunId,
             completed = false,
             images = if (resume) it.images else imageRefs,
-            usedTokens = if (resume) it.usedTokens else 0,
-            usedCost = if (resume) it.usedCost else 0.0,
-            elapsedMs = if (resume) it.elapsedMs else 0,
+            usedTokens = if (resume || subagentContinuation) it.usedTokens else 0,
+            usedCost = if (resume || subagentContinuation) it.usedCost else 0.0,
+            elapsedMs = if (resume || subagentContinuation) it.elapsedMs else 0,
             autoContinueAttempts = if (resume) it.autoContinueAttempts else 0,
         ) }
         val budget = TaskBudget(record.limits, record.usedTokens, record.usedCost, record.elapsedMs)
@@ -395,11 +476,11 @@ class RunManager(
         val live = stateOf(sid)
         // A fresh user prompt starts a fresh task list; the store is
         // session-owned so nothing leaks across chats.
-        if (!resume && !conversation.isChat) todoStore.beginRun(sid)
+        if (!resume && !subagentContinuation && !conversation.isChat) todoStore.beginRun(sid)
         val recoveryMessages = if (resume) sessions.messages(sid).filter { it.turnId == turnId } else emptyList()
         RunRecovery.missingResults(sessions.messages(sid)).forEach { sessions.addMessage(sid, it, turnId) }
         val initialId = record.initialPromptId.ifEmpty { "$turnId-user" }
-        if (sessions.messages(sid).none { it.id == initialId }) {
+        if (!subagentContinuation && sessions.messages(sid).none { it.id == initialId }) {
             sessions.addMessage(sid, ChatMessage(role = Role.USER, text = record.initialPrompt,
                 images = record.images, turnId = turnId, id = initialId), turnId)
         }
@@ -424,6 +505,7 @@ class RunManager(
                 queuedMessage = null, pendingPlan = null,
             )
         }
+        mainRunningSessionIds.update { it + sid }
         runningSessionIds.update { it + sid }
         acquireKeepalive()
         RuntimeNotifier.update("Working…")
@@ -515,6 +597,7 @@ class RunManager(
                     resolveSubagentModel = modelResolver::resolve,
                     repoMapEnabled = repoMapOn,
                     pinnedInstructions = record.pins,
+                    subagentRuns = subagents,
                     durableEvent = { event ->
                         if (event is AgentEvent.Finished) finishedNormally = event.reason == null
                         if (event is AgentEvent.Error) recoverableInterruption = event.recoverable
@@ -595,7 +678,8 @@ class RunManager(
                         pendingPlan = pendingPlan,
                     )
                 }
-                runningSessionIds.update { it - sid }
+                mainRunningSessionIds.update { it - sid }
+                runningSessionIds.update { if (hasActiveSubagents(sid)) it else it - sid }
                 synchronized(lock) {
                     turnIds.remove(sid)
                     allowedTools.remove(sid)
@@ -661,9 +745,9 @@ class RunManager(
 
     private val compactionSnapshots = java.util.concurrent.ConcurrentHashMap<String, SessionRepository.CompactionSnapshot>()
 
-    private suspend fun handleEvent(sessionId: String, event: AgentEvent) {
+    private suspend fun handleEvent(sessionId: String, event: AgentEvent, persistedTurnId: String? = null) {
         val live = stateOf(sessionId)
-        val turnId = synchronized(lock) { turnIds[sessionId] }
+        val turnId = persistedTurnId ?: synchronized(lock) { turnIds[sessionId] }
         when (event) {
             is AgentEvent.ThinkingProgress -> live.update { it.copy(thinkingTiming = event.timing) }
             is AgentEvent.Text -> {
@@ -891,6 +975,7 @@ class RunManager(
                         (event.toolCallId to st.subagentSteps[event.toolCallId].orEmpty() + event.line),
                 )
             }
+            is AgentEvent.SubagentPreview -> Unit
             is AgentEvent.Finished -> event.reason?.let { reason ->
                 // Abnormal end (no visible answer), show why instead of
                 // ending the run silently.
@@ -1005,6 +1090,9 @@ class RunManager(
     }
 
     fun stop(sessionId: String) {
+        stoppedSubagentSessions += sessionId
+        subagentFollowUps.remove(sessionId)?.cancel()
+        subagents.stopSession(sessionId)
         followUps.stop(sessionId)
         synchronized(lock) { followUpJobs[sessionId]?.cancel() }
         synchronized(lock) { jobs[sessionId]?.cancel() }
@@ -1012,11 +1100,14 @@ class RunManager(
 
     /** Cancels every live agent run and waits for each run's cleanup. */
     suspend fun stopAllAndJoin() {
+        stoppedSubagentSessions += runningSessionIds.value
+        subagentFollowUps.values.toList().forEach { it.cancel() }
         followUps.stopAll()
         val successors = synchronized(lock) { followUpJobs.values.toList() }
         successors.forEach { it.cancel() }
         val active = synchronized(lock) { jobs.values.toList() }
         active.forEach { it.cancel() }
+        subagents.stopAllAndJoin()
         active.forEach { runCatching { it.join() } }
         successors.forEach { runCatching { it.join() } }
     }
@@ -1026,11 +1117,14 @@ class RunManager(
      * [startRun] cannot race the old job's finally block.
      */
     suspend fun stopAndJoin(sessionId: String) {
+        stoppedSubagentSessions += sessionId
+        subagentFollowUps.remove(sessionId)?.cancelAndJoin()
         followUps.stop(sessionId)
         synchronized(lock) { followUpJobs[sessionId] }?.cancelAndJoin()
-        val job = synchronized(lock) { jobs[sessionId] } ?: return
-        job.cancel()
-        job.join()
+        val job = synchronized(lock) { jobs[sessionId] }
+        job?.cancel()
+        subagents.stopSessionAndJoin(sessionId)
+        job?.join()
     }
 
     /** Dismisses the pending PLAN-mode plan card without executing it. */

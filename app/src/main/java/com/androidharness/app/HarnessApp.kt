@@ -46,6 +46,7 @@ class HarnessApp : Application() {
 class AppContainer(val appContext: Context) {
     /** Deep-link channel: run-result notifications deliver a session id here. */
     val pendingSessionId = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val pendingSubagentChat = kotlinx.coroutines.flow.MutableStateFlow<Pair<String, String>?>(null)
 
     /** Share-target channel: content awaiting a regular Chat destination and draft import. */
     val pendingShare = kotlinx.coroutines.flow.MutableStateFlow<com.androidharness.app.data.PendingShare?>(null)
@@ -76,7 +77,8 @@ class AppContainer(val appContext: Context) {
         }, onDisconnected = { id ->
             runManager.runningSessionIds.value.filter {
                 val saved = runManager.controls.flow(it).value
-                saved.provider?.id == id || id in saved.usedProviderIds
+                saved.provider?.id == id || id in saved.usedProviderIds ||
+                    runManager.subagents.runs.value.any { run -> run.sessionId == it && run.status.active && run.providerId == id }
             }
                 .forEach { runManager.stopAndJoin(it) }
         })

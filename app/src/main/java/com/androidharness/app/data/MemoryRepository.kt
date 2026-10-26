@@ -16,7 +16,7 @@ enum class MemoryScope {
 }
 
 enum class MemoryCategory {
-    PROFILE, PREFERENCE, PROJECT, DECISION, FACT;
+    PROFILE, PREFERENCE, PROJECT, DECISION, FACT, GOAL;
 
     companion object {
         fun fromStored(value: String?): MemoryCategory =
@@ -40,7 +40,8 @@ internal object MemoryText {
  * memory list cannot quietly turn into a second system prompt.
  */
 internal object MemoryPrompt {
-    const val MAX_CHARS = 5_000
+    const val MAX_CHARS = 4_000
+    const val CORE_CHARS = 1_000
 
     data class Block(val text: String, val usedIds: List<String>, val omitted: Int, val supplied: List<MemoryEntity> = emptyList())
 
@@ -57,11 +58,17 @@ internal object MemoryPrompt {
         val used = mutableListOf<String>()
         val supplied = mutableListOf<MemoryEntity>()
         var omitted = 0
+        var coreChars = 0
         for (memory in sorted) {
+            val relevant = query.isBlank() || MemoryMatch.relevance(memory.text, query) > 0
+            val core = memory.pinned || memory.scope == MemoryScope.GLOBAL.name &&
+                memory.category in setOf("PROFILE", "PREFERENCE")
+            if (!relevant && !core) { omitted++; continue }
             val prefix = "- [id:${memory.id} ${memory.category.lowercase()}${if (memory.isSummary) "; digest, recall(memory_id) for full text" else ""}] "
             val content = if (memory.isSummary) {
                 // Select facts from a large digest instead of dropping the whole digest.
-                memory.text.lines().filter { it.isNotBlank() && !it.endsWith(":") }.sortedByDescending {
+                memory.text.lines().filter { it.isNotBlank() && !it.endsWith(":") &&
+                    (query.isBlank() || MemoryMatch.relevance(it, query) > 0) }.sortedByDescending {
                     MemoryMatch.relevance(it, query)
                 }.fold("") { result, line ->
                     if (text.length + prefix.length + result.length + line.length + 2 <= maxChars)
@@ -69,8 +76,10 @@ internal object MemoryPrompt {
                 }.trim()
             } else memory.text
             val line = prefix + content + "\n"
+            if (!relevant && core && coreChars + line.length > CORE_CHARS) { omitted++; continue }
             if (content.isBlank() || text.length + line.length > maxChars) { omitted++; continue }
             text.append(line)
+            if (!relevant && core) coreChars += line.length
             used += memory.id
             supplied += memory.copy(text = content)
         }

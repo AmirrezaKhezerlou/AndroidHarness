@@ -344,4 +344,35 @@
     <string name="transfer_workspace">Ruang kerja</string>
     <string name="transfer_choose_workspace">Pilih ruang kerja</string>
     <string name="transfer_port">Port</string>
+    <string name="subagents_allow_background">Izinkan delegasi latar belakang</string>
+    <string name="subagents_background_description">Tetap mengobrol saat subagen menelusuri proyek di latar belakang. Tugas hanya membaca; dua tugas berjalan bersamaan.</string>
+    <string name="subagents_notify_completion">Beri tahu saat selesai</string>
+    <string name="subagents_notify_description">Terima notifikasi berisi hasil. Ketuk untuk membuka obrolan subagen.</string>
+    <string name="subagents_deck_title">Subagen</string>
+    <string name="subagents_open_chat">Buka obrolan</string>
+    <string name="subagents_collapse">Ciutkan pop-up subagen</string>
+    <string name="subagents_expand">Perluas pop-up subagen</string>
+    <string name="subagents_previous">Subagen sebelumnya</string>
+    <string name="subagents_next">Subagen berikutnya</string>
+    <string name="subagents_latest_activity">AKTIVITAS TERBARU</string>
+    <string name="subagents_working">Bekerja</string>
+    <string name="subagents_queued">Mengantre</string>
+    <string name="subagents_completed">Selesai</string>
+    <string name="subagents_failed">Gagal</string>
+    <string name="subagents_stopped">Dihentikan</string>
+    <string name="subagents_interrupted">Terputus</string>
+    <string name="subagents_stop">Hentikan</string>
+    <string name="subagents_waiting_slot">Menunggu slot latar belakang</string>
+    <string name="subagents_starting">Memulai subagen…</string>
+    <string name="subagents_all_finished">Semua selesai</string>
+    <string name="subagents_active_count">%1$d bekerja</string>
+    <string name="subagents_queued_count">%1$d mengantre</string>
+    <string name="subagents_page_count">%1$d / %2$d</string>
+    <string name="subagents_elapsed">%1$s berlalu</string>
+    <string name="subagents_main_chat">Obrolan utama</string>
+    <string name="subagents_results_return">Hasil dikembalikan ke agen utama.</string>
+    <string name="ui_back">@string/settings_action_back</string>
+    <plurals name="subagents_count">
+        <item quantity="other">%1$d subagen</item>
+    </plurals>
 </resources>

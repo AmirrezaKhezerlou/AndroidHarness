@@ -164,6 +164,7 @@ import com.androidharness.app.ui.theme.fastEffectsSpec
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -209,6 +210,11 @@ private fun ChatScreenContent(
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     // Lazy list content and its derived lookup maps must use the same snapshot.
     val state = viewModel.state.collectAsStateWithLifecycle().value
+    val subagentResults by remember(state.sessionId) {
+        state.sessionId?.let { sid -> viewModel.container.runManager.subagents.forSession(sid)
+            .map { list -> list.associate { it.id to (it.status to it.output) } }.distinctUntilChanged() }
+            ?: kotlinx.coroutines.flow.flowOf(emptyMap())
+    }.collectAsStateWithLifecycle(initialValue = emptyMap())
     val globalSettings by viewModel.container.settings.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
     val effectiveImageFrequency = com.androidharness.app.core.ChatExperience
         .effectiveImageFrequency(state.conversation.imageFrequency, globalSettings.chatImageFrequency)
@@ -1380,17 +1386,22 @@ private fun ChatScreenContent(
                     .fillMaxSize()
                     .imePadding(),
             ) {
-                val toolResults = remember(state.messages) {
+                val toolResults = remember(state.messages, subagentResults) {
                     val map = HashMap<String, ChatMessage>(state.messages.size)
                     for (m in state.messages) {
                         if (m.role == Role.TOOL && !m.toolCallId.isNullOrEmpty()) {
                             map[m.toolCallId] = m
                         }
                     }
+                    subagentResults.forEach { (id, outcome) ->
+                        if (outcome.first.active) map.remove(id)
+                        else map[id] = ChatMessage(role = Role.TOOL, toolCallId = id, toolName = "task",
+                            text = outcome.second, isError = outcome.first != com.androidharness.app.agent.SubagentStatus.COMPLETED)
+                    }
                     map
                 }
-                val runningIds = remember(state.runningCalls) {
-                    state.runningCalls.map { it.id }.toSet()
+                val runningIds = remember(state.runningCalls, subagentResults) {
+                    state.runningCalls.map { it.id }.toSet() + subagentResults.filterValues { it.first.active }.keys
                 }
                 val committedCallIds = remember(state.messages, state.currentTurnId) {
                     state.messages.filter { it.turnId == state.currentTurnId }.flatMap { it.toolCalls }.map { it.id }.toSet()
@@ -1887,7 +1898,7 @@ private fun ChatScreenContent(
                                     }
                                 }
                                 if (isTurnRunning || isSearchTurn) {
-                                    val taskCalls = message.toolCalls.filter { it.name == "task" }
+                                    val taskCalls = message.toolCalls.filter { it.name == "task" && (isSearchTurn || it.id !in subagentResults) }
                                     val otherCalls = message.toolCalls.filter { it.name != "task" }
                                     if (taskCalls.size >= 2) {
                                         indexedItem(key = "message-$messageKey-subagents", contentType = ChatListContentType.Subagents) {
@@ -2232,6 +2243,8 @@ private fun ChatScreenContent(
                 com.androidharness.app.ui.automation.ScheduledMessageRow(chatSchedules, scheduleConnection, scheduleNow) {
                     if (chatSchedules.size == 1) scheduleDraft = chatSchedules.first() else showScheduledList = true
                 }
+                if (!state.conversation.isChat) com.androidharness.app.ui.chat.components.FloatingSubagentDock(
+                    state.sessionId, viewModel.container.runManager, onOpenSubagent)
                 MessageComposer(
                     chatOnly = state.conversation.isChat,
                     sendAllowed = viewModel.attachmentBlockReason() == null,

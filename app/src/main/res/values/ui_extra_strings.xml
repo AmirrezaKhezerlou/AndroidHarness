@@ -344,4 +344,33 @@
     <string name="transfer_workspace">Workspace</string>
     <string name="transfer_choose_workspace">Choose workspace</string>
     <string name="transfer_port">Port</string>
+    <string name="subagents_allow_background">Allow background delegation</string>
+    <string name="ui_back">@string/settings_action_back</string>
+    <string name="subagents_background_description">Keep chatting while subagents explore in the background. Background tasks use read-only tools; two run at a time.</string>
+    <string name="subagents_notify_completion">Notify on completion</string>
+    <string name="subagents_notify_description">Get a notification with the result. Tap to open the subagent’s chat.</string>
+    <string name="subagents_deck_title">Subagents</string>
+    <string name="subagents_open_chat">Open chat</string>
+    <string name="subagents_collapse">Collapse subagent popup</string>
+    <string name="subagents_expand">Expand subagent popup</string>
+    <string name="subagents_previous">Previous subagent</string>
+    <string name="subagents_next">Next subagent</string>
+    <string name="subagents_latest_activity">LATEST ACTIVITY</string>
+    <string name="subagents_working">Working</string>
+    <string name="subagents_queued">Queued</string>
+    <string name="subagents_completed">Completed</string>
+    <string name="subagents_failed">Failed</string>
+    <string name="subagents_stopped">Stopped</string>
+    <string name="subagents_interrupted">Interrupted</string>
+    <string name="subagents_stop">Stop</string>
+    <string name="subagents_waiting_slot">Waiting for a background slot</string>
+    <string name="subagents_starting">Starting subagent…</string>
+    <string name="subagents_all_finished">All finished</string>
+    <string name="subagents_active_count">%1$d working</string>
+    <string name="subagents_queued_count">%1$d queued</string>
+    <string name="subagents_page_count">%1$d / %2$d</string>
+    <string name="subagents_elapsed">%1$s elapsed</string>
+    <string name="subagents_main_chat">Main chat</string>
+    <string name="subagents_results_return">Results return to the main agent.</string>
+    <plurals name="subagents_count"><item quantity="one">%1$d subagent</item><item quantity="other">%1$d subagents</item></plurals>
 </resources>

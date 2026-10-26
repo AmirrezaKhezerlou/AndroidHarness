@@ -338,11 +338,12 @@ internal fun MemoryEditDialog(
     enabled: Boolean = true,
     initialSection: MemorySection = MemorySection.CHAT,
     error: String? = null,
+    initialCategory: MemoryCategory = MemoryCategory.FACT,
 ) {
     var owner by remember(initial?.id) { mutableStateOf(initial?.let { MemorySection.fromStored(it.section) } ?: initialSection) }
     val maxChars = if (initial?.isSummary == true) MemoryConsolidation.MAX_CHARS else 600
     var text by remember(initial?.id) { mutableStateOf(initial?.text.orEmpty()) }
-    var category by remember(initial?.id) { mutableStateOf(MemoryCategory.fromStored(initial?.category)) }
+    var category by remember(initial?.id) { mutableStateOf(initial?.let { MemoryCategory.fromStored(it.category) } ?: initialCategory) }
     var scope by remember(initial?.id) { mutableStateOf(MemoryScope.fromStored(initial?.scope)) }
     var projectId by remember(initial?.id, projects) {
         mutableStateOf(initial?.projectId ?: projects.firstOrNull()?.id)
@@ -430,6 +431,7 @@ private fun categoryLabel(category: String): Int = when (MemoryCategory.fromStor
     MemoryCategory.PROJECT -> R.string.settings_memory_category_project
     MemoryCategory.DECISION -> R.string.settings_memory_category_decision
     MemoryCategory.FACT -> R.string.settings_memory_category_fact
+    MemoryCategory.GOAL -> R.string.my_ai_goals
 }
 
 @Composable

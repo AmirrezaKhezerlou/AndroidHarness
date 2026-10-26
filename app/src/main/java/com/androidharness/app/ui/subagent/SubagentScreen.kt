@@ -17,6 +17,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -25,11 +26,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androidharness.app.AppContainer
 import com.androidharness.app.core.Role
+import com.androidharness.app.core.ChatMessage
+import com.androidharness.app.agent.SubagentStatus
+import com.androidharness.app.ui.chat.components.subagentStatusText
 import com.androidharness.app.core.ToolCallData
 import com.androidharness.app.browser.BrowserToolActivity
 import com.androidharness.app.ui.chat.components.WebPreviewSheet
@@ -46,6 +52,8 @@ import com.androidharness.app.ui.theme.HarnessMono
 import com.androidharness.app.ui.theme.LocalStatusColors
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
  * One subagent run as a real conversation: the delegation prompt as a user
@@ -69,15 +77,21 @@ fun SubagentScreen(
         .collectAsStateWithLifecycle(initialValue = emptyList())
     val live by container.runManager.live(sessionId)
         .collectAsStateWithLifecycle()
+    val run by remember(sessionId, toolCallId) {
+        container.runManager.subagents.forSession(sessionId).map { list -> list.firstOrNull { it.id == toolCallId } }.distinctUntilChanged()
+    }.collectAsStateWithLifecycle(initialValue = null)
 
-    val parentCall = remember(messages) {
+    val parentCall = run?.call ?: remember(messages) {
         messages.firstNotNullOfOrNull { m ->
             if (m.role == Role.ASSISTANT && m.toolCallId == null) {
                 m.toolCalls.firstOrNull { it.id == toolCallId }
             } else null
         }
     }
-    val result = remember(messages) {
+    val result = if (run != null) run?.takeUnless { it.status.active }?.let {
+        ChatMessage(role = Role.TOOL, text = it.output, toolCallId = toolCallId,
+            isError = it.status != SubagentStatus.COMPLETED)
+    } else remember(messages) {
         messages.firstOrNull { it.role == Role.TOOL && it.toolCallId == toolCallId }
     }
     val innerTurns = remember(messages) {
@@ -88,16 +102,16 @@ fun SubagentScreen(
         messages.filter { it.role == Role.TOOL && it.toolCallId in innerCallIds }
             .associateBy { it.toolCallId }
     }
-    val running = live.runningCalls.any { it.id == toolCallId }
-    val steps = live.subagentSteps[toolCallId].orEmpty()
+    val running = run?.status?.active ?: live.runningCalls.any { it.id == toolCallId }
+    val steps = run?.steps ?: live.subagentSteps[toolCallId].orEmpty()
 
     val taskInfo = remember(parentCall) {
         parentCall?.let { taskArgsObject(it.argumentsJson) }
     }
-    val title = taskInfo?.get("title")?.jsonPrimitive?.contentOrNull
+    val title = run?.name ?: (taskInfo?.get("name") ?: taskInfo?.get("title"))?.jsonPrimitive?.contentOrNull
         ?.takeIf { it.isNotBlank() } ?: uiContext.getString(R.string.ui_subagent)
     val prompt = taskInfo?.get("prompt")?.jsonPrimitive?.contentOrNull.orEmpty()
-    val statusText = when {
+    val statusText = run?.let { "${subagentStatusText(it.status)} · ${it.model}" } ?: when {
         running -> steps.lastOrNull() ?: uiContext.getString(R.string.ui_running)
         result?.isError == true -> uiContext.getString(R.string.ui_failed_64)
         result != null -> uiContext.getString(R.string.settings_action_done)
@@ -125,6 +139,19 @@ fun SubagentScreen(
 
     Scaffold(
         containerColor = scheme.surface,
+        bottomBar = {
+            Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                Text(stringResource(R.string.subagents_results_return), style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant)
+                androidx.compose.foundation.layout.Row {
+                    TextButton(onClick = onBack) { Text(stringResource(R.string.subagents_main_chat)) }
+                    if (run?.status?.active == true) TextButton(onClick = { container.runManager.subagents.stop(sessionId, toolCallId) }) {
+                        Text(stringResource(R.string.subagents_stop))
+                    }
+                }
+            }
+        },
         topBar = {
             AppHeader(
                 title = title,
@@ -197,6 +224,9 @@ fun SubagentScreen(
             }
 
             if (running) {
+                run?.preview?.takeIf { it.isNotBlank() && it != innerTurns.lastOrNull()?.text?.takeLast(360) }?.let { preview ->
+                    item(key = "live-answer-preview") { AssistantText(preview) }
+                }
                 item(key = "live-progress") {
                     Column(Modifier.fillMaxWidth()) {
                         ThinLinearProgress(modifier = Modifier.fillMaxWidth())

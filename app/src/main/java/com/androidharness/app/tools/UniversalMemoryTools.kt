@@ -31,7 +31,7 @@ class RememberTool(private val memory: MemoryRepository) : Tool {
                     "'auto' (default) uses the project when this conversation has one and global otherwise.",
             ),
             "category" to Schema.string(
-                "One of profile, preference, project, decision, or fact (default fact).",
+                "One of profile, preference, goal, project, decision, or fact (default fact). Use goal for an explicitly stated ongoing user goal; update it as priorities change.",
             ),
         ),
         required = listOf("text"),

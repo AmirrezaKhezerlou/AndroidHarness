@@ -249,6 +249,10 @@ class MainActivity : AppCompatActivity() {
             container.pendingSettingsScroll.value = "telegram"
         }
         val sessionId = intent?.getStringExtra(AgentService.EXTRA_SESSION_ID) ?: return
+        intent.getStringExtra(AgentService.EXTRA_SUBAGENT_CALL_ID)?.let { callId ->
+            container.pendingSubagentChat.value = sessionId to callId
+            return
+        }
         // AppNav observes this to deep-link into the session's chat.
         container.pendingSessionId.tryEmit(sessionId)
     }

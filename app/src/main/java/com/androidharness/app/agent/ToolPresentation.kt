@@ -180,7 +180,7 @@ fun toolPresentation(call: ToolCallData, result: ChatMessage? = null): ToolPrese
         }
         "ask_user" -> ToolPresentation("Asked a question", "Waiting for your answer…", kind = ToolActivityKind.QUESTION)
         "task" -> {
-            val title = arg("title")?.takeIf { it.isNotBlank() } ?: "research subagent"
+            val title = (arg("name") ?: arg("title"))?.takeIf { it.isNotBlank() } ?: "research subagent"
             ToolPresentation("Delegated $title", "Delegating: $title…", kind = ToolActivityKind.SUBAGENT)
         }
         "memory_write", "remember" -> ToolPresentation("Saved memory", "Saving to memory…", kind = ToolActivityKind.MEMORY)

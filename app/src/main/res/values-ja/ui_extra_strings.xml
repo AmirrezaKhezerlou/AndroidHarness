@@ -344,4 +344,35 @@
     <string name="transfer_workspace">"ワークスペース"</string>
     <string name="transfer_choose_workspace">"ワークスペースを選択"</string>
     <string name="transfer_port">"ポート"</string>
+    <string name="subagents_allow_background">バックグラウンドへの委任を許可</string>
+    <string name="subagents_background_description">サブエージェントがバックグラウンドで調査している間も会話を続けられます。タスクは読み取り専用で、同時に2つまで実行します。</string>
+    <string name="subagents_notify_completion">完了時に通知</string>
+    <string name="subagents_notify_description">結果を通知します。タップするとサブエージェントのチャットが開きます。</string>
+    <string name="subagents_deck_title">サブエージェント</string>
+    <string name="subagents_open_chat">チャットを開く</string>
+    <string name="subagents_collapse">サブエージェントのポップアップを折りたたむ</string>
+    <string name="subagents_expand">サブエージェントのポップアップを展開</string>
+    <string name="subagents_previous">前のサブエージェント</string>
+    <string name="subagents_next">次のサブエージェント</string>
+    <string name="subagents_latest_activity">最新のアクティビティ</string>
+    <string name="subagents_working">作業中</string>
+    <string name="subagents_queued">待機中</string>
+    <string name="subagents_completed">完了</string>
+    <string name="subagents_failed">失敗</string>
+    <string name="subagents_stopped">停止済み</string>
+    <string name="subagents_interrupted">中断</string>
+    <string name="subagents_stop">停止</string>
+    <string name="subagents_waiting_slot">バックグラウンドの空きを待機中</string>
+    <string name="subagents_starting">サブエージェントを開始中…</string>
+    <string name="subagents_all_finished">すべて完了</string>
+    <string name="subagents_active_count">%1$d件が作業中</string>
+    <string name="subagents_queued_count">%1$d件が待機中</string>
+    <string name="subagents_page_count">%1$d / %2$d</string>
+    <string name="subagents_elapsed">経過時間：%1$s</string>
+    <string name="subagents_main_chat">メインチャット</string>
+    <string name="subagents_results_return">結果はメインエージェントに返されます。</string>
+    <string name="ui_back">@string/settings_action_back</string>
+    <plurals name="subagents_count">
+        <item quantity="other">%1$d件のサブエージェント</item>
+    </plurals>
 </resources>
