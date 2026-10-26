@@ -88,11 +88,12 @@ class ComposerProgressDeviceTest {
             assertTrue(action.performAction(AccessibilityNodeInfo.ACTION_CLICK))
             assertEquals(1, transcribed.get())
             instrumentation.runOnMainSync { recording.value = GroqRecordState.TRANSCRIBING }
-            awaitText(context.getString(com.androidharness.app.R.string.ui_transcribing_audio_with_groq_whisper))
+            awaitText(context.getString(com.androidharness.app.R.string.voice_transcribing))
+            instrumentation.runOnMainSync { recording.value = GroqRecordState.IDLE }
         }
     }
 
-    @Test fun groqVoiceGesturesSurvivePanelExpansionAndKeepBusyDraftSeparate() {
+    @Test fun groqVoiceGesturesSurviveCapsuleTransitionAndKeepBusyDraftSeparate() {
         val state = mutableStateOf(GroqRecordState.IDLE)
         val armed = mutableStateOf(false)
         val samples = mutableStateOf(emptyList<Float>())
@@ -139,13 +140,22 @@ class ComposerProgressDeviceTest {
             fun click(description: String) {
                 var action = node(description)
                 while (!action.isClickable && action.parent != null) action = action.parent
-                assertTrue(action.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+                val target = bounds(action)
+                val down = SystemClock.uptimeMillis()
+                for (type in listOf(android.view.MotionEvent.ACTION_DOWN, android.view.MotionEvent.ACTION_UP)) {
+                    val event = android.view.MotionEvent.obtain(down, SystemClock.uptimeMillis(), type,
+                        target.exactCenterX(), target.exactCenterY(), 0)
+                    event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
+                    try { assertTrue(instrumentation.uiAutomation.injectInputEvent(event, true)) }
+                    finally { event.recycle() }
+                }
             }
             fun gesture(dx: Float = 0f, dy: Float = 0f) {
                 val target = bounds(node(idle))
                 val down = SystemClock.uptimeMillis()
                 fun event(action: Int, x: Float, y: Float) {
                     val event = android.view.MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, x, y, 0)
+                    event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
                     try { assertTrue(instrumentation.uiAutomation.injectInputEvent(event, true)) }
                     finally { event.recycle() }
                 }
@@ -162,14 +172,16 @@ class ComposerProgressDeviceTest {
             gesture()
             await { state.value == GroqRecordState.TRANSCRIBING }
             assertEquals(1, finishes.get())
-            awaitText(context.getString(com.androidharness.app.R.string.ui_transcribing_audio_with_groq_whisper))
+            awaitText(context.getString(com.androidharness.app.R.string.voice_transcribing))
             assertNull("Processing cannot start another recording", find { it.contentDescription?.toString() == idle })
             assertEquals("Voice processing never sends the existing draft", 0, sends.get())
             screenshot("voice-transcribing")
-            instrumentation.runOnMainSync { state.value = GroqRecordState.IDLE }
-            gesture(dx = -125 * density)
+            click(context.getString(com.androidharness.app.R.string.settings_action_cancel))
             await { state.value == GroqRecordState.IDLE }
             assertEquals(1, cancels.get())
+            gesture(dx = -125 * density)
+            await { state.value == GroqRecordState.IDLE }
+            assertEquals(2, cancels.get())
             gesture(dy = -95 * density)
             await { state.value == GroqRecordState.LOCKED }
             SystemClock.sleep(500)
@@ -183,13 +195,22 @@ class ComposerProgressDeviceTest {
             await { state.value == GroqRecordState.LOCKED }
             click(context.getString(com.androidharness.app.R.string.ui_discard_recording))
             await { state.value == GroqRecordState.IDLE }
-            assertEquals(2, cancels.get())
-            assertNotNull(find { it.text?.toString() == "Keep this queued draft" })
+            assertEquals(3, cancels.get())
+            click(idle)
+            await { state.value == GroqRecordState.LOCKED }
+            click(context.getString(com.androidharness.app.R.string.ui_transcribe_voice_message))
+            await { state.value == GroqRecordState.TRANSCRIBING }
+            assertEquals(3, finishes.get())
+            click(context.getString(com.androidharness.app.R.string.settings_action_cancel))
+            await { state.value == GroqRecordState.IDLE }
+            assertEquals(4, cancels.get())
+            awaitText("Keep this queued draft")
         }
     }
 
     @Test fun groqVoiceFitsNarrowLayoutAtLargeFonts() {
         val state = mutableStateOf(GroqRecordState.LOCKED)
+        val composerHeight = java.util.concurrent.atomic.AtomicInteger()
         ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
             scenario.onActivity { activity -> activity.setContent {
                 CompositionLocalProvider(LocalDesktopLayout provides false, LocalDesktopInput provides false,
@@ -200,23 +221,37 @@ class ComposerProgressDeviceTest {
                                 Box(Modifier.width(320.dp)) {
                                     MessageComposer(false, TextFieldValue(), null, {}, {}, {}, {}, {}, {},
                                         voiceEngine = AppSettings.VOICE_ENGINE_GROQ, groqRecordState = state.value,
-                                        recordingDurationMs = 72_000, levels = List(40) { (it % 7) / 7f })
+                                        recordingDurationMs = 72_000, levels = List(40) { (it % 7) / 7f },
+                                        modifier = Modifier.onSizeChanged { composerHeight.set(it.height) })
                                 }
                             }
                         }
                     }
                 }
             } }
-            awaitText("01:12")
+            awaitText("1:12")
+            SystemClock.sleep(400)
+            val density = context.resources.displayMetrics.density
+            assertTrue("Recording stays in one compact row at large fonts", composerHeight.get() <= 80 * density)
+            val finish = bounds(requireNotNull(find { it.contentDescription?.toString() == context.getString(com.androidharness.app.R.string.ui_transcribe_voice_message) }))
+            val timer = bounds(requireNotNull(find { it.text?.toString() == "1:12" }))
+            assertFalse("Timer and finish targets do not overlap", Rect.intersects(timer, finish))
             screenshot("voice-large-font-locked")
             instrumentation.runOnMainSync { state.value = GroqRecordState.TRANSCRIBING }
-            val label = context.getString(com.androidharness.app.R.string.ui_transcribing_audio_with_groq_whisper)
+            val label = context.getString(com.androidharness.app.R.string.voice_transcribing)
             awaitText(label)
             val text = bounds(requireNotNull(find { it.text?.toString() == label }))
-            val density = context.resources.displayMetrics.density
-            assertTrue("Processing label wraps at large fonts", text.height() > 35 * density)
+            assertTrue("Processing title stays compact at large fonts", text.height() <= 64 * density)
             assertTrue("Processing label stays within the narrow panel", text.right <= 320 * density)
+            await {
+                find { it.contentDescription?.toString() == context.getString(com.androidharness.app.R.string.settings_action_cancel) }
+                    ?.let { it.isVisibleToUser && bounds(it).bottom <= context.resources.displayMetrics.heightPixels } == true
+            }
+            SystemClock.sleep(400) // Inspect the settled panel, while its progress animation continues.
             screenshot("voice-large-font-transcribing")
+            assertTrue("Transcription stays in one compact row at large fonts", composerHeight.get() <= 80 * density)
+            // Stop the fixture's infinite processing animation before ActivityScenario waits for idle.
+            instrumentation.runOnMainSync { state.value = GroqRecordState.IDLE }
         }
     }
 
@@ -250,6 +285,7 @@ class ComposerProgressDeviceTest {
                 for (action in listOf(android.view.MotionEvent.ACTION_DOWN, android.view.MotionEvent.ACTION_UP)) {
                     val event = android.view.MotionEvent.obtain(down, SystemClock.uptimeMillis(), action,
                         input.exactCenterX(), input.exactCenterY(), 0)
+                    event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
                     try { assertTrue(instrumentation.uiAutomation.injectInputEvent(event, true)) }
                     finally { event.recycle() }
                 }
@@ -390,7 +426,8 @@ class ComposerProgressDeviceTest {
             image.recycle()
             if (bottom > top && bottom - top > (right - left) * 4) {
                 assertEquals("The visible cursor must be vertically centered in the single-line field", bounds.exactCenterY(),
-                    (top + bottom + 1) / 2f, 2f * context.resources.displayMetrics.density)
+                    // The caret and accessibility rectangles are rounded to whole physical pixels.
+                    (top + bottom + 1) / 2f, 2f * context.resources.displayMetrics.density + .5f)
                 return
             }
             SystemClock.sleep(60) // Cursor may be in its blink-off interval.

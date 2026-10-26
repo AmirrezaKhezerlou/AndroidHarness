@@ -23,16 +23,19 @@ data class SettingsBackupFile(
     val searchKeys: Map<String, String> = emptyMap(),
     val groqKey: String? = null,
     val memories: List<BackupMemory> = emptyList(),
+    val providerProxy: com.androidharness.app.llm.ProviderProxy = com.androidharness.app.llm.ProviderProxy(),
 ) {
     companion object {
-        /** v3 preserves section ownership and restorable consolidation metadata. */
-        const val VERSION = 3
+        /** v4 includes encrypted key pools and provider proxy controls. */
+        const val VERSION = 4
     }
 }
 
 @Serializable
 class BackupProvider(val config: ProviderConfig, val customModels: List<String> = emptyList(), val apiKey: String? = null,
-    val headers: List<com.androidharness.app.llm.ProviderHeader> = emptyList())
+    val headers: List<com.androidharness.app.llm.ProviderHeader> = emptyList(),
+    val keyPool: com.androidharness.app.llm.ProviderKeyPool? = null,
+    val proxy: com.androidharness.app.llm.ProviderProxy = com.androidharness.app.llm.ProviderProxy())
 
 /** Local models and device sign-ins are not portable API connections. */
 object SettingsBackupPolicy {
@@ -106,6 +109,7 @@ enum class SettingsBackupProblem(val hint: String) {
     PROVIDER_REFERENCE("A selected provider is missing. Choose your models again in Models and Subagent settings."),
     PROVIDER_URL("A saved provider URL is invalid. Review Manage providers in Models settings."),
     CUSTOM_MODELS("A custom model ID is empty or too long. Review Manage providers in Models settings."),
+    PROVIDER_CONTROLS("An API key pool or proxy setting is invalid. Review connection controls."),
     PROVIDER_HEADERS("A custom provider header is invalid. Review Manage providers in Models settings."),
     MCP("An MCP server name or transport is invalid, or names are duplicated. Review MCP servers settings."),
     MEMORY("A saved memory is invalid or duplicated. Review Memory settings."),
@@ -136,7 +140,9 @@ object SettingsBackupValidation {
         check(s.voiceEngine in setOf("inbuilt", "groq"), SettingsBackupProblem.VOICE)
         val ids = file.providers.map { it.config.id }.toSet() + HarnessProvider.ID
         check(listOfNotNull(s.activeProviderId, s.planningProviderId, s.executionProviderId, s.subagentProviderId).all { it in ids }, SettingsBackupProblem.PROVIDER_REFERENCE)
+        check(file.providerProxy.error() == null, SettingsBackupProblem.PROVIDER_CONTROLS)
         file.providers.forEach {
+            check(it.keyPool?.error() == null && it.proxy.error() == null, SettingsBackupProblem.PROVIDER_CONTROLS)
             check(com.androidharness.app.llm.ProviderHeaders.error(it.headers) == null, SettingsBackupProblem.PROVIDER_HEADERS)
             check(!com.androidharness.app.chatgpt.ChatGptProtocol.isProvider(it.config.id), SettingsBackupProblem.PROVIDERS)
             check(it.config.id.isNotBlank() && it.config.name.length in 1..200 && it.customModels.size <= 1000, SettingsBackupProblem.PROVIDERS)
@@ -192,13 +198,18 @@ class SettingsBackup(private val c: AppContainer) {
             val providers = configs.map { config ->
                 BackupProvider(config, c.providers.customModels(config.id).map { it.id },
                     if (includeKeys && config.id != HarnessProvider.ID) credential { c.keys.getKey(config.id) } else null,
-                    if (includeKeys) config.headers else emptyList())
+                    if (includeKeys) config.headers else emptyList(),
+                    if (com.androidharness.app.llm.ProviderHeaders.editable(config)) c.keys.providerKeyPool(config.id).let { pool ->
+                        if (includeKeys) pool else pool.copy(keys = emptyList())
+                    } else null,
+                    c.keys.providerProxy(config.id).let { if (includeKeys) it else it.withoutCredentials() })
             }
             val file = SettingsBackupFile(settings = s, providers = providers,
                 servers = if (includeKeys) c.mcp.servers.value.map { it.copy(enabled = false) } else emptyList(),
                 searchKeys = if (includeKeys) listOf("brave", "tavily").mapNotNull { name -> credential { c.keys.searchApiKey(name) }?.let { name to it } }.toMap() else emptyMap(),
                 groqKey = if (includeKeys) credential { c.keys.groqApiKey() } else null,
-                memories = c.memory.memories.first().map { it.toBackupMemory() })
+                memories = c.memory.memories.first().map { it.toBackupMemory() },
+                providerProxy = c.keys.providerProxy(null).let { if (includeKeys) it else it.withoutCredentials() })
             SettingsBackupValidation.validate(file)
             val plain = json.encodeToString(SettingsBackupFile.serializer(), file).toByteArray(Charsets.UTF_8)
             val encrypted = try { BackupEncryption.encrypt(plain, password) } finally { plain.fill(0) }
@@ -240,10 +251,15 @@ class SettingsBackup(private val c: AppContainer) {
             val p = entry.config
             val restored = c.providers.add(p.name + " (restored)", p.type, p.baseUrl, p.model, entry.apiKey.orEmpty(), entry.headers)
             ids[p.id] = restored.id
+            c.providers.saveControls(restored, entry.keyPool, entry.proxy)
             entry.customModels.forEach { c.providers.addCustomModel(restored.id, it) }
         }
         file.providers.firstOrNull { it.config.id == HarnessProvider.ID }?.customModels?.forEach {
             c.providers.addCustomModel(HarnessProvider.ID, it)
+        }
+        if (file.version >= 4) c.providers.saveGlobalProxy(file.providerProxy)
+        file.providers.firstOrNull { it.config.id == HarnessProvider.ID }?.let { entry ->
+            c.keys.putProviderControls(HarnessProvider.ID, null, entry.proxy)
         }
         if (file.servers.isNotEmpty()) c.mcp.importDisabledServers(file.servers)
         file.searchKeys.forEach { (name, key) -> if (c.keys.searchApiKey(name) == null) c.keys.putSearchApiKey(name, key) }

@@ -48,6 +48,9 @@ fun ProvidersScreen(
     val scheme = MaterialTheme.colorScheme
     var query by rememberSaveable { mutableStateOf("") }
     var showDisabled by rememberSaveable { mutableStateOf(false) }
+    var controlsFor by remember { mutableStateOf<ProviderConfig?>(null) }
+    var showControls by remember { mutableStateOf(false) }
+    var saveFailed by remember { mutableStateOf(false) }
     var showAllModels by remember { mutableStateOf(false) }
     val visibility by com.androidharness.app.data.ModelVisibility.get(LocalContext.current).state.collectAsStateWithLifecycle()
     val selection = rememberProviderSelection()
@@ -78,7 +81,8 @@ fun ProvidersScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 item {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        TextButton(onClick = { controlsFor = null; showControls = true }) { Text(stringResource(R.string.provider_global_proxy_action)) }
                         TextButton(enabled = !selection.busy, onClick = {
                             if (selection.selecting) selection.done() else selection.selecting = true
                         }) { Text(if (selection.selecting) uiContext.getString(R.string.settings_action_done) else uiContext.getString(R.string.ui_select_providers)) }
@@ -132,6 +136,9 @@ fun ProvidersScreen(
                                 )
                             }
                         },
+                        onControls = if (com.androidharness.app.local.LocalModelCatalog.isLocal(provider.id)) null else {
+                            { controlsFor = provider; showControls = true }
+                        },
                         onEdit = {
                             editing = provider
                             showDialog = true
@@ -182,6 +189,8 @@ fun ProvidersScreen(
         }
     }
 
+    if (showControls) ProviderControlsSheet(container, controlsFor) { showControls = false; controlsFor = null }
+
     if (showDialog) {
         ProviderSheet(
             existing = editing,
@@ -189,29 +198,38 @@ fun ProvidersScreen(
             onDismiss = { showDialog = false },
             onSave = { name, type, baseUrl, model, apiKey, headers ->
                 scope.launch {
-                    val existingConfig = editing
-                    if (existingConfig == null) {
-                        val created = container.providers.add(name, type, baseUrl, model, apiKey, headers)
-                        // Adding a provider switches to it on its own default
-                        // model; a stale model override must not survive.
-                        container.settings.setActiveSelection(created.id, null)
-                    } else {
-                        container.providers.update(
-                            existingConfig.copy(
-                                name = name,
-                                type = type,
-                                baseUrl = baseUrl,
-                                model = model,
-                                headers = headers,
-                            ),
-                            apiKey,
-                        )
-                    }
-                    showDialog = false
+                    try {
+                        val existingConfig = editing
+                        if (existingConfig == null) {
+                            val created = container.providers.add(name, type, baseUrl, model, apiKey, headers)
+                            // Adding a provider switches to it on its own default
+                            // model; a stale model override must not survive.
+                            container.settings.setActiveSelection(created.id, null)
+                        } else {
+                            container.providers.update(
+                                existingConfig.copy(
+                                    name = name,
+                                    type = type,
+                                    baseUrl = baseUrl,
+                                    model = model,
+                                    headers = headers,
+                                ),
+                                apiKey,
+                            )
+                        }
+                        showDialog = false
+                    } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                    catch (_: Exception) { saveFailed = true }
                 }
             },
         )
     }
+
+    if (saveFailed) AlertDialog(
+        onDismissRequest = { saveFailed = false },
+        text = { Text(stringResource(R.string.provider_save_failed)) },
+        confirmButton = { TextButton(onClick = { saveFailed = false }) { Text(stringResource(android.R.string.ok)) } },
+    )
 
     if (showModelsFor != null || showAllModels) {
         ModelPickerSheet(

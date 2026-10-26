@@ -203,8 +203,9 @@ class ChatExperienceDeviceTest {
             val latest = android.graphics.Rect().also { await("Latest thought 12").getBoundsInScreen(it) }
             assertTrue("The latest thought is within the visible inner viewport", latest.top > 0 && latest.bottom < instrumentation.targetContext.resources.displayMetrics.heightPixels)
             screenshot("chat-nested-activity-auto-follow")
-            tap("Thinking"); awaitGone("Latest thought 12")
-            tap("Thinking"); await("Latest thought 12")
+            // The live header retains the latest tool phase after that tool completes.
+            tap("Read web pages"); awaitGone("Latest thought 12")
+            tap("Read web pages"); await("Latest thought 12")
             scenario.onActivity { live.value = false }
             await("Thoughts"); await("Latest thought 12")
             screenshot("chat-nested-completed-latest")
@@ -333,7 +334,9 @@ class ChatExperienceDeviceTest {
 
     @Test fun answerVersionsPersistAndRestoreTheSelectedToolHistory(): Unit = runBlocking {
         val name = "chat-versions-${System.nanoTime()}.db"
-        fun open() = androidx.room.Room.databaseBuilder(c.appContext, com.androidharness.app.data.db.AppDatabase::class.java, name).addMigrations(com.androidharness.app.data.db.AppDatabase.MIGRATION_21_22).build()
+        fun open() = androidx.room.Room.databaseBuilder(c.appContext, com.androidharness.app.data.db.AppDatabase::class.java, name)
+            .addMigrations(com.androidharness.app.data.db.AppDatabase.MIGRATION_21_22,
+                com.androidharness.app.data.db.AppDatabase.MIGRATION_22_23).build()
         var database = open()
         try {
             var repo = SessionRepository(database)
@@ -343,6 +346,12 @@ class ChatExperienceDeviceTest {
             android.database.sqlite.SQLiteDatabase.openDatabase(c.appContext.getDatabasePath(name).path, null,
                 android.database.sqlite.SQLiteDatabase.OPEN_READWRITE).use {
                 it.execSQL("DROP TABLE chat_answer_versions")
+                // Recreate the actual v21 memory schema before testing the full upgrade path.
+                it.execSQL("DROP TABLE memories")
+                it.execSQL("CREATE TABLE memories (id TEXT NOT NULL PRIMARY KEY, text TEXT NOT NULL, category TEXT NOT NULL, " +
+                    "scope TEXT NOT NULL, projectId TEXT, sourceSessionId TEXT, pinned INTEGER NOT NULL, enabled INTEGER NOT NULL, " +
+                    "createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, lastUsedAt INTEGER NOT NULL, useCount INTEGER NOT NULL)")
+                for (column in listOf("scope", "projectId", "enabled")) it.execSQL("CREATE INDEX index_memories_$column ON memories($column)")
                 it.version = 21
             }
             database = open(); repo = SessionRepository(database)
@@ -409,8 +418,6 @@ class ChatExperienceDeviceTest {
                 scenario.onActivity { activity -> activity.setContent { HarnessTheme(dynamicColor = false) {
                     Column(Modifier.fillMaxSize().statusBarsPadding().padding(24.dp)) {
                         com.androidharness.app.ui.chat.components.ChatMemoryReceipt(messages, c, false)
-                        com.androidharness.app.ui.chat.components.ChatMemoryReceipt(emptyList(), c, false,
-                            listOf(SuppliedMemory(requireNotNull(memoryId), text)))
                     }
                 } } }
                 tap("Memory saved"); tap(text)
@@ -418,14 +425,11 @@ class ChatExperienceDeviceTest {
                 assertTrue(input.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, android.os.Bundle().apply {
                     putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, changed)
                 }))
-                tap("Save"); awaitGone("Edit memory"); await(changed)
+                tap("Save"); awaitGone("Save"); await(changed)
                 assertEquals(changed, c.memory.memories.first().single { it.id == memoryId }.text)
                 screenshot("chat-memory-receipt-edited")
-                tap("Close"); tap("Memory used · 1"); await(text)
-                screenshot("chat-memory-used-original-snapshot")
-                tap(text); await(changed); tap("Delete"); await("Delete this memory?"); tap("Delete")
-                await(text + " · Deleted from memory")
-                tap("Close"); tap("Memory saved")
+                assertNull("Supplied-memory metadata stays out of the transcript", find("Memory used · 1"))
+                tap(changed); tap("Delete"); await("Delete this memory?"); tap("Delete")
                 await("This saved memory is no longer available here. Older receipts can be managed in Settings → Memory.")
                 assertFalse(c.memory.memories.first().any { it.id == memoryId })
             }
@@ -508,11 +512,11 @@ class ChatExperienceDeviceTest {
             val updatedDeadline = SystemClock.uptimeMillis() + 8000
             while (metric()?.text?.toString()?.contains("~100 tokens") != true && SystemClock.uptimeMillis() < updatedDeadline) SystemClock.sleep(100)
             assertTrue(requireNotNull(metric()).text.toString().contains("~100 tokens"))
-            scenario.onActivity { timing.value = timing.value.stop(ThinkingTiming.now()); reported.value = 42; live.value = false }
+            scenario.onActivity { timing.value = timing.value.stop(ThinkingTiming.now()); reported.value = 142; live.value = false }
             val reportDeadline = SystemClock.uptimeMillis() + 8000
-            while (metric()?.text?.toString()?.contains("42 tokens") != true && SystemClock.uptimeMillis() < reportDeadline) SystemClock.sleep(100)
+            while (metric()?.text?.toString()?.contains("142 tokens") != true && SystemClock.uptimeMillis() < reportDeadline) SystemClock.sleep(100)
             val frozen = requireNotNull(metric()).text.toString()
-            assertTrue(frozen.contains("42 tokens")); assertFalse(frozen.contains("~"))
+            assertTrue(frozen.contains("142 tokens")); assertFalse(frozen.contains("~"))
             SystemClock.sleep(1200)
             assertEquals("The timer stops when thinking ends", frozen, metric()?.text?.toString())
             screenshot("chat-collapsed-thinking-live-metrics-large-text")

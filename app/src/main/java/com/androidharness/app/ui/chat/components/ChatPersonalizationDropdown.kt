@@ -17,6 +17,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -32,8 +34,13 @@ internal fun ChatPersonalizationDropdown(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val chevron by animateFloatAsState(if (expanded) 180f else 0f, expressiveSpatialSpec(), label = "personalizationChevron")
+    // DropdownMenu aligns its start edge to the anchor, so the anchor must be
+    // as wide as the menu for a centered trigger to produce a centered menu.
+    val menuWidth = with(LocalDensity.current) {
+        LocalWindowInfo.current.containerSize.width.toDp() - 32.dp
+    }.coerceIn(48.dp, 360.dp).coerceAtMost(320.dp)
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        Box {
+        Box(Modifier.width(menuWidth), contentAlignment = Alignment.Center) {
             TextButton(onClick = { expanded = true }, enabled = enabled,
                 colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
                 modifier = Modifier.heightIn(min = 48.dp)) {
@@ -42,7 +49,8 @@ internal fun ChatPersonalizationDropdown(
                 Spacer(Modifier.width(8.dp))
                 Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(20.dp).graphicsLayer { rotationZ = chevron })
             }
-            DropdownMenu(expanded = expanded && enabled, onDismissRequest = { expanded = false }) {
+            DropdownMenu(expanded = expanded && enabled, onDismissRequest = { expanded = false },
+                modifier = Modifier.width(menuWidth)) {
                 for (option in listOf(true, false)) {
                     DropdownMenuItem(
                         text = { Column {

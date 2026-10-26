@@ -544,14 +544,14 @@ class SearchFilesTool : Tool {
             nodes.forEach { node ->
                 if (!node.isFile) return@forEach
                 val nameMatch = runCatching {
-                    nameMatcher.matches(java.nio.file.Path.of(node.name))
+                    nameMatcher.matches(java.nio.file.Paths.get(node.name))
                 }.getOrDefault(false)
                 val pathMatch = runCatching {
-                    nameMatcher.matches(java.nio.file.Path.of(node.relPath))
+                    nameMatcher.matches(java.nio.file.Paths.get(node.relPath))
                 }.getOrDefault(false)
                 val rootMatch = if (rootMatcher != null && !node.relPath.contains('/')) {
                     runCatching {
-                        rootMatcher.matches(java.nio.file.Path.of(node.name))
+                        rootMatcher.matches(java.nio.file.Paths.get(node.name))
                     }.getOrDefault(false)
                 } else false
                 if (nameMatch || pathMatch || rootMatch) matches += node.relPath
@@ -810,7 +810,7 @@ class GrepTool(
             if (includeMatcher != null) {
                 val targetNode = ctx.workspace.resolve(path)
                 if (targetNode.exists && targetNode.isFile &&
-                    !includeMatcher.matches(java.nio.file.Path.of(targetNode.name))
+                    !includeMatcher.matches(java.nio.file.Paths.get(targetNode.name))
                 ) {
                     throw ToolFailure(
                         "Path '$path' is a file, but the 'include' filter '$include' excludes it. " +
@@ -836,7 +836,7 @@ class GrepTool(
                     // result look like the filter had been ignored (on-device
                     // QA, 2026-09-17).
                     if (includeMatcher != null &&
-                        !includeMatcher.matches(java.nio.file.Path.of(node.name))
+                        !includeMatcher.matches(java.nio.file.Paths.get(node.name))
                     ) continue
                     if (node.length > 2_000_000) {
                         skipped += "${node.relPath} (>2MB)"

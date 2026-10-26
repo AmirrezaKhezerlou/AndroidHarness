@@ -1643,4 +1643,18 @@
         <item quantity="many">"%1$d صفاً"</item>
         <item quantity="other">"%1$d صف"</item>
     </plurals>
+    <string name="voice_transcribing">جارٍ تحويل الصوت إلى نص…</string>
+    <string name="donate_upi_title">تبرع عبر UPI</string>
+    <string name="donate_upi_copy_id">نسخ معرف UPI</string>
+    <string name="donate_upi_copied">تم نسخ معرف UPI</string>
+    <string name="donate_upi_show_qr">عرض رمز QR</string>
+    <string name="donate_upi_hide_qr">إخفاء رمز QR</string>
+    <string name="donate_upi_qr_description">رمز QR للتبرع عبر UPI</string>
+    <string name="donate_upi_save_qr">حفظ في المعرض</string>
+    <string name="donate_upi_qr_saved">تم حفظ رمز QR في المعرض</string>
+    <string name="donate_upi_save_failed">تعذر حفظ رمز QR</string>
+    <string name="donate_upi_storage_required">اسمح بالوصول إلى التخزين لحفظ رمز QR في المعرض.</string>
+    <string name="donate_funding_message">نواجه نقصًا في التمويل لمواصلة تطوير AndroidHarness. دعمك يساعدنا على الاستمرار.</string>
+    <string name="donate_dismiss_message">إخفاء رسالة التبرع</string>
+    <string name="donate_upi_saving_qr">جارٍ الحفظ…</string>
 </resources>

@@ -96,8 +96,15 @@ class MemoryReliabilityUiDeviceTest {
                 } }
                 click(context.getString(R.string.chat_memory_updated))
                 awaitText(original.text)
-                val fact = bounds(requireNotNull(find { it.text?.toString() == original.text }))
                 val screen = context.resources.displayMetrics
+                // Semantics appear before the bottom sheet finishes sliding onto the screen.
+                await {
+                    find { it.text?.toString() == original.text }?.let { node ->
+                        val rect = bounds(node)
+                        rect.height() > 40 * screen.density && rect.bottom <= screen.heightPixels
+                    } == true
+                }
+                val fact = bounds(requireNotNull(find { it.text?.toString() == original.text }))
                 assertTrue(fact.left >= 0 && fact.right <= screen.widthPixels)
                 assertTrue("Memory text wraps into readable lines", fact.height() > 40 * screen.density)
                 screenshot("memory-updated-sheet-large-font")

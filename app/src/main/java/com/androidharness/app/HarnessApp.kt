@@ -60,6 +60,7 @@ class AppContainer(val appContext: Context) {
     val pendingSettingsScroll = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 
     val keys = KeyStoreManager(appContext)
+    init { com.androidharness.app.llm.ProviderNetwork.settings = keys::providerProxy }
     val settings = SettingsRepository(appContext)
     /** Reads assistant replies with Android TTS or Groq PlayAI. */
     val tts = com.androidharness.app.data.audio.TtsController(appContext, settings, keys)
@@ -82,6 +83,7 @@ class AppContainer(val appContext: Context) {
     val providers: ProviderRepository = ProviderRepository(appContext, keys, localModels, chatGpt, settings)
 
     init {
+        com.androidharness.app.llm.RotatingKeyProvider.pools = providers::controls
         ProviderFactory.chatGptProvider = com.androidharness.app.chatgpt.ChatGptProvider(chatGpt::accessToken,
             modelEntry = { id, model -> chatGpt.state.value.accounts.firstOrNull { it.providerId == id }?.models?.firstOrNull { it.id == model } })
         com.androidharness.app.llm.ModelCatalog.chatGptModels = { chatGpt.refreshModels(it) }
@@ -131,7 +133,13 @@ class AppContainer(val appContext: Context) {
         linuxEnv.deployStateListener = { shizuku.invalidateDeployState() }
     }
 
-    val updates = com.androidharness.app.data.update.UpdateManager(appContext, shizuku)
+    val updates = com.androidharness.app.data.update.UpdateManager(appContext, deviceAccess)
+    internal val sync by lazy { com.androidharness.app.data.transfer.SyncManager(keys, sshConnections) { fs, action ->
+        runManager.withIdleWorkspace(fs, "Stop running tasks in this workspace before syncing files.", action)
+    } }
+    internal val ftpShare by lazy { com.androidharness.app.data.transfer.FtpShareManager(appContext) { fs, action ->
+        runManager.withIdleWorkspace(fs, "Stop running tasks in this workspace before changing shared files.", action)
+    } }
     val backgroundProcesses = com.androidharness.app.data.BgProcessStore(
         appContext, linuxEnv, shizuku, workspaceRoot = workspace.appPrivateRoot, deviceAccess = deviceAccess,
     )

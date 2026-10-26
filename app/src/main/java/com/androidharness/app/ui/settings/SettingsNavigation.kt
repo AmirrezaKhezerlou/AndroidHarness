@@ -180,6 +180,14 @@ internal enum class SettingsPage(
         "diagnostics help doctor repair errors storage linux shizuku ssh mcp notifications provider report",
         onHome = false,
     ),
+    SYNC(
+        R.string.sync_title, R.string.sync_description, R.string.settings_group_connections,
+        "sync ftp sftp upload download remote folder transfer",
+    ),
+    FTP_SERVER(
+        R.string.ftp_server_title, R.string.ftp_server_description, R.string.settings_group_connections,
+        "ftp server share wifi local network files passive",
+    ),
     BACKUP(
         R.string.settings_page_backup_title,
         R.string.settings_page_backup_desc,
@@ -196,7 +204,7 @@ internal enum class SettingsPage(
         R.string.settings_page_updates_title,
         R.string.settings_page_updates_desc,
         R.string.settings_group_app_data,
-        "version release download",
+        "version release download install root shizuku github update",
     ),
     SETUP(
         R.string.settings_page_setup_title,
@@ -599,6 +607,9 @@ internal fun matchingSettingsPages(query: String, text: (Int) -> String): List<S
     matchingSettingsEntries(query, text).map { it.page }.distinct()
 
 internal fun settingsDeepLink(target: String): SettingsPage? = when (target) {
+    "sync" -> SettingsPage.SYNC
+    "ftp-server" -> SettingsPage.FTP_SERVER
+    "updates" -> SettingsPage.UPDATES
     "language" -> SettingsPage.LANGUAGE
     "troubleshooting" -> SettingsPage.TROUBLESHOOTING
     "github" -> SettingsPage.GITHUB

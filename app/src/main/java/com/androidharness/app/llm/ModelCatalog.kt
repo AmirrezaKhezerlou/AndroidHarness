@@ -83,7 +83,7 @@ object ModelCatalog {
 
     sealed interface Result {
         data class Models(val models: List<ModelEntry>, val latencyMs: Long) : Result
-        data class Failed(val message: String) : Result
+        data class Failed(val message: String, val status: Int? = null) : Result
     }
 
     suspend fun listModels(config: ProviderConfig, apiKey: String, httpClient: OkHttpClient = client): Result =
@@ -102,7 +102,7 @@ object ModelCatalog {
                 val request = buildRequest(config, apiKey)
                 ProviderHeaders.client(config, httpClient).newCall(request).execute().use { resp ->
                     if (!resp.isSuccessful) {
-                        return@use Result.Failed("HTTP ${resp.code}: ${resp.message}")
+                        return@use Result.Failed("HTTP ${resp.code}: ${resp.message}", resp.code)
                     }
                     val body = resp.body?.string() ?: return@use Result.Failed("Empty response")
                     val entries = if (config.id == HarnessProvider.ID) HarnessProvider.parseKiloCatalog(body)

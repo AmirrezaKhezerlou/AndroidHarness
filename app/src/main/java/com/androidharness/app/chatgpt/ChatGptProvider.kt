@@ -76,7 +76,7 @@ class ChatGptProvider(
                 val request = Request.Builder().url(ChatGptProtocol.RESOURCE + "/responses")
                     .header("Authorization", "Bearer $access")
                     .post(requestBody.toString().toRequestBody("application/json; charset=utf-8".toMediaType())).build()
-                try { ProviderFactory.sseJson(request, client).collect { element ->
+                try { ProviderFactory.sseJson(request, com.androidharness.app.llm.ProviderNetwork.client(client, config.id)).collect { element ->
                     if (completed || failed) return@collect
                     received = true
                     val event = element as? JsonObject ?: return@collect

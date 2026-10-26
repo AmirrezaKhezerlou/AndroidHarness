@@ -206,6 +206,7 @@ dependencies {
     implementation("dev.cel:cel:0.14.0")
     implementation(libs.coroutines.android)
     implementation(libs.commons.compress)
+    implementation(libs.commons.net)
     implementation(libs.xz)
     implementation("com.github.topjohnwu.libsu:core:6.0.0")
     implementation("com.github.topjohnwu.libsu:service:6.0.0")

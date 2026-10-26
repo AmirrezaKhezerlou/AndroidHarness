@@ -408,6 +408,117 @@ class LocalizationDeviceTest {
         } finally { target.deleteSharedPreferences(preference) }
     }
 
+    @Test fun persianSearchAndPermissionControlsWorkWithLargeText() {
+        val fa = context("fa")
+        var selected: Pair<SettingsPage, Int?>? = null
+        val state = mutableStateOf(AppSettings())
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            scenario.onActivity { activity -> show(activity, locale = "fa") {
+                SettingsHome(fa.getString(R.string.settings_search_max_context_title), {},
+                    { page, anchor -> selected = page to anchor }, Modifier.fillMaxSize().verticalScroll(rememberScrollState()))
+            } }
+            click(fa.getString(R.string.settings_search_max_context_desc))
+            assertEquals(SettingsPage.AGENT to R.string.settings_anchor_max_context, selected)
+            screenshot("persian-settings-search.png")
+            scenario.onActivity { activity -> show(activity, scale = 1.5f, locale = "fa") {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+                    AgentBehaviorSection(state.value,
+                        onPermissionMode = { state.value = state.value.copy(permissionMode = it) },
+                        onContextLimit = { state.value = state.value.copy(maxContextTokens = it) },
+                        onIterationLimit = { state.value = state.value.copy(maxIterations = it) },
+                        onProjectInstructions = {}, onLiveUpdates = {})
+                }
+            } }
+            click(fa.getString(R.string.settings_anchor_default_permission))
+            click(fa.localizedOptionLabel(PermissionMode.FULL_AUTO.label))
+            assertEquals(PermissionMode.FULL_AUTO, state.value.permissionMode)
+            awaitText(fa.localizedOptionLabel(PermissionMode.FULL_AUTO.label))
+            screenshot("persian-agent-150-percent.png")
+        }
+    }
+
+    @Test fun persianPrimaryScreensAndModelPickerPreserveModelIds() {
+        val container = (target.applicationContext as HarnessApp).container
+        val fa = context("fa")
+        val preference = "persian-picker-${System.nanoTime()}"
+        val shortcuts = ModelShortcuts(target, preference)
+        val provider = ProviderConfig("persian-provider", "Provider unchanged", ProviderType.OPENAI_COMPAT,
+            "https://unused.invalid/v1", "first-model")
+        var chosen: Pair<String, String?>? = null
+        try {
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { activity -> show(activity, locale = "fa") { SetupScreen(container, onFinish = {}) } }
+                awaitText(fa.getString(R.string.ui_welcome_to_androidharness)); screenshot("persian-setup.png")
+                scenario.onActivity { activity -> show(activity, locale = "fa") { StatsScreen(container, onBack = {}) } }
+                awaitText(fa.getString(R.string.ui_model_activity)); screenshot("persian-usage.png")
+                scenario.onActivity { activity -> show(activity, locale = "fa") { AutomationScreen(container, onBack = {}, onOpenSession = {}) } }
+                awaitText(fa.getString(R.string.ui_automation)); screenshot("persian-automation.png")
+                scenario.onActivity { activity -> show(activity, locale = "fa") { FilesScreen(container, onBack = {}, onOpenFile = {}) } }
+                awaitText(fa.getString(R.string.ui_files)); screenshot("persian-files.png")
+                scenario.onActivity { activity -> show(activity, locale = "fa") {
+                    ModelPickerSheet(listOf(provider), provider.id, provider.model,
+                        mapOf(provider.id to listOf(ModelEntry("first-model", displayName = "First model"),
+                            ModelEntry("second-model", displayName = "Second model"))),
+                        onDismiss = {}, onSelect = { id, model -> chosen = id to model }, onRefreshCatalog = { null },
+                        onManageProviders = {}, modelShortcuts = shortcuts)
+                } }
+                awaitText(fa.getString(R.string.ui_all_models))
+                awaitText(fa.getString(R.string.ui_search_models_or_providers))
+                awaitText("${provider.name} · ${fa.getString(R.string.ui_current)}")
+                click("Second model")
+                screenshot("persian-model-picker.png"); click(fa.getString(R.string.ui_use_model))
+                assertEquals(provider.id to "second-model", chosen)
+            }
+        } finally { target.deleteSharedPreferences(preference) }
+    }
+
+    @Test fun persianResourcesKeepDomainValuesAndFormatEveryCount() {
+        val fa = context("fa")
+        assertEquals(context("en").getString(R.string.app_name), fa.getString(R.string.app_name))
+        for (id in listOf(R.string.settings_language_english, R.string.settings_language_chinese,
+            R.string.settings_language_russian, R.string.settings_language_arabic,
+            R.string.settings_language_indonesian, R.string.settings_language_persian)) {
+            assertEquals("Language autonyms stay recognizable", context("en").getString(id), fa.getString(id))
+        }
+        assertEquals(android.view.View.LAYOUT_DIRECTION_RTL, fa.resources.configuration.layoutDirection)
+        assertEquals("Confirm everything", PermissionMode.CONFIRM_ALL.label)
+        assertTrue(fa.getString(R.string.settings_root_shizuku_available).contains("Shizuku"))
+        assertTrue(fa.getString(R.string.settings_root_shizuku_available).contains("Root"))
+        for (count in listOf(0, 1, 2, 3, 10, 11, 99, 100, 101)) {
+            val number = String.format(java.util.Locale.forLanguageTag("fa"), "%d", count)
+            val value = fa.resources.getQuantityString(R.plurals.settings_accounts_models_available, count, count)
+            assertTrue(value, value.contains(number))
+            assertFalse(value, value.contains("%1"))
+        }
+        val summary = fa.getString(R.string.sync_preview_counts, 2, 3, 4)
+        for (count in 2..4) assertTrue(summary, summary.contains(String.format(java.util.Locale.forLanguageTag("fa"), "%d", count)))
+        val fileSummary = fa.getString(R.string.ui_in, "3", "references", "4", "files")
+        assertTrue(fileSummary, fileSummary.contains("3") && fileSummary.contains("4"))
+        assertFalse(fileSummary, fileSummary.contains("references") || fileSummary.contains("files"))
+    }
+
+    @Test fun persianDonationDialogKeepsTheUpiIdAndQrControlsReadable() {
+        val fa = context("fa")
+        val open = mutableStateOf(true)
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            scenario.onActivity { activity -> show(activity, scale = 1.5f, locale = "fa") {
+                if (open.value) com.androidharness.app.ui.chat.components.UpiDonationDialog { open.value = false }
+            } }
+            awaitText("sanuj69@ybl")
+            click(fa.getString(R.string.donate_upi_copy_id))
+            instrumentation.runOnMainSync {
+                assertEquals("sanuj69@ybl", target.getSystemService(android.content.ClipboardManager::class.java)
+                    .primaryClip!!.getItemAt(0).text.toString())
+            }
+            click(fa.getString(R.string.donate_upi_show_qr))
+            awaitText(fa.getString(R.string.donate_upi_qr_description))
+            awaitText(fa.getString(R.string.donate_upi_save_qr))
+            screenshot("persian-donation-qr-150-percent.png")
+            click(fa.getString(R.string.settings_action_close))
+            assertFalse(open.value)
+        }
+    }
+
     @Test fun arabicResourcesSelectAllPluralFormsAndKeepDomainValues() {
         val ar = context("ar")
         assertEquals("النماذج والمزوّدون", ar.getString(R.string.settings_page_models_title))

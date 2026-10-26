@@ -14,7 +14,7 @@
     <string name="rich_share_unavailable">"برنامه‌ای برای اشتراک‌گذاری این متن در دسترس نیست."</string>
     <string name="rich_images_hidden">"تصاویر برای این گفتگو خاموش است."</string>
     <string name="rich_expand_image">"بزرگ‌نمایی تصویر"</string>
-    <string name="rich_open_source">"متن‌باز"</string>
+    <string name="rich_open_source">باز کردن منبع</string>
     <string name="rich_discuss_image">"پرسش درباره این تصویر"</string>
     <string name="rich_discuss_image_prompt">"تصویری که انتخاب کردم را توضیح بده."</string>
     <string name="rich_reported_status">"گزارش‌شده: %1$s"</string>

@@ -252,11 +252,15 @@ class ConversationSectionsDeviceTest {
     }
 
     @Test fun desktopSidebarKeepsChatSelectedOnOtherPagesAndCanReopenChat(): Unit = runBlocking {
+        val configuration = instrumentation.targetContext.resources.configuration
+        org.junit.Assume.assumeTrue("Run this case in a desktop-sized emulator window",
+            configuration.screenWidthDp >= 720 * configuration.fontScale.coerceAtLeast(1f))
         val saved = c.settings.settings.first()
         val before = c.sessions.sessions.first().map { it.id }.toSet()
         val chat = c.sessions.createSession("Desktop sidebar Chat fixture", c.workspace.currentProjectOnce().id,
             ConversationConfig(ConversationKind.CHAT))
         c.settings.setOnboardingDone(true)
+        c.settings.setStartScreen(StartScreen.CODE)
         c.settings.setResumeLastChat(true)
         c.settings.setChatStart(com.androidharness.app.data.ChatStartMode.NEW_CHAT)
         c.settings.setWorkspaceLayout(WorkspaceLayoutMode.DESKTOP)
@@ -292,6 +296,8 @@ class ConversationSectionsDeviceTest {
             c.settings.setChatStart(saved.chatStart)
             c.settings.setWorkspaceLayout(saved.workspaceLayout)
             c.settings.setLastActiveSessionId(saved.lastActiveSessionId)
+            c.settings.setStartScreen(saved.startScreen)
+            c.settings.setLastConversationKind(saved.lastConversationKind)
         }
     }
 

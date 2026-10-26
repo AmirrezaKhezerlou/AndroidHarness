@@ -165,7 +165,8 @@ class ProjectSidebarDeviceTest {
             await { find("AndroidHarness icon") != null }
             assertSearchInactive(activity)
             tap("Search chats and messages")
-            await { searchHasFocus() && keyboardVisible(activity) }
+            await { searchHasFocus() }
+            await { keyboardVisible(activity) }
             search("Unique sidebar search message anchor")
             tap("Collapse sidebar")
             await { find("Open navigation") != null }
@@ -218,10 +219,13 @@ class ProjectSidebarDeviceTest {
         }
     }
 
-    private fun searchHasFocus(): Boolean = nodes().any {
-        it.isVisibleToUser && it.isEditable && it.isFocused &&
-            (it.contentDescription?.toString() == "Search chats and messages" ||
-                it.parent?.contentDescription?.toString() == "Search chats and messages")
+    private fun searchHasFocus(): Boolean {
+        val label = find("Search chats and messages") ?: return false
+        val labelBounds = Rect().also(label::getBoundsInScreen)
+        return nodes().any {
+            it.isVisibleToUser && it.isEditable && it.isFocused &&
+                Rect.intersects(labelBounds, Rect().also(it::getBoundsInScreen))
+        }
     }
 
     private fun keyboardVisible(activity: MainActivity): Boolean {
@@ -354,7 +358,10 @@ class ProjectSidebarDeviceTest {
     private fun await(condition: () -> Boolean) {
         val deadline = SystemClock.uptimeMillis() + 15_000
         while (SystemClock.uptimeMillis() < deadline) { if (condition()) return; SystemClock.sleep(100) }
-        screenshot("failure"); error("Sidebar condition timed out")
+        screenshot("failure"); error("Sidebar condition timed out; editable nodes=" + nodes().filter { it.isEditable }.map {
+            "text=${it.text}, description=${it.contentDescription}, focused=${it.isFocused}, ancestors=" +
+                generateSequence(it.parent) { parent -> parent.parent }.take(6).map { parent -> parent.contentDescription }.toList()
+        })
     }
     private fun screenshot(name: String) {
         val tag = InstrumentationRegistry.getArguments().getString("variant") ?: "default"

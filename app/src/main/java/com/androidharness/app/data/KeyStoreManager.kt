@@ -41,11 +41,61 @@ class KeyStoreManager(context: Context) {
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
     )
 
-    fun putKey(providerId: String, apiKey: String) {
-        prefs.edit().putString(providerId, apiKey).apply()
+    @Synchronized fun putKey(providerId: String, apiKey: String) {
+        putProviderControls(providerId, providerKeyPool(providerId).replaceDefault(apiKey.trim()), providerProxy(providerId))
     }
 
-    fun getKey(providerId: String): String? = prefs.getString(providerId, null)
+    fun getKey(providerId: String): String? = providerKeyPool(providerId).keys.firstOrNull { it.enabled }?.value
+
+    /** Structured device credentials are separate from provider API-key pools. */
+    fun localSecret(slot: String): String? = prefs.getString("local_secret:$slot", null) ?: prefs.getString(slot, null)
+    @Synchronized fun putLocalSecret(slot: String, value: String) {
+        check(prefs.edit().putString("local_secret:$slot", value).remove(slot).remove("provider_keys:$slot").commit()) { "Could not save connection credentials." }
+    }
+    @Synchronized fun removeLocalSecret(slot: String) {
+        check(prefs.edit().remove("local_secret:$slot").remove(slot).remove("provider_keys:$slot").commit()) { "Could not remove connection credentials." }
+    }
+
+    fun providerKeyPool(providerId: String): com.androidharness.app.llm.ProviderKeyPool {
+        val raw = prefs.getString("provider_keys:$providerId", null)
+        if (raw != null) return try {
+            kotlinx.serialization.json.Json.decodeFromString<com.androidharness.app.llm.ProviderKeyPool>(raw).also {
+                check(it.error() == null)
+            }
+        } catch (_: Exception) { throw IllegalStateException("Saved provider API keys could not be read. Reopen connection controls.") }
+        val legacy = prefs.getString(providerId, null)?.takeIf { it.isNotBlank() }
+        return com.androidharness.app.llm.ProviderKeyPool(legacy?.let {
+            listOf(com.androidharness.app.llm.ProviderApiKey(id = "primary", value = it))
+        }.orEmpty())
+    }
+
+    fun providerProxy(providerId: String?): com.androidharness.app.llm.ProviderProxy =
+        prefs.getString(if (providerId == null) "global_provider_proxy" else "provider_proxy:$providerId", null)?.let {
+            try { kotlinx.serialization.json.Json.decodeFromString<com.androidharness.app.llm.ProviderProxy>(it).also { proxy -> check(proxy.error() == null) } }
+            catch (_: Exception) { throw IllegalStateException("Saved provider proxy could not be read. Reopen connection controls.") }
+        } ?: com.androidharness.app.llm.ProviderProxy()
+
+    @Synchronized fun putProviderControls(providerId: String, pool: com.androidharness.app.llm.ProviderKeyPool?, proxy: com.androidharness.app.llm.ProviderProxy) {
+        require(pool?.error() == null) { pool?.error().orEmpty() }
+        require(proxy.error() == null) { proxy.error().orEmpty() }
+        val edit = prefs.edit()
+        if (pool != null) {
+            edit.putString("provider_keys:$providerId", kotlinx.serialization.json.Json.encodeToString(com.androidharness.app.llm.ProviderKeyPool.serializer(), pool))
+            val first = pool.keys.firstOrNull { it.enabled }?.value
+            if (first == null) edit.remove(providerId) else edit.putString(providerId, first)
+        }
+        if (proxy.mode == com.androidharness.app.llm.ProviderProxyMode.INHERIT) edit.remove("provider_proxy:$providerId")
+        else edit.putString("provider_proxy:$providerId", kotlinx.serialization.json.Json.encodeToString(com.androidharness.app.llm.ProviderProxy.serializer(), proxy))
+        check(edit.commit()) { "Could not securely save provider controls." }
+    }
+
+    @Synchronized fun putGlobalProviderProxy(proxy: com.androidharness.app.llm.ProviderProxy) {
+        require(proxy.error() == null) { proxy.error().orEmpty() }
+        val edit = prefs.edit()
+        if (proxy.mode == com.androidharness.app.llm.ProviderProxyMode.INHERIT) edit.remove("global_provider_proxy")
+        else edit.putString("global_provider_proxy", kotlinx.serialization.json.Json.encodeToString(com.androidharness.app.llm.ProviderProxy.serializer(), proxy))
+        check(edit.commit()) { "Could not securely save global provider proxy." }
+    }
 
     fun providerHeaders(providerId: String): List<com.androidharness.app.llm.ProviderHeader> =
         prefs.getString("provider_headers:$providerId", null)?.let {
@@ -62,7 +112,7 @@ class KeyStoreManager(context: Context) {
     }
 
     fun removeKey(providerId: String) {
-        prefs.edit().remove(providerId).apply()
+        check(prefs.edit().remove(providerId).remove("provider_keys:$providerId").remove("provider_proxy:$providerId").commit()) { "Could not securely remove provider credentials." }
     }
 
     /** GitHub access token used for push/PR/private-repo access from the toolchain. */

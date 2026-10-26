@@ -48,16 +48,16 @@ class SshConnections(private val keys: KeyStoreManager) {
     private val sessions = ConcurrentHashMap<String, Session>()
     private val paused = ConcurrentHashMap.newKeySet<String>()
     val statuses = MutableStateFlow<Map<String, SshStatus>>(emptyMap())
-    fun load(id: String): SshConnection = keys.getKey("ssh_workspace_$id")?.let {
+    fun load(id: String): SshConnection = keys.localSecret("ssh_workspace_$id")?.let {
         json.decodeFromString<SshConnection>(it)
     } ?: error("SSH credentials are missing. Open Connection settings to reconnect.")
     fun save(config: SshConnection) {
         config.validate()
         disconnect(config.id)
-        keys.putKey("ssh_workspace_${config.id}", json.encodeToString(SshConnection.serializer(), config))
+        keys.putLocalSecret("ssh_workspace_${config.id}", json.encodeToString(SshConnection.serializer(), config))
         paused.remove(config.id)
     }
-    fun forget(id: String) { disconnect(id); keys.removeKey("ssh_workspace_$id") }
+    fun forget(id: String) { disconnect(id); keys.removeLocalSecret("ssh_workspace_$id") }
     fun disconnect(id: String) {
         paused.add(id)
         sessions.remove(id)?.disconnect()
@@ -68,7 +68,7 @@ class SshConnections(private val keys: KeyStoreManager) {
         paused.remove(id)
         session(id)
     }
-    private fun connect(config: SshConnection, repository: HostKeyRepository): Session {
+    private fun connect(config: SshConnection, repository: HostKeyRepository, onConnecting: (Session) -> Unit = {}): Session {
         val client = JSch().apply {
             setHostKeyRepository(repository)
             if (config.privateKey.isNotBlank()) addIdentity("workspace", config.privateKey.toByteArray(), null,
@@ -76,6 +76,7 @@ class SshConnections(private val keys: KeyStoreManager) {
         }
         val session = client.getSession(config.username, config.host, config.port)
         try {
+            onConnecting(session)
             session.setConfig("StrictHostKeyChecking", "yes")
             if (config.privateKey.isNotBlank()) session.setConfig("PreferredAuthentications", "publickey")
             else {
@@ -110,12 +111,16 @@ class SshConnections(private val keys: KeyStoreManager) {
         return requireNotNull(observed) { "Server did not provide a host key" }
     }
     fun <T> preview(config: SshConnection, block: (ChannelSftp) -> T): T {
+        return openTransfer(config).use { block(it.channel) }
+    }
+    internal fun openTransfer(config: SshConnection, onConnecting: (Session) -> Unit = {}): SftpLease {
         config.validate()
-        val session = connect(config, FingerprintRepository(config.fingerprint))
+        val session = connect(config, FingerprintRepository(config.fingerprint), onConnecting)
         try {
             val sftp = session.openChannel("sftp") as ChannelSftp
-            try { sftp.connect(10_000); return block(sftp) } finally { sftp.disconnect() }
-        } finally { session.disconnect() }
+            try { sftp.connect(10_000); return SftpLease(session, sftp) }
+            catch (e: Exception) { sftp.disconnect(); throw e }
+        } catch (e: Exception) { session.disconnect(); throw e }
     }
     @Synchronized private fun session(id: String): Session {
         check(id !in paused) { "SSH disconnected. Tap Reconnect before continuing." }
@@ -205,4 +210,8 @@ class SshConnections(private val keys: KeyStoreManager) {
                 if (submitted) "Remote outcome uncertain. Reconnect and inspect before retrying." else "Reconnect in workspace Connection settings.")
         } finally { channel?.disconnect() }
     }
+}
+
+internal class SftpLease(private val session: Session, val channel: ChannelSftp) : java.io.Closeable {
+    override fun close() { channel.disconnect(); session.disconnect() }
 }

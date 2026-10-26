@@ -194,6 +194,27 @@ class DeviceAccessManager(
         return ShellRunResult(result.exitCode, result.timedOut, result.output, result.stderr, ExecutionTier.ROOT, null)
     }
 
+    /** A self-update is one manual action. Only an unavailable, undispatched call may fall back. */
+    internal suspend fun installUpdate(apk: File, requested: DeviceBackend?, onDispatch: (DeviceBackend) -> Unit): Pair<DeviceBackend, PrivilegedResult>? =
+        withRequest(null, null, requireRoot = requested == DeviceBackend.ROOT, requireShizuku = requested == DeviceBackend.SHIZUKU,
+            forceDevice = true, manual = true) {
+            val request = currentCoroutineContext()[AccessRequest]!!
+            val excluded = if (requested == DeviceBackend.ROOT) setOf(DeviceBackend.SHIZUKU, DeviceBackend.NORMAL) else emptySet()
+            val decision = select(excluded = excluded)
+            val backend = decision.backend?.takeIf { it != DeviceBackend.NORMAL } ?: return@withRequest null
+            if (backend == DeviceBackend.ROOT && !claimRoot(request)) return@withRequest null
+            val command = com.androidharness.app.data.update.UpdateInstallPolicy.command(apk, android.os.Process.myUid() / 100000)
+            active.update { it + 1 }
+            try {
+                withContext(VerifiedDeviceAccess(backend, decision.uid)) {
+                    onDispatch(backend)
+                    val result = if (backend == DeviceBackend.ROOT) root.run(command, null, null, 120_000, 4000)
+                        else shizuku.runPrivileged(command, null, null, 120_000, 4000)
+                    result?.let { backend to it }
+                }
+            } finally { active.update { (it - 1).coerceAtLeast(0) } }
+        }
+
     suspend fun statusForAgent(workspace: com.androidharness.app.workspace.WorkspaceFs, sessionId: String?): String {
         val prefs = store.preferences.first()
         if (workspace is com.androidharness.app.workspace.SshFs) return "SSH commands run on the remote host. Local Android root/Shizuku grants do not grant root on that host."
