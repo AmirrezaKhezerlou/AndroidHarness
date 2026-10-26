@@ -1,5 +1,7 @@
 package com.androidharness.app.ui.settings
 
+import androidx.compose.material.icons.outlined.CloudSync
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.LazyColumn
@@ -243,6 +245,8 @@ internal fun settingsIcon(page: SettingsPage): ImageVector = when (page) {
     SettingsPage.ENVIRONMENT -> Icons.Outlined.Terminal
     SettingsPage.TROUBLESHOOTING -> Icons.Outlined.Build
     SettingsPage.BACKUP -> Icons.Outlined.Archive
+    SettingsPage.SYNC -> Icons.Outlined.CloudSync
+    SettingsPage.FTP_SERVER -> Icons.Outlined.Storage
     SettingsPage.USAGE -> Icons.Outlined.BarChart
     SettingsPage.UPDATES -> Icons.Outlined.SystemUpdate
     SettingsPage.SETUP -> Icons.Outlined.Checklist

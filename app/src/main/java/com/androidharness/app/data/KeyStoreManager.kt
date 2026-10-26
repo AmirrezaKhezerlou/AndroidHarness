@@ -47,6 +47,15 @@ class KeyStoreManager(context: Context) {
 
     fun getKey(providerId: String): String? = providerKeyPool(providerId).keys.firstOrNull { it.enabled }?.value
 
+    /** Structured device credentials are separate from provider API-key pools. */
+    fun localSecret(slot: String): String? = prefs.getString("local_secret:$slot", null) ?: prefs.getString(slot, null)
+    @Synchronized fun putLocalSecret(slot: String, value: String) {
+        check(prefs.edit().putString("local_secret:$slot", value).remove(slot).remove("provider_keys:$slot").commit()) { "Could not save connection credentials." }
+    }
+    @Synchronized fun removeLocalSecret(slot: String) {
+        check(prefs.edit().remove("local_secret:$slot").remove(slot).remove("provider_keys:$slot").commit()) { "Could not remove connection credentials." }
+    }
+
     fun providerKeyPool(providerId: String): com.androidharness.app.llm.ProviderKeyPool {
         val raw = prefs.getString("provider_keys:$providerId", null)
         if (raw != null) return try {

@@ -133,7 +133,13 @@ class AppContainer(val appContext: Context) {
         linuxEnv.deployStateListener = { shizuku.invalidateDeployState() }
     }
 
-    val updates = com.androidharness.app.data.update.UpdateManager(appContext, shizuku)
+    val updates = com.androidharness.app.data.update.UpdateManager(appContext, deviceAccess)
+    internal val sync by lazy { com.androidharness.app.data.transfer.SyncManager(keys, sshConnections) { fs, action ->
+        runManager.withIdleWorkspace(fs, "Stop running tasks in this workspace before syncing files.", action)
+    } }
+    internal val ftpShare by lazy { com.androidharness.app.data.transfer.FtpShareManager(appContext) { fs, action ->
+        runManager.withIdleWorkspace(fs, "Stop running tasks in this workspace before changing shared files.", action)
+    } }
     val backgroundProcesses = com.androidharness.app.data.BgProcessStore(
         appContext, linuxEnv, shizuku, workspaceRoot = workspace.appPrivateRoot, deviceAccess = deviceAccess,
     )

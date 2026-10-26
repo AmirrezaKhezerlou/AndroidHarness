@@ -332,6 +332,8 @@ fun SettingsScreen(
                             ChatsBackupSection(container)
                         }
                         SettingsPage.UPDATES -> UpdatesCard(container)
+                        SettingsPage.SYNC -> com.androidharness.app.ui.transfer.SyncSettingsSection(container)
+                        SettingsPage.FTP_SERVER -> com.androidharness.app.ui.transfer.FtpServerSection(container)
                         SettingsPage.ABOUT -> AboutSection(container)
                         SettingsPage.SKILLS, SettingsPage.USAGE, SettingsPage.SETUP -> Unit
                     }
@@ -3079,6 +3081,7 @@ private fun UpdatesCard(container: AppContainer) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            UpdateInstallationChoice(container)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Button(
                     onClick = { scope.launch { container.updates.check(manual = true) } },

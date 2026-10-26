@@ -1,5 +1,8 @@
 package com.androidharness.app.ui.update
 
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.res.stringResource
+
 import com.androidharness.app.R
 import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import android.content.Intent
@@ -466,15 +469,15 @@ private fun InstallingContent(step: UpdateManager.Step.Installing, release: Upda
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = if (step.viaShizuku) uiContext.getString(R.string.ui_installing_via_shizuku) else uiContext.getString(R.string.ui_opening_system_installer),
+                    text = if (step.viaRoot || step.viaShizuku) uiContext.getString(R.string.update_installing_via, if (step.viaRoot) "Root" else "Shizuku") else uiContext.getString(R.string.ui_opening_system_installer),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = if (step.viaShizuku) {
-                        uiContext.getString(R.string.ui_shizuku_is_installing_silently_the_app_will, (release?.tag ?: "update").toString())
+                    text = if (step.viaRoot || step.viaShizuku) {
+                        uiContext.getString(R.string.update_install_privileged_hint)
                     } else {
                         uiContext.getString(R.string.ui_confirm_the_package_installer_prompt_to_finish)
                     },
@@ -516,15 +519,15 @@ private fun DoneContent(step: UpdateManager.Step.Done, release: UpdateManager.La
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = if (step.viaShizuku) uiContext.getString(R.string.ui_installation_complete) else uiContext.getString(R.string.ui_ready_to_install),
+                    text = if (step.viaRoot || step.viaShizuku) uiContext.getString(R.string.ui_installation_complete) else uiContext.getString(R.string.ui_ready_to_install),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = if (step.viaShizuku) {
-                        uiContext.getString(R.string.ui_was_installed_via_shizuku, (release?.tag ?: "Update").toString())
+                    text = if (step.viaRoot || step.viaShizuku) {
+                        uiContext.getString(R.string.update_installed_via, if (step.viaRoot) "Root" else "Shizuku")
                     } else {
                         uiContext.getString(R.string.ui_apk_staged_follow_installer_instructions)
                     },
@@ -615,11 +618,7 @@ private fun UpdateActions(
             }
 
             is UpdateManager.Step.Downloading -> {
-                Text(
-                    uiContext.getString(R.string.ui_downloading),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_action_cancel)) }
             }
 
             is UpdateManager.Step.Installing -> {
@@ -672,8 +671,8 @@ private fun titleFor(step: UpdateManager.Step, r: UpdateManager.LatestRelease?):
     is UpdateManager.Step.UpToDate -> "You're up to date"
     is UpdateManager.Step.Available -> "Update available"
     is UpdateManager.Step.Downloading -> "Downloading update"
-    is UpdateManager.Step.Installing -> if (step.viaShizuku) "Installing via Shizuku…" else "Opening installer…"
-    is UpdateManager.Step.Done -> if (step.viaShizuku) "Installed!" else "Handed to installer"
+    is UpdateManager.Step.Installing -> when { step.viaRoot -> "Installing via Root…"; step.viaShizuku -> "Installing via Shizuku…"; else -> "Opening installer…" }
+    is UpdateManager.Step.Done -> if (step.viaRoot || step.viaShizuku) "Installed!" else "Handed to installer"
     is UpdateManager.Step.Error -> "Something went wrong"
     else -> "Update"
 }
