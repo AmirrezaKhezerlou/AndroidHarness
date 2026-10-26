@@ -119,7 +119,23 @@ class LanguageSettingsDeviceTest {
                 scrollTo(label(R.string.settings_language_contribute_title, "fa"))
                 scenario.onActivity { assertEquals("fa", it.resources.configuration.locales[0].language) }
 
-                // Brazilian Portuguese must restore LTR layout after Persian, including on legacy Android.
+                // German must restore LTR layout after Persian, including on legacy Android.
+                click("Deutsch")
+                scrollTo(label(R.string.settings_language_contribute_title, "de"))
+                scenario.onActivity {
+                    assertEquals("de", it.resources.configuration.locales[0].language)
+                    assertEquals("de", AppCompatDelegate.getApplicationLocales().toLanguageTags())
+                    assertEquals(android.view.View.LAYOUT_DIRECTION_LTR, it.resources.configuration.layoutDirection)
+                    assertEquals(android.view.View.LAYOUT_DIRECTION_LTR, it.window.decorView.layoutDirection)
+                }
+                screenshot("language-german-phone.png")
+                scenario.recreate()
+                scrollTo("Deutsch")
+                scenario.onActivity { assertEquals("de", it.resources.configuration.locales[0].language) }
+                var german = find("Deutsch")
+                while (german != null && !german.isCheckable) german = german.parent
+                assertTrue("German remains selected after recreation", german?.isChecked == true)
+
                 scrollTo("Português (Brasil)")
                 click("Português (Brasil)")
                 scrollTo(label(R.string.settings_language_contribute_title, "pt-BR"))

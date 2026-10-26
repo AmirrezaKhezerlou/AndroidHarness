@@ -408,6 +408,31 @@ class LocalizationDeviceTest {
         } finally { target.deleteSharedPreferences(preference) }
     }
 
+    @Test fun germanResourcesKeepNativeNamesAndFormatCounts() {
+        val de = context("de")
+        assertEquals("Modelle und Anbieter", de.getString(R.string.settings_page_models_title))
+        assertEquals("Alles bestätigen", de.localizedOptionLabel(PermissionMode.CONFIRM_ALL.label))
+        assertEquals("Vollautomatisch", de.localizedOptionLabel(PermissionMode.FULL_AUTO.label))
+        assertEquals("Vollzugriff", de.localizedOptionLabel(PermissionMode.FULL_ACCESS.label))
+        assertEquals(android.view.View.LAYOUT_DIRECTION_LTR, de.resources.configuration.layoutDirection)
+        assertEquals("1 verfügbares Modell", de.resources.getQuantityString(R.plurals.settings_accounts_models_available, 1, 1))
+        assertEquals("2 verfügbare Modelle", de.resources.getQuantityString(R.plurals.settings_accounts_models_available, 2, 2))
+        for (count in listOf(0, 1, 2, 10, 100, 1_000_000)) {
+            val value = de.resources.getQuantityString(R.plurals.answer_table_rows, count, count)
+            assertTrue(value, value.contains(count.toString()))
+            assertFalse(value, value.contains("%1"))
+        }
+        assertEquals("0 Zeilen", de.resources.getQuantityString(R.plurals.answer_table_rows, 0, 0))
+        assertEquals("1 Zeile", de.resources.getQuantityString(R.plurals.answer_table_rows, 1, 1))
+        assertEquals(context("en").getString(R.string.app_name), de.getString(R.string.app_name))
+        assertEquals("Deutsch", de.getString(R.string.settings_language_german))
+        assertEquals("English", de.getString(R.string.settings_language_english))
+        assertEquals("Português (Brasil)", de.getString(R.string.settings_language_portuguese))
+        assertEquals("Bahasa Indonesia", de.getString(R.string.settings_language_indonesian))
+        assertTrue(de.getString(R.string.settings_root_shizuku_available).contains("Shizuku"))
+        assertTrue(de.getString(R.string.settings_root_shizuku_available).contains("Root"))
+    }
+
     @Test fun brazilianPortugueseResourcesKeepNativeNamesAndFormatCounts() {
         val pt = context("pt-BR")
         assertEquals("Modelos e provedores", pt.getString(R.string.settings_page_models_title))
@@ -432,19 +457,23 @@ class LocalizationDeviceTest {
         assertTrue(pt.getString(R.string.settings_root_shizuku_available).contains("Root"))
     }
 
-    @Test fun brazilianPortugueseSearchAndPermissionControlsWorkWithLargeText() {
-        val pt = context("pt-BR")
+    @Test fun brazilianPortugueseSearchAndPermissionControlsWorkWithLargeText() = checkSearchAndPermissionControls("pt-BR", "portuguese-brazil")
+
+    @Test fun germanSearchAndPermissionControlsWorkWithLargeText() = checkSearchAndPermissionControls("de", "german")
+
+    private fun checkSearchAndPermissionControls(locale: String, screenshotPrefix: String) {
+        val localized = context(locale)
         var selected: Pair<SettingsPage, Int?>? = null
         val state = mutableStateOf(AppSettings())
         ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
-            scenario.onActivity { activity -> show(activity, locale = "pt-BR") {
-                SettingsHome(pt.getString(R.string.settings_search_max_context_title), {},
+            scenario.onActivity { activity -> show(activity, locale = locale) {
+                SettingsHome(localized.getString(R.string.settings_search_max_context_title), {},
                     { page, anchor -> selected = page to anchor }, Modifier.fillMaxSize().verticalScroll(rememberScrollState()))
             } }
-            click(pt.getString(R.string.settings_search_max_context_desc))
+            click(localized.getString(R.string.settings_search_max_context_desc))
             assertEquals(SettingsPage.AGENT to R.string.settings_anchor_max_context, selected)
-            screenshot("portuguese-brazil-settings-search.png")
-            scenario.onActivity { activity -> show(activity, scale = 1.5f, locale = "pt-BR") {
+            screenshot("$screenshotPrefix-settings-search.png")
+            scenario.onActivity { activity -> show(activity, scale = 1.5f, locale = locale) {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
                     AgentBehaviorSection(state.value,
                         onPermissionMode = { state.value = state.value.copy(permissionMode = it) },
@@ -453,67 +482,75 @@ class LocalizationDeviceTest {
                         onProjectInstructions = {}, onLiveUpdates = {})
                 }
             } }
-            click(pt.getString(R.string.settings_anchor_default_permission))
-            click(pt.localizedOptionLabel(PermissionMode.FULL_AUTO.label))
+            click(localized.getString(R.string.settings_anchor_default_permission))
+            click(localized.localizedOptionLabel(PermissionMode.FULL_AUTO.label))
             assertEquals(PermissionMode.FULL_AUTO, state.value.permissionMode)
-            awaitText(pt.localizedOptionLabel(PermissionMode.FULL_AUTO.label))
-            screenshot("portuguese-brazil-agent-150-percent.png")
+            awaitText(localized.localizedOptionLabel(PermissionMode.FULL_AUTO.label))
+            screenshot("$screenshotPrefix-agent-150-percent.png")
         }
     }
 
-    @Test fun brazilianPortuguesePrimaryScreensAndModelPickerPreserveModelIds() {
+    @Test fun brazilianPortuguesePrimaryScreensAndModelPickerPreserveModelIds() = checkPrimaryScreensAndModelPicker("pt-BR", "portuguese-brazil")
+
+    @Test fun germanPrimaryScreensAndModelPickerPreserveModelIds() = checkPrimaryScreensAndModelPicker("de", "german")
+
+    private fun checkPrimaryScreensAndModelPicker(locale: String, screenshotPrefix: String) {
         val container = (target.applicationContext as HarnessApp).container
-        val pt = context("pt-BR")
-        val preference = "portuguese-brazil-picker-${System.nanoTime()}"
+        val localized = context(locale)
+        val preference = "$screenshotPrefix-picker-${System.nanoTime()}"
         val shortcuts = ModelShortcuts(target, preference)
-        val provider = ProviderConfig("portuguese-brazil-provider", "Provider unchanged", ProviderType.OPENAI_COMPAT,
+        val provider = ProviderConfig("$screenshotPrefix-provider", "Provider unchanged", ProviderType.OPENAI_COMPAT,
             "https://unused.invalid/v1", "first-model")
         var chosen: Pair<String, String?>? = null
         try {
             ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
-                scenario.onActivity { activity -> show(activity, locale = "pt-BR") { SetupScreen(container, onFinish = {}) } }
-                awaitText(pt.getString(R.string.ui_welcome_to_androidharness)); screenshot("portuguese-brazil-setup.png")
-                scenario.onActivity { activity -> show(activity, locale = "pt-BR") { StatsScreen(container, onBack = {}) } }
-                awaitText(pt.getString(R.string.ui_model_activity)); screenshot("portuguese-brazil-usage.png")
-                scenario.onActivity { activity -> show(activity, locale = "pt-BR") { AutomationScreen(container, onBack = {}, onOpenSession = {}) } }
-                awaitText(pt.getString(R.string.ui_automation)); screenshot("portuguese-brazil-automation.png")
-                scenario.onActivity { activity -> show(activity, locale = "pt-BR") { FilesScreen(container, onBack = {}, onOpenFile = {}) } }
-                awaitText(pt.getString(R.string.ui_files)); screenshot("portuguese-brazil-files.png")
-                scenario.onActivity { activity -> show(activity, locale = "pt-BR") {
+                scenario.onActivity { activity -> show(activity, locale = locale) { SetupScreen(container, onFinish = {}) } }
+                awaitText(localized.getString(R.string.ui_welcome_to_androidharness)); screenshot("$screenshotPrefix-setup.png")
+                scenario.onActivity { activity -> show(activity, locale = locale) { StatsScreen(container, onBack = {}) } }
+                awaitText(localized.getString(R.string.ui_model_activity)); screenshot("$screenshotPrefix-usage.png")
+                scenario.onActivity { activity -> show(activity, locale = locale) { AutomationScreen(container, onBack = {}, onOpenSession = {}) } }
+                awaitText(localized.getString(R.string.ui_automation)); screenshot("$screenshotPrefix-automation.png")
+                scenario.onActivity { activity -> show(activity, locale = locale) { FilesScreen(container, onBack = {}, onOpenFile = {}) } }
+                awaitText(localized.getString(R.string.ui_files)); screenshot("$screenshotPrefix-files.png")
+                scenario.onActivity { activity -> show(activity, locale = locale) {
                     ModelPickerSheet(listOf(provider), provider.id, provider.model,
                         mapOf(provider.id to listOf(ModelEntry("first-model", displayName = "First model"),
                             ModelEntry("second-model", displayName = "Second model"))),
                         onDismiss = {}, onSelect = { id, model -> chosen = id to model }, onRefreshCatalog = { null },
                         onManageProviders = {}, modelShortcuts = shortcuts)
                 } }
-                awaitText(pt.getString(R.string.ui_all_models))
-                awaitText(pt.getString(R.string.ui_search_models_or_providers))
-                awaitText("${provider.name} · ${pt.getString(R.string.ui_current)}")
-                click("Second model")
-                screenshot("portuguese-brazil-model-picker.png"); click(pt.getString(R.string.ui_use_model))
+                awaitText(localized.getString(R.string.ui_all_models))
+                awaitText(localized.getString(R.string.ui_search_models_or_providers))
+                awaitText("${provider.name} · ${localized.getString(R.string.ui_current)}")
+                click(localized.getString(R.string.ui_choose_from, "Second model", provider.name))
+                screenshot("$screenshotPrefix-model-picker.png"); click(localized.getString(R.string.ui_use_model))
                 assertEquals(provider.id to "second-model", chosen)
             }
         } finally { target.deleteSharedPreferences(preference) }
     }
 
-    @Test fun brazilianPortugueseDonationDialogKeepsTheUpiIdAndQrControlsReadable() {
-        val pt = context("pt-BR")
+    @Test fun brazilianPortugueseDonationDialogKeepsTheUpiIdAndQrControlsReadable() = checkDonationDialog("pt-BR", "portuguese-brazil")
+
+    @Test fun germanDonationDialogKeepsTheUpiIdAndQrControlsReadable() = checkDonationDialog("de", "german")
+
+    private fun checkDonationDialog(locale: String, screenshotPrefix: String) {
+        val localized = context(locale)
         val open = mutableStateOf(true)
         ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
-            scenario.onActivity { activity -> show(activity, scale = 1.5f, locale = "pt-BR") {
+            scenario.onActivity { activity -> show(activity, scale = 1.5f, locale = locale) {
                 if (open.value) com.androidharness.app.ui.chat.components.UpiDonationDialog { open.value = false }
             } }
             awaitText("sanuj69@ybl")
-            click(pt.getString(R.string.donate_upi_copy_id))
+            click(localized.getString(R.string.donate_upi_copy_id))
             instrumentation.runOnMainSync {
                 assertEquals("sanuj69@ybl", target.getSystemService(android.content.ClipboardManager::class.java)
                     .primaryClip!!.getItemAt(0).text.toString())
             }
-            click(pt.getString(R.string.donate_upi_show_qr))
-            awaitText(pt.getString(R.string.donate_upi_qr_description))
-            awaitText(pt.getString(R.string.donate_upi_save_qr))
-            screenshot("portuguese-brazil-donation-qr-150-percent.png")
-            click(pt.getString(R.string.settings_action_close))
+            click(localized.getString(R.string.donate_upi_show_qr))
+            awaitText(localized.getString(R.string.donate_upi_qr_description))
+            awaitText(localized.getString(R.string.donate_upi_save_qr))
+            screenshot("$screenshotPrefix-donation-qr-150-percent.png")
+            click(localized.getString(R.string.settings_action_close))
             assertFalse(open.value)
         }
     }
@@ -587,7 +624,7 @@ class LocalizationDeviceTest {
         assertEquals(context("en").getString(R.string.app_name), fa.getString(R.string.app_name))
         for (id in listOf(R.string.settings_language_english, R.string.settings_language_chinese,
             R.string.settings_language_russian, R.string.settings_language_arabic,
-            R.string.settings_language_indonesian, R.string.settings_language_persian, R.string.settings_language_portuguese)) {
+            R.string.settings_language_indonesian, R.string.settings_language_persian, R.string.settings_language_portuguese, R.string.settings_language_german)) {
             assertEquals("Language autonyms stay recognizable", context("en").getString(id), fa.getString(id))
         }
         assertEquals(android.view.View.LAYOUT_DIRECTION_RTL, fa.resources.configuration.layoutDirection)
@@ -797,6 +834,7 @@ class LocalizationDeviceTest {
             return null
         }
         val automation = instrumentation.uiAutomation
+        if (android.os.Build.VERSION.SDK_INT >= 33) automation.clearCache()
         // Android 9 can report no active root immediately after a dialog is dismissed.
         return search(automation.rootInActiveWindow)
             ?: automation.windows.firstNotNullOfOrNull { search(it.root) }

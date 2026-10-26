@@ -12,5 +12,6 @@
     <locale android:name="ar" />
     <locale android:name="fa" />
     <locale android:name="pt-BR" />
+    <locale android:name="de" />
     <locale android:name="id" />
 </locale-config>

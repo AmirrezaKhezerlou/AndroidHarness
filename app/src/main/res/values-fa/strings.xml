@@ -910,6 +910,7 @@
     <string name="settings_language_arabic">"العربية"</string>
     <string name="settings_language_persian">"فارسی"</string>
     <string name="settings_language_portuguese">Português (Brasil)</string>
+    <string name="settings_language_german">Deutsch</string>
     <string name="settings_language_indonesian">Bahasa Indonesia</string>
     <string name="memory_section_chat">"گفتگوی کنید"</string>
     <string name="memory_section_code">"کد"</string>

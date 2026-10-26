@@ -929,6 +929,7 @@
     <string name="settings_language_arabic">العربية</string>
     <string name="settings_language_persian">فارسی</string>
     <string name="settings_language_portuguese">Português (Brasil)</string>
+    <string name="settings_language_german">Deutsch</string>
     <string name="settings_language_indonesian">Bahasa Indonesia</string>
     <string name="chat_global_instructions">全局 Chat 指令</string>
     <string name="chat_global_instructions_summary">所有 Chat 的默认指导。</string>
