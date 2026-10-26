@@ -89,6 +89,7 @@ class ComposerProgressDeviceTest {
             assertEquals(1, transcribed.get())
             instrumentation.runOnMainSync { recording.value = GroqRecordState.TRANSCRIBING }
             awaitText(context.getString(com.androidharness.app.R.string.ui_transcribing_audio_with_groq_whisper))
+            instrumentation.runOnMainSync { recording.value = GroqRecordState.IDLE }
         }
     }
 
@@ -146,6 +147,7 @@ class ComposerProgressDeviceTest {
                 val down = SystemClock.uptimeMillis()
                 fun event(action: Int, x: Float, y: Float) {
                     val event = android.view.MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, x, y, 0)
+                    event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
                     try { assertTrue(instrumentation.uiAutomation.injectInputEvent(event, true)) }
                     finally { event.recycle() }
                 }
@@ -184,7 +186,7 @@ class ComposerProgressDeviceTest {
             click(context.getString(com.androidharness.app.R.string.ui_discard_recording))
             await { state.value == GroqRecordState.IDLE }
             assertEquals(2, cancels.get())
-            assertNotNull(find { it.text?.toString() == "Keep this queued draft" })
+            awaitText("Keep this queued draft")
         }
     }
 
@@ -217,6 +219,8 @@ class ComposerProgressDeviceTest {
             assertTrue("Processing label wraps at large fonts", text.height() > 35 * density)
             assertTrue("Processing label stays within the narrow panel", text.right <= 320 * density)
             screenshot("voice-large-font-transcribing")
+            // Stop the fixture's infinite processing animation before ActivityScenario waits for idle.
+            instrumentation.runOnMainSync { state.value = GroqRecordState.IDLE }
         }
     }
 
@@ -250,6 +254,7 @@ class ComposerProgressDeviceTest {
                 for (action in listOf(android.view.MotionEvent.ACTION_DOWN, android.view.MotionEvent.ACTION_UP)) {
                     val event = android.view.MotionEvent.obtain(down, SystemClock.uptimeMillis(), action,
                         input.exactCenterX(), input.exactCenterY(), 0)
+                    event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
                     try { assertTrue(instrumentation.uiAutomation.injectInputEvent(event, true)) }
                     finally { event.recycle() }
                 }
@@ -390,7 +395,8 @@ class ComposerProgressDeviceTest {
             image.recycle()
             if (bottom > top && bottom - top > (right - left) * 4) {
                 assertEquals("The visible cursor must be vertically centered in the single-line field", bounds.exactCenterY(),
-                    (top + bottom + 1) / 2f, 2f * context.resources.displayMetrics.density)
+                    // The caret and accessibility rectangles are rounded to whole physical pixels.
+                    (top + bottom + 1) / 2f, 2f * context.resources.displayMetrics.density + .5f)
                 return
             }
             SystemClock.sleep(60) // Cursor may be in its blink-off interval.

@@ -337,6 +337,7 @@ class ChatPersonalizationDeviceTest {
         for (action in listOf(android.view.MotionEvent.ACTION_DOWN, android.view.MotionEvent.ACTION_UP)) {
             val event = android.view.MotionEvent.obtain(down, SystemClock.uptimeMillis(), action,
                 bounds.exactCenterX(), bounds.exactCenterY(), 0)
+            event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
             try { assertTrue(instrumentation.uiAutomation.injectInputEvent(event, true)) }
             finally { event.recycle() }
             SystemClock.sleep(50)

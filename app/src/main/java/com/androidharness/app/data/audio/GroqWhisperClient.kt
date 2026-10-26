@@ -1,14 +1,23 @@
 package com.androidharness.app.data.audio
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.Response
+import java.io.IOException
 import okhttp3.RequestBody.Companion.asRequestBody
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -25,7 +34,7 @@ object GroqWhisperClient {
 
     data class ValidationResult(val success: Boolean, val error: String? = null)
 
-    suspend fun validateApiKey(apiKey: String): ValidationResult = withContext(Dispatchers.IO) {
+    suspend fun validateApiKey(apiKey: String, client: OkHttpClient = httpClient): ValidationResult = withContext(Dispatchers.IO) {
         val trimmed = apiKey.trim()
         if (trimmed.isBlank()) {
             return@withContext ValidationResult(false, "API key cannot be blank")
@@ -37,18 +46,19 @@ object GroqWhisperClient {
                 .get()
                 .build()
 
-            httpClient.newCall(req).execute().use { resp ->
+            executeText(client, req).let { resp ->
                 if (resp.isSuccessful) {
                     ValidationResult(true)
                 } else {
-                    val body = resp.body?.string().orEmpty()
+                    val body = resp.body
                     val msg = runCatching {
                         json.parseToJsonElement(body).jsonObject["error"]?.jsonObject?.get("message")?.jsonPrimitive?.content
                     }.getOrNull() ?: "Verification failed (HTTP ${resp.code})"
-                    ValidationResult(false, msg)
+                    ValidationResult(false, msg.replace(trimmed, "[redacted]"))
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) {
             ValidationResult(false, e.message ?: "Failed to connect to Groq API")
         }
     }
@@ -57,6 +67,7 @@ object GroqWhisperClient {
         audioFile: File,
         apiKey: String,
         model: String = "whisper-large-v3",
+        client: OkHttpClient = httpClient,
     ): Result<String> = withContext(Dispatchers.IO) {
         val trimmedKey = apiKey.trim()
         if (trimmedKey.isBlank()) {
@@ -82,23 +93,48 @@ object GroqWhisperClient {
                 .post(requestBody)
                 .build()
 
-            httpClient.newCall(req).execute().use { resp ->
-                val body = resp.body?.string().orEmpty()
+            executeText(client, req).let { resp ->
+                val body = resp.body
                 if (!resp.isSuccessful) {
                     val err = runCatching {
                         json.parseToJsonElement(body).jsonObject["error"]?.jsonObject?.get("message")?.jsonPrimitive?.content
                     }.getOrNull() ?: "Groq transcription failed (HTTP ${resp.code})"
-                    return@withContext Result.failure(RuntimeException(err))
+                    return@withContext Result.failure(RuntimeException(err.replace(trimmedKey, "[redacted]")))
                 }
 
                 val text = runCatching {
-                    json.parseToJsonElement(body).jsonObject["text"]?.jsonPrimitive?.content
-                }.getOrNull()?.trim().orEmpty()
-
-                Result.success(text)
+                    json.parseToJsonElement(body).jsonObject["text"]?.jsonPrimitive?.contentOrNull
+                }.getOrNull()?.trim()
+                if (text == null) Result.failure(IllegalStateException("Groq returned an invalid transcription response."))
+                else Result.success(text)
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) {
             Result.failure(e)
         }
     }
+
+    private data class TextResponse(val code: Int, val body: String) {
+        val isSuccessful get() = code in 200..299
+    }
+
+    /** Keep cancellation attached until the response body has also finished reading. */
+    private suspend fun executeText(client: OkHttpClient, request: Request): TextResponse = suspendCancellableCoroutine { continuation ->
+        val call = client.newCall(request)
+        continuation.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, error: IOException) {
+                if (continuation.isActive) continuation.resumeWithException(error)
+            }
+            override fun onResponse(call: Call, response: Response) {
+                try {
+                    val result = response.use { TextResponse(it.code, it.body?.string().orEmpty()) }
+                    if (continuation.isActive) continuation.resume(result)
+                } catch (error: Exception) {
+                    if (continuation.isActive) continuation.resumeWithException(error)
+                }
+            }
+        })
+    }
+
 }

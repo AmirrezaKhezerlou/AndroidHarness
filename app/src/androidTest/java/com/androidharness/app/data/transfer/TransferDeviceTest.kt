@@ -61,7 +61,10 @@ class TransferDeviceTest {
                 assertFalse(ftp.storeFile("read.txt", "blocked".byteInputStream()))
                 scenario.close()
                 assertTrue(c.ftpShare.state.value.running)
-                val notification = context.getSystemService(NotificationManager::class.java).activeNotifications.single { it.notification.channelId == "ftp-sharing" }.notification
+                val notification = context.getSystemService(NotificationManager::class.java).activeNotifications.single {
+                    it.notification.channelId == "ftp-sharing" &&
+                        it.notification.flags and android.app.Notification.FLAG_GROUP_SUMMARY == 0
+                }.notification
                 notification.actions.single().actionIntent.send()
                 withTimeout(10_000) { c.ftpShare.state.first { !it.running && !it.starting } }
                 assertNull(c.ftpShare.passwordForActiveShare())

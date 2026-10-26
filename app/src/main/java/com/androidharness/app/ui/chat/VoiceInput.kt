@@ -26,6 +26,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -47,6 +48,9 @@ class VoiceInputController(
     private val context: Context,
     private val container: AppContainer,
     private val scope: CoroutineScope,
+    private val transcribe: suspend (File, String, String) -> Result<String> = { file, key, model ->
+        GroqWhisperClient.transcribe(file, key, model)
+    },
 ) {
     // Inbuilt state
     var isListeningInbuilt by mutableStateOf(false)
@@ -80,6 +84,7 @@ class VoiceInputController(
     private var mediaRecorder: MediaRecorder? = null
     private var currentAudioFile: File? = null
     private var amplitudeJob: Job? = null
+    private var transcriptionJob: Job? = null
     private var recordStartTime = 0L
 
     val isNativeAvailable: Boolean
@@ -190,6 +195,7 @@ class VoiceInputController(
         }
 
         try {
+            mediaRecorder = mr
             mr.apply {
                 setAudioSource(MediaRecorder.AudioSource.MIC)
                 setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
@@ -201,7 +207,6 @@ class VoiceInputController(
                 prepare()
                 start()
             }
-            mediaRecorder = mr
             groqRecordState = if (locked) GroqRecordState.LOCKED else GroqRecordState.HOLDING
             recordStartTime = SystemClock.elapsedRealtime()
             recordingDurationMs = 0L
@@ -233,6 +238,8 @@ class VoiceInputController(
     }
 
     fun cancelGroqRecording() {
+        transcriptionJob?.cancel()
+        transcriptionJob = null
         cleanupGroqRecorder()
         groqRecordState = GroqRecordState.IDLE
         cancelArmed = false
@@ -275,22 +282,21 @@ class VoiceInputController(
         }
 
         groqRecordState = GroqRecordState.TRANSCRIBING
-        scope.launch {
-            val result = GroqWhisperClient.transcribe(
-                audioFile = file,
-                apiKey = apiKey,
-                model = model,
-            )
-            withContext(Dispatchers.Main) {
-                file.delete()
-                groqRecordState = GroqRecordState.IDLE
-                result.onSuccess { text ->
-                    if (text.isNotBlank()) {
-                        onTranscription(text)
+        transcriptionJob = scope.launch {
+            try {
+                val result = transcribe(file, apiKey, model)
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                withContext(Dispatchers.Main) {
+                    groqRecordState = GroqRecordState.IDLE
+                    result.onSuccess { text ->
+                        if (text.isNotBlank()) onTranscription(text)
+                    }.onFailure { err ->
+                        errorMessage = err.message ?: "Transcription failed"
                     }
-                }.onFailure { err ->
-                    errorMessage = err.message ?: "Transcription failed"
                 }
+            } finally {
+                file.delete()
+                if (currentAudioFile == file) currentAudioFile = null
             }
         }
     }
