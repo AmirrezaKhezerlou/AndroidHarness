@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.9 (2026-10-26)
+
+### Added
+
+- **Provider connection controls**: each API provider can hold up to 20 named API keys with individual switches. Rotate API keys sends requests through the enabled keys in turn, and a key that is rejected, rate limited or out of quota can be replaced by another key only before any answer text or tool output exists, so a failed request is never replayed. Providers also gain a proxy setting (Use global setting, Direct connection or Custom proxy) with HTTP or SOCKS5 and optional credentials for HTTP proxies, plus one Global provider proxy used by replies and model lists. Key pools and proxy credentials stay in encrypted storage, changes apply to new requests, and settings backups move to v4 with key pools and proxy settings, leaving credentials out when keys are excluded.
+- **FTP and SFTP sync**: Settings → Connections → FTP / SFTP sync selects a local workspace and a saved remote connection, previews uploads and downloads before applying them, and reports new files, replacements and unchanged entries. Replacing existing files needs approval, nothing is deleted, and Git history and generated folders are skipped. A sync is limited to 512 MB per file and 1 GB or 10,000 entries in total. SFTP checks the saved SSH host key and accepts a password or private key, while FTP states that it sends passwords and files unencrypted.
+- **FTP sharing**: Settings → Connections → FTP server shares one workspace with an FTP client, read only or read and write, with an option to accept connections from the local network. Sharing continues in the background with a Stop action in its notification, refuses symbolic links and special files, and limits uploads to 512 MB.
+- **Update install method**: the update dialog offers Automatic, Root, Shizuku and Android installer. Automatic uses an enabled and already authorized device access route and falls back to the Android installer, a dispatched install is never retried automatically, and the dialog names the route that installed the update.
+- **Memory sections and global Chat instructions**: saved memories now belong to Chat, Code or Shared. Each section has its own switch, Chat and Code can optionally look up the other section, existing memories become Shared, and Consolidate memories builds a reviewed digest of related entries whose originals stay restorable. In-chat receipts say whether a memory was saved or was already saved, and a failed save is reported. Settings → Chat Option holds global Chat instructions up to 4,000 characters that every Chat uses, and one Chat can keep or replace them for itself; instructions saved before this release stay as overrides.
+- **Workspace file links**: file names in Code answers and inline code open in the editor, with an optional `:line` or `#L` suffix to land on a line. Markdown links that point at workspace files open the editor instead of the browser, while commands, URLs and loopback preview addresses keep their current behavior.
+- **Stop for running commands**: while a terminal command runs, the run button becomes Stop and Ctrl+C interrupts from a hardware keyboard. Cancelling a task now ends its local process group and commands running through Shizuku or root instead of letting them continue in the background.
+- **Languages**: Persian (فارسی), Brazilian Portuguese (Português (Brasil)), German (Deutsch), Spanish (Español) and Japanese (日本語) join App language, the Android per-app language list and the locale configuration, each listed under its own name. Persian is laid out right to left while code, diffs and terminals stay left to right.
+
+### Changed
+
+- **Chat reading position**: a streamed reply keeps its rendered item identity when it is saved, so the transcript no longer shifts as the live answer becomes history, and a fling to the bottom still resumes following. Expanded disclosures contain their own drags and flings in Chat and Code, including in standalone previews. Tables with one or two columns fit the phone width, wider tables add a position bar and swipe hint, and blank lines inside a streaming code fence no longer split the live block.
+- **Drawer gestures**: side swipes no longer open the drawer on Settings, providers, skills, stats, setup, previews or memory screens, and a drawer that was open is closed when one of them opens. Workspace screens keep the edge swipe.
+- **Composer and voice**: the Groq recorder is a compact capsule in the typing area with a live waveform, a timer, slide left to cancel and slide up to lock, and a Transcribing state that can be cancelled. The personalization menu opens centered under its pill with a chevron that turns while open. Menus animate from the pressed location, sidebar rows and icon buttons share press feedback, and switching between Chat and Code uses a short directional fade and slide.
+- **Chat presentation guidance**: rich responses are chosen for the shape of the answer instead of a target percentage, tables are kept for genuine tabular data or an explicit request, and charts for quantitative trends. Component examples are labeled as structure, not content to copy.
+
+### Fixed
+
+- **File filters on Android 8 through 13**: `search_files` and `grep` name and include filters called `Path.of`, which only exists from API 34, so they failed on those releases; they now use `Paths.get`.
+- **Groq transcription**: a response without a usable text value is reported instead of producing a blank transcript, error text redacts the API key, and cancelling transcription cancels the HTTP request and removes the recording file. A recorder that fails to start is cleaned up along with its audio file.
+- **Provider save errors**: a provider that cannot be saved now points at Connection controls for its API keys.
+
 ## 2.8 (2026-10-24)
 
 ### Added
