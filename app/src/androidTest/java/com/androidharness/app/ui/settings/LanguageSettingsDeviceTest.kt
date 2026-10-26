@@ -119,7 +119,23 @@ class LanguageSettingsDeviceTest {
                 scrollTo(label(R.string.settings_language_contribute_title, "fa"))
                 scenario.onActivity { assertEquals("fa", it.resources.configuration.locales[0].language) }
 
-                // Spanish must restore LTR layout after Persian, including on legacy Android.
+                // Japanese must restore LTR layout after Persian, including on legacy Android.
+                click("日本語")
+                scrollTo(label(R.string.settings_language_contribute_title, "ja"))
+                scenario.onActivity {
+                    assertEquals("ja", it.resources.configuration.locales[0].language)
+                    assertEquals("ja", AppCompatDelegate.getApplicationLocales().toLanguageTags())
+                    assertEquals(android.view.View.LAYOUT_DIRECTION_LTR, it.resources.configuration.layoutDirection)
+                    assertEquals(android.view.View.LAYOUT_DIRECTION_LTR, it.window.decorView.layoutDirection)
+                }
+                screenshot("language-japanese-phone.png")
+                scenario.recreate()
+                scrollTo("日本語")
+                scenario.onActivity { assertEquals("ja", it.resources.configuration.locales[0].language) }
+                var japanese = find("日本語")
+                while (japanese != null && !japanese.isCheckable) japanese = japanese.parent
+                assertTrue("Japanese remains selected after recreation", japanese?.isChecked == true)
+
                 click("Español")
                 scrollTo(label(R.string.settings_language_contribute_title, "es"))
                 scenario.onActivity {
