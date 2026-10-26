@@ -30,6 +30,7 @@ internal fun LanguageSection() {
         locales[0]?.language == "ru" -> "ru"
         locales[0]?.language == "ar" -> "ar"
         locales[0]?.language == "fa" -> "fa"
+        locales[0]?.language == "pt" -> "pt-BR"
         locales[0]?.language == "id" || locales[0]?.language == "in" -> "id"
         else -> "en"
     }
@@ -42,6 +43,7 @@ internal fun LanguageSection() {
         "ru" to R.string.settings_language_russian,
         "ar" to R.string.settings_language_arabic,
         "fa" to R.string.settings_language_persian,
+        "pt-BR" to R.string.settings_language_portuguese,
         "id" to R.string.settings_language_indonesian,
     )
 

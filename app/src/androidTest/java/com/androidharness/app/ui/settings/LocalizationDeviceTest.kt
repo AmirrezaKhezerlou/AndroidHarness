@@ -408,6 +408,116 @@ class LocalizationDeviceTest {
         } finally { target.deleteSharedPreferences(preference) }
     }
 
+    @Test fun brazilianPortugueseResourcesKeepNativeNamesAndFormatCounts() {
+        val pt = context("pt-BR")
+        assertEquals("Modelos e provedores", pt.getString(R.string.settings_page_models_title))
+        assertEquals("Confirmar tudo", pt.localizedOptionLabel(PermissionMode.CONFIRM_ALL.label))
+        assertEquals("Totalmente automático", pt.localizedOptionLabel(PermissionMode.FULL_AUTO.label))
+        assertEquals("Acesso total", pt.localizedOptionLabel(PermissionMode.FULL_ACCESS.label))
+        assertEquals(android.view.View.LAYOUT_DIRECTION_LTR, pt.resources.configuration.layoutDirection)
+        assertEquals("1 modelo disponível", pt.resources.getQuantityString(R.plurals.settings_accounts_models_available, 1, 1))
+        assertEquals("2 modelos disponíveis", pt.resources.getQuantityString(R.plurals.settings_accounts_models_available, 2, 2))
+        for (count in listOf(0, 1, 2, 10, 100, 1_000_000)) {
+            val value = pt.resources.getQuantityString(R.plurals.answer_table_rows, count, count)
+            assertTrue(value, value.contains(count.toString()))
+            assertFalse(value, value.contains("%1"))
+        }
+        assertEquals(context("en").getString(R.string.app_name), pt.getString(R.string.app_name))
+        assertEquals("Português (Brasil)", pt.getString(R.string.settings_language_portuguese))
+        assertEquals("English", pt.getString(R.string.settings_language_english))
+        assertEquals("Bahasa Indonesia", pt.getString(R.string.settings_language_indonesian))
+        assertEquals("Remover \"Example\" da lista? Os arquivos no disco não são excluídos.",
+            pt.getString(R.string.settings_workspace_delete_message, "Example"))
+        assertTrue(pt.getString(R.string.settings_root_shizuku_available).contains("Shizuku"))
+        assertTrue(pt.getString(R.string.settings_root_shizuku_available).contains("Root"))
+    }
+
+    @Test fun brazilianPortugueseSearchAndPermissionControlsWorkWithLargeText() {
+        val pt = context("pt-BR")
+        var selected: Pair<SettingsPage, Int?>? = null
+        val state = mutableStateOf(AppSettings())
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            scenario.onActivity { activity -> show(activity, locale = "pt-BR") {
+                SettingsHome(pt.getString(R.string.settings_search_max_context_title), {},
+                    { page, anchor -> selected = page to anchor }, Modifier.fillMaxSize().verticalScroll(rememberScrollState()))
+            } }
+            click(pt.getString(R.string.settings_search_max_context_desc))
+            assertEquals(SettingsPage.AGENT to R.string.settings_anchor_max_context, selected)
+            screenshot("portuguese-brazil-settings-search.png")
+            scenario.onActivity { activity -> show(activity, scale = 1.5f, locale = "pt-BR") {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+                    AgentBehaviorSection(state.value,
+                        onPermissionMode = { state.value = state.value.copy(permissionMode = it) },
+                        onContextLimit = { state.value = state.value.copy(maxContextTokens = it) },
+                        onIterationLimit = { state.value = state.value.copy(maxIterations = it) },
+                        onProjectInstructions = {}, onLiveUpdates = {})
+                }
+            } }
+            click(pt.getString(R.string.settings_anchor_default_permission))
+            click(pt.localizedOptionLabel(PermissionMode.FULL_AUTO.label))
+            assertEquals(PermissionMode.FULL_AUTO, state.value.permissionMode)
+            awaitText(pt.localizedOptionLabel(PermissionMode.FULL_AUTO.label))
+            screenshot("portuguese-brazil-agent-150-percent.png")
+        }
+    }
+
+    @Test fun brazilianPortuguesePrimaryScreensAndModelPickerPreserveModelIds() {
+        val container = (target.applicationContext as HarnessApp).container
+        val pt = context("pt-BR")
+        val preference = "portuguese-brazil-picker-${System.nanoTime()}"
+        val shortcuts = ModelShortcuts(target, preference)
+        val provider = ProviderConfig("portuguese-brazil-provider", "Provider unchanged", ProviderType.OPENAI_COMPAT,
+            "https://unused.invalid/v1", "first-model")
+        var chosen: Pair<String, String?>? = null
+        try {
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { activity -> show(activity, locale = "pt-BR") { SetupScreen(container, onFinish = {}) } }
+                awaitText(pt.getString(R.string.ui_welcome_to_androidharness)); screenshot("portuguese-brazil-setup.png")
+                scenario.onActivity { activity -> show(activity, locale = "pt-BR") { StatsScreen(container, onBack = {}) } }
+                awaitText(pt.getString(R.string.ui_model_activity)); screenshot("portuguese-brazil-usage.png")
+                scenario.onActivity { activity -> show(activity, locale = "pt-BR") { AutomationScreen(container, onBack = {}, onOpenSession = {}) } }
+                awaitText(pt.getString(R.string.ui_automation)); screenshot("portuguese-brazil-automation.png")
+                scenario.onActivity { activity -> show(activity, locale = "pt-BR") { FilesScreen(container, onBack = {}, onOpenFile = {}) } }
+                awaitText(pt.getString(R.string.ui_files)); screenshot("portuguese-brazil-files.png")
+                scenario.onActivity { activity -> show(activity, locale = "pt-BR") {
+                    ModelPickerSheet(listOf(provider), provider.id, provider.model,
+                        mapOf(provider.id to listOf(ModelEntry("first-model", displayName = "First model"),
+                            ModelEntry("second-model", displayName = "Second model"))),
+                        onDismiss = {}, onSelect = { id, model -> chosen = id to model }, onRefreshCatalog = { null },
+                        onManageProviders = {}, modelShortcuts = shortcuts)
+                } }
+                awaitText(pt.getString(R.string.ui_all_models))
+                awaitText(pt.getString(R.string.ui_search_models_or_providers))
+                awaitText("${provider.name} · ${pt.getString(R.string.ui_current)}")
+                click("Second model")
+                screenshot("portuguese-brazil-model-picker.png"); click(pt.getString(R.string.ui_use_model))
+                assertEquals(provider.id to "second-model", chosen)
+            }
+        } finally { target.deleteSharedPreferences(preference) }
+    }
+
+    @Test fun brazilianPortugueseDonationDialogKeepsTheUpiIdAndQrControlsReadable() {
+        val pt = context("pt-BR")
+        val open = mutableStateOf(true)
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            scenario.onActivity { activity -> show(activity, scale = 1.5f, locale = "pt-BR") {
+                if (open.value) com.androidharness.app.ui.chat.components.UpiDonationDialog { open.value = false }
+            } }
+            awaitText("sanuj69@ybl")
+            click(pt.getString(R.string.donate_upi_copy_id))
+            instrumentation.runOnMainSync {
+                assertEquals("sanuj69@ybl", target.getSystemService(android.content.ClipboardManager::class.java)
+                    .primaryClip!!.getItemAt(0).text.toString())
+            }
+            click(pt.getString(R.string.donate_upi_show_qr))
+            awaitText(pt.getString(R.string.donate_upi_qr_description))
+            awaitText(pt.getString(R.string.donate_upi_save_qr))
+            screenshot("portuguese-brazil-donation-qr-150-percent.png")
+            click(pt.getString(R.string.settings_action_close))
+            assertFalse(open.value)
+        }
+    }
+
     @Test fun persianSearchAndPermissionControlsWorkWithLargeText() {
         val fa = context("fa")
         var selected: Pair<SettingsPage, Int?>? = null
@@ -477,7 +587,7 @@ class LocalizationDeviceTest {
         assertEquals(context("en").getString(R.string.app_name), fa.getString(R.string.app_name))
         for (id in listOf(R.string.settings_language_english, R.string.settings_language_chinese,
             R.string.settings_language_russian, R.string.settings_language_arabic,
-            R.string.settings_language_indonesian, R.string.settings_language_persian)) {
+            R.string.settings_language_indonesian, R.string.settings_language_persian, R.string.settings_language_portuguese)) {
             assertEquals("Language autonyms stay recognizable", context("en").getString(id), fa.getString(id))
         }
         assertEquals(android.view.View.LAYOUT_DIRECTION_RTL, fa.resources.configuration.layoutDirection)

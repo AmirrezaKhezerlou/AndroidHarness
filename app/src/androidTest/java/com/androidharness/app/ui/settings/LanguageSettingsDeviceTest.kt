@@ -119,7 +119,25 @@ class LanguageSettingsDeviceTest {
                 scrollTo(label(R.string.settings_language_contribute_title, "fa"))
                 scenario.onActivity { assertEquals("fa", it.resources.configuration.locales[0].language) }
 
-                // Indonesian must restore LTR layout after Persian, including on legacy Android.
+                // Brazilian Portuguese must restore LTR layout after Persian, including on legacy Android.
+                scrollTo("Português (Brasil)")
+                click("Português (Brasil)")
+                scrollTo(label(R.string.settings_language_contribute_title, "pt-BR"))
+                scenario.onActivity {
+                    assertEquals("pt-BR", it.resources.configuration.locales[0].toLanguageTag())
+                    assertEquals("pt-BR", AppCompatDelegate.getApplicationLocales().toLanguageTags())
+                    assertEquals(android.view.View.LAYOUT_DIRECTION_LTR, it.resources.configuration.layoutDirection)
+                    assertEquals(android.view.View.LAYOUT_DIRECTION_LTR, it.window.decorView.layoutDirection)
+                }
+                screenshot("language-portuguese-brazil-phone.png")
+                scenario.recreate()
+                scrollTo(label(R.string.settings_language_contribute_title, "pt-BR"))
+                scenario.onActivity { assertEquals("pt-BR", it.resources.configuration.locales[0].toLanguageTag()) }
+                var portuguese = find("Português (Brasil)")
+                while (portuguese != null && !portuguese.isCheckable) portuguese = portuguese.parent
+                assertTrue("Brazilian Portuguese remains selected after recreation", portuguese?.isChecked == true)
+
+                scrollTo("Bahasa Indonesia")
                 click("Bahasa Indonesia")
                 scrollTo(label(R.string.settings_language_contribute_title, "id"))
                 scenario.onActivity {
@@ -141,7 +159,7 @@ class LanguageSettingsDeviceTest {
                 while (chosen != null && !chosen.isCheckable) chosen = chosen.parent
                 assertTrue("Indonesian remains selected with the legacy locale code", chosen?.isChecked == true)
 
-                // Explicit English must work even after Chinese, Russian, Arabic, Persian and Indonesian overrides.
+                // Explicit English must work even after every translated locale override.
                 click("English")
                 scrollTo(label(R.string.settings_language_contribute_title, "en"))
                 scenario.onActivity { assertEquals("en", it.resources.configuration.locales[0].language) }

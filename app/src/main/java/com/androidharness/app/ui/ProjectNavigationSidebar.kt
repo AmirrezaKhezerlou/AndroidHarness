@@ -151,6 +151,7 @@ internal fun ProjectNavigationSidebar(
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val short = maxHeight < 440.dp
             val narrow = maxWidth < 280.dp
+            val stackTabs = maxWidth < 180.dp * density.fontScale
             @Composable fun Header() {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
                 Column {
@@ -198,7 +199,9 @@ internal fun ProjectNavigationSidebar(
                         })
                     if (!chatOnly) Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, top = 2.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically) {
-                        Row(Modifier.weight(1f).background(scheme.surfaceContainer, RoundedCornerShape(12.dp)).padding(3.dp)) {
+                        FlowRow(Modifier.weight(1f).background(scheme.surfaceContainer, RoundedCornerShape(12.dp)).padding(3.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                            maxItemsInEachRow = if (stackTabs) 1 else 2) {
                             listOf(false to uiContext.getString(R.string.ui_chats), true to uiContext.getString(R.string.ui_projects)).forEach { (projectTab, label) ->
                                 val selectedTab = projectsView == projectTab
                                 val tabColor by animateColorAsState(
@@ -214,6 +217,7 @@ internal fun ProjectNavigationSidebar(
                                     modifier = Modifier.weight(1f).semantics { role = Role.Tab; selected = selectedTab }) {
                                     Box(Modifier.heightIn(min = 42.dp).padding(horizontal = 2.dp), contentAlignment = Alignment.Center) {
                                         Text(label, style = MaterialTheme.typography.labelLarge,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis,
                                             color = if (selectedTab) scheme.onSecondaryContainer else scheme.onSurfaceVariant)
                                     }
                                 }

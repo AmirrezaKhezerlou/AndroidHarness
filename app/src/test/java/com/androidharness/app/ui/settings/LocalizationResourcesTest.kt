@@ -261,7 +261,82 @@ class LocalizationResourcesTest {
         val locales = DocumentBuilderFactory.newInstance().newDocumentBuilder()
             .parse(File("src/main/res/xml/locales_config.xml")).getElementsByTagName("locale")
         val tags = (0 until locales.length).map { (locales.item(it) as Element).getAttribute("android:name") }
-        assertTrue(tags.containsAll(listOf("en", "zh-CN", "ru", "ar", "fa", "id")))
+        assertTrue(tags.containsAll(listOf("en", "zh-CN", "ru", "ar", "fa", "pt-BR", "id")))
+    }
+
+    @Test fun brazilianPortugueseCoversEveryUiResourceInItsOriginalGroup() {
+        assertEquals(strings("values").keys, strings("values-pt-rBR").keys)
+        for (group in listOf("strings.xml", "ui_strings.xml", "ui_extra_strings.xml", "rich_strings.xml")) {
+            fun names(locale: String): Set<String> {
+                val root = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+                    .parse(File("src/main/res/$locale/$group")).documentElement.childNodes
+                return (0 until root.length).mapNotNull { root.item(it) as? Element }
+                    .filter { it.tagName in setOf("string", "plurals") && it.getAttribute("translatable") != "false" }
+                    .map { it.getAttribute("name") }.toSet()
+            }
+            assertEquals("Resource group $group", names("values"), names("values-pt-rBR"))
+        }
+    }
+
+    @Test fun brazilianPortuguesePreservesFormattingAndTechnicalValues() {
+        val english = strings("values")
+        val portuguese = strings("values-pt-rBR")
+        // These arguments supply English grammar, rather than counts or user values.
+        val grammarOnly = mapOf("ui_in" to setOf(2, 4), "ui_use_workspace" to setOf(2),
+            "ui_updated" to setOf(2), "ui_replace_in" to setOf(2),
+            "ui_renamed_in_review_the_open_drafts_and" to setOf(2), "ui_rename_in" to setOf(2))
+        val argument = Regex("%(\\d+)\\$([-+ #0,(]*\\d*(?:\\.\\d+)?[sdf])")
+        val url = Regex("https?://[^\\s<>\"\\\\]+")
+        english.forEach { (name, format) ->
+            val translated = portuguese.getValue(name)
+            val expected = argument.findAll(format).filter {
+                it.groupValues[1].toInt() !in grammarOnly[name].orEmpty()
+            }.map { it.value }.sorted().toList()
+            assertEquals("Format arguments in $name", expected,
+                argument.findAll(translated).map { it.value }.sorted().toList())
+            assertEquals("URLs in $name", url.findAll(format).map { it.value }.toList(),
+                url.findAll(translated).map { it.value }.toList())
+            val types = argument.findAll(format).associate { it.groupValues[1].toInt() to it.groupValues[2].last() }
+            if (types.isNotEmpty()) {
+                val args = Array<Any>(types.keys.max()) { index ->
+                    when (types[index + 1]) { 'd' -> 21; 'f' -> 2.5; else -> "sample" }
+                }
+                String.format(Locale.forLanguageTag("pt-BR"), translated, *args)
+            }
+            for (token in listOf("Shizuku", "AndroidHarness", "GitHub", "CodeGraph", "localhost", "mcpServers")) {
+                assertEquals("Technical value $token in $name", format.split(token).size, translated.split(token).size)
+            }
+        }
+        for (name in english.keys.filter { it.startsWith("settings_language_") &&
+            it.substringAfter("settings_language_") in setOf("english", "chinese", "russian", "arabic", "persian", "indonesian", "portuguese") }) {
+            assertEquals("Native language name $name", english.getValue(name).removeSurrounding("\""),
+                portuguese.getValue(name).removeSurrounding("\""))
+        }
+    }
+
+    @Test fun brazilianPortuguesePluralsPreserveCountsAndCoverOneAndOther() {
+        fun plurals(locale: String): Map<String, Map<String, String>> = buildMap {
+            File("src/main/res/$locale").listFiles().orEmpty().filter { it.extension == "xml" }.forEach { file ->
+                val nodes = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file).getElementsByTagName("plurals")
+                for (index in 0 until nodes.length) {
+                    val node = nodes.item(index) as Element
+                    val items = node.getElementsByTagName("item")
+                    put(node.getAttribute("name"), (0 until items.length).associate { item ->
+                        val entry = items.item(item) as Element
+                        entry.getAttribute("quantity") to entry.textContent
+                    })
+                }
+            }
+        }
+        val portuguese = plurals("values-pt-rBR")
+        assertEquals(plurals("values").keys, portuguese.keys)
+        portuguese.forEach { (name, forms) ->
+            assertEquals(name, setOf("one", "other"), forms.keys)
+            forms.values.forEach { form ->
+                assertTrue(name, form.contains("%1\$d"))
+                String.format(Locale.forLanguageTag("pt-BR"), form, 21)
+            }
+        }
     }
 
 }
