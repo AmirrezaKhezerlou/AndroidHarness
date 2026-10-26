@@ -1639,4 +1639,5 @@
         <item quantity="many">"%1$d строк"</item>
         <item quantity="other">"%1$d строки"</item>
     </plurals>
+    <string name="voice_transcribing">Преобразование в текст…</string>
 </resources>

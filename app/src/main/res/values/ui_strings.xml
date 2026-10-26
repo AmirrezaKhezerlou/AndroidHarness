@@ -1629,4 +1629,5 @@
     <string name="answer_table_swipe_hint">Swipe sideways to see more columns</string>
     <plurals name="answer_table_columns"><item quantity="one">%1$d column</item><item quantity="other">%1$d columns</item></plurals>
     <plurals name="answer_table_rows"><item quantity="one">%1$d row</item><item quantity="other">%1$d rows</item></plurals>
+    <string name="voice_transcribing">Transcribing…</string>
 </resources>

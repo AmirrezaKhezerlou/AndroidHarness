@@ -1629,4 +1629,5 @@
     <string name="answer_table_swipe_hint">"Geser ke samping untuk melihat lebih banyak kolom"</string>
     <plurals name="answer_table_columns"><item quantity="other">"%1$d kolom"</item></plurals>
     <plurals name="answer_table_rows"><item quantity="other">"%1$d baris"</item></plurals>
+    <string name="voice_transcribing">Mentranskripsikan…</string>
 </resources>

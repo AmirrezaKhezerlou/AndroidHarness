@@ -1643,4 +1643,5 @@
         <item quantity="many">"%1$d صفاً"</item>
         <item quantity="other">"%1$d صف"</item>
     </plurals>
+    <string name="voice_transcribing">جارٍ تحويل الصوت إلى نص…</string>
 </resources>
