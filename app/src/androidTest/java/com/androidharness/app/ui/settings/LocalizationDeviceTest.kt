@@ -408,6 +408,32 @@ class LocalizationDeviceTest {
         } finally { target.deleteSharedPreferences(preference) }
     }
 
+    @Test fun spanishResourcesKeepNativeNamesAndFormatCounts() {
+        val es = context("es")
+        assertEquals("Modelos y proveedores", es.getString(R.string.settings_page_models_title))
+        assertEquals("Confirmar todo", es.localizedOptionLabel(PermissionMode.CONFIRM_ALL.label))
+        assertEquals("Automático", es.localizedOptionLabel(PermissionMode.FULL_AUTO.label))
+        assertEquals("Acceso total", es.localizedOptionLabel(PermissionMode.FULL_ACCESS.label))
+        assertEquals(android.view.View.LAYOUT_DIRECTION_LTR, es.resources.configuration.layoutDirection)
+        assertEquals("1 modelo disponible", es.resources.getQuantityString(R.plurals.settings_accounts_models_available, 1, 1))
+        assertEquals("2 modelos disponibles", es.resources.getQuantityString(R.plurals.settings_accounts_models_available, 2, 2))
+        for (count in listOf(0, 1, 2, 10, 100, 1_000_000)) {
+            val value = es.resources.getQuantityString(R.plurals.answer_table_rows, count, count)
+            assertTrue(value, value.contains(count.toString()))
+            assertFalse(value, value.contains("%1"))
+        }
+        assertEquals("0 filas", es.resources.getQuantityString(R.plurals.answer_table_rows, 0, 0))
+        assertEquals("1 fila", es.resources.getQuantityString(R.plurals.answer_table_rows, 1, 1))
+        assertEquals(context("en").getString(R.string.app_name), es.getString(R.string.app_name))
+        assertEquals("Español", es.getString(R.string.settings_language_spanish))
+        assertEquals("Deutsch", es.getString(R.string.settings_language_german))
+        assertEquals("English", es.getString(R.string.settings_language_english))
+        assertEquals("Português (Brasil)", es.getString(R.string.settings_language_portuguese))
+        assertEquals("Bahasa Indonesia", es.getString(R.string.settings_language_indonesian))
+        assertTrue(es.getString(R.string.settings_root_shizuku_available).contains("Shizuku"))
+        assertTrue(es.getString(R.string.settings_root_shizuku_available).contains("Root"))
+    }
+
     @Test fun germanResourcesKeepNativeNamesAndFormatCounts() {
         val de = context("de")
         assertEquals("Modelle und Anbieter", de.getString(R.string.settings_page_models_title))
@@ -461,6 +487,8 @@ class LocalizationDeviceTest {
 
     @Test fun germanSearchAndPermissionControlsWorkWithLargeText() = checkSearchAndPermissionControls("de", "german")
 
+    @Test fun spanishSearchAndPermissionControlsWorkWithLargeText() = checkSearchAndPermissionControls("es", "spanish")
+
     private fun checkSearchAndPermissionControls(locale: String, screenshotPrefix: String) {
         val localized = context(locale)
         var selected: Pair<SettingsPage, Int?>? = null
@@ -493,6 +521,8 @@ class LocalizationDeviceTest {
     @Test fun brazilianPortuguesePrimaryScreensAndModelPickerPreserveModelIds() = checkPrimaryScreensAndModelPicker("pt-BR", "portuguese-brazil")
 
     @Test fun germanPrimaryScreensAndModelPickerPreserveModelIds() = checkPrimaryScreensAndModelPicker("de", "german")
+
+    @Test fun spanishPrimaryScreensAndModelPickerPreserveModelIds() = checkPrimaryScreensAndModelPicker("es", "spanish")
 
     private fun checkPrimaryScreensAndModelPicker(locale: String, screenshotPrefix: String) {
         val container = (target.applicationContext as HarnessApp).container
@@ -532,6 +562,8 @@ class LocalizationDeviceTest {
     @Test fun brazilianPortugueseDonationDialogKeepsTheUpiIdAndQrControlsReadable() = checkDonationDialog("pt-BR", "portuguese-brazil")
 
     @Test fun germanDonationDialogKeepsTheUpiIdAndQrControlsReadable() = checkDonationDialog("de", "german")
+
+    @Test fun spanishDonationDialogKeepsTheUpiIdAndQrControlsReadable() = checkDonationDialog("es", "spanish")
 
     private fun checkDonationDialog(locale: String, screenshotPrefix: String) {
         val localized = context(locale)
@@ -624,7 +656,7 @@ class LocalizationDeviceTest {
         assertEquals(context("en").getString(R.string.app_name), fa.getString(R.string.app_name))
         for (id in listOf(R.string.settings_language_english, R.string.settings_language_chinese,
             R.string.settings_language_russian, R.string.settings_language_arabic,
-            R.string.settings_language_indonesian, R.string.settings_language_persian, R.string.settings_language_portuguese, R.string.settings_language_german)) {
+            R.string.settings_language_indonesian, R.string.settings_language_persian, R.string.settings_language_portuguese, R.string.settings_language_german, R.string.settings_language_spanish)) {
             assertEquals("Language autonyms stay recognizable", context("en").getString(id), fa.getString(id))
         }
         assertEquals(android.view.View.LAYOUT_DIRECTION_RTL, fa.resources.configuration.layoutDirection)

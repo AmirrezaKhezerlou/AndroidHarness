@@ -261,12 +261,14 @@ class LocalizationResourcesTest {
         val locales = DocumentBuilderFactory.newInstance().newDocumentBuilder()
             .parse(File("src/main/res/xml/locales_config.xml")).getElementsByTagName("locale")
         val tags = (0 until locales.length).map { (locales.item(it) as Element).getAttribute("android:name") }
-        assertTrue(tags.containsAll(listOf("en", "zh-CN", "ru", "ar", "fa", "pt-BR", "de", "id")))
+        assertTrue(tags.containsAll(listOf("en", "zh-CN", "ru", "ar", "fa", "pt-BR", "de", "es", "id")))
     }
 
     @Test fun brazilianPortugueseCoversEveryUiResourceInItsOriginalGroup() = assertUiResourceCoverage("values-pt-rBR")
 
     @Test fun germanCoversEveryUiResourceInItsOriginalGroup() = assertUiResourceCoverage("values-de")
+
+    @Test fun spanishCoversEveryUiResourceInItsOriginalGroup() = assertUiResourceCoverage("values-es")
 
     private fun assertUiResourceCoverage(resourceFolder: String) {
         assertEquals(strings("values").keys, strings(resourceFolder).keys)
@@ -285,6 +287,8 @@ class LocalizationResourcesTest {
     @Test fun brazilianPortuguesePreservesFormattingAndTechnicalValues() = assertFormattingAndTechnicalValues("values-pt-rBR", "pt-BR")
 
     @Test fun germanPreservesFormattingAndTechnicalValues() = assertFormattingAndTechnicalValues("values-de", "de")
+
+    @Test fun spanishPreservesFormattingAndTechnicalValues() = assertFormattingAndTechnicalValues("values-es", "es")
 
     private fun assertFormattingAndTechnicalValues(resourceFolder: String, languageTag: String) {
         val english = strings("values")
@@ -316,7 +320,7 @@ class LocalizationResourcesTest {
             }
         }
         for (name in english.keys.filter { it.startsWith("settings_language_") &&
-            it.substringAfter("settings_language_") in setOf("english", "chinese", "russian", "arabic", "persian", "indonesian", "portuguese", "german") }) {
+            it.substringAfter("settings_language_") in setOf("english", "chinese", "russian", "arabic", "persian", "indonesian", "portuguese", "german", "spanish") }) {
             assertEquals("Native language name $name", english.getValue(name).removeSurrounding("\""),
                 translations.getValue(name).removeSurrounding("\""))
         }
@@ -325,6 +329,8 @@ class LocalizationResourcesTest {
     @Test fun brazilianPortuguesePluralsPreserveCountsAndCoverOneAndOther() = assertPluralCoverage("values-pt-rBR", "pt-BR")
 
     @Test fun germanPluralsPreserveCountsAndCoverOneAndOther() = assertPluralCoverage("values-de", "de")
+
+    @Test fun spanishPluralsPreserveCountsAndCoverOneAndOther() = assertPluralCoverage("values-es", "es")
 
     private fun assertPluralCoverage(resourceFolder: String, languageTag: String) {
         fun plurals(locale: String): Map<String, Map<String, String>> = buildMap {
