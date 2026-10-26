@@ -940,6 +940,7 @@
     <string name="chat_image_frequency_inherit">Use app setting (%1$s)</string>
     <string name="settings_language_russian">Русский</string>
     <string name="settings_language_arabic">العربية</string>
+    <string name="settings_language_persian">فارسی</string>
     <string name="settings_language_indonesian">Bahasa Indonesia</string>
     <string name="memory_section_chat">Chat</string>
     <string name="memory_section_code">Code</string>

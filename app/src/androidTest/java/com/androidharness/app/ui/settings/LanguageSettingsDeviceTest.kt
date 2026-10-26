@@ -106,7 +106,20 @@ class LanguageSettingsDeviceTest {
                 scrollTo(label(R.string.settings_language_contribute_title, "ar"))
                 scenario.onActivity { assertEquals("ar", it.resources.configuration.locales[0].language) }
 
-                // Indonesian must restore LTR layout after Arabic, including on legacy Android.
+                click("فارسی")
+                scrollTo(label(R.string.settings_language_contribute_title, "fa"))
+                scenario.onActivity {
+                    assertEquals("fa", it.resources.configuration.locales[0].language)
+                    assertEquals("fa", AppCompatDelegate.getApplicationLocales().toLanguageTags())
+                    assertEquals(android.view.View.LAYOUT_DIRECTION_RTL, it.resources.configuration.layoutDirection)
+                    assertEquals(android.view.View.LAYOUT_DIRECTION_RTL, it.window.decorView.layoutDirection)
+                }
+                screenshot("language-persian-phone.png")
+                scenario.recreate()
+                scrollTo(label(R.string.settings_language_contribute_title, "fa"))
+                scenario.onActivity { assertEquals("fa", it.resources.configuration.locales[0].language) }
+
+                // Indonesian must restore LTR layout after Persian, including on legacy Android.
                 click("Bahasa Indonesia")
                 scrollTo(label(R.string.settings_language_contribute_title, "id"))
                 scenario.onActivity {
@@ -128,7 +141,7 @@ class LanguageSettingsDeviceTest {
                 while (chosen != null && !chosen.isCheckable) chosen = chosen.parent
                 assertTrue("Indonesian remains selected with the legacy locale code", chosen?.isChecked == true)
 
-                // Explicit English must work even after Chinese, Russian, Arabic and Indonesian overrides.
+                // Explicit English must work even after Chinese, Russian, Arabic, Persian and Indonesian overrides.
                 click("English")
                 scrollTo(label(R.string.settings_language_contribute_title, "en"))
                 scenario.onActivity { assertEquals("en", it.resources.configuration.locales[0].language) }
@@ -138,7 +151,8 @@ class LanguageSettingsDeviceTest {
                 val systemTags = if (android.os.Build.VERSION.SDK_INT >= 33)
                     target.getSystemService(android.app.LocaleManager::class.java).systemLocales.toLanguageTags()
                 else Resources.getSystem().configuration.locales.toLanguageTags()
-                awaitText(label(R.string.settings_language_contribute_title, systemTags))
+                // The top bar stays visible when clearing the override resets the scroll position.
+                awaitText(label(R.string.settings_page_language_title, systemTags))
                 scenario.onActivity {
                     assertTrue(AppCompatDelegate.getApplicationLocales().isEmpty)
                     assertEquals(label(R.string.settings_page_language_title, systemTags),
@@ -153,8 +167,10 @@ class LanguageSettingsDeviceTest {
 
     @Test fun contributionButtonOpensThePublicProjectAtLargeFont() {
         var opened: String? = null
+        var action = ""
         ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
+                action = activity.getString(R.string.settings_language_contribute_action)
                 activity.setContent {
                     val density = LocalDensity.current.density
                     CompositionLocalProvider(
@@ -174,7 +190,6 @@ class LanguageSettingsDeviceTest {
                     }
                 }
             }
-            val action = target.getString(R.string.settings_language_contribute_action)
             scrollTo(action)
             screenshot("language-contribute-150-percent.png")
             click(action)
@@ -187,9 +202,12 @@ class LanguageSettingsDeviceTest {
     }
 
     private fun find(text: String): AccessibilityNodeInfo? {
+        if (android.os.Build.VERSION.SDK_INT >= 33) instrumentation.uiAutomation.clearCache()
         fun visit(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
             if (node == null) return null
-            if (node.text?.toString() == text || node.contentDescription?.toString() == text) return node
+            if (listOfNotNull(node.text?.toString(), node.contentDescription?.toString()).any {
+                it == text || it.lineSequence().any { line -> line == text }
+            }) return node
             for (index in 0 until node.childCount) visit(node.getChild(index))?.let { return it }
             return null
         }
@@ -202,20 +220,42 @@ class LanguageSettingsDeviceTest {
             find(text)?.let { return it }
             SystemClock.sleep(100)
         }
-        error("Missing language control: $text")
+        val visible = mutableListOf<String>()
+        fun collect(node: AccessibilityNodeInfo?) {
+            if (node == null) return
+            node.text?.let { visible += it.toString() }
+            for (index in 0 until node.childCount) collect(node.getChild(index))
+        }
+        collect(instrumentation.uiAutomation.rootInActiveWindow)
+        screenshot("language-failure-${text.hashCode()}.png")
+        error("Missing language control: $text; UI: $visible")
     }
 
     private fun scrollTo(text: String) {
-        for (direction in listOf(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)) {
+        for (forward in listOf(true, false)) {
             repeat(8) {
                 if (find(text) != null) return
-                fun scroll(node: AccessibilityNodeInfo?): Boolean {
-                    if (node == null) return false
-                    if (node.isScrollable && node.performAction(direction)) return true
-                    for (index in 0 until node.childCount) if (scroll(node.getChild(index))) return true
-                    return false
+                // Real swipes also exercise the scroll container when another locale adds rows.
+                val metrics = target.resources.displayMetrics
+                val x = metrics.widthPixels * .5f
+                val startY = metrics.heightPixels * if (forward) .78f else .25f
+                val endY = metrics.heightPixels * if (forward) .25f else .78f
+                val down = SystemClock.uptimeMillis()
+                for (step in 0..12) {
+                    val action = when (step) {
+                        0 -> android.view.MotionEvent.ACTION_DOWN
+                        12 -> android.view.MotionEvent.ACTION_UP
+                        else -> android.view.MotionEvent.ACTION_MOVE
+                    }
+                    val event = android.view.MotionEvent.obtain(down, SystemClock.uptimeMillis(), action,
+                        x, startY + (endY - startY) * step / 12, 0)
+                    event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
+                    val injected = try { instrumentation.uiAutomation.injectInputEvent(event, true) }
+                    finally { event.recycle() }
+                    // A locale change can replace the focused window during a swipe. Retry navigation.
+                    if (!injected) break
+                    SystemClock.sleep(20)
                 }
-                scroll(instrumentation.uiAutomation.rootInActiveWindow)
                 SystemClock.sleep(200)
             }
         }
