@@ -896,6 +896,7 @@
     <string name="chat_image_frequency_inherit">"Gunakan setelan aplikasi (%1$s)"</string>
     <string name="settings_language_russian">"Русский"</string>
     <string name="settings_language_arabic">"العربية"</string>
+    <string name="settings_language_persian">"فارسی"</string>
     <string name="settings_language_indonesian">Bahasa Indonesia</string>
     <string name="chat_global_instructions">"Instruksi Chat global"</string>
     <string name="chat_global_instructions_summary">"Panduan bawaan untuk semua Chat."</string>

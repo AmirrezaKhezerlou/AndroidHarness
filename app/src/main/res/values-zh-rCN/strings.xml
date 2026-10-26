@@ -927,6 +927,7 @@
     <string name="chat_image_frequency_inherit">使用应用设置（%1$s）</string>
     <string name="settings_language_russian">Русский</string>
     <string name="settings_language_arabic">العربية</string>
+    <string name="settings_language_persian">فارسی</string>
     <string name="settings_language_indonesian">Bahasa Indonesia</string>
     <string name="chat_global_instructions">全局 Chat 指令</string>
     <string name="chat_global_instructions_summary">所有 Chat 的默认指导。</string>
