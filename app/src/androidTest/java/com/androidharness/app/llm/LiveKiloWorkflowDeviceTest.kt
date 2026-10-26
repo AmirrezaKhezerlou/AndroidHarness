@@ -6,6 +6,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.androidharness.app.HarnessApp
 import com.androidharness.app.agent.*
 import com.androidharness.app.core.*
+import com.androidharness.app.core.response.ChatRichResponse
+import com.androidharness.app.core.response.RichResponse
 import com.androidharness.app.data.*
 import com.androidharness.app.data.db.*
 import com.androidharness.app.tools.*
@@ -42,9 +44,10 @@ class LiveKiloWorkflowDeviceTest {
         }
     }
     private suspend fun runChat(engine: AgentEngine, config: ProviderConfig, session: String, root: File,
-        prompt: String, conversation: ConversationConfig, global: String = ""): List<AgentEvent> = withTimeout(180_000) {
+        prompt: String, conversation: ConversationConfig, global: String = "",
+        history: List<ChatMessage> = emptyList()): List<AgentEvent> = withTimeout(180_000) {
         engine.run(session, UUID.randomUUID().toString(), config, HarnessProvider.KEYLESS,
-            listOf(ChatMessage(Role.USER, prompt)), { PermissionMode.FULL_AUTO }, mutableSetOf(), FileFs(root),
+            history + ChatMessage(Role.USER, prompt), { PermissionMode.FULL_AUTO }, mutableSetOf(), FileFs(root),
             RequestOptions(maxOutputTokens = 4096), 100_000, AgentMode.ACT, maxIterations = 4,
             conversation = conversation, chatInstructions = global, searchDepth = SearchDepth.OFF,
             chatImageFrequency = ImageFrequency.NONE).toList().also { events ->
@@ -55,6 +58,55 @@ class LiveKiloWorkflowDeviceTest {
     private fun evidence(name: String, text: String) {
         val directory = File(c.appContext.getExternalFilesDir(null), "regression-live-kilo").apply { mkdirs() }
         File(directory, "$name.json").writeText(org.json.JSONObject().put("scenario", name).put("answer", text).toString(2))
+    }
+    @Test fun liveRichAnswersUseTablesAndChartsOnlyWhenTheyFitTheRequest() = runBlocking<Unit> {
+        val config = connection()
+        val root = File(c.appContext.cacheDir, "live-kilo-presentation-${UUID.randomUUID()}").apply { mkdirs() }
+        val engine = AgentEngine(provider(), ToolRegistry(emptyList()), c.checkpoints, c.images, c.linuxEnv, c.shizuku, c.skills)
+        val scenarios = listOf(
+            Triple("explanation", "Explain why breaking a big task into small steps makes it easier to start.", "non-tabular"),
+            Triple("qualitative-comparison", "Compare a paper notebook with a notes app for keeping a daily journal. Help me choose.", "non-tabular"),
+            Triple("routine-after-table", "Help me make a simple, calmer morning routine.", "non-tabular"),
+            Triple("rich-choices", "Help me choose between reading, drawing, and taking a walk tonight. Give me interactive choices in your reply.", "choices"),
+            Triple("requested-table", "Show a table of these supplied book counts: Jan 10, Feb 15, Mar 12.", "table"),
+            Triple("requested-chart", "Show a native interactive line chart of these supplied book counts: Jan 10, Feb 15, Mar 12.", "chart"),
+        )
+        val precedingTable = listOf(
+            ChatMessage(Role.USER, "Show these measured times in a table: A 12 ms, B 18 ms."),
+            ChatMessage(Role.ASSISTANT, "| Run | Latency (ms) |\n| --- | --- |\n| A | 12 |\n| B | 18 |"),
+        )
+        fun descendants(node: RichResponse.Node): List<RichResponse.Node> = listOf(node) + when (node) {
+            is RichResponse.Node.Card -> node.children.flatMap(::descendants)
+            is RichResponse.Node.Layout -> node.children.flatMap(::descendants)
+            is RichResponse.Node.Tabs -> node.tabs.flatMap { it.children }.flatMap(::descendants)
+            else -> emptyList()
+        }
+        val markdownTable = Regex("(?m)^\\s*\\|?\\s*:?-{3,}:?\\s*\\|")
+        val failures = mutableListOf<String>()
+        try {
+            for ((name, query, expected) in scenarios) {
+                val answer = runChat(engine, config, "presentation-${UUID.randomUUID()}", root, query,
+                    ConversationConfig(ConversationKind.CHAT, personalizationEnabled = false),
+                    history = if (name == "routine-after-table") precedingTable else emptyList()).answer()
+                evidence("presentation-$name", answer)
+                val normalized = ChatRichResponse.normalize(answer)
+                val nodes = RichResponse.parse(normalized).filterIsInstance<RichResponse.Part.Content>().flatMap { descendants(it.node) }
+                val table = nodes.any { it is RichResponse.Node.Table || it is RichResponse.Node.Preview && it.html.contains("<table", true) } ||
+                    markdownTable.containsMatchIn(RichResponse.plainText(normalized))
+                val charts = nodes.filterIsInstance<RichResponse.Node.Chart>()
+                val matches = when (expected) {
+                    "non-tabular" -> !table && charts.isEmpty()
+                    "choices" -> !table && charts.isEmpty() && nodes.any { it is RichResponse.Node.Choices }
+                    "table" -> table && listOf("Jan", "Feb", "Mar", "10", "15", "12").all(answer::contains)
+                    "chart" -> charts.any { chart ->
+                        chart.kind == "line" && (chart.series.flatMap { it.points } + chart.points).map { it.value }.containsAll(listOf(10.0, 15.0, 12.0))
+                    }
+                    else -> false
+                }
+                if (answer.isBlank() || !matches) failures += "$name expected $expected: $answer"
+            }
+            assertTrue(failures.joinToString("\n\n"), failures.isEmpty())
+        } finally { root.deleteRecursively() }
     }
     @Test fun liveChatHonorsGlobalOverridesAndPersonalizationWithoutUnnecessaryTables() = runBlocking<Unit> {
         val config = connection()

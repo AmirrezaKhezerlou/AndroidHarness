@@ -191,11 +191,14 @@ internal fun EmptyState(
                                     )
                                 }
                             }
+                            HorizontalDivider(color = scheme.outlineVariant)
+                            DonationFundingNotice()
+                            DonationRow()
                             HorizontalDivider(
                                 color = scheme.outlineVariant.copy(alpha = 0.5f),
                                 modifier = Modifier.padding(start = 56.dp),
                             )
-                            DonationRow()
+                            UpiDonationRow()
                         }
                     }
                 } else {

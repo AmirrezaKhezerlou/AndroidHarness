@@ -227,6 +227,7 @@ class SettingsRepository(private val context: Context) {
         val EXECUTION_MODEL = stringPreferencesKey("execution_model")
         val PLANNING_PROMO_SEEN = booleanPreferencesKey("planning_promo_seen")
         val FORK_PROMO_SEEN = booleanPreferencesKey("fork_promo_seen")
+        val DONATION_NOTICE_DISMISSED = booleanPreferencesKey("donation_notice_dismissed")
         val BIOMETRIC_LOCK_ENABLED = booleanPreferencesKey("biometric_lock_enabled")
         val BIOMETRIC_LOCK_TIMEOUT = intPreferencesKey("biometric_lock_timeout_minutes")
         val VOICE_ENGINE = stringPreferencesKey("voice_engine")
@@ -259,6 +260,15 @@ class SettingsRepository(private val context: Context) {
         val CAVEMAN_INSTALLED = booleanPreferencesKey("caveman_installed")
         val CAVEMAN_INTENSITY = stringPreferencesKey("caveman_intensity")
         val CAVEMAN_WENYAN = booleanPreferencesKey("caveman_wenyan")
+    }
+
+    /** Device-local dismissal shared by the empty Chat and Code screens. */
+    val donationNoticeDismissed: Flow<Boolean> = context.settingsStore.data.map { prefs ->
+        prefs[Keys.DONATION_NOTICE_DISMISSED] ?: false
+    }
+
+    suspend fun setDonationNoticeDismissed(dismissed: Boolean) {
+        context.settingsStore.edit { it[Keys.DONATION_NOTICE_DISMISSED] = dismissed }
     }
 
     val settings: Flow<AppSettings> = context.settingsStore.data.map { prefs ->
