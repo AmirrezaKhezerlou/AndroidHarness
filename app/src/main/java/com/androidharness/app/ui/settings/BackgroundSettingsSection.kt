@@ -58,6 +58,7 @@ internal fun BackgroundSettingsSection(container: AppContainer, settings: AppSet
             stringResource(R.string.background_android_description), onClick = ::openAndroidNotifications,
             trailing = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) })
     }
+    LiveUpdatesSetting(settings) { enabled -> scope.launch { container.settings.setLiveUpdatesEnabled(enabled) } }
 }
 
 @Composable

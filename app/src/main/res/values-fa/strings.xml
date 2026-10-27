@@ -13,7 +13,7 @@
     <string name="settings_page_github_title">"GitHub"</string>
     <string name="settings_page_github_desc">"ورود، مخازن را وارد کنید و تغییرات را منتشر کنید"</string>
     <string name="settings_page_accounts_title">"حساب های متصل"</string>
-    <string name="settings_page_accounts_desc">"از طرح ChatGPT خود برای کدنویسی و ابزارها استفاده کنید"</string>
+    <string name="settings_page_accounts_desc">اتصال حساب ChatGPT</string>
     <string name="settings_page_models_title">"مدل ها و ارائه دهندگان"</string>
     <string name="settings_page_models_desc">"اتصالات، مدل ها و مسیریابی بازگشتی"</string>
     <string name="settings_page_subagent_title">"تنظیمات نمایندگی فرعی"</string>
@@ -22,8 +22,8 @@
     <string name="settings_page_local_models_desc">"مدل هایی را که روی گوشی شما اجرا می شوند انتخاب و مدیریت کنید"</string>
     <string name="settings_page_agent_title">"رفتار عامل"</string>
     <string name="settings_page_agent_desc">"مجوزها، محدودیت های زمینه و دستورالعمل های پروژه"</string>
-    <string name="settings_page_chat_title">"گفتگوی و دستورات"</string>
-    <string name="settings_page_chat_desc">"رفتار راه اندازی، فهرست بندی کد و دستورات اسلش"</string>
+    <string name="settings_page_chat_title">گفتگوی کدنویسی و فرمان‌ها</string>
+    <string name="settings_page_chat_desc">کد زنده، نقشه پروژه و فرمان‌ها</string>
     <string name="settings_page_codegraph_title">"کد گراف"</string>
     <string name="settings_page_codegraph_desc">"CodeGraph را نصب کنید و فهرست های پروژه را مدیریت کنید"</string>
     <string name="settings_page_caveman_title">"غارنشین"</string>
@@ -81,7 +81,7 @@
     <string name="settings_search_subagent_model_title">"مدل زیر عامل"</string>
     <string name="settings_search_subagent_model_desc">"تنظیمات Sub-Agent · یک ارائه دهنده و مدل جداگانه برای subagents انتخاب کنید"</string>
     <string name="settings_search_max_context_title">"حداکثر پنجره زمینه"</string>
-    <string name="settings_search_max_context_desc">"رفتار عامل · حداکثر اندازه بافت مدل را تنظیم کنید"</string>
+    <string name="settings_search_max_context_desc">رفتار عامل · محدودیت زمینه کدنویسی</string>
     <string name="settings_search_tool_iterations_title">"محدودیت تکرار فراخوانی ابزار"</string>
     <string name="settings_search_tool_iterations_desc">"رفتار عامل · محدود کردن تکرارهای ابزار عامل"</string>
     <string name="settings_search_project_instructions_title">"دستورالعمل های پروژه (AGENTS.md)"</string>
@@ -247,11 +247,11 @@
     <string name="settings_about_read_license">"مجوز کامل را بخوانید"</string>
     <string name="settings_backup_chat_backup">"پشتیبان گفتگو"</string>
     <string name="settings_agent_instructions_content">"محتوای AGENTS.md"</string>
-    <string name="settings_agent_context_cap_subtitle">"متن ارسال شده به مدل را درپوش کنید."</string>
+    <string name="settings_agent_context_cap_subtitle">محدودیت زمینه کدنویسی را تنظیم می‌کند. گفتگو تا ۲۵۰ هزار توکن استفاده می‌کند.</string>
     <string name="settings_agent_tool_rounds_subtitle">"چند دور ابزار یک اجرا می تواند طول بکشد."</string>
     <string name="settings_agent_instructions_subtitle">"قوانین فضای کاری فعلی خود را مشاهده یا ویرایش کنید."</string>
     <string name="settings_agent_permission_subtitle">انتخاب کنید عامل چه زمانی درخواست تأیید کند. نصب بسته‌ها همیشه نیاز به تأیید دارد؛ تأییدهای ذخیره‌شده مانع نمایش دوبارهٔ همان درخواست می‌شوند.</string>
-    <string name="settings_agent_context_cap_detail">"یک زمینه بزرگتر می تواند تاریخچه بیشتری را حفظ کند، اما از نشانه های بیشتری استفاده می کند. محدودیت خود مدل همچنان اعمال می شود."</string>
+    <string name="settings_agent_context_cap_detail">زمینه بزرگ‌تر کدنویسی تاریخچه بیشتری نگه می‌دارد اما توکن بیشتری مصرف می‌کند. محدودیت مدل همچنان اعمال می‌شود. گفتگو تا ۲۵۰ هزار توکن استفاده می‌کند.</string>
     <string name="settings_agent_tool_rounds_detail">"یک دور می تواند شامل چندین تماس ابزار باشد. نامحدود ادامه می دهد تا زمانی که کار تمام شود یا آن را متوقف کنید."</string>
     <string name="settings_caveman_native_pack">"بسته مهارتی بومی"</string>
     <string name="settings_caveman_native_pack_desc">"پاسخ های کوتاه تر و پنج مهارت کدنویسی متمرکز. از مدل موجود شما استفاده می کند، بدون کلید API اضافی، ترمینال یا پروکسی."</string>
@@ -795,8 +795,8 @@
     <string name="chat_tool_result_empty">"هیچ پیوند منبعی برگردانده نشد."</string>
     <string name="chat_memory_saved">"حافظه ذخیره شد"</string>
     <string name="settings_group_chat_options">"گفتگوی کنید"</string>
-    <string name="settings_page_chat_options_title">"گزینه گفتگو"</string>
-    <string name="settings_page_chat_options_desc">"صفحه شروع و نحوه باز شدن گفتگوی را انتخاب کنید"</string>
+    <string name="settings_page_chat_options_title">تنظیمات گفتگو</string>
+    <string name="settings_page_chat_options_desc">دستورهای گفتگو، تصاویر و شروع برنامه</string>
     <string name="settings_start_screen">"صفحه شروع"</string>
     <string name="settings_start_code_desc">"وقتی برنامه شروع به کار کرد، کد را باز کنید."</string>
     <string name="settings_start_chat_desc">"وقتی برنامه شروع به کار کرد، Chat را باز کنید."</string>

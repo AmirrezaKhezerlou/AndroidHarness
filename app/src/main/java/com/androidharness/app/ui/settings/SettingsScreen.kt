@@ -168,6 +168,7 @@ fun SettingsScreen(
     var pendingDelete by remember { mutableStateOf<ProjectEntity?>(null) }
 
     var pageName by rememberSaveable { mutableStateOf<String?>(null) }
+    var pageHistory by rememberSaveable { mutableStateOf(listOf<String>()) }
     val desktop = com.androidharness.app.ui.LocalDesktopLayout.current
     val page = pageName?.let { name -> SettingsPage.entries.firstOrNull { it.name == name } }
         ?: if (desktop) SettingsPage.APPEARANCE else null
@@ -184,6 +185,7 @@ fun SettingsScreen(
     val homeScroll = rememberScrollState()
     fun goBack() {
         when {
+            pageHistory.isNotEmpty() -> { pageName = pageHistory.last(); pageHistory = pageHistory.dropLast(1); highlight = null }
             desktop -> onBack()
             page != null -> pageName = null
             query.isNotBlank() -> query = ""
@@ -193,7 +195,11 @@ fun SettingsScreen(
     BackHandler(enabled = page != null || query.isNotBlank()) { goBack() }
     LaunchedEffect(Unit) {
         container.pendingSettingsScroll.filterNotNull().collect { target ->
-            settingsDeepLink(target)?.let { pageName = it.name }
+            settingsDeepLink(target)?.let { destination ->
+                val current = pageName
+                if (current != null && current != destination.name) pageHistory = pageHistory + current
+                pageName = destination.name
+            }
             highlight = settingsDeepLinkAnchor(target)
             container.pendingSettingsScroll.value = null
         }
@@ -204,7 +210,12 @@ fun SettingsScreen(
             SettingsPage.SKILLS -> onOpenSkills()
             SettingsPage.USAGE -> onOpenStats()
             SettingsPage.SETUP -> onRunSetup()
-            else -> pageName = destination.name
+            else -> {
+                val current = pageName
+                if (desktop && !(page == SettingsPage.CODING && destination in settingsCodingPages)) pageHistory = emptyList()
+                else if (current != null && current != destination.name) pageHistory = pageHistory + current
+                pageName = destination.name
+            }
         }
     }
 
@@ -220,7 +231,7 @@ fun SettingsScreen(
             AppHeader(
                 title = if (desktop) stringResource(R.string.settings_page_title) else page?.let { stringResource(it.title) }
                     ?: stringResource(R.string.settings_page_title),
-                onBack = { goBack() },
+                onBack = { if (desktop) onBack() else goBack() },
             )
         },
     ) { padding ->
@@ -2304,7 +2315,7 @@ private fun CurrentSetupCard(
                 else "${active.name} · ${settings.activeModel?.takeIf { it.isNotBlank() } ?: active.model}",
             )
             SetupLine(uiContext.getString(R.string.ui_thinking_2), localizedThinkingOption(settings.thinkingLevel.label))
-            SetupLine(uiContext.getString(R.string.ui_context_window_1183), formatTokenCount(settings.maxContextTokens.toLong()))
+            SetupLine("${uiContext.getString(R.string.ui_context_window_1183)} · ${uiContext.getString(R.string.conversation_code)}", formatTokenCount(settings.maxContextTokens.toLong()))
             SetupLine(uiContext.getString(R.string.ui_default_permission), localizedOption(settings.permissionMode.label))
             Text(
                 uiContext.getString(R.string.ui_model_and_thinking_change_from_the_chat),
@@ -2336,31 +2347,16 @@ private fun SetupLine(label: String, value: String) {
 }
 
 
-/** Settings reached through the Coding hub, in display order. */
-private val codingSettingsPages = listOf(
-    SettingsPage.SUBAGENT,
-    SettingsPage.AGENT,
-    SettingsPage.CHAT,
-    SettingsPage.SKILLS,
-    SettingsPage.CODE_INTELLIGENCE,
-    SettingsPage.CAVEMAN,
-    SettingsPage.MCP,
-    SettingsPage.TELEGRAM,
-    SettingsPage.WORKSPACE,
-    SettingsPage.ENVIRONMENT,
-    SettingsPage.TROUBLESHOOTING,
-)
-
 @Composable
 private fun CodingSection(onOpen: (SettingsPage) -> Unit) {
     SettingsPanel(Modifier.fillMaxWidth()) {
-        codingSettingsPages.forEachIndexed { index, destination ->
+        settingsCodingPages.forEachIndexed { index, destination ->
             SettingRow(
                 icon = settingsIcon(destination),
                 title = stringResource(destination.title),
                 subtitle = stringResource(destination.description),
                 onClick = { onOpen(destination) },
-                divider = index != codingSettingsPages.lastIndex,
+                divider = index != settingsCodingPages.lastIndex,
                 trailing = {
                     Icon(
                         Icons.AutoMirrored.Filled.KeyboardArrowRight,
@@ -2388,6 +2384,7 @@ private fun AgentSection(
         onIterationLimit = { scope.launch { container.settings.setMaxIterations(it) } },
         onProjectInstructions = { showAgentsDialog = true },
         onLiveUpdates = { scope.launch { container.settings.setLiveUpdatesEnabled(it) } },
+        showLiveUpdates = false,
     )
     if (showAgentsDialog) {
         AgentsInstructionsDialog(container, onDismiss = { showAgentsDialog = false })
@@ -2547,7 +2544,7 @@ private fun AppearanceSection(container: AppContainer, settings: AppSettings, sc
 @Composable
 private fun ChatBehaviorSection(container: AppContainer, settings: AppSettings, scope: kotlinx.coroutines.CoroutineScope) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
-    SettingsHeader(uiContext.getString(R.string.ui_chat_behavior))
+    SettingsHeader(stringResource(R.string.settings_page_chat_title))
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             SettingsAnchor(R.string.settings_anchor_show_live_code) {

@@ -13,7 +13,7 @@
     <string name="settings_page_github_title">"GitHub"</string>
     <string name="settings_page_github_desc">"Login, impor repositori, dan publikasikan perubahan"</string>
     <string name="settings_page_accounts_title">"Akun terhubung"</string>
-    <string name="settings_page_accounts_desc">"Gunakan paket ChatGPT untuk pemrograman dan alat"</string>
+    <string name="settings_page_accounts_desc">Hubungkan akun ChatGPT Anda</string>
     <string name="settings_page_models_title">"Model &amp; penyedia"</string>
     <string name="settings_page_models_desc">"Koneksi, model, dan perutean cadangan"</string>
     <string name="settings_page_subagent_title">"Setelan agen pendamping"</string>
@@ -22,8 +22,8 @@
     <string name="settings_page_local_models_desc">"Pilih dan kelola model yang berjalan di ponsel"</string>
     <string name="settings_page_agent_title">"Perilaku agen"</string>
     <string name="settings_page_agent_desc">"Izin, batas konteks, dan instruksi proyek"</string>
-    <string name="settings_page_chat_title">"Chat &amp; perintah"</string>
-    <string name="settings_page_chat_desc">"Perilaku awal, pengindeksan kode, dan perintah garis miring"</string>
+    <string name="settings_page_chat_title">Percakapan kode dan perintah</string>
+    <string name="settings_page_chat_desc">Kode langsung, peta proyek, dan perintah</string>
     <string name="settings_page_codegraph_title">"CodeGraph"</string>
     <string name="settings_page_codegraph_desc">"Instal CodeGraph dan kelola indeks proyek"</string>
     <string name="settings_page_caveman_title">"Caveman"</string>
@@ -81,7 +81,7 @@
     <string name="settings_search_subagent_model_title">"Model agen pendamping"</string>
     <string name="settings_search_subagent_model_desc">"Setelan agen pendamping · Pilih penyedia dan model terpisah untuk agen pendamping"</string>
     <string name="settings_search_max_context_title">"Jendela konteks maksimal"</string>
-    <string name="settings_search_max_context_desc">"Perilaku agen · Atur ukuran konteks model maksimal"</string>
+    <string name="settings_search_max_context_desc">Perilaku agen · Atur batas konteks Kode</string>
     <string name="settings_search_tool_iterations_title">"Batas putaran panggilan alat"</string>
     <string name="settings_search_tool_iterations_desc">"Perilaku agen · Batasi putaran alat agen"</string>
     <string name="settings_search_project_instructions_title">"Instruksi proyek (AGENTS.md)"</string>
@@ -247,11 +247,11 @@
     <string name="settings_about_read_license">"Baca lisensi lengkap"</string>
     <string name="settings_backup_chat_backup">"Cadangan chat"</string>
     <string name="settings_agent_instructions_content">"Isi AGENTS.md"</string>
-    <string name="settings_agent_context_cap_subtitle">"Batasi konteks yang dikirim ke model."</string>
+    <string name="settings_agent_context_cap_subtitle">Mengatur batas konteks Kode. Chat menggunakan hingga 250 ribu token.</string>
     <string name="settings_agent_tool_rounds_subtitle">"Jumlah putaran alat yang dapat dilakukan dalam satu eksekusi."</string>
     <string name="settings_agent_instructions_subtitle">"Lihat atau edit aturan ruang kerja saat ini."</string>
     <string name="settings_agent_permission_subtitle">"Pilih kapan agen meminta persetujuan. Instalasi paket selalu meminta izin; persetujuan tersimpan melewati permintaan berulang."</string>
-    <string name="settings_agent_context_cap_detail">"Konteks lebih besar dapat menyimpan lebih banyak riwayat, tetapi menggunakan lebih banyak token. Batas model sendiri tetap berlaku."</string>
+    <string name="settings_agent_context_cap_detail">Konteks Kode yang lebih besar menyimpan lebih banyak riwayat tetapi memakai lebih banyak token. Batas model tetap berlaku. Chat menggunakan hingga 250 ribu token.</string>
     <string name="settings_agent_tool_rounds_detail">"Satu putaran dapat mencakup beberapa panggilan alat. Tanpa batas akan terus berjalan hingga tugas selesai atau Anda hentikan."</string>
     <string name="settings_caveman_native_pack">"Paket keahlian bawaan"</string>
     <string name="settings_caveman_native_pack_desc">"Respons lebih singkat dan lima keahlian pemrograman terarah. Menggunakan model Anda tanpa kunci API tambahan, terminal, atau proxy."</string>
@@ -783,8 +783,8 @@
     <string name="chat_tool_result_empty">"Tidak ada tautan sumber yang dikembalikan."</string>
     <string name="chat_memory_saved">"Memori disimpan"</string>
     <string name="settings_group_chat_options">"Chat"</string>
-    <string name="settings_page_chat_options_title">"Opsi Chat"</string>
-    <string name="settings_page_chat_options_desc">"Pilih layar awal dan cara Chat dibuka"</string>
+    <string name="settings_page_chat_options_title">Pengaturan chat</string>
+    <string name="settings_page_chat_options_desc">Instruksi chat, gambar, dan pengaturan awal</string>
     <string name="settings_start_screen">"Layar awal"</string>
     <string name="settings_start_code_desc">"Buka Kode saat aplikasi dimulai."</string>
     <string name="settings_start_chat_desc">"Buka Chat saat aplikasi dimulai."</string>

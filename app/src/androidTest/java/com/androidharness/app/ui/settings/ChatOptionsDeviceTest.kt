@@ -27,6 +27,45 @@ class ChatOptionsDeviceTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val c get() = (instrumentation.targetContext.applicationContext as HarnessApp).container
 
+    @Test fun reorganizedSettingsKeepCodingBackNavigationAndSearchConnected(): Unit = runBlocking {
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            scenario.onActivity { activity -> activity.setContent {
+                CompositionLocalProvider(LocalDesktopLayout provides false) { HarnessTheme { SettingsScreen(c, {}) } }
+            } }
+            tap("Coding")
+            tap("Code conversation & commands")
+            await("Show live code")
+            instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+            await("Sub-Agent settings")
+            instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+            await("Chat settings")
+            val search = nodes().first { it.isEditable }
+            assertTrue(search.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, android.os.Bundle().apply {
+                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "telegram")
+            }))
+            tap("Telegram")
+            await("Connect bot")
+            c.pendingSettingsScroll.value = "agent"
+            await("Default permission mode")
+            instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+            await("Connect bot")
+        }
+    }
+
+    @Test fun wideSettingsKeepCodingNavigationReachable(): Unit = runBlocking {
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            scenario.onActivity { activity -> activity.setContent {
+                CompositionLocalProvider(LocalDesktopLayout provides true) { HarnessTheme { SettingsScreen(c, {}) } }
+            } }
+            tap("Coding")
+            tap("Code conversation & commands")
+            await("Show live code")
+            instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+            await("Sub-Agent settings")
+            screenshot("wide-settings-coding")
+        }
+    }
+
     @Test fun globalInstructionsCanBeEditedFromChatOptionsAndSurviveReloadAndRestore(): Unit = runBlocking {
         val saved = c.settings.settings.first()
         val instruction = "GLOBAL_SETTINGS_INSTRUCTION_613: keep answers concise."
@@ -37,7 +76,7 @@ class ChatOptionsDeviceTest {
             c.settings.setChatInstructions("")
             ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
                 show(scenario)
-                tap("Chat Option"); tap("Global Chat instructions")
+                tap("Chat settings"); tap("Global Chat instructions")
                 await("Chat instructions")
                 val editor = nodes().first { it.isEditable }
                 assertTrue(editor.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, android.os.Bundle().apply {
@@ -52,7 +91,7 @@ class ChatOptionsDeviceTest {
             c.settings.restorePortable(portable)
             assertEquals(instruction, c.settings.settings.first().chatInstructions)
             ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
-                show(scenario); tap("Chat Option"); await(instruction)
+                show(scenario); tap("Chat settings"); await(instruction)
                 screenshot("global-chat-instructions-settings")
             }
         } finally { c.settings.restorePortable(saved) }
@@ -73,11 +112,13 @@ class ChatOptionsDeviceTest {
             } }
             ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
                 show(scenario)
+                val accounts = android.graphics.Rect().also { await("Connected accounts").getBoundsInScreen(it) }
                 val language = android.graphics.Rect().also { await("App language").getBoundsInScreen(it) }
-                val option = android.graphics.Rect().also { await("Chat Option").getBoundsInScreen(it) }
-                assertTrue("Chat Option follows Language", option.top > language.bottom)
+                assertTrue("Connected accounts is above App language", accounts.bottom < language.top)
+                val option = android.graphics.Rect().also { await("Chat settings").getBoundsInScreen(it) }
+                assertTrue("Chat settings follows Language", option.top > language.bottom)
                 screenshot("chat-option-settings-home")
-                tap("Chat Option"); await("Start screen"); awaitSelected("Code")
+                tap("Chat settings"); await("Start screen"); awaitSelected("Code")
                 tap("Chat"); awaitPreference { it.startScreen == StartScreen.CHAT }; awaitSelected("Chat")
                 scenario.onActivity { scale.value = 1.5f }
                 await("Last selected"); screenshot("chat-option-large-dark")
@@ -85,7 +126,7 @@ class ChatOptionsDeviceTest {
             }
             ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
                 show(scenario)
-                tap("Chat Option"); await("Start screen"); awaitSelected("Last selected")
+                tap("Chat settings"); await("Start screen"); awaitSelected("Last selected")
                 screenshot("chat-option-persisted")
             }
         } finally { c.settings.setStartScreen(saved.startScreen) }

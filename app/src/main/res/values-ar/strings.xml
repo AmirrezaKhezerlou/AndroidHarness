@@ -13,7 +13,7 @@
     <string name="settings_page_github_title">"GitHub"</string>
     <string name="settings_page_github_desc">"تسجيل الدخول واستيراد المستودعات ونشر التغييرات"</string>
     <string name="settings_page_accounts_title">"الحسابات المتصلة"</string>
-    <string name="settings_page_accounts_desc">"استخدم اشتراك ChatGPT للبرمجة والأدوات"</string>
+    <string name="settings_page_accounts_desc">ربط حساب ChatGPT</string>
     <string name="settings_page_models_title">"النماذج والمزوّدون"</string>
     <string name="settings_page_models_desc">"الاتصالات والنماذج والتوجيه الاحتياطي"</string>
     <string name="settings_page_subagent_title">"إعدادات الوكلاء الفرعيين"</string>
@@ -22,8 +22,8 @@
     <string name="settings_page_local_models_desc">"اختيار النماذج التي تعمل على هاتفك وإدارتها"</string>
     <string name="settings_page_agent_title">"سلوك الوكيل"</string>
     <string name="settings_page_agent_desc">"الأذونات وحدود السياق وتعليمات المشروع"</string>
-    <string name="settings_page_chat_title">"المحادثة والأوامر"</string>
-    <string name="settings_page_chat_desc">"سلوك البدء وفهرسة الكود وأوامر الشرطة المائلة"</string>
+    <string name="settings_page_chat_title">محادثة البرمجة والأوامر</string>
+    <string name="settings_page_chat_desc">الكود المباشر وخريطة المشروع والأوامر المختصرة</string>
     <string name="settings_page_codegraph_title">"CodeGraph"</string>
     <string name="settings_page_codegraph_desc">"تثبيت CodeGraph وإدارة فهارس المشاريع"</string>
     <string name="settings_page_caveman_title">"Caveman"</string>
@@ -81,7 +81,7 @@
     <string name="settings_search_subagent_model_title">"نموذج الوكيل الفرعي"</string>
     <string name="settings_search_subagent_model_desc">"إعدادات الوكلاء الفرعيين · اختيار مزوّد ونموذج منفصلين"</string>
     <string name="settings_search_max_context_title">"أقصى نافذة سياق"</string>
-    <string name="settings_search_max_context_desc">"سلوك الوكيل · ضبط أقصى حجم لسياق النموذج"</string>
+    <string name="settings_search_max_context_desc">سلوك الوكيل · تحديد حد سياق البرمجة</string>
     <string name="settings_search_tool_iterations_title">"حد جولات استدعاء الأدوات"</string>
     <string name="settings_search_tool_iterations_desc">"سلوك الوكيل · تقييد جولات أدوات الوكيل"</string>
     <string name="settings_search_project_instructions_title">"تعليمات المشروع (AGENTS.md)"</string>
@@ -247,11 +247,11 @@
     <string name="settings_about_read_license">"قراءة الترخيص الكامل"</string>
     <string name="settings_backup_chat_backup">"نسخ المحادثات الاحتياطي"</string>
     <string name="settings_agent_instructions_content">"محتوى AGENTS.md"</string>
-    <string name="settings_agent_context_cap_subtitle">"تقييد حجم السياق المرسل إلى النموذج."</string>
+    <string name="settings_agent_context_cap_subtitle">يحدد حد سياق البرمجة. تستخدم الدردشة حتى 250 ألف رمز.</string>
     <string name="settings_agent_tool_rounds_subtitle">"عدد جولات الأدوات التي يمكن أن يستغرقها التشغيل."</string>
     <string name="settings_agent_instructions_subtitle">"عرض قواعد مساحة العمل الحالية أو تعديلها."</string>
     <string name="settings_agent_permission_subtitle">"اختر متى يطلب الوكيل الموافقة. يطلب تثبيت الحزم الموافقة دائماً؛ وتتجاوز الموافقات المحفوظة الطلبات المتكررة."</string>
-    <string name="settings_agent_context_cap_detail">"يمكن للسياق الأكبر الاحتفاظ بسجل أطول، لكنه يستخدم رموزاً أكثر. يظل حد النموذج نفسه سارياً."</string>
+    <string name="settings_agent_context_cap_detail">يحتفظ سياق البرمجة الأكبر بمزيد من السجل ويستخدم رموزاً أكثر. يظل حد النموذج سارياً. تستخدم الدردشة حتى 250 ألف رمز.</string>
     <string name="settings_agent_tool_rounds_detail">"قد تتضمن الجولة عدة استدعاءات أدوات. يواصل الوضع غير المحدود حتى انتهاء المهمة أو إيقافك لها."</string>
     <string name="settings_caveman_native_pack">"حزمة مهارات مدمجة"</string>
     <string name="settings_caveman_native_pack_desc">"ردود أقصر وخمس مهارات برمجة محددة. تستخدم نموذجك الحالي دون مفتاح API إضافي أو طرفية أو وكيل وسيط."</string>
@@ -788,8 +788,8 @@
     <string name="chat_tool_result_empty">"لم تُعد أي روابط مصادر."</string>
     <string name="chat_memory_saved">"حُفظت الذاكرة"</string>
     <string name="settings_group_chat_options">"دردشة"</string>
-    <string name="settings_page_chat_options_title">"خيارات المحادثة"</string>
-    <string name="settings_page_chat_options_desc">"اختيار شاشة البدء وطريقة فتح المحادثة"</string>
+    <string name="settings_page_chat_options_title">إعدادات الدردشة</string>
+    <string name="settings_page_chat_options_desc">تعليمات الدردشة والصور وبدء التشغيل</string>
     <string name="settings_start_screen">"شاشة البدء"</string>
     <string name="settings_start_code_desc">"فتح الكود عند بدء التطبيق."</string>
     <string name="settings_start_chat_desc">"فتح المحادثة عند بدء التطبيق."</string>

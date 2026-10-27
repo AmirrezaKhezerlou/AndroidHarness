@@ -23,7 +23,7 @@
     <string name="settings_page_github_title">GitHub</string>
     <string name="settings_page_github_desc">登录、导入仓库并发布改动</string>
     <string name="settings_page_accounts_title">已连接账户</string>
-    <string name="settings_page_accounts_desc">使用你的 ChatGPT 订阅进行编码和调用工具</string>
+    <string name="settings_page_accounts_desc">连接 ChatGPT 账户</string>
     <string name="settings_page_models_title">模型与提供商</string>
     <string name="settings_page_models_desc">连接、模型与回退路由</string>
     <string name="settings_page_subagent_title">子代理设置</string>
@@ -32,8 +32,8 @@
     <string name="settings_page_local_models_desc">选择并管理在手机上运行的模型</string>
     <string name="settings_page_agent_title">代理行为</string>
     <string name="settings_page_agent_desc">权限、上下文上限与项目指令</string>
-    <string name="settings_page_chat_title">对话与命令</string>
-    <string name="settings_page_chat_desc">启动行为、代码索引与斜杠命令</string>
+    <string name="settings_page_chat_title">代码对话与命令</string>
+    <string name="settings_page_chat_desc">实时代码、项目地图和斜杠命令</string>
     <string name="settings_page_codegraph_title">CodeGraph</string>
     <string name="settings_page_codegraph_desc">安装 CodeGraph 并管理项目索引</string>
     <string name="settings_page_caveman_title">Caveman</string>
@@ -93,7 +93,7 @@
     <string name="settings_search_subagent_model_title">子代理模型</string>
     <string name="settings_search_subagent_model_desc">子代理设置 · 为子代理单独指定提供商和模型</string>
     <string name="settings_search_max_context_title">最大上下文窗口</string>
-    <string name="settings_search_max_context_desc">代理行为 · 设置模型上下文的最大长度</string>
+    <string name="settings_search_max_context_desc">代理行为 · 设置代码上下文上限</string>
     <string name="settings_search_tool_iterations_title">工具调用次数上限</string>
     <string name="settings_search_tool_iterations_desc">代理行为 · 限制代理的工具调用轮数</string>
     <string name="settings_search_project_instructions_title">项目指令（AGENTS.md）</string>
@@ -267,11 +267,11 @@
     <string name="settings_about_read_license">阅读完整许可证</string>
     <string name="settings_backup_chat_backup">对话备份</string>
     <string name="settings_agent_instructions_content">AGENTS.md 内容</string>
-    <string name="settings_agent_context_cap_subtitle">限制发送给模型的上下文长度。</string>
+    <string name="settings_agent_context_cap_subtitle">设置代码的上下文上限。聊天最多使用 250K 个 token。</string>
     <string name="settings_agent_tool_rounds_subtitle">一次运行可用的工具轮数。</string>
     <string name="settings_agent_instructions_subtitle">查看或编辑当前工作区的规则。</string>
     <string name="settings_agent_permission_subtitle">选择代理何时请求批准。安装软件包始终会询问；记住的批准会跳过重复提示。</string>
-    <string name="settings_agent_context_cap_detail">更大的上下文能保留更多历史，但会消耗更多 Token。模型自身的上限依然生效。</string>
+    <string name="settings_agent_context_cap_detail">更大的代码上下文可保留更多历史，但会使用更多 token。模型自身的上限仍然适用。聊天最多使用 250K 个 token。</string>
     <string name="settings_agent_tool_rounds_detail">一轮可以包含多次工具调用。设为无限制时会一直继续，直到任务完成或你主动停止。</string>
     <string name="settings_caveman_native_pack">原生技能包</string>
     <string name="settings_caveman_native_pack_desc">更短的回复，加上五个专注的编程技能。使用你现有的模型，无需额外的 API 密钥、终端或代理。</string>
@@ -814,8 +814,8 @@
     <string name="chat_tool_result_empty">未返回来源链接。</string>
     <string name="chat_memory_saved">记忆已保存</string>
     <string name="settings_group_chat_options">聊天</string>
-    <string name="settings_page_chat_options_title">聊天选项</string>
-    <string name="settings_page_chat_options_desc">选择启动页面以及聊天打开方式</string>
+    <string name="settings_page_chat_options_title">聊天设置</string>
+    <string name="settings_page_chat_options_desc">聊天指令、图片和启动设置</string>
     <string name="settings_start_screen">启动页面</string>
     <string name="settings_start_code_desc">启动应用时打开代码版块。</string>
     <string name="settings_start_chat_desc">启动应用时打开聊天版块。</string>

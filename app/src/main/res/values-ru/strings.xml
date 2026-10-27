@@ -13,7 +13,7 @@
     <string name="settings_page_github_title">"GitHub"</string>
     <string name="settings_page_github_desc">"Вход, импорт репозиториев и публикация изменений"</string>
     <string name="settings_page_accounts_title">"Подключённые аккаунты"</string>
-    <string name="settings_page_accounts_desc">"Используйте подписку ChatGPT для работы с кодом и инструментами"</string>
+    <string name="settings_page_accounts_desc">Подключите аккаунт ChatGPT</string>
     <string name="settings_page_models_title">"Модели и провайдеры"</string>
     <string name="settings_page_models_desc">"Подключения, модели и резервная маршрутизация"</string>
     <string name="settings_page_subagent_title">"Настройки субагентов"</string>
@@ -22,8 +22,8 @@
     <string name="settings_page_local_models_desc">"Выбор и управление моделями, работающими на телефоне"</string>
     <string name="settings_page_agent_title">"Поведение агента"</string>
     <string name="settings_page_agent_desc">"Разрешения, размер контекста и инструкции проекта"</string>
-    <string name="settings_page_chat_title">"Чат и команды"</string>
-    <string name="settings_page_chat_desc">"Поведение при запуске, индексация кода и команды через /"</string>
+    <string name="settings_page_chat_title">Диалог о коде и команды</string>
+    <string name="settings_page_chat_desc">Код в реальном времени, карта проекта и команды</string>
     <string name="settings_page_codegraph_title">"CodeGraph"</string>
     <string name="settings_page_codegraph_desc">"Установка CodeGraph и управление индексами проектов"</string>
     <string name="settings_page_caveman_title">"Caveman"</string>
@@ -81,7 +81,7 @@
     <string name="settings_search_subagent_model_title">"Модель субагента"</string>
     <string name="settings_search_subagent_model_desc">"Настройки субагентов · Отдельный провайдер и модель для субагентов"</string>
     <string name="settings_search_max_context_title">"Максимальный размер контекста"</string>
-    <string name="settings_search_max_context_desc">"Поведение агента · Максимальный размер контекста модели"</string>
+    <string name="settings_search_max_context_desc">Поведение агента · Предел контекста Код</string>
     <string name="settings_search_tool_iterations_title">"Лимит циклов вызова инструментов"</string>
     <string name="settings_search_tool_iterations_desc">"Поведение агента · Ограничение числа циклов работы с инструментами"</string>
     <string name="settings_search_project_instructions_title">"Инструкции проекта (AGENTS.md)"</string>
@@ -247,11 +247,11 @@
     <string name="settings_about_read_license">"Прочитать полную лицензию"</string>
     <string name="settings_backup_chat_backup">"Резервная копия чатов"</string>
     <string name="settings_agent_instructions_content">"Содержимое AGENTS.md"</string>
-    <string name="settings_agent_context_cap_subtitle">"Ограничение контекста, отправляемого модели."</string>
+    <string name="settings_agent_context_cap_subtitle">Задаёт предел контекста Код. Чат использует до 250 тысяч токенов.</string>
     <string name="settings_agent_tool_rounds_subtitle">"Допустимое число циклов работы с инструментами."</string>
     <string name="settings_agent_instructions_subtitle">"Просмотр и изменение правил текущей рабочей области."</string>
     <string name="settings_agent_permission_subtitle">"Выберите, когда агент запрашивает подтверждение. Установка пакетов всегда требует подтверждения; сохранённые разрешения избавляют от повторных запросов."</string>
-    <string name="settings_agent_context_cap_detail">"Больший контекст сохраняет больше истории, но расходует больше токенов. Собственный лимит модели продолжает действовать."</string>
+    <string name="settings_agent_context_cap_detail">Больший контекст Код сохраняет больше истории, но расходует больше токенов. Ограничение модели сохраняется. Чат использует до 250 тысяч токенов.</string>
     <string name="settings_agent_tool_rounds_detail">"Один цикл может включать несколько вызовов инструментов. Без ограничения агент работает до завершения задачи или вашей остановки."</string>
     <string name="settings_caveman_native_pack">"Встроенный набор навыков"</string>
     <string name="settings_caveman_native_pack_desc">"Краткие ответы и пять специальных навыков программирования. Использует вашу текущую модель без дополнительного ключа API, терминала или прокси."</string>
@@ -786,8 +786,8 @@
     <string name="chat_tool_result_empty">"Ссылки на источники не получены."</string>
     <string name="chat_memory_saved">"Запись памяти сохранена"</string>
     <string name="settings_group_chat_options">"Чат"</string>
-    <string name="settings_page_chat_options_title">"Параметры чата"</string>
-    <string name="settings_page_chat_options_desc">"Выберите стартовый экран и поведение чата при открытии"</string>
+    <string name="settings_page_chat_options_title">Настройки чата</string>
+    <string name="settings_page_chat_options_desc">Инструкции чата, изображения и запуск</string>
     <string name="settings_start_screen">"Стартовый экран"</string>
     <string name="settings_start_code_desc">"Открывать раздел «Код» при запуске приложения."</string>
     <string name="settings_start_chat_desc">"Открывать раздел «Чат» при запуске приложения."</string>

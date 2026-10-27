@@ -13,7 +13,7 @@
     <string name="settings_page_github_title">"GitHub"</string>
     <string name="settings_page_github_desc">"サインイン、リポジトリのインポート、変更の公開"</string>
     <string name="settings_page_accounts_title">"接続済みアカウント"</string>
-    <string name="settings_page_accounts_desc">"ChatGPTプランをコーディングとツールに使用"</string>
+    <string name="settings_page_accounts_desc">ChatGPT アカウントを接続</string>
     <string name="settings_page_models_title">"モデルとプロバイダー"</string>
     <string name="settings_page_models_desc">"接続、モデル、フォールバックルーティング"</string>
     <string name="settings_page_subagent_title">"サブエージェント設定"</string>
@@ -22,8 +22,8 @@
     <string name="settings_page_local_models_desc">"スマートフォン上で動作するモデルを選択・管理"</string>
     <string name="settings_page_agent_title">"エージェントの動作"</string>
     <string name="settings_page_agent_desc">"権限、コンテキスト上限、プロジェクト指示"</string>
-    <string name="settings_page_chat_title">"チャットとコマンド"</string>
-    <string name="settings_page_chat_desc">"起動動作、コードインデックス、スラッシュコマンド"</string>
+    <string name="settings_page_chat_title">コード会話とコマンド</string>
+    <string name="settings_page_chat_desc">ライブコード、プロジェクトマップ、スラッシュコマンド</string>
     <string name="settings_page_codegraph_title">"CodeGraph"</string>
     <string name="settings_page_codegraph_desc">"CodeGraphをインストールし、プロジェクトインデックスを管理"</string>
     <string name="settings_page_caveman_title">"Caveman"</string>
@@ -81,7 +81,7 @@
     <string name="settings_search_subagent_model_title">"サブエージェントモデル"</string>
     <string name="settings_search_subagent_model_desc">"サブエージェント設定 · サブエージェント用に別のプロバイダーとモデルを選択"</string>
     <string name="settings_search_max_context_title">"最大コンテキストウィンドウ"</string>
-    <string name="settings_search_max_context_desc">"エージェントの動作 · モデルの最大コンテキストサイズを設定"</string>
+    <string name="settings_search_max_context_desc">エージェントの動作 · コードのコンテキスト上限</string>
     <string name="settings_search_tool_iterations_title">"ツール呼び出し反復上限"</string>
     <string name="settings_search_tool_iterations_desc">"エージェントの動作 · エージェントのツール反復を制限"</string>
     <string name="settings_search_project_instructions_title">"プロジェクト指示 (AGENTS.md)"</string>
@@ -247,11 +247,11 @@
     <string name="settings_about_read_license">"ライセンス全文を読む"</string>
     <string name="settings_backup_chat_backup">"チャットバックアップ"</string>
     <string name="settings_agent_instructions_content">"AGENTS.mdの内容"</string>
-    <string name="settings_agent_context_cap_subtitle">"モデルに送信するコンテキストを制限します。"</string>
+    <string name="settings_agent_context_cap_subtitle">コードのコンテキスト上限を設定します。チャットは最大25万トークンを使用します。</string>
     <string name="settings_agent_tool_rounds_subtitle">"実行できるツールラウンド数。"</string>
     <string name="settings_agent_instructions_subtitle">"現在のワークスペースのルールを表示または編集します。"</string>
     <string name="settings_agent_permission_subtitle">"エージェントが承認を求めるタイミングを選択します。パッケージのインストールは常に確認します。記憶された承認は再確認をスキップします。"</string>
-    <string name="settings_agent_context_cap_detail">"コンテキストが大きいほど履歴を多く保持できますが、トークンをより多く使用します。モデル自身の上限も適用されます。"</string>
+    <string name="settings_agent_context_cap_detail">コードのコンテキストを大きくすると履歴を多く保持できますが、トークン消費も増えます。モデルの上限は引き続き適用されます。チャットは最大25万トークンです。</string>
     <string name="settings_agent_tool_rounds_detail">"1ラウンドに複数のツール呼び出しを含められます。無制限はタスク完了または停止まで継続します。"</string>
     <string name="settings_caveman_native_pack">"ネイティブスキルパック"</string>
     <string name="settings_caveman_native_pack_desc">"より短い返答と5つの集中コーディングスキル。既存モデルを使用し、追加のAPIキー、ターミナル、プロキシは不要です。"</string>
@@ -794,8 +794,8 @@
     <string name="chat_tool_result_empty">"ソースリンクは返されませんでした。"</string>
     <string name="chat_memory_saved">"メモリを保存しました"</string>
     <string name="settings_group_chat_options">"Chat"</string>
-    <string name="settings_page_chat_options_title">"Chatオプション"</string>
-    <string name="settings_page_chat_options_desc">"開始画面とChatの開き方を選択"</string>
+    <string name="settings_page_chat_options_title">チャット設定</string>
+    <string name="settings_page_chat_options_desc">チャットの指示、画像、起動設定</string>
     <string name="settings_start_screen">"開始画面"</string>
     <string name="settings_start_code_desc">"アプリ起動時にCodeを開きます。"</string>
     <string name="settings_start_chat_desc">"アプリ起動時にChatを開きます。"</string>

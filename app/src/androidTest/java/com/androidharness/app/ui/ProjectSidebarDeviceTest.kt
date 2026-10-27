@@ -288,7 +288,7 @@ class ProjectSidebarDeviceTest {
             click("Settings")
             await { find("Search settings") != null }
             for (start in listOf(.02f, .2f)) { swipeFrom(start); assertDrawerClosed() }
-            click("Chat Option")
+            click("Chat settings")
             SystemClock.sleep(350)
             for (start in listOf(.02f, .2f)) { swipeFrom(start); assertDrawerClosed() }
             instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)

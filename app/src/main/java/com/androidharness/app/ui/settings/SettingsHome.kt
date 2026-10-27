@@ -73,9 +73,9 @@ internal fun SettingsHome(
                 Text(stringResource(R.string.settings_search_empty_hint), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
             }
         }
-        results.groupBy { it.page.group }.forEach { (group, entries) ->
+        settingsDisplayGroups(results, query).forEach { (group, entries) ->
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                val showHeader = entries.size > 1 || stringResource(group) != stringResource(entries.first().page.title)
+                val showHeader = entries.size > 1
                 if (showHeader) Text(
                     stringResource(group),
                     style = MaterialTheme.typography.titleSmall,
@@ -148,23 +148,13 @@ internal fun DesktopSettingsNavigation(
             LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
                 if (results.isEmpty()) item { Text(stringResource(R.string.settings_search_empty_title), Modifier.padding(12.dp),
                     style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant) }
-                results.groupBy { it.page.group }.toList().sortedBy { (group, _) ->
-                    when (group) {
-                        R.string.settings_group_language -> -4
-                        R.string.settings_group_chat_options -> -3
-                        R.string.settings_group_memory -> -2
-                        R.string.settings_group_coding -> -1
-                        R.string.settings_group_your_assistant -> 0
-                        R.string.settings_group_personalize -> 1
-                        else -> 2
-                    }
-                }.forEach { (group, entries) ->
-                    if (entries.size > 1 || context.getString(group) != context.getString(entries.first().page.title)) {
+                settingsDisplayGroups(results, query).forEach { (group, entries) ->
+                    if (entries.size > 1) {
                         item { Text(stringResource(group), Modifier.padding(start = 12.dp, top = 16.dp, bottom = 6.dp),
                             style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant) }
                     }
                     items(entries, key = { "${it.page}:${it.title}" }) { entry ->
-                        val active = entry.page == selected
+                        val active = entry.page == selected || entry.page == SettingsPage.CODING && selected in settingsCodingPages
                         Surface(onClick = { onOpen(entry.page, entry.anchor) },
                             color = if (active) scheme.secondaryContainer else scheme.surfaceContainerLow,
                             contentColor = if (active) scheme.onSecondaryContainer else scheme.onSurface,

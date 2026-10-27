@@ -48,7 +48,9 @@ class SettingsNavigationTest {
 
     @Test
     fun `empty search keeps the normal primary settings home`() {
-        val home = SettingsPage.entries.filter { it.onHome }
+        val home = settingsHomePages
+        assertEquals(SettingsPage.entries.filter { it.onHome }.toSet(), home.toSet())
+        assertEquals(home.size, home.toSet().size)
         val entries = matchingSettingsEntries("", settingsTestStrings())
         assertEquals(home.size, entries.size)
         assertTrue(entries.all { it.primary })
@@ -62,12 +64,13 @@ class SettingsNavigationTest {
     }
 
     @Test
-    fun `language is first and GitHub integration still supports a direct link`() {
-        assertEquals(SettingsPage.LANGUAGE, matchingSettingsPages("", settingsTestStrings()).first())
-        assertEquals(SettingsPage.CHAT_OPTIONS, matchingSettingsPages("", settingsTestStrings())[1])
-        assertEquals(SettingsPage.MEMORY, matchingSettingsPages("", settingsTestStrings())[2])
-        assertEquals(SettingsPage.CODING, matchingSettingsPages("", settingsTestStrings())[3])
-        assertEquals(SettingsPage.GITHUB, matchingSettingsPages("", settingsTestStrings())[4])
+    fun `connected accounts is first and GitHub integration still supports a direct link`() {
+        assertEquals(SettingsPage.CONNECTED_ACCOUNTS, matchingSettingsPages("", settingsTestStrings()).first())
+        assertEquals(SettingsPage.LANGUAGE, matchingSettingsPages("", settingsTestStrings())[1])
+        assertEquals(SettingsPage.CHAT_OPTIONS, matchingSettingsPages("", settingsTestStrings())[2])
+        val groups = settingsDisplayGroups(matchingSettingsEntries("", settingsTestStrings()), "").values.toList()
+        assertEquals(listOf(SettingsPage.CONNECTED_ACCOUNTS), groups.first().map { it.page })
+        assertTrue(groups.drop(1).any { group -> group.any { it.page == SettingsPage.GITHUB } })
         assertEquals(SettingsPage.LANGUAGE, settingsDeepLink("language"))
         assertEquals(SettingsPage.GITHUB, settingsDeepLink("github"))
         assertEquals(listOf(SettingsPage.GITHUB), matchingSettingsPages("commit push", settingsTestStrings()))
@@ -78,12 +81,18 @@ class SettingsNavigationTest {
         assertTrue(SettingsPage.CODING.onHome)
         for (page in listOf(SettingsPage.SUBAGENT, SettingsPage.AGENT, SettingsPage.CHAT,
             SettingsPage.SKILLS, SettingsPage.CODE_INTELLIGENCE, SettingsPage.CAVEMAN,
-            SettingsPage.MCP, SettingsPage.TELEGRAM, SettingsPage.WORKSPACE,
-            SettingsPage.ENVIRONMENT, SettingsPage.TROUBLESHOOTING)) {
+            SettingsPage.WORKSPACE, SettingsPage.ENVIRONMENT)) {
             assertFalse(page.onHome)
             assertEquals(R.string.settings_group_coding, page.group)
             assertTrue(page in matchingSettingsPages(page.keywords.substringBefore(' '), settingsTestStrings()))
         }
+        assertEquals(settingsCodingPages.toSet(), SettingsPage.entries.filter { !it.onHome }.toSet())
+        for (page in listOf(SettingsPage.MCP, SettingsPage.TELEGRAM, SettingsPage.GITHUB, SettingsPage.CONNECTED_ACCOUNTS)) {
+            assertTrue(page.onHome)
+            assertEquals(R.string.settings_group_connections, page.group)
+        }
+        assertTrue(SettingsPage.TROUBLESHOOTING.onHome)
+        assertEquals(R.string.settings_group_app_data, SettingsPage.TROUBLESHOOTING.group)
         assertEquals(R.string.settings_group_memory, SettingsPage.MEMORY.group)
         assertEquals(SettingsPage.CODING, settingsDeepLink("coding"))
         assertTrue(SettingsPage.AGENT in matchingSettingsPages("max context", settingsTestStrings()))

@@ -231,12 +231,14 @@ class ChatGptDeviceTest {
     }
 
     @Test fun connectedAccountsIsFirstAndShowsSignIn() {
+        assertEquals(SettingsPage.CONNECTED_ACCOUNTS, matchingSettingsEntries("", instrumentation.targetContext).first().page)
         assertEquals(SettingsPage.CONNECTED_ACCOUNTS, matchingSettingsEntries("connected accounts", instrumentation.targetContext).first().page)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity -> activity.setContent { MaterialTheme { SettingsScreen(container, onBack = {}) } } }
             clickText("Connected accounts")
             waitForText("Continue with ChatGPT")
-            waitForText("Manage usage")
+            scrollToText("Limits & usage in ChatGPT")
+            waitForText("Limits & usage in ChatGPT")
             println("CHATGPT_SETTINGS_OK: first settings section opens and shows sign-in and usage controls")
         }
     }

@@ -13,7 +13,7 @@
     <string name="settings_page_github_title">"GitHub"</string>
     <string name="settings_page_github_desc">"Inicia sesión, importa repositorios y publica cambios"</string>
     <string name="settings_page_accounts_title">"Cuentas conectadas"</string>
-    <string name="settings_page_accounts_desc">"Usa tu plan de ChatGPT para programación y herramientas"</string>
+    <string name="settings_page_accounts_desc">Conecta tu cuenta de ChatGPT</string>
     <string name="settings_page_models_title">"Modelos y proveedores"</string>
     <string name="settings_page_models_desc">"Conexiones, modelos y enrutamiento de respaldo"</string>
     <string name="settings_page_subagent_title">"Configuración de subagentes"</string>
@@ -22,8 +22,8 @@
     <string name="settings_page_local_models_desc">"Elige y gestiona modelos que se ejecutan en tu teléfono"</string>
     <string name="settings_page_agent_title">"Comportamiento del agente"</string>
     <string name="settings_page_agent_desc">"Permisos, límites de contexto e instrucciones del proyecto"</string>
-    <string name="settings_page_chat_title">"Chat y comandos"</string>
-    <string name="settings_page_chat_desc">"Comportamiento al iniciar, indexación de código y comandos con barra"</string>
+    <string name="settings_page_chat_title">Conversación de código y comandos</string>
+    <string name="settings_page_chat_desc">Código en directo, mapa del proyecto y comandos</string>
     <string name="settings_page_codegraph_title">"CodeGraph"</string>
     <string name="settings_page_codegraph_desc">"Instala CodeGraph y gestiona índices de proyecto"</string>
     <string name="settings_page_caveman_title">"Caveman"</string>
@@ -81,7 +81,7 @@
     <string name="settings_search_subagent_model_title">"Modelo de subagente"</string>
     <string name="settings_search_subagent_model_desc">"Configuración de subagentes · Elige un proveedor y modelo separados para subagentes"</string>
     <string name="settings_search_max_context_title">"Ventana de contexto máxima"</string>
-    <string name="settings_search_max_context_desc">"Comportamiento del agente · Define el tamaño máximo de contexto del modelo"</string>
+    <string name="settings_search_max_context_desc">Comportamiento del agente · Límite de contexto de Código</string>
     <string name="settings_search_tool_iterations_title">"Límite de iteraciones de llamadas a herramientas"</string>
     <string name="settings_search_tool_iterations_desc">"Comportamiento del agente · Limita las iteraciones de herramientas del agente"</string>
     <string name="settings_search_project_instructions_title">"Instrucciones del proyecto (AGENTS.md)"</string>
@@ -247,11 +247,11 @@
     <string name="settings_about_read_license">"Leer la licencia completa"</string>
     <string name="settings_backup_chat_backup">"Copia de seguridad del chat"</string>
     <string name="settings_agent_instructions_content">"Contenido de AGENTS.md"</string>
-    <string name="settings_agent_context_cap_subtitle">"Limita el contexto enviado al modelo."</string>
+    <string name="settings_agent_context_cap_subtitle">Establece el límite de contexto de Código. Chat usa hasta 250 mil tokens.</string>
     <string name="settings_agent_tool_rounds_subtitle">"Cuántas rondas de herramientas puede tomar una ejecución."</string>
     <string name="settings_agent_instructions_subtitle">"Ver o editar las reglas de tu espacio de trabajo actual."</string>
     <string name="settings_agent_permission_subtitle">"Elige cuándo el agente pide aprobación. Las instalaciones de paquetes siempre preguntan; las aprobaciones recordadas omiten repeticiones."</string>
-    <string name="settings_agent_context_cap_detail">"Un contexto mayor puede conservar más historial, pero usa más tokens. El límite del modelo sigue aplicando."</string>
+    <string name="settings_agent_context_cap_detail">Un contexto mayor de Código conserva más historial, pero usa más tokens. Se aplica el límite del modelo. Chat usa hasta 250 mil tokens.</string>
     <string name="settings_agent_tool_rounds_detail">"Una ronda puede incluir varias llamadas a herramientas. Ilimitado sigue hasta que la tarea termina o la detienes."</string>
     <string name="settings_caveman_native_pack">"Paquete de habilidades nativo"</string>
     <string name="settings_caveman_native_pack_desc">"Respuestas más cortas y cinco habilidades de programación enfocadas. Usa tu modelo existente, sin clave de API, terminal ni proxy adicionales."</string>
@@ -795,8 +795,8 @@
     <string name="chat_tool_result_empty">"No se devolvieron enlaces de fuentes."</string>
     <string name="chat_memory_saved">"Recuerdo guardado"</string>
     <string name="settings_group_chat_options">"Chat"</string>
-    <string name="settings_page_chat_options_title">"Opciones de Chat"</string>
-    <string name="settings_page_chat_options_desc">"Elige la pantalla inicial y cómo se abre Chat"</string>
+    <string name="settings_page_chat_options_title">Ajustes de chat</string>
+    <string name="settings_page_chat_options_desc">Instrucciones de chat, imágenes e inicio</string>
     <string name="settings_start_screen">"Pantalla inicial"</string>
     <string name="settings_start_code_desc">"Abre Code al iniciar la app."</string>
     <string name="settings_start_chat_desc">"Abre Chat al iniciar la app."</string>

@@ -52,13 +52,13 @@ internal enum class SettingsPage(
     GITHUB(
         R.string.settings_page_github_title,
         R.string.settings_page_github_desc,
-        R.string.settings_group_github,
+        R.string.settings_group_connections,
         "oauth login git pat token scopes import commit push preset automation",
     ),
     CONNECTED_ACCOUNTS(
         R.string.settings_page_accounts_title,
         R.string.settings_page_accounts_desc,
-        R.string.settings_group_special_providers,
+        R.string.settings_group_connections,
         "chatgpt codex subscription sign in login account plan oauth",
     ),
     MODELS(
@@ -142,16 +142,14 @@ internal enum class SettingsPage(
     MCP(
         R.string.settings_page_mcp_title,
         R.string.settings_page_mcp_desc,
-        R.string.settings_group_coding,
+        R.string.settings_group_connections,
         "mcp integrations servers transport",
-        onHome = false,
     ),
     TELEGRAM(
         R.string.settings_page_telegram_title,
         R.string.settings_page_telegram_desc,
-        R.string.settings_group_coding,
+        R.string.settings_group_connections,
         "telegram bot remote control pairing notifications gateway",
-        onHome = false,
     ),
     WORKSPACE(
         R.string.settings_page_workspace_title,
@@ -182,9 +180,8 @@ internal enum class SettingsPage(
     TROUBLESHOOTING(
         R.string.settings_page_troubleshooting_title,
         R.string.settings_page_troubleshooting_desc,
-        R.string.settings_group_coding,
+        R.string.settings_group_app_data,
         "diagnostics help doctor repair errors storage linux shizuku ssh mcp notifications provider report",
-        onHome = false,
     ),
     SYNC(
         R.string.sync_title, R.string.sync_description, R.string.settings_group_connections,
@@ -241,7 +238,28 @@ internal data class SettingsSearchEntry(
     @StringRes val anchor: Int? = null,
 )
 
-private val homeSettingsEntries = SettingsPage.entries.filter { it.onHome }.map { page ->
+internal val settingsHomePages = listOf(
+    SettingsPage.CONNECTED_ACCOUNTS, SettingsPage.LANGUAGE, SettingsPage.CHAT_OPTIONS, SettingsPage.MEMORY, SettingsPage.CODING,
+    SettingsPage.MODELS, SettingsPage.LOCAL_MODELS, SettingsPage.VOICE,
+    SettingsPage.APPEARANCE, SettingsPage.PRIVACY,
+    SettingsPage.GITHUB, SettingsPage.SEARCH, SettingsPage.MCP,
+    SettingsPage.TELEGRAM, SettingsPage.SYNC, SettingsPage.FTP_SERVER,
+    SettingsPage.BACKGROUND, SettingsPage.STORAGE,
+    SettingsPage.BACKUP, SettingsPage.USAGE, SettingsPage.TROUBLESHOOTING,
+    SettingsPage.UPDATES, SettingsPage.SETUP, SettingsPage.ABOUT,
+)
+
+/** Keep the account shortcut at the top without pulling every connection above the other sections. */
+internal fun settingsDisplayGroups(entries: List<SettingsSearchEntry>, query: String) = entries.groupBy {
+    if (query.isBlank() && it.page == SettingsPage.CONNECTED_ACCOUNTS) R.string.settings_group_special_providers else it.page.group
+}
+
+internal val settingsCodingPages = listOf(
+    SettingsPage.SUBAGENT, SettingsPage.AGENT, SettingsPage.CHAT, SettingsPage.SKILLS,
+    SettingsPage.CODE_INTELLIGENCE, SettingsPage.CAVEMAN, SettingsPage.WORKSPACE, SettingsPage.ENVIRONMENT,
+)
+
+private val homeSettingsEntries = settingsHomePages.map { page ->
     SettingsSearchEntry(page.title, page.description, page, page.keywords, primary = true)
 }
 
@@ -277,7 +295,7 @@ private val subSettingsEntries = listOfNotNull(
     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.BAKLAVA) SettingsSearchEntry(
         R.string.settings_search_live_updates_title,
         R.string.settings_search_live_updates_desc,
-        SettingsPage.AGENT,
+        SettingsPage.BACKGROUND,
         "live activity updates now bar samsung one ui pixel hyperos coloros oxygenos originos magicos status bar lock screen notification foreground",
         anchor = R.string.settings_agent_live_updates,
     ) else null,

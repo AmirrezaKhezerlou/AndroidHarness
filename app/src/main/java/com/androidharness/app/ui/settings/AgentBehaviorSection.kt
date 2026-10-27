@@ -59,6 +59,7 @@ internal fun AgentBehaviorSection(
     onIterationLimit: (Int) -> Unit,
     onProjectInstructions: () -> Unit,
     onLiveUpdates: (Boolean) -> Unit,
+    showLiveUpdates: Boolean = true,
     /**
      * Test/preview override for the device-owner check guarding full access.
      * Production callers leave this null so the real biometric/PIN prompt runs.
@@ -108,76 +109,7 @@ internal fun AgentBehaviorSection(
                 )
             }
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
-            BehaviorGroup(stringResource(R.string.settings_agent_group_live_updates), Icons.Outlined.Notifications) {
-                SettingsAnchor(R.string.settings_agent_live_updates) {
-                    val vendor = remember { liveUpdateVendor }
-                    var state by remember { mutableStateOf(liveUpdateState(context)) }
-                    // The user usually returns here after granting the appop in system settings.
-                    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { state = liveUpdateState(context) }
-                    Column(
-                        Modifier.fillMaxWidth().padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(stringResource(R.string.settings_agent_live_updates), style = MaterialTheme.typography.titleSmall)
-                                Text(
-                                    stringResource(R.string.settings_agent_live_updates_subtitle),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            Switch(checked = settings.liveUpdatesEnabled, onCheckedChange = onLiveUpdates)
-                        }
-                        Text(
-                            stringResource(
-                                R.string.settings_agent_live_updates_device,
-                                liveUpdateDeviceName,
-                                stringResource(vendor.label),
-                            ),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            val tint = when (state) {
-                                LiveUpdateState.READY -> MaterialTheme.colorScheme.primary
-                                LiveUpdateState.BLOCKED -> MaterialTheme.colorScheme.error
-                                LiveUpdateState.UNSUPPORTED -> MaterialTheme.colorScheme.onSurfaceVariant
-                            }
-                            Box(Modifier.size(8.dp).background(tint, CircleShape))
-                            Text(
-                                stringResource(state.description),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = tint,
-                            )
-                        }
-                        Text(
-                            stringResource(vendor.steps),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(
-                            stringResource(R.string.settings_agent_live_updates_usage),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        TextButton(
-                            onClick = { context.openLiveUpdateSettings() },
-                            contentPadding = PaddingValues(0.dp),
-                        ) {
-                            Text(stringResource(R.string.settings_agent_live_updates_open))
-                        }
-                    }
-                }
-            }
-        }
+        if (showLiveUpdates) LiveUpdatesSetting(settings, onLiveUpdates)
         BehaviorGroup(stringResource(R.string.settings_agent_instructions_group), Icons.Outlined.Description) {
             SettingsAnchor(R.string.settings_anchor_project_instructions) {
                 BehaviorValueRow(
@@ -338,4 +270,79 @@ private fun BehaviorValueRow(
 @Composable
 private fun BehaviorDivider() {
     HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+}
+
+@Composable
+internal fun LiveUpdatesSetting(settings: AppSettings, onLiveUpdates: (Boolean) -> Unit) {
+    val context = LocalContext.current
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+        BehaviorGroup(stringResource(R.string.settings_agent_group_live_updates), Icons.Outlined.Notifications) {
+            SettingsAnchor(R.string.settings_agent_live_updates) {
+                val vendor = remember { liveUpdateVendor }
+                var state by remember { mutableStateOf(liveUpdateState(context)) }
+                // The user usually returns here after granting the appop in system settings.
+                LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { state = liveUpdateState(context) }
+                Column(
+                    Modifier.fillMaxWidth().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(stringResource(R.string.settings_agent_live_updates), style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                stringResource(R.string.settings_agent_live_updates_subtitle),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(checked = settings.liveUpdatesEnabled, onCheckedChange = onLiveUpdates)
+                    }
+                    Text(
+                        stringResource(
+                            R.string.settings_agent_live_updates_device,
+                            liveUpdateDeviceName,
+                            stringResource(vendor.label),
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        val tint = when (state) {
+                            LiveUpdateState.READY -> MaterialTheme.colorScheme.primary
+                            LiveUpdateState.BLOCKED -> MaterialTheme.colorScheme.error
+                            LiveUpdateState.UNSUPPORTED -> MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                        Box(Modifier.size(8.dp).background(tint, CircleShape))
+                        Text(
+                            stringResource(state.description),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = tint,
+                        )
+                    }
+                    Text(
+                        stringResource(vendor.steps),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        stringResource(R.string.settings_agent_live_updates_usage),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(
+                        onClick = { context.openLiveUpdateSettings() },
+                        contentPadding = PaddingValues(0.dp),
+                    ) {
+                        Text(stringResource(R.string.settings_agent_live_updates_open))
+                    }
+                }
+            }
+        }
+    }
 }
