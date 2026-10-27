@@ -264,7 +264,8 @@ internal fun EnvironmentInstallCard(
             )
         } else {
             Text(
-                uiContext.getString(R.string.ui_the_agent_wants_to_run, (request.command.take(80)).toString()),
+                uiContext.getString(R.string.ui_wanted_to_run, (request.command.take(80)).toString()) +
+                    uiContext.getString(R.string.ui_the_command_failed_with_not_found),
                 style = MaterialTheme.typography.bodySmall,
                 color = scheme.onSurfaceVariant,
                 maxLines = 2,

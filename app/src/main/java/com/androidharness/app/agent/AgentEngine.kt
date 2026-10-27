@@ -108,6 +108,25 @@ internal fun detectMissingHeadlineTool(output: String): String? {
     return null
 }
 
+/** Recognize actual Android shell command-not-found failures, not mentions in commands or stdout. */
+internal fun missingAndroidToolchain(output: String): String? {
+    if (!Regex("(?m)^exit code: 127$").containsMatchIn(output)) return null
+    val encoded = output.lineSequence().firstOrNull { it.startsWith("stderr (JSON string): ") }
+        ?.substringAfter("stderr (JSON string): ") ?: return null
+    val stderr = runCatching { kotlinx.serialization.json.Json.parseToJsonElement(encoded).jsonPrimitive.content }.getOrNull() ?: return null
+    val match = Regex("(?:^|[\\s/])([a-zA-Z0-9+_.-]+):\\s*(?:command )?(?:inaccessible or )?not found", RegexOption.IGNORE_CASE)
+        .find(stderr) ?: return null
+    val tool = match.groupValues[1].lowercase()
+    return when {
+        tool == "git" -> "git"
+        tool.matches(Regex("python[0-9.]*|pip[0-9.]*")) -> "python"
+        tool in setOf("node", "npm", "npx", "yarn") -> "node"
+        tool in setOf("gcc", "g++", "clang", "make", "cmake", "ninja", "pkg-config") -> "compilers"
+        tool in setOf("curl", "wget", "ssh", "scp", "rsync", "jq", "bash") -> "core-tools"
+        else -> null
+    }
+}
+
 /** Estimated token breakdown of the request about to be sent (chars / 4). */
 data class ContextEstimate(
     val messagesTokens: Int,
@@ -968,42 +987,6 @@ class AgentEngine(
             return runs.foreground(run, emitEvent, execute)
         }
 
-        // Commands that need real toolchains (git/python/node/…) prompt the user
-        // to install the bundled Linux environment straight from the chat.
-        if ((call.name == "shell" || call.name == "shell_background") && !linuxEnv.isReady && workspace !is com.androidharness.app.workspace.SshFs) {
-            val args = runCatching {
-                json.parseToJsonElement(call.argumentsJson).jsonObject
-            }.getOrNull()
-            val command = args?.get("command")?.jsonPrimitive?.content.orEmpty()
-            val hints = detectToolchainHints(command)
-            if (hints.isNotEmpty()) {
-                // A previous install already failed, tell the model clearly and
-                // do not re-prompt, so it stops retrying git/python/node commands.
-                val failed = linuxEnv.state.value as? com.androidharness.app.data.env.EnvState.Failed
-                if (failed != null) {
-                    return ToolResult(
-                        false,
-                        "The Linux environment install failed earlier: ${failed.message}. " +
-                            "Do NOT retry git/python/node commands in this session. " +
-                            "Stick to toybox-compatible commands (ls, cat, grep, sed, mkdir, cp, mv…) " +
-                            "or tell the user they can retry from Settings → Linux environment.",
-                    )
-                }
-                val request = EnvironmentRequest(call, command, hints)
-                emitEvent(AgentEvent.EnvironmentNeeded(request))
-                if (!request.response.await()) {
-                    return ToolResult(
-                        false,
-                        "The user declined installing the Linux environment right now. " +
-                            "Do NOT retry git/python/node commands in this session: use only " +
-                            "toybox-compatible commands (ls, cat, grep, sed, mkdir, cp, mv…) " +
-                            "or continue with tasks that do not need them.",
-                    )
-                }
-                // approved: install ran; fall through and execute with the new environment
-            }
-        }
-
         // ask_user is handled by the UI, never executed here.
         if (call.name == "ask_user") {
             val args = runCatching {
@@ -1141,7 +1124,8 @@ class AgentEngine(
 
         kotlin.coroutines.coroutineContext[TaskBudget]?.check()
         val startedAt = System.currentTimeMillis()
-        val executed = try {
+        val linuxWasReady = linuxEnv.isReady
+        var executed = try {
             if (call.name in setOf("git_push", "git_pull", "http_request", "shell", "shell_background") &&
                 workspace !is com.androidharness.app.workspace.SshFs) prepareGitHub()
             val execute = suspend {
@@ -1169,6 +1153,29 @@ class AgentEngine(
             ToolResult(false, e.message ?: "${call.name} failed").redacted()
         }
 
+        // Only offer setup after Android actually reported a missing tool. The
+        // command may already have changed files, so never replay it here.
+        if (call.name == "shell" && !executed.ok && !linuxWasReady &&
+            workspace !is com.androidharness.app.workspace.SshFs
+        ) {
+            val hint = missingAndroidToolchain(executed.output)
+            if (hint != null) {
+                val failed = linuxEnv.state.value as? com.androidharness.app.data.env.EnvState.Failed
+                val note = if (failed != null) {
+                    "Linux setup failed earlier: ${failed.message}. Use Android-native file tools or available Android commands where possible; the user can retry setup in Settings."
+                } else {
+                    val request = EnvironmentRequest(call, command.orEmpty(), listOf(hint))
+                    emitEvent(AgentEvent.EnvironmentNeeded(request))
+                    if (request.response.await() && linuxEnv.isReady) {
+                        "Linux setup completed. The previous command already ran and may have partially changed files; inspect its result before deciding whether to retry."
+                    } else {
+                        "Linux is not available. Continue with Android-native file tools and available Android commands where possible; do not repeatedly request setup."
+                    }
+                }
+                executed = executed.copy(output = executed.output + "\n[note: $note]")
+            }
+        }
+
         // Broken-environment repair: a headline tool died with "not found"
         // while the environment claims Ready. That is the harness's bug (a
         // half-installed toolchain), not the task's, surface a repair card
@@ -1176,7 +1183,7 @@ class AgentEngine(
         // check keeps project-level failures ("vite: not found") out: those
         // are not fixable by reinstalling the toolchain.
         if (call.name == "shell" && !executed.ok && workspace !is com.androidharness.app.workspace.SshFs &&
-            linuxEnv.isReady && linuxEnv.state.value !is com.androidharness.app.data.env.EnvState.Failed
+            linuxWasReady && linuxEnv.isReady && linuxEnv.state.value !is com.androidharness.app.data.env.EnvState.Failed
         ) {
             val missingTool = detectMissingHeadlineTool(executed.output)
             val binaries = missingTool?.let { HEADLINE_TOOL_BINARIES[it] }
@@ -1864,16 +1871,6 @@ class AgentEngine(
         return lines.take(i + 1).joinToString("\n").trimEnd() to opts.take(8)
     }
 
-    private fun detectToolchainHints(command: String): List<String> {
-        val hints = mutableListOf<String>()
-        if (Regex("(^|[\\s;&|])git\\b").containsMatchIn(command)) hints += "git"
-        if (Regex("python[0-9.]*|\\bpip[0-9.]*").containsMatchIn(command)) hints += "python"
-        if (Regex("\\bnode\\b|\\bnpm\\b|\\bnpx\\b|\\byarn\\b").containsMatchIn(command)) hints += "node"
-        if (Regex("\\b(gcc|g\\+\\+|clang|make|cmake|ninja|pkg-config)\\b").containsMatchIn(command)) hints += "compilers"
-        if (Regex("\\b(curl|wget|ssh|scp|rsync|jq)\\b").containsMatchIn(command)) hints += "core-tools"
-        return hints.distinct()
-    }
-
     private fun recentMemoryQuery(history: List<ChatMessage>): String = history.filter { it.role == Role.USER }
         .takeLast(3).joinToString("\n") { it.text.take(2_000) }
 
@@ -2087,6 +2084,7 @@ Rules:
             }
             if (selected?.hasReadOnly == true) append("At least one selected workspace is read only: command/Git/integration tools are blocked for this selection; file tools retain each workspace's grant.\n")
             if (local) {
+                if (!linuxEnv.isReady) append("Linux environment is not installed or ready. First use the native file tools for reading and editing and the Android shell for commands available on the selected access route. Do not assume desktop Linux tools exist; only offer Linux setup if a required tool actually fails and the task cannot proceed without it. Preserve explicit Shizuku or root access when requested.\n")
                 append("\nLinux userspace state: ").append(linuxEnv.state.value.javaClass.simpleName).append(". This is Android with Termux-derived packages, not a desktop Linux distro or the separate Termux app.\n")
                 val installed = linuxEnv.installedPackages()
                 append("Installed package records (${installed.size}): ")
