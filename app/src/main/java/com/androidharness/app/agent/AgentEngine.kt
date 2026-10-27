@@ -278,6 +278,8 @@ class AgentEngine(
         // is told about change with it.
         var replySettings = cavemanSettings()
         val localChat = com.androidharness.app.local.LocalModelCatalog.isLocal(config.id)
+        val contextLimit = if (conversation.isChat) ChatContextPolicy.limit(maxContextTokens,
+            options.modelCatalogs[config.id]?.firstOrNull { it.id == config.model }?.contextTokens, localChat) else maxContextTokens
         val agentContextEnabled = !localChat || replySettings.localModelAgentContext
         var suppliedMemories = emptyList<com.androidharness.app.core.SuppliedMemory>()
         var memoryQuery = recentMemoryQuery(history)
@@ -412,8 +414,11 @@ class AgentEngine(
             // Auto-compact before the request grows past the context budget.
             val estimate = estimateContext(working, requestSystemPrompt, tools)
             emit(AgentEvent.EstimatedContext(estimate))
-            if (!localChat && estimate.total > (maxContextTokens * 0.8).toInt() && working.size > 6) {
-                val compacted = compact(provider, config, apiKey, working, maxContextTokens, sessionId) {
+            val compactThreshold = if (conversation.isChat) ChatContextPolicy.compactAt(contextLimit, requestOptions.maxOutputTokens)
+                else (contextLimit * 0.8).toInt()
+            val needsCompaction = if (conversation.isChat) estimate.total >= compactThreshold else estimate.total > compactThreshold
+            if ((!localChat || conversation.isChat) && needsCompaction && (conversation.isChat || working.size > 6)) {
+                val compacted = compact(provider, config, apiKey, working, contextLimit, sessionId, conversation.isChat) {
                     if (it is AgentEvent.ProviderChanged) config = it.config
                     emit(it)
                 }
@@ -424,6 +429,10 @@ class AgentEngine(
                     // The window just shrank: refresh the context panel now
                     // instead of waiting for the next request's usage row.
                     emit(AgentEvent.EstimatedContext(estimateContext(working, requestSystemPrompt, tools)))
+                }
+                if (conversation.isChat && estimateContext(working, requestSystemPrompt, tools).total >= compactThreshold) {
+                    emit(AgentEvent.Error("The latest message is too large for the available context. Shorten it or choose a model with a larger context."))
+                    break
                 }
             }
 
@@ -1621,13 +1630,20 @@ class AgentEngine(
     private suspend fun compact(
         provider: LlmProvider, config: ProviderConfig, apiKey: String,
         working: List<ChatMessage>, maxContextTokens: Int, sessionId: String,
+        chat: Boolean,
         emit: suspend (AgentEvent) -> Unit,
     ): List<ChatMessage>? {
         var keepCount = minOf(8, working.size)
+        if (chat) {
+            // Leave room for the summary even when only a few turns are unusually large.
+            while (keepCount > 1 && (keepCount == working.size ||
+                    estimateContext(working.takeLast(keepCount), "", emptyList()).total > maxContextTokens / 2)) keepCount--
+        }
         while (keepCount < working.size && working[working.size - keepCount].role == Role.TOOL) keepCount++
         val older = working.dropLast(keepCount)
         if (older.isEmpty()) {
-            emit(AgentEvent.Error("This chat is too large for the selected model. Run /compact or choose a model with a larger context."))
+            emit(AgentEvent.Error(if (chat) "This message is too large for the available context. Shorten it or choose a model with a larger context."
+                else "This chat is too large for the selected model. Run /compact or choose a model with a larger context."))
             return null
         }
         emit(AgentEvent.Compacting("Summarizing earlier messages…"))
@@ -1647,7 +1663,8 @@ class AgentEngine(
         } catch (e: CancellationException) { throw e }
         catch (e: TaskPaused) { throw e }
         catch (e: Exception) {
-            emit(AgentEvent.Error("Compaction failed: ${e.message}. History was kept. Retry /compact or choose another model."))
+            emit(AgentEvent.Error(if (chat) "Compaction failed: ${e.message}. History was kept. Try sending again or choose another model."
+                else "Compaction failed: ${e.message}. History was kept. Retry /compact or choose another model."))
             null
         }
     }

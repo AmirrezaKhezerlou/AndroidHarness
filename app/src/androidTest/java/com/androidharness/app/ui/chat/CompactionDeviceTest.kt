@@ -33,6 +33,49 @@ class CompactionDeviceTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val c get() = (instrumentation.targetContext.applicationContext as HarnessApp).container
 
+    @Test fun chatUses250kAndAutomaticallyCompactsBeforeTheLimit() = runBlocking {
+        val requests = Collections.synchronizedList(mutableListOf<JsonObject>())
+        val server = FixtureServer(requests)
+        val provider = c.providers.add("Chat context fixture", ProviderType.OPENAI_COMPAT,
+            "http://127.0.0.1:${server.port}/v1", "fixture-model", "fixture")
+        val sid = c.sessions.createSession("Chat context", conversation = ConversationConfig(ConversationKind.CHAT))
+        suspend fun send(text: String) {
+            c.runManager.startRun(sid, text, emptyList(), provider, "fixture", PermissionMode.CONFIRM_ALL,
+                AgentMode.ACT, 2_000, 64_000, ThinkingLevel.OFF, 2, notifyOnFinish = false)
+            withTimeout(60_000) { c.runManager.live(sid).first { !it.running } }
+            withTimeout(60_000) { while (c.runManager.isRunning(sid)) delay(10) }
+            assertNull(c.runManager.live(sid).value.error)
+            val record = c.runManager.controls.flow(sid).value
+            assertTrue("status=${record.status}, completed=${record.completed}, reason=${record.reason}, requests=${requests.size}, prompt=${record.initialPrompt}", record.completed)
+        }
+        try {
+            repeat(20) { c.sessions.addMessage(sid, ChatMessage(Role.USER, "Goal $it " + "x".repeat(40_000))) }
+            send("First question")
+            assertEquals(250_000, c.runManager.controls.flow(sid).value.maxContext)
+            assertTrue(c.sessions.session(sid)!!.compactionSummary.isEmpty())
+            repeat(4) { c.sessions.addMessage(sid, ChatMessage(Role.USER, "More $it " + "y".repeat(40_000))) }
+            val originals = c.sessions.messages(sid).map { it.id }
+            server.mode = "partial-error"
+            c.runManager.startRun(sid, "Question during failure", emptyList(), provider, "fixture", PermissionMode.CONFIRM_ALL,
+                AgentMode.ACT, 2_000, 64_000, ThinkingLevel.OFF, 2, notifyOnFinish = false)
+            withTimeout(60_000) { c.runManager.live(sid).first { !it.running } }
+            withTimeout(60_000) { while (c.runManager.isRunning(sid)) delay(10) }
+            assertTrue(c.runManager.live(sid).value.error.orEmpty().contains("Compaction failed"))
+            assertTrue(c.sessions.session(sid)!!.compactionSummary.isEmpty())
+            assertTrue(c.sessions.messages(sid).map { it.id }.containsAll(originals))
+            server.mode = "stop"
+            send("Continue with the latest question")
+            assertEquals("Preserve the goal and tool outcomes", c.sessions.session(sid)!!.compactionSummary)
+            assertTrue(c.sessions.messages(sid).map { it.id }.containsAll(originals))
+            assertTrue(c.sessions.historyFor(sid).second.first().text.contains("Preserve the goal"))
+            assertTrue(requests.last()["messages"]!!.jsonArray.any { it.jsonObject["content"]?.jsonPrimitive?.content == "Continue with the latest question" })
+        } finally {
+            c.runManager.stopAndJoin(sid)
+            c.sessions.session(sid)?.let { c.sessions.deleteSession(it) }
+            c.providers.delete(provider.id); server.close()
+        }
+    }
+
     @Test fun atomicSummaryRetainsRecentMessagesAcrossReopeningAndNeverDeletesHistory() = runBlocking {
         val context = instrumentation.targetContext
         val name = "compaction-${System.nanoTime()}.db"

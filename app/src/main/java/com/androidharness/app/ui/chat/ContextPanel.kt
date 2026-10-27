@@ -39,7 +39,12 @@ fun ContextUsageDialog(
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val used = state.contextUsed.toLong().coerceAtLeast(0)
-    val max = state.maxContextTokens.toLong()
+    val provider = state.activeProvider
+    val local = provider?.let { com.androidharness.app.local.LocalModelCatalog.isLocal(it.id) } == true
+    val modelLimit = provider?.let { p -> state.catalogs[p.id]?.firstOrNull { it.id == state.effectiveModel }?.contextTokens }
+    val localLimit = if (local && state.taskControl.provider?.id == provider?.id) state.taskControl.maxContext else com.androidharness.app.agent.ChatContextPolicy.LIMIT
+    val max = (if (state.conversation.isChat) com.androidharness.app.agent.ChatContextPolicy.limit(localLimit, modelLimit, local)
+        else state.maxContextTokens).toLong()
     val fraction = (used.toFloat() / max.toFloat()).coerceIn(0f, 1f)
     val estimate = state.estimate
     val estimateTotal = estimate?.total?.takeIf { it > 0 } ?: 1
@@ -86,7 +91,7 @@ fun ContextUsageDialog(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                TextButton(onClick = onContextLimits) { Text(uiContext.getString(R.string.ui_context_limits_extra71)) }
+                if (!state.conversation.isChat) TextButton(onClick = onContextLimits) { Text(uiContext.getString(R.string.ui_context_limits_extra71)) }
                 TextButton(onClick = onDismiss) { Text(uiContext.getString(R.string.settings_action_close)) }
             }
         },

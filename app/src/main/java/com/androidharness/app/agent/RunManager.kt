@@ -420,6 +420,9 @@ class RunManager(
             "This chat's model is no longer available. Choose another model in the picker."
         }
         val conversation = com.androidharness.app.data.ConversationConfig.decode(sessions.session(sid)?.conversationJson)
+        val contextLimit = if (conversation.isChat) ChatContextPolicy.limit(maxContextTokens,
+            providers.catalogs.first()[runConfig.id]?.firstOrNull { it.id == runConfig.model }?.contextTokens,
+            com.androidharness.app.local.LocalModelCatalog.isLocal(runConfig.id)) else maxContextTokens
         val assignedWorkspace = workspace.forSession(sid)
         require(workspaceOverride == null || workspaceOverride.displayPath == assignedWorkspace.displayPath) {
             "This chat's workspace changed while preparing the request. Send the message again."
@@ -457,7 +460,7 @@ class RunManager(
             fallbackPrimary = if (resume) it.fallbackPrimary ?: runConfig else runConfig,
             usedProviderIds = (if (resume) it.usedProviderIds else emptySet()) + runConfig.id,
             mode = mode.name, thinking = thinking.name, maxOutput = maxOutputTokens,
-            maxContext = maxContextTokens, maxIterations = maxIterations, turnId = turnId,
+            maxContext = contextLimit, maxIterations = maxIterations, turnId = turnId,
             initialPrompt = if (resume || subagentContinuation) it.initialPrompt else text,
             initialPromptId = if (resume || subagentContinuation) it.initialPromptId else queuedPromptId ?: "$turnId-user",
             automationRunId = if (resume) it.automationRunId else automationRunId,
@@ -588,7 +591,7 @@ class RunManager(
                     options = RequestOptions(maxOutputTokens = maxOutputTokens, thinking = thinking,
                         modelCatalogs = providers.catalogs.first(), customReasoning = reasoningPrefs.reasoningConfigs,
                         customThinkingLevels = customLevels),
-                    maxContextTokens = maxContextTokens,
+                    maxContextTokens = contextLimit,
                     mode = if (conversation.isChat) AgentMode.ACT else mode,
                     conversation = conversation,
                     searchDepth = reasoningPrefs.searchDepth,
