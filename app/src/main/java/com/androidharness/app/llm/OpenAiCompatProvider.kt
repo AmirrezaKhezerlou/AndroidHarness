@@ -186,7 +186,21 @@ class OpenAiCompatProvider(
                         put("content", systemPrompt)
                     })
                 }
-                CompatHistory.normalize(messages).forEach { add(serializeMessage(it, config)) }
+                val normalized = CompatHistory.normalize(messages)
+                val closeUps = mutableListOf<com.androidharness.app.core.ImageData>()
+                normalized.forEachIndexed { index, message ->
+                    // Chat Completions accepts images in user messages, while
+                    // strict endpoints reject image parts in tool messages.
+                    val zoom = message.role == Role.TOOL && message.toolName == "zoom_chat_image"
+                    if (zoom) closeUps.addAll(message.imageData)
+                    add(serializeMessage(if (zoom) message.copy(imageData = emptyList()) else message, config))
+                    if (closeUps.isNotEmpty() && normalized.getOrNull(index + 1)?.role != Role.TOOL) {
+                        add(serializeMessage(ChatMessage(role = Role.USER,
+                            text = "Images returned by the preceding chat image zoom tool, in call order.",
+                            imageData = closeUps.toList()), config))
+                        closeUps.clear()
+                    }
+                }
             }
             if (tools.isNotEmpty()) {
                 putJsonArray("tools") {

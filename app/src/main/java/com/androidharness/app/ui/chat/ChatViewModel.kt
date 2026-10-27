@@ -993,6 +993,7 @@ class ChatViewModel(
 
     private fun importAttachment(uri: Uri, imageOnly: Boolean = false, mimeHint: String? = null) {
         val id = java.util.UUID.randomUUID().toString()
+        val snapshot = _state.value
         _state.update { it.copy(attachmentImports = it.attachmentImports + AttachmentImport(id, uri.lastPathSegment?.substringAfterLast('/').orEmpty())) }
         fun active() = _state.value.attachmentImports.any { it.id == id }
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -1006,7 +1007,11 @@ class ChatViewModel(
                 if (size != null && size > FileAttachments.COPY_BYTE_LIMIT) throw AttachmentProblem(
                     AttachmentImportStatus.TOO_LARGE, c.appContext.getString(R.string.chat_attachment_too_large))
                 if (imageOnly || mime.startsWith("image/")) {
-                    val stored = c.images.import(uri) ?: throw IllegalStateException(c.appContext.getString(R.string.ui_could_not_load_that_image))
+                    val keepOriginal = if (snapshot.conversationReady || snapshot.sessionId == null) snapshot.conversation.isChat
+                        else c.sessions.session(snapshot.sessionId)?.let {
+                            com.androidharness.app.data.ConversationConfig.decode(it.conversationJson).isChat
+                        } ?: snapshot.conversation.isChat
+                    val stored = c.images.import(uri, keepOriginal = keepOriginal) ?: throw IllegalStateException(c.appContext.getString(R.string.ui_could_not_load_that_image))
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
                         if (active()) {
                             pendingAttachments += ImageRef(stored.file.name, stored.mime)

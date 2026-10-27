@@ -78,7 +78,7 @@ class ConversationSectionsDeviceTest {
                     extraTools = listOf(tool("mcp_fixture")), repoMapEnabled = false, conversation = policy).toList()
                 assertFalse(events.any { it is AgentEvent.ApprovalNeeded || it is AgentEvent.Error })
                 if (policy.isChat) {
-                    assertEquals(listOf("web_search"), advertised)
+                    assertEquals(listOf("web_search", "zoom_chat_image"), advertised)
                     assertEquals(listOf("web_search"), executed)
                     assertTrue(prompt.startsWith(com.androidharness.app.core.ChatExperience.SYSTEM_PROMPT))
                     assertTrue(prompt.contains("Current local date: ${java.time.LocalDate.now()}"))

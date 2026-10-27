@@ -14,6 +14,7 @@ import com.androidharness.app.data.db.UsageEventEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.builtins.ListSerializer
@@ -45,6 +46,7 @@ internal fun clampForStorage(s: String, max: Int = MAX_PERSISTED_FIELD_CHARS): S
 
 class SessionRepository(
     private val db: AppDatabase,
+    private val images: ImageStore? = null,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private val toolCallList = ListSerializer(ToolCallData.serializer())
@@ -805,10 +807,12 @@ class SessionRepository(
     }
 
     suspend fun clearMessages(sessionId: String) {
+        val originals = originalNames(sessionId)
         db.dao().deleteChatAnswerVersions(sessionId)
         db.dao().deleteMessages(sessionId)
         db.dao().deleteCheckpoints(sessionId)
         db.dao().setCompaction(sessionId, "", 0)
+        removeUnreferencedOriginals(originals)
     }
 
     /**
@@ -822,6 +826,7 @@ class SessionRepository(
     }
 
     suspend fun deleteSession(session: SessionEntity) {
+        val originals = originalNames(session.id)
         db.dao().deleteChatAnswerVersions(session.id)
         db.dao().deleteMessages(session.id)
         db.dao().deleteCheckpoints(session.id)
@@ -829,6 +834,35 @@ class SessionRepository(
         db.dao().deleteFileEdits(session.id)
         db.dao().deleteSessionFileChanges(session.id)
         db.dao().deleteSession(session)
+        removeUnreferencedOriginals(originals)
+    }
+
+    /** Branches and saved answer versions can share image references. */
+    private suspend fun originalNames(sessionId: String): Set<String>? {
+        if (images == null) return null
+        return try {
+            val rows = db.dao().messages(sessionId) + db.dao().chatAnswerVersions(sessionId).first().flatMap {
+                json.decodeFromString(ListSerializer(MessageEntity.serializer()), it.messagesJson)
+            }
+            rows.flatMap { json.decodeFromString(imageList, it.imagesJson).map(ImageRef::name) }.toSet()
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) { null }
+    }
+
+    private suspend fun removeUnreferencedOriginals(candidates: Set<String>?) {
+        if (images == null || candidates.isNullOrEmpty()) return
+        // If any saved data cannot be inspected, retain the originals rather
+        // than risking a reference in another chat or answer version.
+        try {
+            val used = db.dao().allSessionIds().flatMap { id ->
+                originalNames(id) ?: error("Could not inspect chat images")
+            }.toSet()
+            (candidates - used).forEach { name ->
+                images.deleteOriginal(name)
+                images.deleteChatZoom(name)
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) { /* Keep originals if reference checking fails. */ }
     }
 
     private fun MessageEntity.toChatMessageCached(): ChatMessage = synchronized(messageCache) {

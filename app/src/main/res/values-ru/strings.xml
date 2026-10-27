@@ -761,6 +761,8 @@
     <string name="chat_created_artifact">"Визуальный материал создан"</string>
     <string name="chat_reading_artifact">"Чтение сохранённого визуального материала"</string>
     <string name="chat_read_artifact">"Визуальный материал прочитан"</string>
+    <string name="chat_zooming_image">Рассматриваю изображение подробнее</string>
+    <string name="chat_zoomed_image">Изображение рассмотрено подробнее</string>
     <string name="chat_reading_text">"Чтение вашего текста"</string>
     <string name="chat_read_text">"Ваш текст прочитан"</string>
     <string name="chat_preparing_code_option">"Подготовка перехода к коду"</string>

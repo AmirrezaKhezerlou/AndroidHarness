@@ -789,6 +789,8 @@
     <string name="chat_created_artifact">已创建可视内容</string>
     <string name="chat_reading_artifact">正在读取已保存内容</string>
     <string name="chat_read_artifact">已读取保存的内容</string>
+    <string name="chat_zooming_image">正在仔细查看图片</string>
+    <string name="chat_zoomed_image">已仔细查看图片</string>
     <string name="chat_reading_text">正在阅读你的文本</string>
     <string name="chat_read_text">已阅读你的文本</string>
     <string name="chat_preparing_code_option">正在准备代码选项</string>

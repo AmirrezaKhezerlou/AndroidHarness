@@ -770,6 +770,8 @@
     <string name="chat_created_artifact">"Creó un elemento visual"</string>
     <string name="chat_reading_artifact">"Leyendo un visual guardado"</string>
     <string name="chat_read_artifact">"Leyó un visual guardado"</string>
+    <string name="chat_zooming_image">Examinando la imagen de cerca</string>
+    <string name="chat_zoomed_image">Imagen examinada de cerca</string>
     <string name="chat_reading_text">"Leyendo tu texto"</string>
     <string name="chat_read_text">"Leyó tu texto"</string>
     <string name="chat_preparing_code_option">"Preparando una opción de Code"</string>

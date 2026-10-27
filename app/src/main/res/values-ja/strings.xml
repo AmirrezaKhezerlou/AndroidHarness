@@ -769,6 +769,8 @@
     <string name="chat_created_artifact">"ビジュアルを作成しました"</string>
     <string name="chat_reading_artifact">"保存済みビジュアルを読み込み中"</string>
     <string name="chat_read_artifact">"保存済みビジュアルを読み込みました"</string>
+    <string name="chat_zooming_image">画像を詳しく確認中</string>
+    <string name="chat_zoomed_image">画像を詳しく確認しました</string>
     <string name="chat_reading_text">"テキストを読み込み中"</string>
     <string name="chat_read_text">"テキストを読み込みました"</string>
     <string name="chat_preparing_code_option">"Codeオプションを準備中"</string>

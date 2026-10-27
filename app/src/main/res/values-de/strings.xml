@@ -770,6 +770,8 @@
     <string name="chat_created_artifact">"Visualisierung erstellt"</string>
     <string name="chat_reading_artifact">"Lese eine gespeicherte Visualisierung"</string>
     <string name="chat_read_artifact">"Gespeicherte Visualisierung gelesen"</string>
+    <string name="chat_zooming_image">Bild wird genauer betrachtet</string>
+    <string name="chat_zoomed_image">Bild genauer betrachtet</string>
     <string name="chat_reading_text">"Lese deinen Text"</string>
     <string name="chat_read_text">"Deinen Text gelesen"</string>
     <string name="chat_preparing_code_option">"Code-Option wird vorbereitet"</string>

@@ -758,6 +758,8 @@
     <string name="chat_created_artifact">"Visual dibuat"</string>
     <string name="chat_reading_artifact">"Membaca visual tersimpan"</string>
     <string name="chat_read_artifact">"Visual tersimpan dibaca"</string>
+    <string name="chat_zooming_image">Mengamati gambar lebih dekat</string>
+    <string name="chat_zoomed_image">Gambar diamati lebih dekat</string>
     <string name="chat_reading_text">"Membaca teks Anda"</string>
     <string name="chat_read_text">"Teks Anda dibaca"</string>
     <string name="chat_preparing_code_option">"Menyiapkan opsi Kode"</string>

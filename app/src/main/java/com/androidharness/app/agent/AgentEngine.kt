@@ -308,13 +308,6 @@ class AgentEngine(
         } else null
         val imageCapable = (if (conversation.isChat) options.modelCatalogs[config.id]?.firstOrNull { it.id == config.model }?.imageInput else null)
             ?: com.androidharness.app.llm.visionCapable(config.model)
-        val runRegistry = (if (conversation.isChat) registry.withExtra(chatOnlyTools + listOfNotNull(scopedSearch, scopedFetch, scopedBrowser)) else registry.withExtra(extraTools +
-            if (subagentRuns == null) emptyList() else com.androidharness.app.tools.subagentControlTools(subagentRuns, sessionId)))
-            .restrictedTo(conversation.allowedTools)
-            .let { if (conversation.isChat && searchDepth == com.androidharness.app.data.SearchDepth.OFF) it.without(setOf("web_search")) else it }
-            .let { if (memoryOn) it else it.without(memoryToolNames) }
-            .let { if (conversation.personalizationEnabled) it else it.without(recallToolNames) }
-            .let { if (conversation.isChat && !imageCapable) it.without(setOf("view_chat_image")) else it }
         val chatHistory = if (agentContextEnabled || conversation.isChat) history else com.androidharness.app.local.LocalChatCodec.plainChatMessages(history)
         val resolvedHistory = (if (localChat) chatHistory else ContextHygiene.shrinkToolResults(chatHistory))
             .map { it.withImagesResolved() }
@@ -326,6 +319,15 @@ class AgentEngine(
             working.clear()
             working.addAll(sanitized)
         }
+        val runRegistry = (if (conversation.isChat) registry.withExtra(chatOnlyTools + listOfNotNull(scopedSearch, scopedFetch, scopedBrowser) +
+            if (imageCapable) listOf(com.androidharness.app.tools.ChatImageZoomTool(imageStore) { working.toList() }) else emptyList()) else registry.withExtra(extraTools +
+            if (subagentRuns == null) emptyList() else com.androidharness.app.tools.subagentControlTools(subagentRuns, sessionId)))
+            .restrictedTo(conversation.allowedTools)
+            .let { if (conversation.isChat && searchDepth == com.androidharness.app.data.SearchDepth.OFF) it.without(setOf("web_search")) else it }
+            .let { if (memoryOn) it else it.without(memoryToolNames) }
+            .let { if (conversation.personalizationEnabled) it else it.without(recallToolNames) }
+            .let { if (conversation.isChat && !imageCapable) it.without(setOf("view_chat_image", "zoom_chat_image")) else it }
+        var visionAvailable = imageCapable
         val provider = providerFactory(config)
         // Stable per-session cache routing for providers that support it.
         val requestOptions = options.copy(cacheKey = sessionId)
@@ -394,15 +396,19 @@ class AgentEngine(
                     workspace
                 }
 
-            val searchConfiguration = (runRegistry.get("web_search") as? com.androidharness.app.tools.WebSearchTool)?.configurationNote()
-            val tools = if (!agentContextEnabled && !conversation.isChat) emptyList() else runRegistry.schemas(
+            var roundRegistry = if (conversation.isChat && !visionAvailable)
+                runRegistry.without(setOf("view_chat_image", "zoom_chat_image")) else runRegistry
+            val searchConfiguration = (roundRegistry.get("web_search") as? com.androidharness.app.tools.WebSearchTool)?.configurationNote()
+            var tools = if (!agentContextEnabled && !conversation.isChat) emptyList() else roundRegistry.schemas(
                 readOnlyOnly = mode == AgentMode.PLAN,
                 context = ToolContext(execWorkspace, sandboxOff, sessionId),
             )
             val environment = if (agentContextEnabled || conversation.isChat)
                 runtimeEnvironment(workspace, sessionId, mode, effectiveMode, tools, conversation.isChat) +
                     searchConfiguration?.let { "\n## Current web research configuration\n$it\n" }.orEmpty() else ""
-            val requestSystemPrompt = if (conversation.isChat) systemPrompt + environment else if (!agentContextEnabled) "" else com.androidharness.app.caveman.CavemanPolicy.apply(
+            val imageInventory = if (conversation.isChat && visionAvailable)
+                com.androidharness.app.tools.ChatImageInventory.prompt(working) else ""
+            var requestSystemPrompt = if (conversation.isChat) systemPrompt + environment + imageInventory else if (!agentContextEnabled) "" else com.androidharness.app.caveman.CavemanPolicy.apply(
                 systemPrompt + environment + TodoPrompt.format(
                     todoStore?.takeIf { !conversation.isChat && it.owner.value == sessionId }?.todos?.value.orEmpty(),
                     roundsWithoutTodoUpdate,
@@ -586,6 +592,12 @@ class AgentEngine(
                 val stripped = ContextHygiene.stripImages(working)
                 working.clear()
                 working.addAll(stripped)
+                if (conversation.isChat) {
+                    visionAvailable = false
+                    roundRegistry = runRegistry.without(setOf("view_chat_image", "zoom_chat_image"))
+                    tools = tools.filterNot { it.name in setOf("view_chat_image", "zoom_chat_image") }
+                    requestSystemPrompt += "\nImage input was rejected by the provider. You cannot inspect or zoom images in this turn; say so rather than claiming to see them.\n"
+                }
                 failure = StreamRetrier.run(
                     streamFor = {
                         provider.streamChat(config, apiKey, requestSystemPrompt, working, tools, requestOptions)
@@ -708,7 +720,7 @@ class AgentEngine(
                                 val result = executeWithPermission(
                                     call, effectiveMode, sessionAllowedTools, execWorkspace,
                                     sessionId, turnId, mode, requestOptions, config, apiKey,
-                                    runRegistry, resolveSubagentModel, serialEmit,
+                                    roundRegistry, resolveSubagentModel, serialEmit,
                                     subagentRuns = subagentRuns,
                                 )
                                 android.util.Log.d("HarnessSpawn", "task ${call.id} END ${System.currentTimeMillis()}")
@@ -716,9 +728,9 @@ class AgentEngine(
                             }
                         }.awaitAll().forEach { (id, result) -> results[id] = result }
                     }
-                } else if (parallelSafeReadOnly(first, runRegistry)) {
+                } else if (parallelSafeReadOnly(first, roundRegistry)) {
                     val group = mutableListOf<ToolCallData>()
-                    while (ordinaryIndex < calls.size && calls[ordinaryIndex].name != "task" && parallelSafeReadOnly(calls[ordinaryIndex], runRegistry)) {
+                    while (ordinaryIndex < calls.size && calls[ordinaryIndex].name != "task" && parallelSafeReadOnly(calls[ordinaryIndex], roundRegistry)) {
                         group += calls[ordinaryIndex++]
                     }
                     group.forEach { emit(AgentEvent.ToolStarted(it)) }
@@ -730,7 +742,7 @@ class AgentEngine(
                                 call.id to executeWithFailureGuard(
                                     call, deterministicFailures, effectiveMode, sessionAllowedTools, execWorkspace,
                                     sessionId, turnId, mode, requestOptions, config, apiKey,
-                                    runRegistry, resolveSubagentModel, serialEmit,
+                                    roundRegistry, resolveSubagentModel, serialEmit,
                                 )
                             }
                         }.awaitAll().forEach { (id, result) -> results[id] = result }
@@ -741,7 +753,7 @@ class AgentEngine(
                     results[first.id] = executeWithFailureGuard(
                         first, deterministicFailures, effectiveMode, sessionAllowedTools, execWorkspace,
                         sessionId, turnId, mode, requestOptions, config, apiKey,
-                        runRegistry, resolveSubagentModel,
+                        roundRegistry, resolveSubagentModel,
                     ) { emit(it) }
                 }
             }

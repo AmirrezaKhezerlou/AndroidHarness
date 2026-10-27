@@ -802,6 +802,8 @@
     <string name="chat_created_artifact">Created a visual</string>
     <string name="chat_reading_artifact">Reading a saved visual</string>
     <string name="chat_read_artifact">Read a saved visual</string>
+    <string name="chat_zooming_image">Looking closely at the image</string>
+    <string name="chat_zoomed_image">Looked closely at the image</string>
     <string name="chat_reading_text">Reading your text</string>
     <string name="chat_read_text">Read your text</string>
     <string name="chat_preparing_code_option">Preparing a Code option</string>

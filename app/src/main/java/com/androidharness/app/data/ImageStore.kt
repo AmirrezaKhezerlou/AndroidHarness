@@ -23,39 +23,78 @@ class ImageStore(private val context: Context) {
         return com.androidharness.app.core.ImageData("image/jpeg", android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP))
     }
 
+    internal suspend fun remoteOriginal(url: String): ByteArray? =
+        com.androidharness.app.ui.chat.RemoteContentLoader.downloadOriginal(context, url)?.bytes
+
     fun saveResolved(image: com.androidharness.app.core.ImageData): com.androidharness.app.core.ImageRef {
         val name = "${UUID.randomUUID()}.jpg"
         File(dir, name).writeBytes(android.util.Base64.decode(image.base64, android.util.Base64.DEFAULT))
         return com.androidharness.app.core.ImageRef(name, image.mime)
     }
 
-    /** Copies the picked image in, downscaling to at most 1568px on the long edge. */
-    fun import(uri: Uri): StoredImage? {
+    /** Chat keeps an original for close-ups; the normal preview stays bounded. */
+    fun import(uri: Uri, keepOriginal: Boolean = false): StoredImage? {
         val sourceMime = context.contentResolver.getType(uri) ?: "image/png"
-        // Decoding and re-encoding produces JPEG or PNG, regardless of the source format.
         val mime = if (sourceMime == "image/jpeg") "image/jpeg" else "image/png"
         val ext = if (mime == "image/jpeg") "jpg" else "png"
-        return runCatching {
-            val decoded = context.contentResolver.openInputStream(uri)?.use { stream ->
-                val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                BitmapFactory.decodeStream(stream, null, opts)
-                opts
-            } ?: return null
-
-            val sample = sampleSize(decoded.outWidth, decoded.outHeight, MAX_EDGE)
-            val bitmap = context.contentResolver.openInputStream(uri)?.use { stream ->
-                BitmapFactory.decodeStream(stream, null,
-                    BitmapFactory.Options().apply { inSampleSize = sample })
-            } ?: return null
-
-            val file = File(dir, "${UUID.randomUUID()}.$ext")
-            file.outputStream().use { out ->
-                if (ext == "jpg") bitmap.compress(Bitmap.CompressFormat.JPEG, 88, out)
-                else bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+        val file = File(dir, "${UUID.randomUUID()}.$ext")
+        val original = originalFile(file.name)
+        return try {
+            if (keepOriginal) {
+                check(original.parentFile?.mkdirs() == true || original.parentFile?.isDirectory == true)
+                val input = context.contentResolver.openInputStream(uri) ?: error("Image cannot be read")
+                input.use { source -> original.outputStream().use { output ->
+                    val buffer = ByteArray(32 * 1024)
+                    var total = 0L
+                    while (true) {
+                        val count = source.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        check(total <= ORIGINAL_BYTE_LIMIT) { "Image exceeds the attachment limit" }
+                        output.write(buffer, 0, count)
+                    }
+                } }
             }
-            bitmap.recycle()
+            fun open() = if (keepOriginal) original.inputStream() else
+                context.contentResolver.openInputStream(uri) ?: error("Image cannot be read")
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            open().use { BitmapFactory.decodeStream(it, null, bounds) }
+            check(bounds.outWidth > 0 && bounds.outHeight > 0)
+            val bitmap = open().use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply {
+                inSampleSize = sampleSize(bounds.outWidth, bounds.outHeight, MAX_EDGE)
+            }) } ?: error("Image cannot be decoded")
+            try {
+                file.outputStream().use { out ->
+                    check(if (ext == "jpg") bitmap.compress(Bitmap.CompressFormat.JPEG, 88, out)
+                        else bitmap.compress(Bitmap.CompressFormat.PNG, 100, out))
+                }
+            } finally { bitmap.recycle() }
             StoredImage(file, mime)
-        }.getOrNull()
+        } catch (e: Exception) {
+            file.delete()
+            if (keepOriginal) original.delete()
+            null
+        }
+    }
+
+    /** Only internal, generated names are resolved; a chat cannot pick a filesystem path. */
+    internal fun originalFile(name: String): File = File(File(dir, "originals"), File(name).name)
+    internal fun deleteOriginal(name: String) {
+        if (name == File(name).name) runCatching { originalFile(name).delete() }
+    }
+    internal fun savedImageFile(name: String): File? =
+        if (name == File(name).name) File(dir, name).takeIf { it.isFile } else null
+
+    internal fun saveCloseUp(bitmap: Bitmap): com.androidharness.app.core.ImageRef {
+        val file = File(dir, "chat-zoom-${UUID.randomUUID()}.png")
+        try {
+            file.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+            return com.androidharness.app.core.ImageRef(file.name, "image/png")
+        } catch (e: Exception) { file.delete(); throw e }
+    }
+
+    internal fun deleteChatZoom(name: String) {
+        if (name.startsWith("chat-zoom-") && name == File(name).name) delete(name)
     }
 
     fun base64(file: File): String =
@@ -63,7 +102,8 @@ class ImageStore(private val context: Context) {
 
     /** Removes an imported image (e.g. an attachment the user un-picked before sending). */
     fun delete(name: String) {
-        runCatching { File(dir, name).delete() }
+        if (name != File(name).name) return
+        runCatching { File(dir, name).delete(); originalFile(name).delete() }
     }
 
     /** Resolves a persisted image reference to bytes for provider requests. */
@@ -82,5 +122,6 @@ class ImageStore(private val context: Context) {
 
     companion object {
         private const val MAX_EDGE = 1568
+        private const val ORIGINAL_BYTE_LIMIT = 64L * 1024 * 1024
     }
 }

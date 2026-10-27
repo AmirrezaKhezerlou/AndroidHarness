@@ -763,6 +763,8 @@
     <string name="chat_created_artifact">"أُنشئ عرض مرئي"</string>
     <string name="chat_reading_artifact">"جارٍ قراءة عرض مرئي محفوظ"</string>
     <string name="chat_read_artifact">"قُرئ عرض مرئي محفوظ"</string>
+    <string name="chat_zooming_image">جارٍ إلقاء نظرة أقرب على الصورة</string>
+    <string name="chat_zoomed_image">تمت معاينة الصورة عن قرب</string>
     <string name="chat_reading_text">"جارٍ قراءة نصك"</string>
     <string name="chat_read_text">"قُرئ نصك"</string>
     <string name="chat_preparing_code_option">"جارٍ إعداد خيار الكود"</string>

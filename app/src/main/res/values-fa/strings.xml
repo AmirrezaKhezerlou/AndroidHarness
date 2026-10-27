@@ -770,6 +770,8 @@
     <string name="chat_created_artifact">"تصویری ایجاد کرد"</string>
     <string name="chat_reading_artifact">"خواندن تصویری ذخیره شده"</string>
     <string name="chat_read_artifact">"تصویری ذخیره شده را بخوانید"</string>
+    <string name="chat_zooming_image">در حال بررسی دقیق تصویر</string>
+    <string name="chat_zoomed_image">تصویر از نزدیک بررسی شد</string>
     <string name="chat_reading_text">"خواندن متن شما"</string>
     <string name="chat_read_text">"متن خود را بخوانید"</string>
     <string name="chat_preparing_code_option">"آماده سازی گزینه کد"</string>

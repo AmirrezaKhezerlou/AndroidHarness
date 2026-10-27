@@ -107,7 +107,8 @@ class AppContainer(val appContext: Context) {
         // the v4→v5 path above preserves sessions and usage totals.
         .fallbackToDestructiveMigration(true)
         .build()
-    val sessions = SessionRepository(db)
+    val images = ImageStore(appContext)
+    val sessions = SessionRepository(db, images)
     val memory = com.androidharness.app.data.MemoryRepository(db, settings)
     val chatModels = com.androidharness.app.data.ChatModelRepository(settings, providers, sessions)
     val chatBackup by lazy { ChatBackupManager(db, appContext, workspace) }
@@ -117,7 +118,6 @@ class AppContainer(val appContext: Context) {
     val workspace = WorkspaceManager(appContext, db.dao(), sshConnections)
     val fileHistory = com.androidharness.app.data.WorkspaceFileHistory(java.io.File(appContext.filesDir, "workspace-file-history"))
     val checkpoints = CheckpointStore(db.dao(), fileHistory)
-    val images = ImageStore(appContext)
 
     val todoStore = TodoStore()
     val repoMap = com.androidharness.app.repomap.RepoMapCache()

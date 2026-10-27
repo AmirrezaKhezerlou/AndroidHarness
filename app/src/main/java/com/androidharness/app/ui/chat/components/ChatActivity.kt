@@ -482,7 +482,7 @@ private fun ChatActivityGlyph(name: String?, live: Boolean, motion: Boolean) {
                 "search_chats", "recent_chats", "read_chat_snippet" -> Icon(
                     Icons.Outlined.History, null, Modifier.size(15.dp), tint = scheme.onSurfaceVariant,
                 )
-                "web_fetch", "browser_read" -> Box(Modifier.size(15.dp)) {
+                "web_fetch", "browser_read", "zoom_chat_image" -> Box(Modifier.size(15.dp)) {
                     Icon(painterResource(R.drawable.ic_chat_eyes), null, Modifier.fillMaxSize().graphicsLayer {
                         scaleY = blink
                         alpha = blinkAlpha
@@ -521,6 +521,7 @@ private fun activityLabel(name: String, running: Boolean): String = stringResour
     "create_artifact" -> if (running) R.string.chat_creating_artifact else R.string.chat_created_artifact
     "read_artifact" -> if (running) R.string.chat_reading_artifact else R.string.chat_read_artifact
     "read_chat_text" -> if (running) R.string.chat_reading_text else R.string.chat_read_text
+    "zoom_chat_image" -> if (running) R.string.chat_zooming_image else R.string.chat_zoomed_image
     "remember" -> if (running) R.string.chat_saving_memory else R.string.chat_memory_saved
     "recall" -> if (running) R.string.chat_searching_memory else R.string.chat_searched_memory
     "read_tool_output" -> if (running) R.string.chat_reading_results else R.string.chat_read_results
