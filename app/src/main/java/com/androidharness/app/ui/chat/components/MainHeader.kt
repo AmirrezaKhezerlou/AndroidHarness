@@ -79,8 +79,8 @@ import com.androidharness.app.ui.common.BiometricAuth
 import com.androidharness.app.ui.common.ExpressiveIconButton
 
 /**
- * Phones give the model and thinking level their own row so neither competes
- * with navigation or workspace actions. Desktop uses its own compact header.
+ * Phones keep the model and thinking controls together in one row.
+ * Desktop uses its own compact header.
  * Labels and touch targets grow with the system font size.
  */
 @Composable
@@ -159,17 +159,13 @@ internal fun MainHeader(
                     ExpressiveIconButton(onClick = onOpenDrawer) {
                         Icon(painterResource(R.drawable.ic_chat_menu), contentDescription = uiContext.getString(R.string.ui_open_navigation), modifier = Modifier.size(18.dp))
                     }
-                    Column(Modifier.weight(1f).padding(horizontal = 6.dp, vertical = 6.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (sessionTitle.startsWith("Fork of ")) {
-                                Icon(Icons.Outlined.ForkRight, contentDescription = uiContext.getString(R.string.ui_forked_session),
-                                    tint = scheme.primary, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(4.dp))
-                            }
-                            Text(sessionTitle, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
+                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                        HeaderModelPicker(pickerLabel, onPickModel, Modifier.weight(1f, fill = false), scopeLabel = modelScopeLabel)
+                        if (thinkingResolved?.customConfig != null || thinkingLevels.isNotEmpty() || thinkingResolved?.spec?.style == com.androidharness.app.agent.ThinkingSpecs.Style.AUTOMATIC) {
+                            Spacer(Modifier.width(4.dp))
+                            HeaderThinkingControl(thinkingLevel, thinkingLevels, thinkingMenu,
+                                { thinkingMenu = it }, onSetThinking, onPickModel, thinkingResolved, busy, onCustomizeThinking, onSetCustomThinking, onAddThinkingLevel)
                         }
-                        ConversationModeLabel(conversation, workspaceName)
                     }
 
                     // Workspace files explorer, migrated here from the drawer;
@@ -181,6 +177,10 @@ internal fun MainHeader(
                             contentDescription = uiContext.getString(R.string.ui_workspace_files),
                             tint = scheme.onSurfaceVariant,
                         )
+                    }
+                    if (!conversation.isChat) ExpressiveIconButton(onClick = onOpenGitHub, enabled = canOpenGitHub) {
+                        Icon(painterResource(R.drawable.ic_github), contentDescription = uiContext.getString(R.string.ui_open_github),
+                            modifier = Modifier.size(18.dp))
                     }
                     if (conversation.isChat) {
                         SearchDepthControl(searchDepth, onSetSearchDepth)
@@ -359,27 +359,6 @@ internal fun MainHeader(
                                 })
                             }
                         }
-                    }
-                }
-                Row(
-                    Modifier.fillMaxWidth().padding(start = 18.dp, end = 10.dp, bottom = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                        HeaderModelPicker(pickerLabel, onPickModel, Modifier.weight(1f, fill = false), scopeLabel = modelScopeLabel)
-                        if (thinkingResolved?.customConfig != null || thinkingLevels.isNotEmpty() || thinkingResolved?.spec?.style == com.androidharness.app.agent.ThinkingSpecs.Style.AUTOMATIC) {
-                            Spacer(Modifier.width(8.dp))
-                            HeaderThinkingControl(thinkingLevel, thinkingLevels, thinkingMenu,
-                                { thinkingMenu = it }, onSetThinking, onPickModel, thinkingResolved, busy, onCustomizeThinking, onSetCustomThinking, onAddThinkingLevel)
-                        }
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    if (!conversation.isChat) ExpressiveIconButton(onClick = onOpenGitHub, enabled = canOpenGitHub) {
-                        Icon(painterResource(R.drawable.ic_github), contentDescription = uiContext.getString(R.string.ui_open_github),
-                            modifier = Modifier.size(18.dp))
-                    }
-                    if (!conversation.isChat && showWebPreviewShortcut) ExpressiveIconButton(onClick = onOpenWebPreview) {
-                        Icon(Icons.Outlined.Language, contentDescription = uiContext.getString(R.string.ui_open_web_browser), modifier = Modifier.size(18.dp))
                     }
                 }
             }
