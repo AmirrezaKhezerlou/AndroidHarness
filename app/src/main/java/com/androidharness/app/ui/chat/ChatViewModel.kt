@@ -485,9 +485,9 @@ class ChatViewModel(
                     }
                 }
             }.collect { window ->
-                val msgs = window.messages
+                val msgs = window.messages.filterNot { com.androidharness.app.agent.RunRecovery.isInternalChatContinuation(it.id) }
                 // Rewinding may remove the entire loaded suffix. Return to the saved history.
-                if (msgs.isEmpty() && window.hasOlder) {
+                if (window.messages.isEmpty() && window.hasOlder) {
                     sessionId?.let { messageWindowStart.value = c.sessions.messageWindowStart(it) }
                     return@collect
                 }
@@ -2003,7 +2003,7 @@ class ChatViewModel(
         type: ProviderType,
         baseUrl: String,
         model: String,
-        apiKey: String,
+        apiKey: com.androidharness.app.llm.ProviderKeyPool,
         headers: List<com.androidharness.app.llm.ProviderHeader>,
     ) {
         viewModelScope.launch {
@@ -2028,8 +2028,8 @@ class ChatViewModel(
         viewModelScope.launch { c.providers.delete(providerId) }
     }
 
-    /** Stored API key for a provider (filled into the edit form). */
-    fun providerApiKey(providerId: String): String? = c.providers.apiKey(providerId)
+    /** Full key list, including disabled keys, for the shared add/edit form. */
+    fun providerApiKeys(providerId: String): com.androidharness.app.llm.ProviderKeyPool = c.providers.apiKeys(providerId)
 
     // ---- Workspace switching (chat overflow + sheet) ------------------------
 

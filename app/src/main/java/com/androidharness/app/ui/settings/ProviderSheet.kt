@@ -35,6 +35,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalBottomSheetProperties
+import androidx.compose.ui.window.SecureFlagPolicy
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -54,7 +56,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.androidharness.app.ui.common.ProviderMark
@@ -64,6 +65,8 @@ import com.androidharness.app.llm.ModelCatalog
 import com.androidharness.app.llm.ModelEntry
 import com.androidharness.app.llm.ModelsDev
 import com.androidharness.app.llm.ProviderConfig
+import com.androidharness.app.llm.ProviderApiKey
+import com.androidharness.app.llm.ProviderKeyPool
 import com.androidharness.app.llm.ProviderType
 import com.androidharness.app.llm.endpointPath
 import kotlinx.coroutines.Dispatchers
@@ -113,17 +116,18 @@ internal val ProviderBrands: List<ProviderBrand?> = listOf(
 @Composable
 fun ProviderSheet(
     existing: ProviderConfig?,
-    existingKey: String?,
+    apiKeys: (String) -> ProviderKeyPool,
     onDismiss: () -> Unit,
-    onSave: (name: String, type: ProviderType, baseUrl: String, model: String, apiKey: String, headers: List<com.androidharness.app.llm.ProviderHeader>) -> Unit,
+    onSave: (name: String, type: ProviderType, baseUrl: String, model: String, apiKeys: ProviderKeyPool, headers: List<com.androidharness.app.llm.ProviderHeader>) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState,
+        properties = ModalBottomSheetProperties(securePolicy = SecureFlagPolicy.SecureOn)) {
         // The API key field lives in this sheet's own window, which the
         // activity-level FLAG_SECURE never covered.
         ProviderSheetContent(
             existing = existing,
-            existingKey = existingKey,
+            apiKeys = apiKeys,
             onDismiss = onDismiss,
             onSave = onSave,
         )
@@ -135,9 +139,9 @@ private enum class AddStep { PROVIDER, KEY, MODEL }
 @Composable
 internal fun ProviderSheetContent(
     existing: ProviderConfig?,
-    existingKey: String?,
+    apiKeys: (String) -> ProviderKeyPool,
     onDismiss: () -> Unit,
-    onSave: (name: String, type: ProviderType, baseUrl: String, model: String, apiKey: String, headers: List<com.androidharness.app.llm.ProviderHeader>) -> Unit,
+    onSave: (name: String, type: ProviderType, baseUrl: String, model: String, apiKeys: ProviderKeyPool, headers: List<com.androidharness.app.llm.ProviderHeader>) -> Unit,
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     SecureDialogEffect()
@@ -157,7 +161,20 @@ internal fun ProviderSheetContent(
 
     var name by remember { mutableStateOf(existing?.name ?: "") }
     var model by remember { mutableStateOf(existing?.model ?: "") }
-    var apiKey by remember { mutableStateOf(existingKey ?: "") }
+    var keyPool by remember(existing?.id) {
+        mutableStateOf(if (existing == null) ProviderKeyPool(listOf(ProviderApiKey(value = ""))) else ProviderKeyPool())
+    }
+    var keysLoaded by remember(existing?.id) { mutableStateOf(existing == null) }
+    var keysLoadFailed by remember(existing?.id) { mutableStateOf(false) }
+    LaunchedEffect(existing?.id) {
+        if (existing != null) try {
+            keyPool = withContext(Dispatchers.IO) { apiKeys(existing.id) }
+            keysLoaded = true
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) { keysLoadFailed = true }
+    }
+    val apiKey = keyPool.keys.firstOrNull { it.enabled }?.value.orEmpty()
+    val keysValid = keysLoaded && keyPool.error() == null
     var headerRows by remember { mutableStateOf(existing?.headers.orEmpty().map { ProviderHeaderDraft(it) }) }
     val headers = headerRows.map { it.header }
     val headersValid = com.androidharness.app.llm.ProviderHeaders.error(headers) == null
@@ -227,12 +244,14 @@ internal fun ProviderSheetContent(
     }
 
     fun continueToModels() {
+        // A disabled key must never be used just to load the model list.
+        if (requiresKey && apiKey.isBlank()) { step = AddStep.MODEL; return }
         scope.launch {
             fetching = true
             fetchError = null
             val result = withContext(Dispatchers.IO) {
                 ModelCatalog.listModels(
-                    ProviderConfig("", "", effectiveType, effectiveBaseUrl, "", headers = headers),
+                    ProviderConfig(existing?.id.orEmpty(), "", effectiveType, effectiveBaseUrl, "", headers = headers),
                     apiKey,
                 )
             }
@@ -310,6 +329,7 @@ internal fun ProviderSheetContent(
                         selectedDev = devChoice,
                         customSelected = isCustom,
                         onSelectBrand = { selected ->
+                            if (!selected.needsKey && keyPool.keys.all { it.value.isBlank() }) keyPool = keyPool.copy(keys = emptyList())
                             devChoice = null
                             isCustom = false
                             brand = selected
@@ -394,25 +414,12 @@ internal fun ProviderSheetContent(
                         )
                     }
 
-                    if (requiresKey) {
-                        OutlinedTextField(
-                            value = apiKey,
-                            onValueChange = { apiKey = it; fetchError = null },
-                            label = { Text(stringResource(R.string.settings_provider_api_key)) },
-                            placeholder = {
-                                Text(stringResource(R.string.settings_provider_get_one_from, effectiveBaseUrl.substringAfter("://").substringBefore('/')))
-                            },
-                            visualTransformation = PasswordVisualTransformation(),
-                            singleLine = true,
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        Text(
-                            uiContext.getString(R.string.ui_stored_securely_on_this_device_and_used),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 4.dp),
-                        )
+                    if (requiresKey || keyPool.keys.any { it.value.isNotEmpty() }) {
+                        if (keysLoaded) ProviderKeysEditor(keyPool, onChange = { keyPool = it; fetchError = null }, enabled = !fetching)
+                        else if (!keysLoadFailed) androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth())
+                        keyPool.error()?.takeUnless { keyPool.keys.any { key -> key.value.isBlank() } }?.let {
+                            Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                        }
                     } else {
                         Surface(
                             color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
@@ -428,6 +435,7 @@ internal fun ProviderSheetContent(
                         }
                     }
 
+                    if (keysLoadFailed) Text(stringResource(R.string.provider_keys_load_failed), color = MaterialTheme.colorScheme.error)
                     ProviderHeadersEditor(headerRows, onChange = { headerRows = it; fetchError = null })
 
                     fetchError?.let { message ->
@@ -443,12 +451,11 @@ internal fun ProviderSheetContent(
                     primary = {
                         Button(
                             onClick = { continueToModels() },
-                            enabled = !fetching && headersValid &&
-                                (!requiresKey || apiKey.isNotBlank()) &&
+                            enabled = !fetching && headersValid && keysValid &&
                                 (!isCustom || baseUrl.isNotBlank()),
                         ) { Text(if (fetching) uiContext.getString(R.string.ui_connecting) else uiContext.getString(R.string.settings_action_continue)) }
                     },
-                    secondary = if (fetchError != null && headersValid) {
+                    secondary = if (fetchError != null && headersValid && keysValid) {
                         { TextButton(onClick = { step = AddStep.MODEL }) { Text(stringResource(R.string.settings_action_continue_anyway)) } }
                     } else null,
                     onCancel = onDismiss,
@@ -538,10 +545,10 @@ internal fun ProviderSheetContent(
                         Button(
                             onClick = {
                                 val finalName = name.ifBlank { selectedLabel }
-                                onSave(finalName, effectiveType, effectiveBaseUrl.trim(), model.trim(), apiKey.trim(),
+                                onSave(finalName, effectiveType, effectiveBaseUrl.trim(), model.trim(), keyPool,
                                     com.androidharness.app.llm.ProviderHeaders.normalized(headers))
                             },
-                            enabled = model.isNotBlank() && headersValid,
+                            enabled = model.isNotBlank() && headersValid && keysValid,
                         ) { Text(stringResource(R.string.settings_action_save)) }
                     },
                     secondary = null,

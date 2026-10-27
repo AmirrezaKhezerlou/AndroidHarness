@@ -194,7 +194,7 @@ fun ProvidersScreen(
     if (showDialog) {
         ProviderSheet(
             existing = editing,
-            existingKey = editing?.let { container.providers.apiKey(it.id) },
+            apiKeys = container.providers::apiKeys,
             onDismiss = { showDialog = false },
             onSave = { name, type, baseUrl, model, apiKey, headers ->
                 scope.launch {

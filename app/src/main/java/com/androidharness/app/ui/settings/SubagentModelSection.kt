@@ -108,7 +108,7 @@ internal fun SubagentModelSection(container: AppContainer, settings: AppSettings
     if (managing) ProviderManagerSheet(
         providers = providers,
         activeProviderId = pickerProviderId,
-        apiKey = container.providers::apiKey,
+        apiKeys = container.providers::apiKeys,
         onDismiss = { managing = false },
         onSetActive = { providerId ->
             scope.launch {

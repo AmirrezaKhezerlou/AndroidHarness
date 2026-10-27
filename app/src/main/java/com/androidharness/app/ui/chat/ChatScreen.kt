@@ -736,7 +736,7 @@ private fun ChatScreenContent(
             providers = state.providers,
             addProviderInitially = addProviderInitially,
             activeProviderId = state.selectedProviderIdFor(target) ?: state.activeProviderId,
-            apiKey = viewModel::providerApiKey,
+            apiKeys = viewModel::providerApiKeys,
             onDismiss = { activeProviderManagerTarget = null },
             onSetActive = { providerId ->
                 viewModel.selectProviderForTarget(target, providerId)

@@ -29,6 +29,39 @@ class RuntimeRecoveryDeviceTest {
     private suspend fun start(runs: RunManager, sid: String) = runs.startRun(sid, "Build fixture", emptyList(), config,
         "fixture", PermissionMode.FULL_AUTO, AgentMode.ACT, 1024, 32000, ThinkingLevel.OFF, 10, notifyOnFinish = false)
 
+    @Test fun chatResumeKeepsContinuationInModelContextWithoutShowingItInSearch() = runBlocking {
+        val sid = c.sessions.createSession("Continuation fixture", conversation = com.androidharness.app.data.ConversationConfig(com.androidharness.app.data.ConversationKind.CHAT))
+        var calls = 0
+        var resumedHistory = emptyList<ChatMessage>()
+        val provider = object : LlmProvider {
+            override fun streamChat(config: ProviderConfig, apiKey: String, systemPrompt: String,
+                messages: List<ChatMessage>, tools: List<ToolSchema>, options: RequestOptions) = flow {
+                calls++
+                if (calls == 1) {
+                    emit(StreamEvent.TextDelta("Partial answer"))
+                    emit(StreamEvent.Failure("Connection interrupted", code = 503))
+                } else {
+                    resumedHistory = messages
+                    emit(StreamEvent.TextDelta("Continued answer")); emit(StreamEvent.Done("stop"))
+                }
+            }
+        }
+        val runs = runs(provider)
+        try {
+            start(runs, sid)
+            withTimeout(30_000) { while (runs.isRunning(sid)) delay(50) }
+            assertTrue(runs.controls.flow(sid).value.resumable)
+            runs.resumeTask(sid, "fixture", notifyOnFinish = false)
+            withTimeout(30_000) { while (runs.isRunning(sid)) delay(50) }
+            assertTrue(resumedHistory.any { it.text == RunRecovery.CONTINUE_PROMPT })
+            assertTrue(c.sessions.messages(sid).any { RunRecovery.isInternalChatContinuation(it.id) })
+            assertTrue(c.sessions.searchMessagesInSession(sid, "authoritative").isEmpty())
+        } finally {
+            runs.stopAndJoin(sid)
+            c.sessions.session(sid)?.let { c.sessions.deleteSession(it) }
+        }
+    }
+
     @Test fun prepareInterruptedFiles() = runBlocking {
         check(!fixture.exists()) { "Finish or remove the previous isolated recovery fixture first" }
         val prior = c.workspace.currentProjectOnce()

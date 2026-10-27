@@ -1142,7 +1142,7 @@ private fun AutomationEditorDialog(
         ProviderManagerSheet(
             providers = providers,
             activeProviderId = effectiveProviderId,
-            apiKey = container.providers::apiKey,
+            apiKeys = container.providers::apiKeys,
             onDismiss = { showProviderManager = false },
             onSetActive = { providerId ->
                 selectedProviderId = providerId

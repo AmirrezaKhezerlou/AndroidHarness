@@ -113,7 +113,7 @@ class ProviderManagementDeviceTest {
                 ActivityScenario.launch(ChatListTestActivity::class.java).also { scenario ->
                     scenario.onActivity { activity -> activity.setContent { theme {
                         val scope = rememberCoroutineScope()
-                        ProviderSheetContent(existing, "header-fixture-api-key", {},
+                        ProviderSheetContent(existing, { c.providers.apiKeys(it) }, {},
                             onSave = { name, type, url, model, key, headers -> scope.launch {
                                 val updated = existing.copy(name = name, type = type, baseUrl = url, model = model, headers = headers)
                                 c.providers.update(updated, key)
@@ -228,7 +228,7 @@ class ProviderManagementDeviceTest {
             scenario.onActivity { it.setContent { theme {
                 val providers by c.providers.providers.collectAsStateWithLifecycle(initialValue = emptyList())
                 val scope = rememberCoroutineScope()
-                ProviderManagerSheet(providers, first.id, c.providers::apiKey, {}, {},
+                ProviderManagerSheet(providers, first.id, c.providers::apiKeys, {}, {},
                     onDelete = {},
                     onEnabledChange = { id, enabled -> scope.launch { c.providers.setEnabled(id, enabled) } },
                     onMove = { id, direction, visible -> scope.launch { c.providers.move(id, direction, visible) } },
@@ -389,7 +389,7 @@ class ProviderManagementDeviceTest {
                         onDismiss = { picker = false }, onSelect = { id, model -> selected.set(ModelShortcut(id, requireNotNull(model))) },
                         onRefreshCatalog = { null }, onManageProviders = {}, sameModelAcrossChats = false,
                         modelShortcuts = ModelShortcuts(c.appContext, shortcutsName), onAddProvider = { adding = true })
-                    if (adding) ProviderManagerSheet(listOf(first), first.id, { null }, { adding = false }, {}, {}, { _, _ -> },
+                    if (adding) ProviderManagerSheet(listOf(first), first.id, { com.androidharness.app.llm.ProviderKeyPool() }, { adding = false }, {}, {}, { _, _ -> },
                         { _, _, _ -> }, { _, _, _, _, _, _, _ -> }, addProviderInitially = true)
                 } } }
                 await { find("Choose a model") != null }

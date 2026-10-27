@@ -124,6 +124,8 @@ class TaskBudget(
 /** Close orphan tool calls without replaying operations whose outcome is unknown. */
 object RunRecovery {
     const val CONTINUE_PROMPT = "Resume the interrupted task from saved progress. Completed tool results are authoritative. Inspect uncertain outcomes before further actions; do not repeat completed operations."
+    const val CHAT_CONTINUATION_ID_PREFIX = "internal-chat-continuation-"
+    fun isInternalChatContinuation(id: String?): Boolean = id?.startsWith(CHAT_CONTINUATION_ID_PREFIX) == true
     fun missingResults(messages: List<ChatMessage>): List<ChatMessage> {
         val results = messages.filter { it.role == Role.TOOL }.mapNotNull { it.toolCallId }.toSet()
         return messages.filter { it.role == Role.ASSISTANT && it.toolCallId == null }

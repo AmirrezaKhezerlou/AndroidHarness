@@ -274,7 +274,7 @@
     <string name="provider_proxy_global_hint">"الاتصال الافتراضي لردود المزوّدين وقوائم النماذج"</string>
     <string name="provider_api_keys">"مفاتيح API"</string>
     <string name="provider_rotate_keys">"تدوير مفاتيح API"</string>
-    <string name="provider_rotate_keys_hint">"استخدم المفاتيح المفعّلة بالتناوب. يمكن لمفتاح آخر استعادة طلب مرفوض أو محدود قبل بدء الرد."</string>
+    <string name="provider_rotate_keys_hint">استخدام المفاتيح المفعّلة بالتناوب.</string>
     <string name="provider_key_name">"اسم المفتاح %1$d"</string>
     <string name="provider_api_key_number">"مفتاح API %1$d"</string>
     <string name="provider_use_key">"استخدام المفتاح %1$d"</string>
@@ -384,4 +384,8 @@
         <item quantity="many">%1$d من الوكلاء الفرعيين</item>
         <item quantity="other">%1$d من الوكلاء الفرعيين</item>
     </plurals>
+    <string name="provider_key_count">%1$d / %2$d</string>
+    <string name="provider_show_key">إظهار مفتاح API %1$d</string>
+    <string name="provider_hide_key">إخفاء مفتاح API %1$d</string>
+    <string name="provider_keys_load_failed">تعذر تحميل المفاتيح المحفوظة. أغلق وأعد المحاولة.</string>
 </resources>

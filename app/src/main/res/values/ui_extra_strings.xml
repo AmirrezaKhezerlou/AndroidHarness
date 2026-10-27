@@ -269,7 +269,7 @@
     <string name="provider_proxy_global_hint">Default connection for provider replies and model lists</string>
     <string name="provider_api_keys">API keys</string>
     <string name="provider_rotate_keys">Rotate API keys</string>
-    <string name="provider_rotate_keys_hint">Use enabled keys in turn. Another key can recover a rejected or limited request before a reply starts.</string>
+    <string name="provider_rotate_keys_hint">Use enabled keys in turn.</string>
     <string name="provider_key_name">Key name %1$d</string>
     <string name="provider_api_key_number">API key %1$d</string>
     <string name="provider_use_key">Use key %1$d</string>
@@ -372,4 +372,8 @@
     <string name="subagents_main_chat">Main chat</string>
     <string name="subagents_results_return">Results return to the main agent.</string>
     <plurals name="subagents_count"><item quantity="one">%1$d subagent</item><item quantity="other">%1$d subagents</item></plurals>
+    <string name="provider_key_count">%1$d / %2$d</string>
+    <string name="provider_show_key">Show API key %1$d</string>
+    <string name="provider_hide_key">Hide API key %1$d</string>
+    <string name="provider_keys_load_failed">Could not load saved keys. Close and retry.</string>
 </resources>

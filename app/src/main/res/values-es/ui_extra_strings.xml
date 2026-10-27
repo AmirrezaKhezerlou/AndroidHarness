@@ -270,7 +270,7 @@
     <string name="provider_proxy_global_hint">"Conexión predeterminada para respuestas del proveedor y listas de modelos"</string>
     <string name="provider_api_keys">"Claves API"</string>
     <string name="provider_rotate_keys">"Rotar claves API"</string>
-    <string name="provider_rotate_keys_hint">"Se usan las claves activadas por turnos. Si una solicitud se rechaza o alcanza un límite de uso, se puede probar otra clave antes de que empiece la respuesta."</string>
+    <string name="provider_rotate_keys_hint">Usar las claves activadas por turnos.</string>
     <string name="provider_key_name">"Nombre de clave %1$d"</string>
     <string name="provider_api_key_number">"Clave API %1$d"</string>
     <string name="provider_use_key">"Usar clave %1$d"</string>
@@ -376,4 +376,8 @@
         <item quantity="one">%1$d subagente</item>
         <item quantity="other">%1$d subagentes</item>
     </plurals>
+    <string name="provider_key_count">%1$d / %2$d</string>
+    <string name="provider_show_key">Mostrar clave API %1$d</string>
+    <string name="provider_hide_key">Ocultar clave API %1$d</string>
+    <string name="provider_keys_load_failed">No se pudieron cargar las claves. Cierra y reintenta.</string>
 </resources>

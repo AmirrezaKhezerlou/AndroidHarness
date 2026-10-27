@@ -17,6 +17,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.window.SecureFlagPolicy
+import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalConfiguration
@@ -42,7 +44,7 @@ import kotlinx.coroutines.launch
 fun ProviderManagerSheet(
     providers: List<ProviderConfig>,
     activeProviderId: String?,
-    apiKey: (providerId: String) -> String?,
+    apiKeys: (providerId: String) -> com.androidharness.app.llm.ProviderKeyPool,
     onDismiss: () -> Unit,
     onSetActive: (String) -> Unit,
     onDelete: suspend (String) -> Unit,
@@ -54,7 +56,7 @@ fun ProviderManagerSheet(
         type: ProviderType,
         baseUrl: String,
         model: String,
-        apiKey: String,
+        apiKeys: com.androidharness.app.llm.ProviderKeyPool,
         headers: List<com.androidharness.app.llm.ProviderHeader>,
     ) -> Unit,
     catalogs: Map<String, List<ModelEntry>> = emptyMap(),
@@ -81,7 +83,8 @@ fun ProviderManagerSheet(
         ModelVisibilitySheet(providers, catalogs, manageModelsFor, onDismiss = { manageModelsFor = null }, onRefreshCatalog = onRefreshCatalog)
         return
     }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState,
+        properties = ModalBottomSheetProperties(securePolicy = SecureFlagPolicy.SecureOn)) {
         Crossfade(
             targetState = showForm,
             animationSpec = fastEffectsSpec(),
@@ -165,7 +168,7 @@ fun ProviderManagerSheet(
                 // step one returns to the list page.
                 ProviderSheetContent(
                     existing = editing,
-                    existingKey = editing?.let { apiKey(it.id) },
+                    apiKeys = apiKeys,
                     onDismiss = { showForm = false },
                     onSave = { name, type, baseUrl, model, key, headers ->
                         onSave(editing, name, type, baseUrl, model, key, headers)

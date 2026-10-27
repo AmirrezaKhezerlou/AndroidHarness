@@ -447,20 +447,20 @@ interface HarnessDao {
     // chat search
     @Query(
         "SELECT m.* FROM message_fts f JOIN messages m ON m.rowid = f.docid " +
-            "WHERE f.text MATCH :match ORDER BY m.createdAt DESC LIMIT :limit"
+            "WHERE f.text MATCH :match AND m.id NOT LIKE 'internal-chat-continuation-%' ORDER BY m.createdAt DESC LIMIT :limit"
     )
     suspend fun searchFts(match: String, limit: Int): List<MessageEntity>
 
-    @Query("SELECT * FROM messages WHERE text LIKE :pattern ESCAPE '\\' ORDER BY createdAt DESC LIMIT :limit")
+    @Query("SELECT * FROM messages WHERE text LIKE :pattern ESCAPE '\\' AND id NOT LIKE 'internal-chat-continuation-%' ORDER BY createdAt DESC LIMIT :limit")
     suspend fun searchLike(pattern: String, limit: Int): List<MessageEntity>
 
     @Query(
         "SELECT m.* FROM message_fts f JOIN messages m ON m.rowid = f.docid " +
-            "WHERE f.text MATCH :match AND m.sessionId = :sessionId ORDER BY m.createdAt ASC LIMIT :limit"
+            "WHERE f.text MATCH :match AND m.sessionId = :sessionId AND m.id NOT LIKE 'internal-chat-continuation-%' ORDER BY m.createdAt ASC LIMIT :limit"
     )
     suspend fun searchFtsInSession(match: String, sessionId: String, limit: Int): List<MessageEntity>
 
-    @Query("SELECT * FROM messages WHERE text LIKE :pattern ESCAPE '\\' AND sessionId = :sessionId ORDER BY createdAt ASC LIMIT :limit")
+    @Query("SELECT * FROM messages WHERE text LIKE :pattern ESCAPE '\\' AND sessionId = :sessionId AND id NOT LIKE 'internal-chat-continuation-%' ORDER BY createdAt ASC LIMIT :limit")
     suspend fun searchLikeInSession(pattern: String, sessionId: String, limit: Int): List<MessageEntity>
 
     @Query("SELECT * FROM sessions WHERE id IN (:ids)")

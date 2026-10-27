@@ -269,7 +269,7 @@
     <string name="provider_proxy_global_hint">"Koneksi default untuk balasan penyedia dan daftar model"</string>
     <string name="provider_api_keys">"Kunci API"</string>
     <string name="provider_rotate_keys">"Rotasi kunci API"</string>
-    <string name="provider_rotate_keys_hint">"Gunakan kunci yang aktif secara bergantian. Kunci lain dapat memulihkan permintaan yang ditolak atau dibatasi sebelum balasan dimulai."</string>
+    <string name="provider_rotate_keys_hint">Gunakan kunci aktif secara bergiliran.</string>
     <string name="provider_key_name">"Nama kunci %1$d"</string>
     <string name="provider_api_key_number">"Kunci API %1$d"</string>
     <string name="provider_use_key">"Gunakan kunci %1$d"</string>
@@ -374,4 +374,8 @@
     <plurals name="subagents_count">
         <item quantity="other">%1$d subagen</item>
     </plurals>
+    <string name="provider_key_count">%1$d / %2$d</string>
+    <string name="provider_show_key">Tampilkan kunci API %1$d</string>
+    <string name="provider_hide_key">Sembunyikan kunci API %1$d</string>
+    <string name="provider_keys_load_failed">Kunci tersimpan tidak dapat dimuat. Tutup dan coba lagi.</string>
 </resources>

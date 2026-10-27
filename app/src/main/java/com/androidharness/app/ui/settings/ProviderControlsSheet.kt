@@ -4,11 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,7 +19,6 @@ import androidx.compose.ui.window.SecureFlagPolicy
 import com.androidharness.app.AppContainer
 import com.androidharness.app.R
 import com.androidharness.app.llm.*
-import com.androidharness.app.ui.common.ExpressiveIconButton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -65,41 +61,7 @@ internal fun ProviderControlsSheet(container: AppContainer, connection: Provider
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (loaded && canEditKeys) {
-                    Text(stringResource(R.string.provider_api_keys), style = MaterialTheme.typography.titleMedium)
-                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(pool.rotate, enabled = !saving, role = Role.Switch,
-                        onValueChange = { pool = pool.copy(rotate = it) }), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(stringResource(R.string.provider_rotate_keys))
-                            Text(stringResource(R.string.provider_rotate_keys_hint), style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Switch(pool.rotate, onCheckedChange = null, enabled = !saving)
-                    }
-                    pool.keys.forEachIndexed { index, key -> androidx.compose.runtime.key(key.id) {
-                        Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedTextField(key.label, { value -> pool = pool.copy(keys = pool.keys.map { if (it.id == key.id) it.copy(label = value.take(80)) else it }) },
-                                    enabled = !saving, singleLine = true, label = { Text(stringResource(R.string.provider_key_name, index + 1)) }, modifier = Modifier.fillMaxWidth())
-                                OutlinedTextField(key.value, { value -> pool = pool.copy(keys = pool.keys.map { if (it.id == key.id) it.copy(value = value.take(8193).trim()) else it }) },
-                                    enabled = !saving, singleLine = true, visualTransformation = PasswordVisualTransformation(),
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                                    label = { Text(stringResource(R.string.provider_api_key_number, index + 1)) }, modifier = Modifier.fillMaxWidth())
-                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Row(Modifier.weight(1f).heightIn(min = 48.dp).toggleable(key.enabled, enabled = !saving, role = Role.Switch,
-                                        onValueChange = { value -> pool = pool.copy(keys = pool.keys.map { if (it.id == key.id) it.copy(enabled = value) else it }) }),
-                                        verticalAlignment = Alignment.CenterVertically) {
-                                        Switch(key.enabled, onCheckedChange = null, enabled = !saving)
-                                        Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.provider_use_key, index + 1))
-                                    }
-                                    ExpressiveIconButton(enabled = !saving, onClick = { pool = pool.copy(keys = pool.keys.filterNot { it.id == key.id }) }) {
-                                        Icon(Icons.Outlined.DeleteOutline, stringResource(R.string.provider_remove_key, index + 1))
-                                    }
-                                }
-                            }
-                        }
-                    } }
-                    OutlinedButton(enabled = !saving && pool.keys.size < ProviderKeyPool.MAX_KEYS,
-                        onClick = { pool = pool.copy(keys = pool.keys + ProviderApiKey(value = "")) }) { Text(stringResource(R.string.provider_add_key)) }
+                    ProviderKeysEditor(pool, onChange = { pool = it }, enabled = !saving)
                     HorizontalDivider()
                 }
                 if (loaded) {

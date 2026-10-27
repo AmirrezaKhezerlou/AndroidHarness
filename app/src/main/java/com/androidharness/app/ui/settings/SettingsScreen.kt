@@ -2767,7 +2767,7 @@ private fun PlanningModelSection(
             providers = providers,
             activeProviderId = (if (isPlan) settings.planningProviderId else settings.executionProviderId)
                 ?: fallbackProviderId,
-            apiKey = container.providers::apiKey,
+            apiKeys = container.providers::apiKeys,
             onDismiss = { managingRoleProvider = null },
             onSetActive = { providerId ->
                 scope.launch {

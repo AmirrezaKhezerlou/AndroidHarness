@@ -81,7 +81,7 @@ fun FallbackEditorSheet(
     fun update(policy: FallbackPolicy) { draftJson = FallbackPolicy.encode(policy); error = null }
 
     if (managing) {
-        ProviderManagerSheet(providers, browseProviderId, container.providers::apiKey,
+        ProviderManagerSheet(providers, browseProviderId, container.providers::apiKeys,
             onDismiss = { managing = false; picking = true },
             onSetActive = { id -> browseProviderId = id; managing = false; picking = true },
             onDelete = { id -> container.providers.delete(id) },

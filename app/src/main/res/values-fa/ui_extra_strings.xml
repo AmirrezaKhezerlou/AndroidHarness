@@ -270,7 +270,7 @@
     <string name="provider_proxy_global_hint">اتصال پیش‌فرض برای پاسخ‌های ارائه‌دهندگان و فهرست مدل‌ها</string>
     <string name="provider_api_keys">کلیدهای API</string>
     <string name="provider_rotate_keys">چرخش کلیدهای API</string>
-    <string name="provider_rotate_keys_hint">از کلیدهای فعال به‌نوبت استفاده می‌شود. پیش از شروع پاسخ، در صورت رد شدن درخواست یا اعمال محدودیت، می‌توان با کلید دیگری دوباره تلاش کرد.</string>
+    <string name="provider_rotate_keys_hint">استفاده نوبتی از کلیدهای فعال.</string>
     <string name="provider_key_name">نام کلید %1$d</string>
     <string name="provider_api_key_number">کلید API شمارهٔ %1$d</string>
     <string name="provider_use_key">استفاده از کلید %1$d</string>
@@ -376,4 +376,8 @@
         <item quantity="one">%1$d زیرعامل</item>
         <item quantity="other">%1$d زیرعامل</item>
     </plurals>
+    <string name="provider_key_count">%1$d / %2$d</string>
+    <string name="provider_show_key">نمایش کلید API %1$d</string>
+    <string name="provider_hide_key">پنهان کردن کلید API %1$d</string>
+    <string name="provider_keys_load_failed">کلیدهای ذخیره‌شده بارگیری نشدند. ببندید و دوباره تلاش کنید.</string>
 </resources>

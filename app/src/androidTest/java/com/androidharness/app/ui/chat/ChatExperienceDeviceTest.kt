@@ -93,6 +93,7 @@ class ChatExperienceDeviceTest {
         val chat = c.sessions.createSession("New chat", project.id, ConversationConfig(ConversationKind.CHAT))
         val code = c.sessions.createSession("Code comparison", project.id)
         val stores = mutableListOf<ViewModelStore>()
+        lateinit var chatVm: ChatViewModel
         val selected = mutableStateOf(ConversationKind.CHAT)
         val scale = mutableStateOf(1f)
         val theme = mutableStateOf(ThemeMode.LIGHT)
@@ -104,13 +105,18 @@ class ChatExperienceDeviceTest {
             c.sessions.addMessage(sid, ChatMessage(Role.TOOL, "RAW_PRIVATE_TOOL_OUTPUT", toolCallId = "search", toolName = "web_search"), turn)
             c.sessions.addMessage(sid, ChatMessage(Role.ASSISTANT, "Start with one small idea you can test this week."), turn)
         }
+        c.sessions.addMessage(chat, ChatMessage(Role.USER, RunRecovery.CONTINUE_PROMPT,
+            id = RunRecovery.CHAT_CONTINUATION_ID_PREFIX + "fixture"), turn)
         try {
             assertEquals("Help me brainstorm an idea", c.sessions.session(chat)?.title)
+            assertTrue(c.sessions.messages(chat).any { it.text == RunRecovery.CONTINUE_PROMPT })
+            assertFalse(c.sessions.searchMessages("authoritative", true).any { it.sessionId == chat })
+            assertTrue(c.sessions.searchMessagesInSession(chat, "authoritative").isEmpty())
             assertFalse(c.sessions.searchMessages("RAW_PRIVATE_TOOL_OUTPUT", true).any { it.sessionId == chat })
             assertTrue(c.sessions.searchMessages("RAW_PRIVATE_TOOL_OUTPUT", true).any { it.sessionId == code })
             ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
                 scenario.onActivity { activity ->
-                    val chatVm = ChatViewModel(c, chat); val codeVm = ChatViewModel(c, code)
+                    chatVm = ChatViewModel(c, chat); val codeVm = ChatViewModel(c, code)
                     stores += ViewModelStore().apply { put("chat", chatVm); put("code", codeVm) }
                     activity.setContent { HarnessTheme(themeMode = theme.value, dynamicColor = false) {
                         val density = LocalDensity.current
@@ -121,9 +127,11 @@ class ChatExperienceDeviceTest {
                     } }
                 }
                 await("Start with one small idea you can test this week.")
+                assertFalse(chatVm.state.value.messages.any { it.text == RunRecovery.CONTINUE_PROMPT })
                 await("Thoughts")
                 assertNull(find("Searched the web"))
                 assertNull(find("Work summary")); assertNull(find("RAW_PRIVATE_TOOL_OUTPUT"))
+                assertNull(find(RunRecovery.CONTINUE_PROMPT))
                 assertNull(find("Chat tools off")); assertNull(find("Continue in Code"))
                 screenshot("chat-reply")
                 tap("Thoughts"); await("Consider the audience and keep the first experiment small.")

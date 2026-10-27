@@ -269,7 +269,7 @@
     <string name="provider_proxy_global_hint">"プロバイダーの返信とモデル一覧のデフォルト接続"</string>
     <string name="provider_api_keys">"APIキー"</string>
     <string name="provider_rotate_keys">"APIキーをローテーション"</string>
-    <string name="provider_rotate_keys_hint">"有効なキーを順番に使用します。別のキーで、返信開始前の拒否または制限されたリクエストを回復できます。"</string>
+    <string name="provider_rotate_keys_hint">有効なキーを順番に使用します。</string>
     <string name="provider_key_name">"キー名 %1$d"</string>
     <string name="provider_api_key_number">"APIキー %1$d"</string>
     <string name="provider_use_key">"キー %1$d を使用"</string>
@@ -374,4 +374,8 @@
     <plurals name="subagents_count">
         <item quantity="other">%1$d件のサブエージェント</item>
     </plurals>
+    <string name="provider_key_count">%1$d / %2$d</string>
+    <string name="provider_show_key">API キー %1$d を表示</string>
+    <string name="provider_hide_key">API キー %1$d を隠す</string>
+    <string name="provider_keys_load_failed">保存済みキーを読み込めませんでした。閉じて再試行してください。</string>
 </resources>

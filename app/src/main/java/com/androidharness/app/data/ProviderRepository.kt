@@ -9,6 +9,8 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.androidharness.app.llm.HarnessProvider
 import com.androidharness.app.llm.ModelCatalog
 import com.androidharness.app.llm.ModelEntry
+import com.androidharness.app.llm.ProviderApiKey
+import com.androidharness.app.llm.ProviderKeyPool
 import com.androidharness.app.llm.ProviderConfig
 import com.androidharness.app.llm.ProviderType
 import com.androidharness.app.llm.effectiveApiKey
@@ -236,7 +238,14 @@ class ProviderRepository(
     )
 
     suspend fun add(name: String, type: ProviderType, baseUrl: String, model: String, apiKey: String,
+        headers: List<com.androidharness.app.llm.ProviderHeader> = emptyList()): ProviderConfig =
+        add(name, type, baseUrl, model, ProviderKeyPool(apiKey.trim().takeIf { it.isNotEmpty() }?.let {
+            listOf(ProviderApiKey(value = it))
+        }.orEmpty()), headers)
+
+    suspend fun add(name: String, type: ProviderType, baseUrl: String, model: String, apiKeys: ProviderKeyPool,
         headers: List<com.androidharness.app.llm.ProviderHeader> = emptyList()): ProviderConfig {
+        require(apiKeys.error() == null) { apiKeys.error().orEmpty() }
         val config = ProviderConfig(
             id = UUID.randomUUID().toString(),
             name = name,
@@ -246,12 +255,21 @@ class ProviderRepository(
             headers = com.androidharness.app.llm.ProviderHeaders.normalized(headers),
         )
         keys.putProviderHeaders(config.id, config.headers)
-        if (apiKey.isNotBlank()) keys.putKey(config.id, apiKey)
+        keys.putProviderControls(config.id, apiKeys, com.androidharness.app.llm.ProviderProxy())
         save(current() + config)
         return config
     }
 
-    suspend fun update(config: ProviderConfig, apiKey: String?) {
+    suspend fun update(config: ProviderConfig, apiKey: String?) = updateConnection(config) {
+        if (apiKey != null) keys.putKey(config.id, apiKey)
+    }
+
+    suspend fun update(config: ProviderConfig, apiKeys: ProviderKeyPool) {
+        require(apiKeys.error() == null) { apiKeys.error().orEmpty() }
+        updateConnection(config) { keys.putProviderControls(config.id, apiKeys, keys.providerProxy(config.id)) }
+    }
+
+    private suspend fun updateConnection(config: ProviderConfig, saveKeys: () -> Unit) {
         automaticCatalogChecks.keys.removeIf { it.id == config.id }
         if (com.androidharness.app.chatgpt.ChatGptProtocol.isProvider(config.id)) return
         if (com.androidharness.app.local.LocalModelCatalog.isLocal(config.id)) return
@@ -261,9 +279,7 @@ class ProviderRepository(
             return
         }
         val headers = com.androidharness.app.llm.ProviderHeaders.normalized(config.headers)
-        if (apiKey != null) {
-            keys.putKey(config.id, apiKey)
-        }
+        saveKeys()
         keys.putProviderHeaders(config.id, headers)
         save(current().map { if (it.id == config.id) config else it })
     }
@@ -309,6 +325,8 @@ class ProviderRepository(
         ModelVisibility.get(context).remove(id)
         save(current().filterNot { it.id == id })
     }
+
+    fun apiKeys(providerId: String): ProviderKeyPool = keys.providerKeyPool(providerId)
 
     fun apiKey(providerId: String): String? = when {
         com.androidharness.app.chatgpt.ChatGptProtocol.isProvider(providerId) ->
