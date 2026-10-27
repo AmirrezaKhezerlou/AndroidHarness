@@ -22,7 +22,7 @@ class FtpShareService : Service() {
         startForeground(ID, NotificationCompat.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(getString(R.string.ftp_server_title)).setContentText(getString(R.string.ftp_server_notification))
             .setOngoing(true).setContentIntent(open).addAction(0, getString(R.string.ftp_server_stop), stop).build())
-        if (!manager.open()) { stopForeground(STOP_FOREGROUND_REMOVE); stopSelf() }
+        if (!(application as HarnessApp).container.runtimePolicy.state.value.canRun || !manager.open()) { stopForeground(STOP_FOREGROUND_REMOVE); stopSelf() }
         return START_NOT_STICKY
     }
     override fun onTimeout(startId: Int, fgsType: Int) { manager.stop(getString(R.string.ftp_server_timeout)); stopSelf() }

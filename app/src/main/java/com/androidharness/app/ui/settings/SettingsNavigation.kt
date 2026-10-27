@@ -160,6 +160,12 @@ internal enum class SettingsPage(
         "storage files saf folder project remembered permissions grants revoke always",
         onHome = false,
     ),
+    BACKGROUND(
+        R.string.background_settings_title,
+        R.string.background_settings_description,
+        R.string.settings_group_workspace_device,
+        "background notifications alerts running minimize closed services",
+    ),
     STORAGE(
         R.string.settings_page_storage_title,
         R.string.settings_page_storage_desc,
@@ -245,6 +251,8 @@ private val searchableSettingsEntries = SettingsPage.entries.map { page ->
 }
 
 private val subSettingsEntries = listOfNotNull(
+    SettingsSearchEntry(R.string.background_run_title, R.string.background_run_description, SettingsPage.BACKGROUND, "background running leave minimize", anchor = R.string.background_run_title),
+    SettingsSearchEntry(R.string.background_notifications_title, R.string.background_notifications_description, SettingsPage.BACKGROUND, "notifications alerts", anchor = R.string.background_notifications_title),
     SettingsSearchEntry(
         R.string.chat_global_instructions,
         R.string.chat_global_instructions_desc,
@@ -619,6 +627,7 @@ internal fun settingsDeepLink(target: String): SettingsPage? = when (target) {
     "telegram" -> SettingsPage.TELEGRAM
     "agent" -> SettingsPage.AGENT
     "coding" -> SettingsPage.CODING
+    "background", "notifications" -> SettingsPage.BACKGROUND
     "storage" -> SettingsPage.STORAGE
     else -> null
 }

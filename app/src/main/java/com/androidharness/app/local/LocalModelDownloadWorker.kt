@@ -18,11 +18,13 @@ import kotlinx.coroutines.launch
 class LocalModelDownloadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val modelId = inputData.getString("modelId") ?: return Result.failure()
-        val manager = (applicationContext as HarnessApp).container.localModels
+        val container = (applicationContext as HarnessApp).container
+        if (!container.runtimePolicy.canRun()) return Result.retry()
+        val manager = container.localModels
         val model = manager.find(modelId) ?: return Result.failure()
         return try {
             setForeground(foreground(model.title))
-            kotlinx.coroutines.coroutineScope {
+            container.runtimePolicy.whileAllowed { kotlinx.coroutines.coroutineScope {
                 val cancellation = launch(kotlinx.coroutines.Dispatchers.Default, start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
                     try { kotlinx.coroutines.awaitCancellation() }
                     finally { manager.interruptDownload(modelId) }
@@ -30,11 +32,13 @@ class LocalModelDownloadWorker(context: Context, params: WorkerParameters) : Cor
                 try {
                     manager.install(modelId, { isStopped }) { received, total ->
                         setProgress(workDataOf("received" to received, "total" to total))
-                        setForeground(foreground(model.title, (received * 100 / total).toInt()))
+                        if (com.androidharness.app.AppNotifications.enabled(applicationContext)) setForeground(foreground(model.title, (received * 100 / total).toInt()))
                     }
                 } finally { cancellation.cancel() }
-            }
+            } }
             Result.success()
+        } catch (_: com.androidharness.app.BackgroundExecutionDisabled) {
+            Result.retry()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

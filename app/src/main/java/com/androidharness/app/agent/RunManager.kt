@@ -67,6 +67,7 @@ class RunManager(
     private val repoMap: com.androidharness.app.repomap.RepoMapCache? = null,
     private val chatModels: com.androidharness.app.data.ChatModelRepository =
         com.androidharness.app.data.ChatModelRepository(settings, providers, sessions),
+    private val canRun: suspend () -> Boolean = { true },
 ) {
 
     val controls = TaskControlStore(java.io.File(context.filesDir, "task-controls"))
@@ -394,6 +395,7 @@ class RunManager(
         allowModelFallback: Boolean = true,
         subagentContinuation: Boolean = false,
     ): String {
+        check(canRun()) { context.getString(com.androidharness.app.R.string.background_run_blocked) }
         val sid = sessionId ?: sessions.createSession(
             text.take(48),
             projectId = workspace.currentProjectOnce().id,
@@ -529,6 +531,7 @@ class RunManager(
             var recoverableInterruption = false
             try {
                 startSignal.await()
+                check(canRun()) { context.getString(com.androidharness.app.R.string.background_run_blocked) }
                 kotlin.coroutines.coroutineContext.ensureActive()
                 // SSE chunks arrive far faster than frames render; batch them so
                 // the UI updates at a steady cadence regardless of model speed.
@@ -1096,6 +1099,11 @@ class RunManager(
         followUps.stop(sessionId)
         synchronized(lock) { followUpJobs[sessionId]?.cancel() }
         synchronized(lock) { jobs[sessionId]?.cancel() }
+    }
+
+    /** Serializes stopping with run registration, including queued and subagent continuations. */
+    internal suspend fun stopIfBackgroundDisabled() = workspaceGuard.withLock {
+        if (!canRun()) stopAllAndJoin()
     }
 
     /** Cancels every live agent run and waits for each run's cleanup. */

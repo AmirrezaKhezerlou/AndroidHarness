@@ -18,6 +18,7 @@ class AutomationWorker(context: Context, params: WorkerParameters) : CoroutineWo
     override suspend fun doWork(): Result {
         val taskId = inputData.getString(KEY_TASK_ID) ?: return Result.failure()
         val app = applicationContext as? HarnessApp ?: return Result.failure()
+        if (!app.container.runtimePolicy.canRun()) return Result.retry()
         val manager = app.container.automation
         val task = manager.repository.task(taskId) ?: return Result.success()
         val scheduled = inputData.getBoolean("scheduled", false)
@@ -25,7 +26,7 @@ class AutomationWorker(context: Context, params: WorkerParameters) : CoroutineWo
         if (!manager.connection.value.allows(task)) return Result.retry()
         try {
             setForeground(getForegroundInfo())
-            val outcome = coroutineScope {
+            val outcome = app.container.runtimePolicy.whileAllowed { coroutineScope {
                 val connectionGuard = launch {
                     manager.connection.first { !it.allows(task) }
                     throw AutomationConnectionLost()
@@ -34,8 +35,10 @@ class AutomationWorker(context: Context, params: WorkerParameters) : CoroutineWo
                     manager.execute(taskId, scheduled, inputData.getString(KEY_OCCURRENCE)
                         ?: task.activeRun?.occurrence ?: task.nextRunAt?.toString() ?: id.toString())
                 } finally { connectionGuard.cancel() }
-            }
+            } }
             return if (outcome == AutomationOutcome.RETRY) Result.retry() else Result.success()
+        } catch (_: com.androidharness.app.BackgroundExecutionDisabled) {
+            return Result.retry()
         } catch (e: AutomationConnectionLost) {
             return Result.retry()
         } catch (e: CancellationException) {

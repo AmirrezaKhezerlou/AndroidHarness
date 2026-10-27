@@ -2,6 +2,7 @@ package com.androidharness.app.ui.settings
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -20,13 +21,14 @@ internal fun SubagentSettingsSection(
     onSubagentTools: (Boolean) -> Unit,
     onBackgroundSubagents: (Boolean) -> Unit = {},
     onCompletionNotifications: (Boolean) -> Unit = {},
+    onOpenBackgroundSettings: () -> Unit = {},
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     SettingsPanel(Modifier.fillMaxWidth()) {
         SubagentSettingSwitch(R.string.subagents_allow_background, R.string.subagents_background_description,
             settings.backgroundSubagents, onBackgroundSubagents)
         SubagentSettingSwitch(R.string.subagents_notify_completion, R.string.subagents_notify_description,
-            settings.subagentCompletionNotifications, onCompletionNotifications)
+            settings.notificationsEnabled && settings.subagentCompletionNotifications, onCompletionNotifications, enabled = settings.notificationsEnabled)
         SettingsAnchor(R.string.settings_anchor_subagent_tools) {
             Row(
                 Modifier.fillMaxWidth()
@@ -47,17 +49,22 @@ internal fun SubagentSettingsSection(
             }
         }
     }
+    SettingsPanel(Modifier.fillMaxWidth()) {
+        SettingRow(androidx.compose.material.icons.Icons.Outlined.Notifications,
+            stringResource(R.string.background_settings_title), stringResource(R.string.background_settings_description),
+            onClick = onOpenBackgroundSettings)
+    }
 }
 
 @Composable
-private fun SubagentSettingSwitch(title: Int, description: Int, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().toggleable(checked, role = Role.Switch, onValueChange = onChange).padding(16.dp),
+private fun SubagentSettingSwitch(title: Int, description: Int, checked: Boolean, onChange: (Boolean) -> Unit, enabled: Boolean = true) {
+    Row(Modifier.fillMaxWidth().toggleable(checked, enabled = enabled, role = Role.Switch, onValueChange = onChange).padding(16.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(stringResource(title), style = MaterialTheme.typography.titleSmall)
             Text(stringResource(description), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Switch(checked, onCheckedChange = null)
+        Switch(checked, onCheckedChange = null, enabled = enabled)
     }
 }

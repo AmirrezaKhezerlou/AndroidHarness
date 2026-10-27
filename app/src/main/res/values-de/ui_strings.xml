@@ -1649,4 +1649,14 @@
     <string name="donate_funding_message">"Uns fehlen die Mittel, um AndroidHarness weiterzuentwickeln. Deine Unterstützung hilft uns, weiterzumachen."</string>
     <string name="donate_dismiss_message">"Spendenhinweis schließen"</string>
     <string name="donate_upi_saving_qr">"Wird gespeichert…"</string>
+    <string name="background_settings_title">Hintergrund und Benachrichtigungen</string>
+    <string name="background_settings_description">Hintergrundarbeit und Benachrichtigungen verwalten.</string>
+    <string name="background_run_title">Im Hintergrund ausführen</string>
+    <string name="background_run_description">Aus stoppt Agenten beim Verlassen der App.</string>
+    <string name="background_notifications_title">Benachrichtigungen</string>
+    <string name="background_notifications_description">App-Hinweise erlauben. Android verwaltet Diensthinweise.</string>
+    <string name="background_android_title">Android-Benachrichtigungseinstellungen</string>
+    <string name="background_android_description">Alle Android-Benachrichtigungseinstellungen verwalten.</string>
+    <string name="background_run_blocked">Hintergrundausführung ist aus. Öffne AndroidHarness, um eine Aufgabe zu starten oder fortzusetzen.</string>
+    <string name="background_service_notice">Hintergrunddienst läuft</string>
 </resources>

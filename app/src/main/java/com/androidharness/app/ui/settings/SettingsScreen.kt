@@ -300,6 +300,7 @@ fun SettingsScreen(
                                 onSubagentTools = { scope.launch { container.settings.setSubagentFullAccess(it) } },
                                 onBackgroundSubagents = { scope.launch { container.settings.setBackgroundSubagents(it) } },
                                 onCompletionNotifications = { scope.launch { container.settings.setSubagentCompletionNotifications(it) } },
+                                onOpenBackgroundSettings = { openPage(SettingsPage.BACKGROUND) },
                             )
                         }
                         SettingsPage.LOCAL_MODELS -> LocalModelsSection(container)
@@ -326,6 +327,7 @@ fun SettingsScreen(
                                 onSelectWorkspace = { id -> scope.launch { container.workspace.setActiveProject(id) } },
                             )
                         }
+                        SettingsPage.BACKGROUND -> BackgroundSettingsSection(container, settings)
                         SettingsPage.STORAGE -> StorageSection(container)
                         SettingsPage.ENVIRONMENT -> TerminalSection(container, envState, shizukuState, serviceState)
                         SettingsPage.TROUBLESHOOTING -> TroubleshootingSection(container, ::openPage)
@@ -2944,7 +2946,7 @@ private fun SettingsHeader(title: String) {
 }
 
 @Composable
-private fun SettingRow(
+internal fun SettingRow(
     icon: ImageVector,
     title: String,
     subtitle: String,

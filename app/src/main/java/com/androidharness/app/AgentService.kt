@@ -29,6 +29,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /** Pushes the agent's live status for the notification to display. */
@@ -135,6 +136,7 @@ data class RunResultNotification(
 /** Posts completed-run notifications even when [AgentService] has already stopped. */
 object RunResultNotifications {
     fun post(context: Context, result: RunResultNotification) {
+        if (!AppNotifications.enabled(context)) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
         manager.createNotificationChannel(
             NotificationChannel(
@@ -143,7 +145,7 @@ object RunResultNotifications {
                 NotificationManager.IMPORTANCE_DEFAULT,
             ).apply { description = context.getString(R.string.ui_notified_when_a_background_agent_run_finishes) },
         )
-        manager.notify(notificationId(result.subagentCallId?.let { "${result.sessionId}:$it" } ?: result.sessionId), build(context, result))
+        AppNotifications.post(context, notificationId(result.subagentCallId?.let { "${result.sessionId}:$it" } ?: result.sessionId), build(context, result))
     }
 
     private fun build(context: Context, result: RunResultNotification): Notification {
@@ -190,21 +192,20 @@ class AgentService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        current = this
         createChannels()
         startForeground(NOTIFICATION_ID, buildNotification(RuntimeNotifier.status.value))
         scope.launch {
             RuntimeNotifier.status.collect { text ->
                 runCatching {
-                    getSystemService(NotificationManager::class.java)
-                        .notify(NOTIFICATION_ID, buildNotification(text))
+                    AppNotifications.post(this@AgentService, NOTIFICATION_ID, buildNotification(text))
                 }
             }
         }
         scope.launch {
             RuntimeNotifier.active.collect {
                 runCatching {
-                    getSystemService(NotificationManager::class.java)
-                        .notify(NOTIFICATION_ID, buildNotification(RuntimeNotifier.status.value))
+                    AppNotifications.post(this@AgentService, NOTIFICATION_ID, buildNotification(RuntimeNotifier.status.value))
                 }
             }
         }
@@ -219,25 +220,34 @@ class AgentService : Service() {
             RuntimeNotifier.pendingPrompts.collect { prompts ->
                 runCatching { refreshPromptAlerts(prompts) }
                 runCatching {
-                    getSystemService(NotificationManager::class.java)
-                        .notify(NOTIFICATION_ID, buildNotification(RuntimeNotifier.status.value))
+                    AppNotifications.post(this@AgentService, NOTIFICATION_ID, buildNotification(RuntimeNotifier.status.value))
                 }
             }
         }
         scope.launch {
-            (applicationContext as? HarnessApp)?.container?.settings?.settings?.collect { settings ->
-                if (liveUpdatesEnabled != settings.liveUpdatesEnabled) {
-                    liveUpdatesEnabled = settings.liveUpdatesEnabled
-                    runCatching {
-                        getSystemService(NotificationManager::class.java)
-                            .notify(NOTIFICATION_ID, buildNotification(RuntimeNotifier.status.value))
-                    }
+            val container = (applicationContext as HarnessApp).container
+            combine(container.runtimePolicy.state, container.settings.settings) { policy, settings -> policy to settings.liveUpdatesEnabled }.collect { (policy, liveUpdates) ->
+                if (!policy.ready) return@collect
+                if (!policy.runInBackground) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                    return@collect
                 }
+                liveUpdatesEnabled = liveUpdates && policy.notificationsEnabled
+                // A running foreground service must retain its Android-owned notice.
+                // Disabling alerts removes task details/actions and Live Update promotion.
+                startForeground(NOTIFICATION_ID, buildNotification(RuntimeNotifier.status.value))
+                refreshPromptAlerts(RuntimeNotifier.pendingPrompts.value)
             }
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if ((applicationContext as HarnessApp).container.runtimePolicy.state.value.let { it.ready && !it.runInBackground }) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
         when (intent?.action) {
             ACTION_ACQUIRE_WAKELOCK -> acquireWakeLock()
             ACTION_RELEASE_WAKELOCK -> releaseWakeLock()
@@ -252,8 +262,10 @@ class AgentService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        if (current === this) current = null
         scope.cancel()
         releaseWakeLock()
+        stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }
 
@@ -312,9 +324,10 @@ class AgentService : Service() {
     }
 
     private fun buildNotification(text: String): Notification {
+        val alertsEnabled = AppNotifications.enabled(this)
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("AndroidHarness")
-            .setContentText(localizedOptionLabel(text))
+            .setContentText(if (alertsEnabled) localizedOptionLabel(text) else getString(R.string.background_service_notice))
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentIntent(appPendingIntent())
             .setOnlyAlertOnce(true)
@@ -329,7 +342,7 @@ class AgentService : Service() {
             )
         // The live card only surfaces actions on this ongoing notification, so a
         // blocked run must expose its answer buttons here too.
-        RuntimeNotifier.pendingPrompts.value.firstOrNull()?.let { prompt ->
+        RuntimeNotifier.pendingPrompts.value.firstOrNull()?.takeIf { alertsEnabled }?.let { prompt ->
             when (prompt.kind) {
                 PendingPrompt.Kind.APPROVAL -> {
                     // Keep the live card to the two answers the chip promises;
@@ -344,7 +357,7 @@ class AgentService : Service() {
                 PendingPrompt.Kind.QUESTION -> Unit
             }
         }
-        if (liveUpdatesEnabled && RuntimeNotifier.active.value && Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+        if (alertsEnabled && liveUpdatesEnabled && RuntimeNotifier.active.value && Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
             // Android 16 promotes this ongoing notification to a Live Update, which
             // the OEM surfaces in its status bar, lock screen and live activity area
             // (Now Bar on One UI, Live updates on Pixel and near-stock builds).
@@ -393,9 +406,10 @@ class AgentService : Service() {
 
     private fun refreshPromptAlerts(prompts: List<PendingPrompt>) {
         val nm = getSystemService(NotificationManager::class.java) ?: return
-        val tags = prompts.map { it.sessionId }.toSet()
+        val visiblePrompts = prompts.takeIf { AppNotifications.enabled(this) }.orEmpty()
+        val tags = visiblePrompts.map { it.sessionId }.toSet()
         (shownAlertTags - tags).forEach { nm.cancel(it, ALERT_NOTIFICATION_ID) }
-        prompts.forEach { nm.notify(it.sessionId, ALERT_NOTIFICATION_ID, buildActionNeeded(it)) }
+        visiblePrompts.forEach { AppNotifications.post(this, ALERT_NOTIFICATION_ID, buildActionNeeded(it), it.sessionId) }
         shownAlertTags = tags
     }
 
@@ -526,7 +540,12 @@ class AgentService : Service() {
         private const val OPEN_APP_REQUEST_CODE = 9104
         private const val STOP_REQUEST_CODE = 9105
 
+        @Volatile private var current: AgentService? = null
+
+        fun stop(context: Context) { context.stopService(Intent(context, AgentService::class.java)) }
+
         fun startPersistent(context: Context) {
+            if ((context.applicationContext as? HarnessApp)?.container?.runtimePolicy?.state?.value?.runInBackground != true) return
             ContextCompat.startForegroundService(
                 context,
                 Intent(context, AgentService::class.java).setAction(ACTION_START),
@@ -534,6 +553,7 @@ class AgentService : Service() {
         }
 
         fun acquireKeepalive(context: Context) {
+            if ((context.applicationContext as? HarnessApp)?.container?.runtimePolicy?.state?.value?.runInBackground != true) return
             ContextCompat.startForegroundService(
                 context,
                 Intent(context, AgentService::class.java).setAction(ACTION_ACQUIRE_WAKELOCK),
@@ -541,10 +561,8 @@ class AgentService : Service() {
         }
 
         fun releaseKeepalive(context: Context) {
-            ContextCompat.startForegroundService(
-                context,
-                Intent(context, AgentService::class.java).setAction(ACTION_RELEASE_WAKELOCK),
-            )
+            // Releasing the last task must never resurrect a service stopped by the user.
+            current?.releaseWakeLock()
         }
     }
 }

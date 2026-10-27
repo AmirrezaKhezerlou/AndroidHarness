@@ -72,6 +72,7 @@ internal class TelegramManager(
     }
     suspend fun setMode(mode: String) = edits.withLock { idle(); setup.setMode(mode) }
     suspend fun enable() = edits.withLock {
+        check(c.runtimePolicy.canRun()) { c.appContext.getString(com.androidharness.app.R.string.background_run_blocked) }
         check(pairing.value.challenge == null) { "Finish pairing your account first." }
         check(store.loadError == null) { store.loadError ?: "Saved Telegram requests are unavailable." }
         val connection = setup.gatewayConnection() ?: throw TelegramSetupException(TelegramSetupProblem.NOT_PAIRED)
@@ -88,15 +89,23 @@ internal class TelegramManager(
         }
     }
     fun restoreIfEnabled() {
-        if (setup.state.value.enabled) try { startService() } catch (_: Exception) {
-            errorMutable.value = "Open AndroidHarness and enable Telegram to reconnect."
+        scope.launch {
+            if (setup.state.value.enabled && c.runtimePolicy.canRun()) try { startService() } catch (_: Exception) {
+                errorMutable.value = "Open AndroidHarness and enable Telegram to reconnect."
+            }
         }
+    }
+    suspend fun suspendForBackground() = edits.withLock {
+        stopRuntime()
+        cancelPairing()
+        stopService()
     }
     @Synchronized fun startRuntime(owner: Any? = null) {
         runtimeOwner = owner
         if (!setup.state.value.enabled || runtimeJob?.isActive == true) return
         runtimeJob = scope.launch {
-            try { gateway.run() }
+            try { c.runtimePolicy.whileAllowed { gateway.run() } }
+            catch (_: com.androidharness.app.BackgroundExecutionDisabled) { stopService() }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 errorMutable.value = safe(e.message ?: "Telegram stopped. Saved requests are kept.")
@@ -123,6 +132,7 @@ internal class TelegramManager(
     suspend fun resend(key: String) { gateway.resend(key); if (!setup.state.value.enabled) enable() }
 
     suspend fun beginPairing() = edits.withLock {
+        check(c.runtimePolicy.canRun()) { c.appContext.getString(com.androidharness.app.R.string.background_run_blocked) }
         idle()
         pause()
         cancelPairing()

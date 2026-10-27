@@ -42,7 +42,7 @@ internal class TelegramService : Service() {
                     else -> "Connecting…"
                 }
             }.collect { text ->
-                getSystemService(NotificationManager::class.java).notify(ID, notification(text))
+                com.androidharness.app.AppNotifications.post(this@TelegramService, ID, notification(text))
                 if (!manager.setup.state.value.enabled && manager.pairing.value.challenge == null) stopSelf()
             }
         }
@@ -53,6 +53,7 @@ internal class TelegramService : Service() {
             ACTION_STOP -> { scope.launch { manager.stopAndPause(); stopSelf() }; return START_NOT_STICKY }
         }
         if (!manager.setup.state.value.enabled && manager.pairing.value.challenge == null) { stopSelf(); return START_NOT_STICKY }
+        if ((application as HarnessApp).container.runtimePolicy.state.value.let { it.ready && !it.canRun }) { stopSelf(); return START_NOT_STICKY }
         manager.startRuntime(this)
         return START_STICKY
     }

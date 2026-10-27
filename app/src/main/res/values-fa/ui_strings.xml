@@ -1649,4 +1649,14 @@
     <string name="donate_funding_message">برای ادامهٔ توسعهٔ AndroidHarness با کمبود بودجه روبه‌رو هستیم. حمایت شما به ادامهٔ کار ما کمک می‌کند.</string>
     <string name="donate_dismiss_message">بستن پیام حمایت مالی</string>
     <string name="donate_upi_saving_qr">در حال ذخیره…</string>
+    <string name="background_settings_title">پس‌زمینه و اعلان‌ها</string>
+    <string name="background_settings_description">مدیریت کار پس‌زمینه و اعلان‌ها.</string>
+    <string name="background_run_title">اجرا در پس‌زمینه</string>
+    <string name="background_run_description">در حالت خاموش، عامل‌ها با خروج از برنامه متوقف می‌شوند.</string>
+    <string name="background_notifications_title">اعلان‌ها</string>
+    <string name="background_notifications_description">اجازه اعلان‌های برنامه. اعلان سرویس‌ها در اختیار Android است.</string>
+    <string name="background_android_title">تنظیمات اعلان Android</string>
+    <string name="background_android_description">مدیریت همه تنظیمات اعلان Android.</string>
+    <string name="background_run_blocked">اجرا در پس‌زمینه خاموش است. برای شروع یا ادامه کار AndroidHarness را باز کنید.</string>
+    <string name="background_service_notice">سرویس پس‌زمینه در حال اجراست</string>
 </resources>

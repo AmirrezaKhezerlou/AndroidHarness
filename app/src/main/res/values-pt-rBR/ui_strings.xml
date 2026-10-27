@@ -1649,4 +1649,14 @@
     <string name="donate_funding_message">"Estamos com poucos recursos para continuar o desenvolvimento do AndroidHarness. Seu apoio nos ajuda a seguir em frente."</string>
     <string name="donate_dismiss_message">"Fechar mensagem de doação"</string>
     <string name="donate_upi_saving_qr">"Salvando…"</string>
+    <string name="background_settings_title">Segundo plano e notificações</string>
+    <string name="background_settings_description">Gerencie o trabalho em segundo plano e os avisos.</string>
+    <string name="background_run_title">Executar em segundo plano</string>
+    <string name="background_run_description">Desativar interrompe agentes ao sair do app.</string>
+    <string name="background_notifications_title">Notificações</string>
+    <string name="background_notifications_description">Permitir alertas. O Android gerencia avisos de serviços.</string>
+    <string name="background_android_title">Configurações de notificações do Android</string>
+    <string name="background_android_description">Gerencie todas as notificações do Android.</string>
+    <string name="background_run_blocked">A execução em segundo plano está desativada. Abra o AndroidHarness para iniciar ou continuar uma tarefa.</string>
+    <string name="background_service_notice">Serviço em segundo plano ativo</string>
 </resources>

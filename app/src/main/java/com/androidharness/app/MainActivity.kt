@@ -45,6 +45,7 @@ import com.androidharness.app.data.update.UpdateIntents
 import com.androidharness.app.ui.AppNav
 import com.androidharness.app.ui.theme.HarnessTheme
 import com.androidharness.app.ui.update.UpdateDialog
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
@@ -62,15 +63,11 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         container = (application as HarnessApp).container
-        AgentService.startPersistent(this)
-        container.telegram.restoreIfEnabled()
 
-        // The foreground service + run-result notifications need this on 13+.
-        if (Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
-            PackageManager.PERMISSION_GRANTED
-        ) {
-            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        lifecycleScope.launch {
+            if (container.settings.settings.first().notificationsEnabled && Build.VERSION.SDK_INT >= 33 &&
+                ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            ) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
 
         // Open the chat a run-result notification points at, and catch the

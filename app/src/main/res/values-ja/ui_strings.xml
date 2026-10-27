@@ -1647,4 +1647,14 @@
     <string name="donate_funding_message">"AndroidHarnessの開発を続ける資金が不足しています。ご支援いただけると開発を続けられます。"</string>
     <string name="donate_dismiss_message">"寄付メッセージを閉じる"</string>
     <string name="donate_upi_saving_qr">"保存中…"</string>
+    <string name="background_settings_title">バックグラウンドと通知</string>
+    <string name="background_settings_description">バックグラウンド処理と通知を管理します。</string>
+    <string name="background_run_title">バックグラウンドで実行</string>
+    <string name="background_run_description">オフにするとアプリを離れたときにエージェントが停止します。</string>
+    <string name="background_notifications_title">通知</string>
+    <string name="background_notifications_description">通知を許可します。サービスの通知は Android が管理します。</string>
+    <string name="background_android_title">Android の通知設定</string>
+    <string name="background_android_description">Android のすべての通知設定を管理します。</string>
+    <string name="background_run_blocked">バックグラウンド実行はオフです。タスクを開始または続行するには AndroidHarness を開いてください。</string>
+    <string name="background_service_notice">バックグラウンドサービスを実行中</string>
 </resources>

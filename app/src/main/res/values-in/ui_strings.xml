@@ -1643,4 +1643,14 @@
     <string name="donate_funding_message">Dana untuk melanjutkan pengembangan AndroidHarness mulai menipis. Dukungan Anda membantu kami terus berkarya.</string>
     <string name="donate_dismiss_message">Tutup pesan donasi</string>
     <string name="donate_upi_saving_qr">Menyimpan…</string>
+    <string name="background_settings_title">Latar belakang &amp; notifikasi</string>
+    <string name="background_settings_description">Atur pekerjaan latar belakang dan notifikasi.</string>
+    <string name="background_run_title">Jalankan di latar belakang</string>
+    <string name="background_run_description">Jika nonaktif, agen berhenti saat keluar aplikasi.</string>
+    <string name="background_notifications_title">Notifikasi</string>
+    <string name="background_notifications_description">Izinkan peringatan. Android mengatur pemberitahuan layanan.</string>
+    <string name="background_android_title">Setelan notifikasi Android</string>
+    <string name="background_android_description">Kelola semua setelan notifikasi Android.</string>
+    <string name="background_run_blocked">Proses latar belakang nonaktif. Buka AndroidHarness untuk memulai atau melanjutkan tugas.</string>
+    <string name="background_service_notice">Layanan latar belakang berjalan</string>
 </resources>

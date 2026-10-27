@@ -1653,4 +1653,14 @@
     <string name="donate_funding_message">Нам не хватает средств на дальнейшую разработку AndroidHarness. Ваша поддержка поможет нам продолжить работу.</string>
     <string name="donate_dismiss_message">Скрыть сообщение о поддержке</string>
     <string name="donate_upi_saving_qr">Сохранение…</string>
+    <string name="background_settings_title">Фоновая работа и уведомления</string>
+    <string name="background_settings_description">Управление фоновой работой и уведомлениями.</string>
+    <string name="background_run_title">Работать в фоне</string>
+    <string name="background_run_description">При отключении агенты остановятся при выходе.</string>
+    <string name="background_notifications_title">Уведомления</string>
+    <string name="background_notifications_description">Разрешить оповещения. Уведомления служб управляются Android.</string>
+    <string name="background_android_title">Настройки уведомлений Android</string>
+    <string name="background_android_description">Все настройки уведомлений Android.</string>
+    <string name="background_run_blocked">Фоновая работа отключена. Откройте AndroidHarness, чтобы начать или продолжить задачу.</string>
+    <string name="background_service_notice">Фоновая служба работает</string>
 </resources>

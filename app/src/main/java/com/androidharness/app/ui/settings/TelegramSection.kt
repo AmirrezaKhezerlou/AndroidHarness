@@ -114,7 +114,7 @@ import kotlinx.coroutines.launch
         action(uiContext.getString(R.string.ui_telegram_enabled)) { manager.enable() }
     }
     fun enable() {
-        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+        if (com.androidharness.app.AppNotifications.enabled(context) && Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         else action(uiContext.getString(R.string.ui_telegram_enabled)) { manager.enable() }
     }

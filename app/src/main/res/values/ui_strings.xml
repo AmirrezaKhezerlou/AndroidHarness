@@ -1643,4 +1643,14 @@
     <string name="donate_funding_message">We’re short on funds to keep AndroidHarness development going. Your support helps us keep building.</string>
     <string name="donate_dismiss_message">Dismiss donation message</string>
     <string name="donate_upi_saving_qr">Saving…</string>
+    <string name="background_settings_title">Background &amp; notifications</string>
+    <string name="background_settings_description">Manage background work and notifications.</string>
+    <string name="background_run_title">Run in background</string>
+    <string name="background_run_description">Off stops agents when you leave the app.</string>
+    <string name="background_notifications_title">Notifications</string>
+    <string name="background_notifications_description">Allow app alerts. Android manages service notices.</string>
+    <string name="background_android_title">Android notification settings</string>
+    <string name="background_android_description">Manage all Android notification settings.</string>
+    <string name="background_run_blocked">Background running is off. Open AndroidHarness to start or continue a task.</string>
+    <string name="background_service_notice">Background service is running</string>
 </resources>

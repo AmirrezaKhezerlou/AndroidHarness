@@ -63,6 +63,7 @@ class AppContainer(val appContext: Context) {
     val keys = KeyStoreManager(appContext)
     init { com.androidharness.app.llm.ProviderNetwork.settings = keys::providerProxy }
     val settings = SettingsRepository(appContext)
+    internal val runtimePolicy = AppRuntimePolicy(appContext, settings)
     /** Reads assistant replies with Android TTS or Groq PlayAI. */
     val tts = com.androidharness.app.data.audio.TtsController(appContext, settings, keys)
     internal val editorScope = kotlinx.coroutines.CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -271,6 +272,7 @@ class AppContainer(val appContext: Context) {
         mcp = mcp,
         repoMap = repoMap,
         chatModels = chatModels,
+        canRun = runtimePolicy::canRun,
     )
     val githubRepositories = com.androidharness.app.github.GitHubWorkspaces(this)
     val automation = com.androidharness.app.automation.AutomationManager(this)
@@ -288,6 +290,17 @@ class AppContainer(val appContext: Context) {
     suspend fun refreshGitHubAuth() = linuxEnv.refreshGitHub(shizuku, strict = true)
 
     init {
+        runtimePolicy.start(onBackgroundDisabled = {
+            runManager.stopIfBackgroundDisabled()
+            if (!runtimePolicy.canRun()) {
+                // One unavailable device backend must not disable the policy observer.
+                runCatching { telegram.suspendForBackground() }
+                runCatching { ftpShare.stop() }
+                runCatching { terminal.stopTerminal() }
+                runCatching { backgroundProcesses.killAll() }
+                AgentService.stop(appContext)
+            }
+        }, onAvailable = { telegram.restoreIfEnabled() })
         // models.dev thinking-capability catalog: serve the cached copy
         // synchronously, then refresh in the background (daily cadence).
         com.androidharness.app.llm.ModelsDev.load(appContext)

@@ -49,6 +49,8 @@ data class AppSettings(
     /** Tool-call iterations per run. 0 = unlimited. */
     val maxIterations: Int = DEFAULT_MAX_ITERATIONS,
     /** Hold a wakelock while a run is active so runs survive screen-off. */
+    val runInBackground: Boolean = true,
+    val notificationsEnabled: Boolean = true,
     val keepAlive: Boolean = true,
     /** Promote the agent-run notification to an Android 16 Live Update on this device. */
     val liveUpdatesEnabled: Boolean = true,
@@ -211,6 +213,8 @@ class SettingsRepository(private val context: Context) {
         val MAX_CONTEXT = intPreferencesKey("max_context_tokens")
         val MAX_OUTPUT = intPreferencesKey("max_output_tokens")
         val MAX_ITERATIONS = intPreferencesKey("max_iterations")
+        val RUN_IN_BACKGROUND = booleanPreferencesKey("run_in_background")
+        val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
         val KEEP_ALIVE = booleanPreferencesKey("keep_alive")
         val LIVE_UPDATES_ENABLED = booleanPreferencesKey("live_updates_enabled")
         val PINNED = stringSetPreferencesKey("pinned_sessions")
@@ -306,6 +310,8 @@ class SettingsRepository(private val context: Context) {
             maxContextTokens = prefs[Keys.MAX_CONTEXT] ?: AppSettings.DEFAULT_MAX_CONTEXT,
             maxOutputTokens = prefs[Keys.MAX_OUTPUT] ?: AppSettings.DEFAULT_MAX_OUTPUT,
             maxIterations = prefs[Keys.MAX_ITERATIONS] ?: AppSettings.DEFAULT_MAX_ITERATIONS,
+            runInBackground = prefs[Keys.RUN_IN_BACKGROUND] ?: true,
+            notificationsEnabled = prefs[Keys.NOTIFICATIONS_ENABLED] ?: true,
             keepAlive = prefs[Keys.KEEP_ALIVE] ?: true,
             liveUpdatesEnabled = prefs[Keys.LIVE_UPDATES_ENABLED] ?: true,
             pinnedSessions = prefs[Keys.PINNED] ?: emptySet(),
@@ -388,6 +394,8 @@ class SettingsRepository(private val context: Context) {
             p[Keys.MAX_CONTEXT] = s.maxContextTokens
             p[Keys.MAX_OUTPUT] = s.maxOutputTokens
             p[Keys.MAX_ITERATIONS] = s.maxIterations
+            p[Keys.RUN_IN_BACKGROUND] = s.runInBackground
+            p[Keys.NOTIFICATIONS_ENABLED] = s.notificationsEnabled
             p[Keys.KEEP_ALIVE] = s.keepAlive
             p[Keys.LIVE_UPDATES_ENABLED] = s.liveUpdatesEnabled
             p[Keys.SUBAGENT_FULL_ACCESS] = s.subagentFullAccess
@@ -656,6 +664,14 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setMaxIterations(iterations: Int) {
         context.settingsStore.edit { it[Keys.MAX_ITERATIONS] = iterations }
+    }
+
+    suspend fun setRunInBackground(enabled: Boolean) {
+        context.settingsStore.edit { it[Keys.RUN_IN_BACKGROUND] = enabled }
+    }
+
+    suspend fun setNotificationsEnabled(enabled: Boolean) {
+        context.settingsStore.edit { it[Keys.NOTIFICATIONS_ENABLED] = enabled }
     }
 
     suspend fun setKeepAlive(enabled: Boolean) {

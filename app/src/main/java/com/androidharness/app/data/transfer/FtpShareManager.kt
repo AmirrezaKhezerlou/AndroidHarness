@@ -22,6 +22,7 @@ internal class FtpShareManager(private val context: Context, private val guard: 
     private val mutable = MutableStateFlow(FtpShareState())
     val state = mutable.asStateFlow()
     @Synchronized fun start(fs: WorkspaceFs, name: String, port: Int, username: String, password: String, lan: Boolean, readOnly: Boolean) {
+        check((context.applicationContext as? com.androidharness.app.HarnessApp)?.container?.runtimePolicy?.state?.value?.canRun != false) { context.getString(com.androidharness.app.R.string.background_run_blocked) }
         check(!mutable.value.running && !mutable.value.starting) { "Stop the existing FTP server first." }
         require(fs.shellRoot != null) { "Choose an accessible local workspace to share." }
         require(port in 1024..65535 && username.isNotBlank() && password.length >= 8) { "Check the port, username and password." }

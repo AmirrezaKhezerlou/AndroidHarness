@@ -1643,4 +1643,14 @@
     <string name="donate_funding_message">我们用于持续开发 AndroidHarness 的资金不足。您的支持能帮助我们继续开发。</string>
     <string name="donate_dismiss_message">关闭捐赠提示</string>
     <string name="donate_upi_saving_qr">正在保存…</string>
+    <string name="background_settings_title">后台与通知</string>
+    <string name="background_settings_description">管理后台工作和通知。</string>
+    <string name="background_run_title">在后台运行</string>
+    <string name="background_run_description">关闭后，离开应用时会停止智能体。</string>
+    <string name="background_notifications_title">通知</string>
+    <string name="background_notifications_description">允许应用提醒。服务通知由 Android 管理。</string>
+    <string name="background_android_title">Android 通知设置</string>
+    <string name="background_android_description">管理所有 Android 通知设置。</string>
+    <string name="background_run_blocked">后台运行已关闭。请打开 AndroidHarness 以开始或继续任务。</string>
+    <string name="background_service_notice">后台服务正在运行</string>
 </resources>
