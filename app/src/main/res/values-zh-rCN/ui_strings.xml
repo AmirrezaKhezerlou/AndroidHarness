@@ -1062,7 +1062,7 @@
     <string name="ui_keyless">"无需密钥"</string>
     <string name="ui_public_search_engines_no_setup">"公共搜索引擎，无需配置"</string>
     <string name="ui_key_saved">"%1$s · 已保存密钥"</string>
-    <string name="ui_no_key_yet_keyless_fallback">"%1$s · 尚无密钥（回退至免密钥搜索）"</string>
+    <string name="ui_no_key_yet_keyless_fallback">%1$s · 添加 API 密钥以使用此服务</string>
     <string name="ui_on">"开启"</string>
     <string name="ui_no_key">"无密钥"</string>
     <string name="ui_the_agent_searches_public_engines_with_zero">"智能体无需配置即可搜索公共引擎；Brave 或 Tavily"</string>

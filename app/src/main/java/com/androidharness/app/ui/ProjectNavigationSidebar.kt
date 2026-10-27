@@ -107,7 +107,6 @@ internal fun ProjectNavigationSidebar(
     chatOnly: Boolean = false,
     sectionSwitchEnabled: Boolean = true,
     onSelectSection: (com.androidharness.app.data.ConversationKind) -> Unit = {},
-    onMyAi: () -> Unit = {},
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
@@ -167,8 +166,6 @@ internal fun ProjectNavigationSidebar(
                         com.androidharness.app.data.ConversationConfig(
                             if (chatOnly) com.androidharness.app.data.ConversationKind.CHAT else com.androidharness.app.data.ConversationKind.CODE),
                         sectionSwitchEnabled, onSelectSection)
-                    SidebarNavRow(uiContext.getString(R.string.my_ai_title), Icons.Outlined.AutoAwesome,
-                        currentRoute == "my-ai", onClick = onMyAi)
                     Button(onClick = onNewChat, enabled = projectCreationEnabled, shape = RoundedCornerShape(11.dp),
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp).heightIn(min = 44.dp)) {
                         Icon(Icons.Outlined.EditNote, null, Modifier.size(19.dp)); Spacer(Modifier.width(8.dp))

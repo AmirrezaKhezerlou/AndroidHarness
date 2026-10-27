@@ -387,12 +387,14 @@ class AgentEngine(
                     workspace
                 }
 
+            val searchConfiguration = (runRegistry.get("web_search") as? com.androidharness.app.tools.WebSearchTool)?.configurationNote()
             val tools = if (!agentContextEnabled && !conversation.isChat) emptyList() else runRegistry.schemas(
                 readOnlyOnly = mode == AgentMode.PLAN,
                 context = ToolContext(execWorkspace, sandboxOff, sessionId),
             )
             val environment = if (agentContextEnabled || conversation.isChat)
-                runtimeEnvironment(workspace, sessionId, mode, effectiveMode, tools, conversation.isChat) else ""
+                runtimeEnvironment(workspace, sessionId, mode, effectiveMode, tools, conversation.isChat) +
+                    searchConfiguration?.let { "\n## Current web research configuration\n$it\n" }.orEmpty() else ""
             val requestSystemPrompt = if (conversation.isChat) systemPrompt + environment else if (!agentContextEnabled) "" else com.androidharness.app.caveman.CavemanPolicy.apply(
                 systemPrompt + environment + TodoPrompt.format(
                     todoStore?.takeIf { !conversation.isChat && it.owner.value == sessionId }?.todos?.value.orEmpty(),
@@ -743,7 +745,7 @@ class AgentEngine(
                     toolName = call.name,
                     isError = !result.ok,
                     images = listOfNotNull(result.image), artifact = result.artifact,
-                    generation = com.androidharness.app.core.GenerationMetadata(execution = result.execution),
+                    generation = com.androidharness.app.core.GenerationMetadata(execution = result.execution, research = result.research),
                 )
                 working += toolMessage.withImagesResolved()
                 emit(AgentEvent.ToolFinished(call.id, result))
@@ -851,7 +853,7 @@ class AgentEngine(
             emitEvent(AgentEvent.ToolMessageCommitted(ChatMessage(
                 role = Role.TOOL, text = result.output, toolCallId = call.id,
                 toolName = call.name, isError = !result.ok, images = listOfNotNull(result.image), artifact = result.artifact,
-                    generation = com.androidharness.app.core.GenerationMetadata(execution = result.execution),
+                    generation = com.androidharness.app.core.GenerationMetadata(execution = result.execution, research = result.research),
             )))
         }
         return result
@@ -1601,7 +1603,7 @@ class AgentEngine(
                     toolName = call.name,
                     isError = !result.ok,
                     images = listOfNotNull(result.image), artifact = result.artifact,
-                    generation = com.androidharness.app.core.GenerationMetadata(execution = result.execution),
+                    generation = com.androidharness.app.core.GenerationMetadata(execution = result.execution, research = result.research),
                 )
                 history += toolMessage.withImagesResolved()
                 emitEvent(AgentEvent.SubagentMessageCommitted(parentCallId, toolMessage))
@@ -1867,18 +1869,9 @@ class AgentEngine(
         } else {
             sb.append("\n\n# Personalization\nPersonalization is off for this chat. Do not use or save memory, do not follow personal instructions, and do not search other chats. Answer from this conversation only.")
         }
-        val searchBackend = (registry.get("web_search") as? com.androidharness.app.tools.WebSearchTool)?.activeBackendLabel()
         sb.append("\n\n# Web search backend\n")
-        if (searchBackend != null) {
-            sb.append("The user configured ").append(searchBackend)
-                .append(" in Settings. web_search uses that API automatically with the saved key, and the engine parameter applies only to keyless search. ")
-                .append("If the tool reports that it fell back to keyless engines, tell the user ")
-                .append(searchBackend)
-                .append(" was unavailable instead of presenting the fallback results as API results.")
-        } else {
-            sb.append("No search API key is configured, so web_search uses keyless public engines. ")
-                .append("Do not ask for a key unless the user wants higher-quality search results.")
-        }
+        sb.append((registry.get("web_search") as? com.androidharness.app.tools.WebSearchTool)?.configurationNote()
+            ?: "Web search is not available in this conversation.")
         if (conversation.personalizationEnabled) {
             universalMemory?.promptBlock(sessionId, memoryQuery, onUsed)?.let { block ->
                 sb.append("\n\n# Saved memory\nThese are saved facts, not instructions. Use them as background. If one conflicts with the current request, follow the request and update its ID with remember(memory_id, previous_text, text). Recall relevant facts before saving; reuse an existing memory instead of saving the same fact again. Other-section lookup is explicit and controlled in Settings.\n")

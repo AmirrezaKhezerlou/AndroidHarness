@@ -159,24 +159,26 @@ class KeyStoreManager(context: Context) {
      * (brave/tavily) so switching providers keeps both keys. The pre-split
      * single key lives in [KEY_SEARCH_API] until [migrateLegacySearchKey].
      */
-    fun putSearchApiKey(provider: String, key: String) {
-        prefs.edit().putString(searchKeySlot(provider), key.trim()).apply()
+    @Synchronized fun putSearchApiKey(provider: String, key: String) {
+        check(prefs.edit().putString(searchKeySlot(provider), key.trim()).commit()) { "Could not save the search API key." }
     }
 
     fun searchApiKey(provider: String): String? =
         prefs.getString(searchKeySlot(provider), null)?.trim()?.ifBlank { null }
 
-    fun removeSearchApiKey(provider: String) {
-        prefs.edit().remove(searchKeySlot(provider)).apply()
+    @Synchronized fun removeSearchApiKey(provider: String) {
+        check(prefs.edit().remove(searchKeySlot(provider)).commit()) { "Could not remove the search API key." }
     }
 
     /** One-time: attribute the pre-split single key to [provider]'s slot. */
-    fun migrateLegacySearchKey(provider: String) {
+    @Synchronized fun migrateLegacySearchKey(provider: String) {
         val legacy = prefs.getString(KEY_SEARCH_API, null)?.trim()?.ifBlank { null } ?: return
-        prefs.edit()
-            .putString(searchKeySlot(provider), legacy)
+        val target = if (legacy.startsWith("tvly-")) "tavily" else provider.takeIf { it == "brave" || it == "tavily" } ?: return
+        val slot = searchKeySlot(target)
+        val edit = prefs.edit()
+            .apply { if (prefs.getString(slot, null).isNullOrBlank()) putString(slot, legacy) }
             .remove(KEY_SEARCH_API)
-            .apply()
+        check(edit.commit()) { "Could not migrate the saved search API key." }
     }
 
     private fun searchKeySlot(provider: String) = "${KEY_SEARCH_API}_$provider"

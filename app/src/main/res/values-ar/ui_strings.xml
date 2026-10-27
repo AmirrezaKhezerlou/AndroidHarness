@@ -1062,7 +1062,7 @@
     <string name="ui_keyless">"دون مفتاح"</string>
     <string name="ui_public_search_engines_no_setup">"محركات بحث عامة دون إعداد"</string>
     <string name="ui_key_saved">"%1$s · المفتاح محفوظ"</string>
-    <string name="ui_no_key_yet_keyless_fallback">"%1$s · لا يوجد مفتاح بعد (بديل دون مفتاح)"</string>
+    <string name="ui_no_key_yet_keyless_fallback">%1$s · أضف مفتاح API لاستخدام هذا المزوّد</string>
     <string name="ui_on">"مفعّل"</string>
     <string name="ui_no_key">"بلا مفتاح"</string>
     <string name="ui_the_agent_searches_public_engines_with_zero">"يبحث الوكيل في المحركات العامة دون إعداد؛ يقدّم Brave أو Tavily "</string>

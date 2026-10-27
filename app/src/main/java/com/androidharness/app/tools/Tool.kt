@@ -31,6 +31,7 @@ data class ToolResult(
     val image: com.androidharness.app.core.ImageRef? = null,
     val artifact: com.androidharness.app.artifacts.ChatArtifact? = null,
     val execution: List<com.androidharness.app.data.env.ExecutionReceipt> = emptyList(),
+    val research: com.androidharness.app.core.ResearchReceipt? = null,
 )
 
 class ToolFailure(message: String) : Exception(message)
@@ -85,6 +86,7 @@ class ToolRegistry(private val tools: List<Tool>) {
             toolOutputLoader: ToolOutputLoader? = null,
             fileHistory: com.androidharness.app.data.WorkspaceFileHistory? = null,
             memory: com.androidharness.app.data.MemoryRepository? = null,
+            searchApiRefresh: suspend () -> SearchApiConfig? = { searchApi() },
         ): ToolRegistry {
             val baseTools = mutableListOf<Tool>(
                 ListDirTool(),
@@ -119,8 +121,8 @@ class ToolRegistry(private val tools: List<Tool>) {
                 CreateDirTool(),
                 DeleteFileTool(),
                 MoveFileTool(),
-                WebFetchTool(httpClient),
-                WebSearchTool(httpClient, searchApi),
+                WebFetchTool(httpClient, searchApi = searchApi, refreshApi = searchApiRefresh),
+                WebSearchTool(httpClient, searchApi, refreshApi = searchApiRefresh),
                 HttpRequestTool(httpClient) { linuxEnv.githubToken() },
                 AskUserTool(),
                 TaskTool(),

@@ -220,6 +220,8 @@ class WebFetchTool(
     private val client: OkHttpClient,
     /** Turn-scoped page-read allowance; null in Code and Auto. */
     private val readBudget: SearchSourceBudget? = null,
+    private val searchApi: () -> SearchApiConfig? = { null },
+    private val refreshApi: suspend () -> SearchApiConfig? = { searchApi() },
 ) : Tool {
     override val name = "web_fetch"
     override val description =
@@ -238,95 +240,98 @@ class WebFetchTool(
     )
     override val isReadOnly = true
 
-    internal fun forBudget(budget: SearchSourceBudget?): WebFetchTool = WebFetchTool(client, budget)
+    internal fun forBudget(budget: SearchSourceBudget?): WebFetchTool = WebFetchTool(client, budget, searchApi, refreshApi)
 
-    override suspend fun execute(args: JsonObject, ctx: ToolContext): ToolResult =
-        withContext(Dispatchers.IO) {
-            val url = args["url"]?.jsonPrimitive?.content
-                ?: throw ToolFailure("Missing required argument: url")
-            if (!url.startsWith("http://") && !url.startsWith("https://")) {
-                throw ToolFailure("Only http(s) URLs are supported.")
-            }
-            val offset = (args["offset"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0).coerceAtLeast(0)
-            val maxChars = (args["max_chars"]?.jsonPrimitive?.content?.toIntOrNull() ?: 20_000)
-                .coerceIn(1_000, 60_000)
-            val find = args["find"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotBlank() }
-            val includeImages = args["images"]?.jsonPrimitive?.booleanOrNull == true
-            if (readBudget != null && !readBudget.canRead()) {
-                return@withContext ToolResult(true, readLimitText())
-            }
-            WebResultCache.getPage(url)?.let { cached ->
-                if (readBudget != null && !readBudget.claimRead()) {
-                    return@withContext ToolResult(true, readLimitText())
-                }
-                val imageNote = if (includeImages) renderImageNote(WebResultCache.getPageImages(url).orEmpty()) else ""
-                return@withContext ToolResult(true, renderPage(cached, offset, maxChars, find) + imageNote + readNote())
-            }
-            val fetchClient = client.newBuilder()
-                .readTimeout(30, TimeUnit.SECONDS)
-                .build()
+    override suspend fun execute(args: JsonObject, ctx: ToolContext): ToolResult = withContext(Dispatchers.IO) {
+        val url = args["url"]?.jsonPrimitive?.content ?: throw ToolFailure("Missing required argument: url")
+        if (url.toHttpUrlOrNull() == null) throw ToolFailure("Only http(s) URLs are supported.")
+        try {
+            ResearchHttp.page(url) { readPage(url, args) }
+        } catch (ce: kotlinx.coroutines.CancellationException) { throw ce }
+        catch (e: Exception) { ToolResult(false, SecretRedactor.redact("Could not read $url: ${e.message}")) }
+    }
+
+    private suspend fun readPage(url: String, args: JsonObject): ToolResult {
+        val offset = (args["offset"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0).coerceAtLeast(0)
+        val maxChars = (args["max_chars"]?.jsonPrimitive?.content?.toIntOrNull() ?: 20000).coerceIn(1000, 60000)
+        val find = args["find"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotBlank() }
+        val includeImages = args["images"]?.jsonPrimitive?.booleanOrNull == true
+        if (readBudget != null && !readBudget.canRead(url)) return ToolResult(true, readLimitText(), research = readBudget.receipt())
+        val cached = WebResultCache.getPage(url)
+        if (cached != null && ReadableWebPage.problem(cached) == null &&
+            (!includeImages || WebResultCache.getPageImages(url) != null)) {
+            return success(url, cached, WebResultCache.getPageImages(url).orEmpty(),
+                WebResultCache.getPageVia(url)?.let { "cached $it" } ?: "cached page", offset, maxChars, find, includeImages)
+        }
+        val fetchClient = client.newBuilder().readTimeout(30, TimeUnit.SECONDS).build()
+        var extractionNote = ""
+        val api = refreshApi()?.takeIf { it.provider == "tavily" && it.apiKey.isNotBlank() }
+        if (api != null && TavilyPageReader.publicUrl(url)) {
             try {
-                fetchClient.newCall(
-                    Request.Builder()
-                        .url(url)
-                        .header("User-Agent", BROWSER_USER_AGENT)
-                        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7")
-                        .header("Accept-Language", languageHeader(java.util.Locale.getDefault().language))
-                        .build()
-                ).execute().use { resp ->
-                    if (!resp.isSuccessful) {
-                        return@withContext ToolResult(false, "HTTP ${resp.code} fetching $url")
-                    }
-                    val body = resp.body
-                    val mediaType = body?.contentType()
-                    val bytes = body?.bytes() ?: ByteArray(0)
-                    val mime = mediaType?.let { "${it.type}/${it.subtype}" } ?: "application/octet-stream"
-
-                    val isPdf = mediaType?.subtype?.equals("pdf", true) == true || bytes.startsWithAscii("%PDF-")
-                    if (isPdf) {
-                        val extracted = com.androidharness.app.ui.chat.PdfTextExtractor.extract(bytes)
-                            ?: return@withContext ToolResult(true, "[PDF with no extractable text: $mime, ${bytes.size} bytes]")
-                        WebResultCache.putPage(url, extracted.text)
-                        WebResultCache.putPageImages(url, emptyList())
-                        if (readBudget != null && !readBudget.claimRead()) {
-                            return@withContext ToolResult(true, readLimitText())
-                        }
-                        return@withContext ToolResult(true, renderPage(extracted.text, offset, maxChars, find) + readNote())
-                    }
-                    if (HttpBinaryDetector.isBinaryMediaType(mediaType)) {
-                        return@withContext ToolResult(true, "[binary content: $mime, ${bytes.size} bytes]")
-                    }
-                    if (mediaType == null && bytes.isNotEmpty() && com.androidharness.app.workspace.isBinaryStream(java.io.ByteArrayInputStream(bytes))) {
-                        return@withContext ToolResult(true, "[binary content: $mime, ${bytes.size} bytes]")
-                    }
-                    val raw = bytes.toString(mediaType?.charset() ?: Charsets.UTF_8)
-                    val text = htmlToText(raw, mediaType?.subtype)
-                    WebResultCache.putPage(url, text)
-                    val pageUrl = resp.request.url.toString()
-                    val host = resp.request.url.host
-                    val scan = scanPageImages(raw, pageUrl)
-                    val pageImages = scan.images.map { image ->
-                        PageImage(
-                            title = image.alt ?: scan.title ?: host,
-                            imageUrl = image.url,
-                            pageUrl = pageUrl,
-                            source = host,
-                        )
-                    }
-                    WebResultCache.putPageImages(url, pageImages)
-                    if (readBudget != null && !readBudget.claimRead()) {
-                        return@withContext ToolResult(true, readLimitText())
-                    }
-                    val jsNote = if (looksJavascriptOnly(raw, text)) {
-                        "\n[note: this page appears to require JavaScript; readable text may be incomplete]"
-                    } else ""
-                    val imageNote = if (includeImages) renderImageNote(pageImages) else ""
-                    ToolResult(true, renderPage(text, offset, maxChars, find) + jsNote + imageNote + readNote())
-                }
-            } catch (e: Exception) {
-                ToolResult(false, "Fetch failed: ${e.message}")
+                val page = TavilyPageReader.extract(fetchClient, api, url,
+                    advanced = (readBudget?.maxReads ?: 0) >= 25 || url.toHttpUrlOrNull()?.host?.endsWith("reddit.com") == true,
+                    images = includeImages)
+                WebResultCache.putPage(url, page.text, "Tavily Extract")
+                if (includeImages) WebResultCache.putPageImages(url, page.images)
+                return success(url, page.text, page.images, "Tavily Extract", offset, maxChars, find, includeImages)
+            } catch (e: TavilyPageUnavailable) {
+                extractionNote = "\n[note: ${e.message}; trying the original page directly]"
             }
         }
+        val page = ResearchHttp.read(fetchClient, Request.Builder().url(url)
+            .header("User-Agent", BROWSER_USER_AGENT + " AndroidHarness/research")
+            .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7")
+            .header("Accept-Language", languageHeader(java.util.Locale.getDefault().language)).build()) { response ->
+            val body = response.body
+            val media = body?.contentType()
+            val bytes = body?.byteStream()?.use { input ->
+                val out = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    val maxBytes = if (media?.subtype?.equals("pdf", true) == true) 16 * 1024 * 1024 else 4 * 1024 * 1024
+                    if (out.size() + count > maxBytes) throw ToolFailure("Page exceeds the supported read size; use a smaller source.")
+                    out.write(buffer, 0, count)
+                }
+                out.toByteArray()
+            } ?: ByteArray(0)
+            val mime = media?.let { "${it.type}/${it.subtype}" } ?: "application/octet-stream"
+            if (media?.subtype?.equals("pdf", true) == true || bytes.startsWithAscii("%PDF-")) {
+                val text = com.androidharness.app.ui.chat.PdfTextExtractor.extract(bytes)?.text
+                    ?: throw ToolFailure("PDF has no extractable text; it was not counted as a page read.")
+                if (text.isBlank()) throw ToolFailure("PDF contains no readable text.")
+                ExtractedPage(text, emptyList())
+            } else {
+                if (HttpBinaryDetector.isBinaryMediaType(media) || media == null && bytes.isNotEmpty() &&
+                    com.androidharness.app.workspace.isBinaryStream(java.io.ByteArrayInputStream(bytes)))
+                    throw ToolFailure("Unsupported binary content: $mime; it was not counted as a page read.")
+                val raw = bytes.toString(media?.charset() ?: Charsets.UTF_8)
+                val text = htmlToText(raw, media?.subtype)
+                val scan = scanPageImages(raw, response.request.url.toString())
+                ReadableWebPage.problem(text, scan.title.orEmpty())?.let { problem ->
+                    ReadableWebPage.cooldownStatus(text, scan.title.orEmpty())?.let { ResearchHttp.policy.cooldown(response.request.url, it) }
+                    throw ToolFailure(problem)
+                }
+                if (looksJavascriptOnly(raw, text)) throw ToolFailure("This page requires JavaScript and was not counted as read. Use browser_read with this URL, or an accessible alternative.")
+                ExtractedPage(text, scan.images.map { image -> PageImage(image.alt ?: scan.title ?: response.request.url.host,
+                    image.url, response.request.url.toString(), response.request.url.host) })
+            }
+        }
+        WebResultCache.putPage(url, page.text)
+        WebResultCache.putPageImages(url, page.images)
+        return success(url, page.text, page.images, "direct page", offset, maxChars, find, includeImages)
+            .let { it.copy(output = it.output + extractionNote) }
+    }
+
+    private fun success(url: String, text: String, images: List<PageImage>, via: String,
+        offset: Int, maxChars: Int, find: String?, includeImages: Boolean): ToolResult {
+        if (offset >= text.length && offset > 0) return ToolResult(false, "Offset is beyond the ${text.length}-character page. Use offset=0.")
+        if (readBudget != null && !readBudget.claimRead(url)) return ToolResult(true, readLimitText(), research = readBudget.receipt())
+        val imageNote = if (includeImages) renderImageNote(images) else ""
+        val receipt = readBudget?.receipt(url, via) ?: com.androidharness.app.core.ResearchReceipt(pageUrl = url, pageRead = true, backend = via)
+        return ToolResult(true, renderPage(text, offset, maxChars, find) + imageNote + "\n[via $via]" + readNote(), research = receipt)
+    }
 
     private fun renderImageNote(images: List<PageImage>): String =
         if (images.isEmpty()) "\n[no image urls found]"
@@ -387,8 +392,9 @@ private fun ByteArray.startsWithAscii(prefix: String): Boolean {
 
 /** A page that is mostly a JS shell, or that says JS is required, gets a warning. */
 private fun looksJavascriptOnly(raw: String, text: String): Boolean =
-    Regex("(?i)(enable|requires?) javascript|javascript is disabled").containsMatchIn(text) ||
-        (raw.length > 4_000 && text.length < 400)
+    (text.length < 1200 && Regex("(?i)(?:please |you (?:must|need to) )?enable javascript|javascript is (?:disabled|required)").containsMatchIn(text)) ||
+        (raw.length > 4000 && text.length < 120 && raw.contains("<script", true) &&
+            Regex("(?i)id=[\"'](?:root|app|__next)[\"']").containsMatchIn(raw))
 
 /**
  * Page title and image references from one HTML scan. Open Graph comes first,

@@ -371,7 +371,6 @@
     <string name="subagents_elapsed">%1$s berlalu</string>
     <string name="subagents_main_chat">Obrolan utama</string>
     <string name="subagents_results_return">Hasil dikembalikan ke agen utama.</string>
-    <string name="ui_back">@string/settings_action_back</string>
     <plurals name="subagents_count">
         <item quantity="other">%1$d subagen</item>
     </plurals>

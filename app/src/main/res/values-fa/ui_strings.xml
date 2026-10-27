@@ -1064,7 +1064,7 @@
     <string name="ui_keyless">"بدون کلید"</string>
     <string name="ui_public_search_engines_no_setup">"موتورهای جستجوی عمومی، بدون راه اندازی"</string>
     <string name="ui_key_saved">"%1$s · کلید ذخیره شد"</string>
-    <string name="ui_no_key_yet_keyless_fallback">"%1$s · هنوز کلیدی وجود ندارد (بازگشت بدون کلید)"</string>
+    <string name="ui_no_key_yet_keyless_fallback">%1$s · برای استفاده از این ارائه‌دهنده کلید API اضافه کنید</string>
     <string name="ui_on">"روشن"</string>
     <string name="ui_no_key">"بدون کلید"</string>
     <string name="ui_the_agent_searches_public_engines_with_zero">"عامل موتورهای عمومی را با تنظیمات صفر جستجو می کند. شجاع یا تاویلی"</string>

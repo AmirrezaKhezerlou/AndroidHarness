@@ -369,7 +369,6 @@
     <string name="subagents_elapsed">已用时 %1$s</string>
     <string name="subagents_main_chat">主对话</string>
     <string name="subagents_results_return">结果会返回主代理。</string>
-    <string name="ui_back">@string/settings_action_back</string>
     <plurals name="subagents_count">
         <item quantity="other">%1$d 个子代理</item>
     </plurals>

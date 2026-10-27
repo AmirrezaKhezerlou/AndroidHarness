@@ -2,6 +2,8 @@ package com.androidharness.app.core
 
 import com.androidharness.app.tools.PageImageText
 import com.androidharness.app.tools.WebSearchText
+import com.androidharness.app.tools.ReadableWebPage
+import com.androidharness.app.tools.canonicalResultUrl
 import java.net.URI
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -92,7 +94,7 @@ internal object ChatActivityPresentation {
             val uri = runCatching { URI(rawUrl.trim()) }.getOrNull() ?: return
             if (uri.scheme?.lowercase() !in setOf("https", "http") || uri.host.isNullOrBlank() || uri.rawUserInfo != null) return
             val url = uri.toASCIIString()
-            val key = url.substringBefore('#').trimEnd('/')
+            val key = canonicalResultUrl(url)
             val existing = sources[key]
             if (existing != null) sources[key] = existing.copy(read = existing.read || read)
             else if (sources.size < limit) sources[key] = Source(title.trim().ifBlank { uri.host }.take(240), url, uri.host.removePrefix("www."), read)
@@ -102,10 +104,8 @@ internal object ChatActivityPresentation {
             when (call.name) {
                 "web_search" -> WebSearchText.parse(result.text.lineSequence().take(400).joinToString("\n"))
                     .forEach { add(it.title, it.url, false) }
-                "web_fetch", "browser_read" -> if (result.text.isNotBlank() &&
-                    !result.text.startsWith("[binary content:") &&
-                    !result.text.startsWith("[Page read limit reached:")) {
-                    val url = runCatching { Json.parseToJsonElement(call.argumentsJson).jsonObject["url"]?.jsonPrimitive?.content }.getOrNull()
+                "web_fetch", "browser_read" -> if (result.generation.research?.pageRead ?: ReadableWebPage.legacyRead(result.text)) {
+                    val url = result.generation.research?.pageUrl ?: runCatching { Json.parseToJsonElement(call.argumentsJson).jsonObject["url"]?.jsonPrimitive?.content }.getOrNull()
                     if (url != null) add("", url, true)
                 }
             }
@@ -125,7 +125,7 @@ internal object ChatActivityPresentation {
         return out
     }
 
-    /** Latest source and page-read counters reported by web_search in this turn. */
+    /** All matching tool receipts contribute; a later fetch never waits for another search. */
     fun researchProgress(messages: List<ChatMessage>): ResearchProgress? {
         val results = messages.filter { it.role == Role.TOOL && !it.isError }.associateBy { it.toolCallId }
         val pattern = Regex(
@@ -133,18 +133,37 @@ internal object ChatActivityPresentation {
                 "(?:; pages read: (\\d+)/(\\d+) required)?",
         )
         var latest: ResearchProgress? = null
+        var readCount = 0
+        val readPages = hashSetOf<String>()
         for (call in calls(messages)) {
+            val result = results[call.id] ?: continue
+            val receipt = result.generation.research
+            if (call.name in setOf("web_search", "web_fetch", "browser_read") && receipt != null) {
+                readCount = maxOf(readCount, receipt.pagesRead ?: 0)
+                if (receipt.pageRead) receipt.pageUrl?.let { readPages += canonicalResultUrl(it) }
+                if (receipt.sourcesMax != null && receipt.sourcesMax > 0 && receipt.sourcesUsed != null) latest = ResearchProgress(
+                    maxOf(latest?.sourcesUsed ?: 0, receipt.sourcesUsed), receipt.sourcesMax,
+                    readCount, receipt.readsRequired ?: latest?.readsRequired ?: 0)
+                continue
+            }
+            if (call.name == "web_fetch" || call.name == "browser_read") {
+                if (ReadableWebPage.legacyRead(result.text)) runCatching {
+                    Json.parseToJsonElement(call.argumentsJson).jsonObject["url"]?.jsonPrimitive?.content
+                }.getOrNull()?.let { readPages += canonicalResultUrl(it) }
+                continue
+            }
             if (call.name != "web_search") continue
-            val text = results[call.id]?.text ?: continue
+            val text = result.text
             val match = pattern.findAll(text).lastOrNull() ?: continue
             val values = match.groupValues
             latest = ResearchProgress(
-                sourcesUsed = values[1].toIntOrNull() ?: continue,
+                sourcesUsed = maxOf(latest?.sourcesUsed ?: 0, values[1].toIntOrNull() ?: continue),
                 sourcesMax = values[2].toIntOrNull() ?: continue,
                 pagesRead = values[3].toIntOrNull() ?: 0,
                 readsRequired = values[4].toIntOrNull() ?: 0,
             )
+            readCount = maxOf(readCount, latest.pagesRead)
         }
-        return latest
+        return latest?.copy(pagesRead = maxOf(readCount, readPages.size))
     }
 }

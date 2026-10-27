@@ -107,11 +107,14 @@ internal class KeylessSearchBackend : SearchBackend {
         // read timeout before the next one even started.
         val jobs = chain.map { name ->
             async(Dispatchers.IO) {
-                name to runCatching { fetchEngineWithRetry(searchClient, name, query, options) }
+                name to try { Result.success(fetchEngine(searchClient, name, query, options)) }
+                    catch (ce: kotlinx.coroutines.CancellationException) { throw ce }
+                    catch (e: Exception) { Result.failure(e) }
             }
         }
         val finished = withTimeoutOrNull(28_000) { jobs.awaitAll() }
             ?: jobs.filter { it.isCompleted }.mapNotNull { runCatching { it.getCompleted() }.getOrNull() }
+        jobs.filterNot { it.isCompleted }.forEach { it.cancel() }
         val collected = ArrayList<WebSearchResult>()
         val seen = HashSet<String>()
         val used = ArrayList<String>()
@@ -139,22 +142,7 @@ internal class KeylessSearchBackend : SearchBackend {
         )
     }
 
-    /** One retry for transient rate limits and gateway errors, nothing for hard failures. */
-    private fun fetchEngineWithRetry(
-        client: OkHttpClient,
-        engine: String,
-        query: String,
-        options: SearchOptions,
-    ): List<WebSearchResult> = try {
-        fetchEngine(client, engine, query, options)
-    } catch (e: Exception) {
-        val transient = e.message?.let { Regex("HTTP (429|5\\d\\d)").containsMatchIn(it) } == true
-        if (!transient) throw e
-        Thread.sleep(350)
-        fetchEngine(client, engine, query, options)
-    }
-
-    private fun fetchEngine(
+    private suspend fun fetchEngine(
         client: OkHttpClient,
         engine: String,
         query: String,
@@ -185,17 +173,14 @@ internal class KeylessSearchBackend : SearchBackend {
                 googleDate(options.freshness)?.let { append("&tbs=").append(it) }
             }
         }
-        val html = client.newCall(
+        val html = ResearchHttp.read(client,
             Request.Builder()
                 .url(url)
                 .header("User-Agent", BROWSER_USER_AGENT)
                 .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
                 .header("Accept-Language", languageHeader(options.language))
                 .build()
-        ).execute().use { resp ->
-            if (!resp.isSuccessful) throw ToolFailure("HTTP ${resp.code}")
-            resp.body?.string() ?: ""
-        }
+        ) { resp -> ResearchHttp.bodyText(resp) }
         return parse(engine, html)
     }
 
@@ -315,16 +300,13 @@ internal class BraveApiBackend(private val apiKey: String) : SearchBackend {
             options.language?.trim()?.takeIf { it.isNotBlank() }?.let { append("&search_lang=").append(it) }
             options.country?.trim()?.takeIf { it.isNotBlank() }?.let { append("&country=").append(it.uppercase()) }
         }
-        val body = client.newCall(
+        val body = ResearchHttp.read(client,
             Request.Builder()
                 .url(url)
                 .header("Accept", "application/json")
                 .header("X-Subscription-Token", apiKey)
                 .build()
-        ).execute().use { resp ->
-            if (!resp.isSuccessful) throw ToolFailure("HTTP ${resp.code}")
-            resp.body?.string() ?: ""
-        }
+        ) { resp -> ResearchHttp.bodyText(resp) }
         SearchOutcome(BraveSearchParser.parse(body), via = label)
     }
 }
@@ -358,27 +340,38 @@ internal class TavilyApiBackend(private val apiKey: String) : SearchBackend {
         options: SearchOptions,
     ): SearchOutcome = withContext(Dispatchers.IO) {
         val payload = buildJsonObject {
-            put("api_key", apiKey)
             put("query", query)
             put("max_results", count)
             put("search_depth", if (options.deep) "advanced" else "basic")
+            put("include_raw_content", options.deep)
             tavilyTimeRange(options.freshness)?.let { put("time_range", it) }
         }
-        val body = client.newCall(
+        val body = ResearchHttp.read(client,
             Request.Builder()
                 .url("https://api.tavily.com/search")
+                .header("Authorization", "Bearer $apiKey")
                 .post(payload.toString().toRequestBody("application/json".toMediaTypeOrNull()))
                 .build()
-        ).execute().use { resp ->
-            if (!resp.isSuccessful) throw ToolFailure("HTTP ${resp.code}")
-            resp.body?.string() ?: ""
-        }
+        ) { resp -> ResearchHttp.bodyText(resp) }
+        TavilySearchParser.cachePages(body)
         SearchOutcome(TavilySearchParser.parse(body), via = label)
     }
 }
 
 internal object TavilySearchParser {
     private val json = Json { ignoreUnknownKeys = true }
+
+    /** Retrieval is reused on web_fetch, and is counted only once delivered to the model. */
+    fun cachePages(body: String) {
+        runCatching {
+            json.parseToJsonElement(body).jsonObject["results"]?.jsonArray?.take(20)?.forEach { entry ->
+                val obj = entry.jsonObject
+                val url = obj["url"]?.jsonPrimitive?.contentOrNull ?: return@forEach
+                val content = obj["raw_content"]?.jsonPrimitive?.contentOrNull?.take(400000) ?: return@forEach
+                if (ReadableWebPage.problem(content) == null) WebResultCache.putPage(url, content, "Tavily Search API")
+            }
+        }
+    }
 
     fun parse(body: String): List<WebSearchResult> = runCatching {
         val results = json.parseToJsonElement(body).jsonObject
@@ -448,7 +441,7 @@ internal object WebResultCache {
     private const val SEARCH_TTL_MS = 10 * 60_000L
     private const val PAGE_TTL_MS = 15 * 60_000L
     private const val MAX_SEARCHES = 24
-    private const val MAX_PAGES = 8
+    private const val MAX_PAGES = 24
     private const val MAX_PAGE_CHARS = 400_000
 
     private val lock = Any()
@@ -456,8 +449,9 @@ internal object WebResultCache {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Timed<SearchOutcome>>) =
             size > MAX_SEARCHES
     }
-    private val pages = object : LinkedHashMap<String, Timed<String>>(16, .75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Timed<String>>) =
+    private data class Page(val text: String, val via: String?)
+    private val pages = object : LinkedHashMap<String, Timed<Page>>(16, .75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Timed<Page>>) =
             size > MAX_PAGES
     }
     private val pageImages = object : LinkedHashMap<String, Timed<List<PageImage>>>(16, .75f, true) {
@@ -478,27 +472,31 @@ internal object WebResultCache {
     }
 
     fun getPage(url: String): String? = synchronized(lock) {
-        val hit = pages[url] ?: return null
+        val key = canonicalResultUrl(url)
+        val hit = pages[key] ?: return null
         if (System.currentTimeMillis() - hit.at > PAGE_TTL_MS) {
-            pages.remove(url)
+            pages.remove(key)
             null
-        } else hit.value
+        } else hit.value.text
     }
 
-    fun putPage(url: String, text: String) = synchronized(lock) {
-        pages[url] = Timed(text.take(MAX_PAGE_CHARS), System.currentTimeMillis())
+    fun putPage(url: String, text: String, via: String? = null) = synchronized(lock) {
+        pages[canonicalResultUrl(url)] = Timed(Page(text.take(MAX_PAGE_CHARS), via), System.currentTimeMillis())
     }
+
+    fun getPageVia(url: String): String? = synchronized(lock) { pages[canonicalResultUrl(url)]?.value?.via }
 
     fun getPageImages(url: String): List<PageImage>? = synchronized(lock) {
-        val hit = pageImages[url] ?: return null
+        val key = canonicalResultUrl(url)
+        val hit = pageImages[key] ?: return null
         if (System.currentTimeMillis() - hit.at > PAGE_TTL_MS) {
-            pageImages.remove(url)
+            pageImages.remove(key)
             null
         } else hit.value
     }
 
     fun putPageImages(url: String, images: List<PageImage>) = synchronized(lock) {
-        pageImages[url] = Timed(images.take(8), System.currentTimeMillis())
+        pageImages[canonicalResultUrl(url)] = Timed(images.take(8), System.currentTimeMillis())
     }
 
     fun clear() = synchronized(lock) {

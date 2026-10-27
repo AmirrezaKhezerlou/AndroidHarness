@@ -305,7 +305,7 @@ private fun ChatActivityRow(
                     Text("$count", style = style, color = color)
                 }
                 Text("/${counters.sourcesMax} sources", style = style, color = color)
-                if (counters.readsRequired > 0) {
+                if (counters.readsRequired > 0 || counters.pagesRead > 0) {
                     Text(" · ", style = style, color = color)
                     AnimatedCount(counters.pagesRead, motion) { count ->
                         Text("$count", style = style, color = color)

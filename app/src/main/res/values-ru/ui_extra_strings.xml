@@ -374,7 +374,6 @@
     <string name="subagents_elapsed">Прошло: %1$s</string>
     <string name="subagents_main_chat">Основной чат</string>
     <string name="subagents_results_return">Результаты возвращаются основному агенту.</string>
-    <string name="ui_back">@string/settings_action_back</string>
     <plurals name="subagents_count">
         <item quantity="one">%1$d субагент</item>
         <item quantity="few">%1$d субагента</item>

@@ -1064,7 +1064,7 @@
     <string name="ui_keyless">"Schlüssellos"</string>
     <string name="ui_public_search_engines_no_setup">"Öffentliche Suchmaschinen, keine Einrichtung"</string>
     <string name="ui_key_saved">"%1$s · Schlüssel gespeichert"</string>
-    <string name="ui_no_key_yet_keyless_fallback">"%1$s · noch kein Schlüssel (schlüssellose Ausweichlösung)"</string>
+    <string name="ui_no_key_yet_keyless_fallback">%1$s · API-Schlüssel hinzufügen, um diesen Anbieter zu nutzen</string>
     <string name="ui_on">"An"</string>
     <string name="ui_no_key">"Kein Schlüssel"</string>
     <string name="ui_the_agent_searches_public_engines_with_zero">"Der Agent durchsucht öffentliche Suchmaschinen ohne Einrichtung; Brave oder Tavily "</string>

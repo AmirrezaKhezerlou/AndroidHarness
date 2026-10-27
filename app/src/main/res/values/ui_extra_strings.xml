@@ -345,7 +345,6 @@
     <string name="transfer_choose_workspace">Choose workspace</string>
     <string name="transfer_port">Port</string>
     <string name="subagents_allow_background">Allow background delegation</string>
-    <string name="ui_back">@string/settings_action_back</string>
     <string name="subagents_background_description">Keep chatting while subagents explore in the background. Background tasks use read-only tools; two run at a time.</string>
     <string name="subagents_notify_completion">Notify on completion</string>
     <string name="subagents_notify_description">Get a notification with the result. Tap to open the subagent’s chat.</string>

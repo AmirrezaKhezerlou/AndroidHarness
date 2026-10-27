@@ -1064,7 +1064,7 @@
     <string name="ui_keyless">"Keyless"</string>
     <string name="ui_public_search_engines_no_setup">"Public search engines, no setup"</string>
     <string name="ui_key_saved">"%1$s · key saved"</string>
-    <string name="ui_no_key_yet_keyless_fallback">"%1$s · no key yet (keyless fallback)"</string>
+    <string name="ui_no_key_yet_keyless_fallback">%1$s · add an API key to use this provider</string>
     <string name="ui_on">"On"</string>
     <string name="ui_no_key">"No key"</string>
     <string name="ui_the_agent_searches_public_engines_with_zero">"The agent searches public engines with zero setup; Brave or Tavily "</string>

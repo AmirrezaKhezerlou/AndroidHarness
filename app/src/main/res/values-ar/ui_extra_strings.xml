@@ -376,7 +376,6 @@
     <string name="subagents_elapsed">الوقت المنقضي: %1$s</string>
     <string name="subagents_main_chat">المحادثة الرئيسية</string>
     <string name="subagents_results_return">تُعاد النتائج إلى الوكيل الرئيسي.</string>
-    <string name="ui_back">@string/settings_action_back</string>
     <plurals name="subagents_count">
         <item quantity="zero">%1$d من الوكلاء الفرعيين</item>
         <item quantity="one">%1$d من الوكلاء الفرعيين</item>

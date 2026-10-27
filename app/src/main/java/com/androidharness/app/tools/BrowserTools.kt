@@ -267,8 +267,9 @@ class BrowserReadTool(
         val maxChars = (args["max_chars"]?.jsonPrimitive?.content?.toIntOrNull() ?: 20_000)
             .coerceIn(1_000, 60_000)
         val includeImages = args["images"]?.jsonPrimitive?.booleanOrNull == true
-        if (readBudget != null && !readBudget.canRead()) return ToolResult(true, readLimitText())
+        if (readBudget != null && !readBudget.canRead(url)) return ToolResult(true, readLimitText(), research = readBudget.receipt())
         return try {
+            ResearchHttp.page(url) { ResearchHttp.policy.access(requireNotNull(url.toHttpUrlOrNull()), "rendered-browser") {
             val state = controller.navigate(url, ctx.workspace)
             // Prefer the article/main container when it carries real text, then
             // fall back to the whole body. innerText reflects the rendered DOM,
@@ -284,13 +285,20 @@ class BrowserReadTool(
                     " })()",
             )
             val text = (outcome.value ?: state.textSummary).trim()
-            if (readBudget != null && !readBudget.claimRead()) return ToolResult(true, readLimitText())
+            if (!state.error.isNullOrBlank()) return@access ToolResult(false, "Browser could not read $url: ${state.error}. This page was not counted as read.")
+            ReadableWebPage.problem(text, state.title)?.let { problem ->
+                ReadableWebPage.cooldownStatus(text, state.title)?.let { code ->
+                    ResearchHttp.policy.cooldown(requireNotNull(url.toHttpUrlOrNull()), code,
+                        identity = if (code == 429) "" else "rendered-browser")
+                }
+                return@access ToolResult(false, problem)
+            }
+            if (readBudget != null && !readBudget.claimRead(url)) return@access ToolResult(true, readLimitText(), research = readBudget.receipt())
             val images = if (includeImages) scanImages(state) else emptyList()
+            WebResultCache.putPage(url, text, "browser_read")
+            if (includeImages) WebResultCache.putPageImages(url, images)
             val imageNote = if (!includeImages) "" else if (images.isEmpty()) "\n[no image urls found]"
                 else "\n" + PageImageText.render(images, images.size)
-            if (text.isBlank()) {
-                ToolResult(true, "URL: ${state.url}\nTitle: ${state.title}\n[no visible text; the page may still be loading]" + imageNote)
-            } else {
                 val body = text.take(maxChars)
                 ToolResult(true, buildString {
                     append("URL: ").append(state.url).append('\n')
@@ -300,8 +308,11 @@ class BrowserReadTool(
                     if (body.length < text.length) append("\n[truncated at ").append(maxChars).append(" chars]")
                     append(imageNote)
                     readSourceNote()?.let { append(it) }
-                })
-            }
+                }, research = readBudget?.receipt(url, "browser_read") ?:
+                    com.androidharness.app.core.ResearchReceipt(pageUrl = url, pageRead = true, backend = "browser_read"))
+            } }
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            throw ce
         } catch (e: Exception) {
             ToolResult(false, "Browser read failed: ${e.message}")
         }

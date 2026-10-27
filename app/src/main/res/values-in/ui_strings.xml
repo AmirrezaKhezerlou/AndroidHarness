@@ -1062,7 +1062,7 @@
     <string name="ui_keyless">"Tanpa kunci"</string>
     <string name="ui_public_search_engines_no_setup">"Mesin pencari publik, tanpa penyiapan"</string>
     <string name="ui_key_saved">"%1$s · kunci tersimpan"</string>
-    <string name="ui_no_key_yet_keyless_fallback">"%1$s · belum ada kunci (cadangan tanpa kunci)"</string>
+    <string name="ui_no_key_yet_keyless_fallback">%1$s · tambahkan kunci API untuk memakai penyedia ini</string>
     <string name="ui_on">"Aktif"</string>
     <string name="ui_no_key">"Tanpa kunci"</string>
     <string name="ui_the_agent_searches_public_engines_with_zero">"Agen mencari di mesin publik tanpa penyiapan; Brave atau Tavily "</string>

@@ -77,6 +77,18 @@ class SearchSourceBudgetTest {
         assertTrue(researchReadLimit(com.androidharness.app.data.SearchDepth.AUTO) == null)
     }
 
+    @Test fun pageOffsetsTrackingAndRenderedFallbackDoNotConsumeDistinctReadsAgain() {
+        val budget = SearchSourceBudget(100, 2, 8)
+        assertTrue(budget.claimRead("https://a.test/page?utm_source=feed#top"))
+        assertTrue(budget.claimRead("https://a.test/page#bottom"))
+        assertEquals(1, budget.pagesRead)
+        assertTrue(budget.claimRead("https://b.test/page"))
+        assertTrue(budget.canRead("https://a.test/page"))
+        assertTrue(budget.claimRead("https://a.test/page"))
+        assertTrue(!budget.canRead("https://c.test/page"))
+        assertEquals(2, budget.pagesRead)
+    }
+
     @Test fun diversityCapsResultsPerHost() {
         val results = listOf(
             hit("https://a.test/1"), hit("https://a.test/2"), hit("https://a.test/3"),

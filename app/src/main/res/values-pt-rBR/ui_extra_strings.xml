@@ -372,7 +372,6 @@
     <string name="subagents_elapsed">%1$s decorridos</string>
     <string name="subagents_main_chat">Conversa principal</string>
     <string name="subagents_results_return">Os resultados retornam ao agente principal.</string>
-    <string name="ui_back">@string/settings_action_back</string>
     <plurals name="subagents_count">
         <item quantity="one">%1$d subagente</item>
         <item quantity="other">%1$d subagentes</item>

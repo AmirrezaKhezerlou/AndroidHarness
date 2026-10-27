@@ -413,7 +413,6 @@ fun AppNav(container: AppContainer) {
             onAutomation = { navigateFromSidebar { nav.navigate("automation") { launchSingleTop = true } } },
             onProviders = { navigateFromSidebar { nav.navigate("providers") { launchSingleTop = true } } },
             onSettings = { navigateFromSidebar { nav.navigate("settings") { launchSingleTop = true } } },
-            onMyAi = { navigateFromSidebar { nav.navigate("my-ai") { launchSingleTop = true } } },
             workspaceLabel = if (chatWorkspaceContext) uiContext.getString(R.string.ui_workspaces_for_this_chat) else uiContext.getString(R.string.ui_workspace), workspaceSummary = workspaceSummary,
             onWorkspaces = { scope.launch { drawerState.close() }; showWorkspaceSheet = true }, onCollapse = onCollapse,
             currentRoute = currentRoute, projectCreationEnabled = !creatingProjectChat,
@@ -833,13 +832,11 @@ fun AppNav(container: AppContainer) {
                     },
                 )
             }
+            // Restore back stacks saved by builds that included the removed page.
             composable("my-ai") {
-                com.androidharness.app.ui.personal.MyAiScreen(
-                    container = container,
-                    onBack = { nav.popBackStack() },
-                    onChat = { openChat(null, kind = com.androidharness.app.data.ConversationKind.CHAT) },
-                    onSettings = { nav.navigate("settings") },
-                )
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    nav.navigate("settings") { popUpTo("my-ai") { inclusive = true }; launchSingleTop = true }
+                }
             }
             composable("settings") {
                 SettingsScreen(

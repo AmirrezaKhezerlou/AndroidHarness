@@ -18,9 +18,11 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.Before
 import java.io.File
 
 class WebSearchApiTest {
+    @Before fun clearSearchCache() { WebResultCache.clear() }
     private val context = ToolContext(FileFs(File("/tmp")))
 
     private fun client(handler: (Request) -> Response): OkHttpClient =
@@ -63,17 +65,18 @@ class WebSearchApiTest {
         assertFalse(result.output.contains("brave-test-key"))
     }
 
-    @Test fun tavilyKeyIsPostedToTheSelectedApi() = runBlocking {
+    @Test fun tavilyKeyAuthenticatesTheSelectedApiWithoutEnteringThePayload() = runBlocking {
         var posted = ""
         val tool = WebSearchTool(client { request ->
             assertEquals("api.tavily.com", request.url.host)
+            assertEquals("Bearer tvly-test-key", request.header("Authorization"))
             val buffer = Buffer()
             request.body?.writeTo(buffer)
             posted = buffer.readUtf8()
             reply(request, """{"results":[{"title":"Tavily result","url":"https://tavily.test/a","content":"Snippet"}]}""")
         }, { SearchApiConfig("tavily", "tvly-test-key") })
         val result = tool.execute(query("android"), context)
-        assertTrue(posted.contains("\"api_key\":\"tvly-test-key\""))
+        assertFalse(posted.contains("tvly-test-key"))
         assertTrue(result.output.contains("https://tavily.test/a"))
         assertTrue(result.output.contains("[via Tavily Search API]"))
         assertFalse(result.output.contains("tvly-test-key"))
@@ -91,7 +94,7 @@ class WebSearchApiTest {
         assertTrue(result.output.contains("sources this turn: 2/50, 48 remaining"))
     }
 
-    @Test fun failedSelectedApiFallsBackAndReportsIt() = runBlocking {
+    @Test fun rejectedSelectedApiIsReportedWithoutSilentlySwitchingToScraping() = runBlocking {
         var braveAttempted = false
         val tool = WebSearchTool(client { request ->
             if (request.url.host == "api.search.brave.com") {
@@ -106,10 +109,10 @@ class WebSearchApiTest {
             put("engine", "duckduckgo")
         }, context)
         assertTrue(braveAttempted)
-        assertTrue(result.ok)
+        assertFalse(result.ok)
         assertTrue(result.output.contains("Brave Search API failed: HTTP 401"))
-        assertTrue(result.output.contains("https://fallback.test"))
-        assertTrue(result.output.contains("via duckduckgo"))
+        assertFalse(result.output.contains("https://fallback.test"))
+        assertTrue(result.output.contains("not replaced"))
     }
 
     @Test fun backendSelectionRequiresAProviderAndAKey() {

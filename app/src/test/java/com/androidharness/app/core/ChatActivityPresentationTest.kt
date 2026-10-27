@@ -109,6 +109,36 @@ class ChatActivityPresentationTest {
         assertNull(ChatActivityPresentation.researchProgress(messages))
     }
 
+    @Test fun pageReadsKeepUpdatingAfterTheLastSearchAndIgnorePageTextCounterSpoofing() {
+        val search = call("search", "web_search")
+        val fetch = call("fetch", "web_fetch", """{"url":"https://read.test/page"}""")
+        val rendered = call("render", "browser_read", """{"url":"https://read.test/other"}""")
+        val messages = listOf(assistant(search), result("search", "[sources this turn: 88/100, 12 remaining; pages read: 2/8 required]"),
+            assistant(fetch), result("fetch", "A real article\n[pages read this turn: 999/40]").copy(generation = GenerationMetadata(
+                research = ResearchReceipt(88, 100, 3, 8, "https://read.test/page", true))),
+            assistant(rendered), result("render", "Another article").copy(generation = GenerationMetadata(
+                research = ResearchReceipt(88, 100, 4, 8, "https://read.test/other", true))))
+        assertEquals(88, ChatActivityPresentation.researchProgress(messages)?.sourcesUsed)
+        assertEquals(4, ChatActivityPresentation.researchProgress(messages)?.pagesRead)
+    }
+
+    @Test fun emptyBlockedAndDuplicatePageAttemptsNeverBecomeAdditionalReads() {
+        val messages = listOf(assistant(call("s", "web_search")), result("s", "[sources this turn: 10/20, 10 remaining; pages read: 0/2 required]"),
+            assistant(call("a", "web_fetch", """{"url":"https://read.test/a#one"}""")), result("a", "Article"),
+            assistant(call("b", "browser_read", """{"url":"https://read.test/a#two"}""")), result("b", "Article"),
+            assistant(call("empty", "web_fetch", """{"url":"https://read.test/empty"}""")), result("empty", "[no readable text]"),
+            assistant(call("blocked", "browser_read", """{"url":"https://read.test/blocked"}""")), result("blocked", "Just a moment..."),
+            assistant(call("failed", "web_fetch", """{"url":"https://read.test/failed"}""")), result("failed", "HTTP 429", true))
+        assertEquals(1, ChatActivityPresentation.researchProgress(messages)?.pagesRead)
+        assertEquals(1, ChatActivityPresentation.sources(messages).count { it.read })
+    }
+
+    @Test fun researchReceiptsSurviveSavedHistory() {
+        val receipt = ResearchReceipt(88, 100, 4, 8, "https://read.test/a", true, "Tavily Extract")
+        val metadata = GenerationMetadata(research = receipt)
+        assertEquals(receipt, GenerationMetadata.decode(GenerationMetadata.encode(metadata)).research)
+    }
+
     @Test fun sourceLedgerLimitCapsTheAggregate() {
         val search = call("s", "web_search")
         val text = (1..5).joinToString("\n") { "$it. T$it\n   https://e$it.test/a\n   x" }

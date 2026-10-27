@@ -371,7 +371,6 @@
     <string name="subagents_elapsed">経過時間：%1$s</string>
     <string name="subagents_main_chat">メインチャット</string>
     <string name="subagents_results_return">結果はメインエージェントに返されます。</string>
-    <string name="ui_back">@string/settings_action_back</string>
     <plurals name="subagents_count">
         <item quantity="other">%1$d件のサブエージェント</item>
     </plurals>

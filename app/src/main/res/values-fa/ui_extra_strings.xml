@@ -372,7 +372,6 @@
     <string name="subagents_elapsed">زمان سپری‌شده: %1$s</string>
     <string name="subagents_main_chat">گفتگوی اصلی</string>
     <string name="subagents_results_return">نتایج به عامل اصلی برگردانده می‌شوند.</string>
-    <string name="ui_back">@string/settings_action_back</string>
     <plurals name="subagents_count">
         <item quantity="one">%1$d زیرعامل</item>
         <item quantity="other">%1$d زیرعامل</item>

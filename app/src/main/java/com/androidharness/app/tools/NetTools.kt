@@ -32,6 +32,7 @@ class WebSearchTool(
     private val sourceBudget: SearchSourceBudget? = null,
     /** Chat's selected research depth; null for Code and Auto. */
     private val depth: com.androidharness.app.data.SearchDepth? = null,
+    private val refreshApi: suspend () -> SearchApiConfig? = { searchApi() },
 ) : Tool {
     override val name = "web_search"
     override val description: String get() = buildString {
@@ -45,8 +46,8 @@ class WebSearchTool(
         )
         searchBackendFor(searchApi())?.let {
             append(" The user selected ${it.label} in Settings; every search uses that API with the saved key. " +
-                "The engine parameter is ignored while it is active. If the API fails, the result says so " +
-                "and falls back to keyless engines.")
+                "The engine parameter is ignored while it is active. API authentication, quota and rate-limit failures " +
+                "are reported explicitly; do not switch to scraping or repeat unchanged requests.")
         }
         sourceBudget?.let {
             append(" This turn allows at most ${it.maxSources} distinct sources; the tool stops returning new sources when the budget is used.")
@@ -67,8 +68,18 @@ class WebSearchTool(
 
     private val keyless = KeylessSearchBackend()
 
-    /** Human name of the configured search API, or null when keyless engines are active. */
-    internal fun activeBackendLabel(): String? = searchBackendFor(searchApi())?.label
+    internal suspend fun configurationNote(): String {
+        val config = refreshApi()
+        val backend = searchBackendFor(config)
+        return when {
+            backend != null -> "The selected search provider is ${backend.label}; its saved API key is available. " +
+                "Use web_search normally: the harness supplies the key automatically. Do not ask the user to paste it or tell you to use this provider. " +
+                (if (config?.provider == "tavily") "web_fetch also uses Tavily Extract and cached full-page content automatically. " else "") +
+                "Do not navigate to search-engine websites to bypass these tools. Search snippets are not full page reads. Report API failures and unavailable pages honestly."
+            config != null -> "${config.provider} is selected for search, but its saved API key is missing. web_search reports this explicitly; the user can fix it in Web search settings."
+            else -> "No search API is selected. web_search uses public keyless engines. Use web_fetch for pages and browser_read for JavaScript pages."
+        }
+    }
 
     /** A run-scoped copy that spends from this turn's source and read budgets. */
     fun forDepth(depth: com.androidharness.app.data.SearchDepth): WebSearchTool =
@@ -77,6 +88,7 @@ class WebSearchTool(
                 client, searchApi,
                 SearchSourceBudget(it, researchReadLimit(depth), researchReadMinimum(depth)),
                 depth,
+                refreshApi,
             )
         } ?: this
 
@@ -122,13 +134,17 @@ class WebSearchTool(
             .build()
 
         val notes = StringBuilder()
-        val apiBackend = searchBackendFor(searchApi())
+        val apiConfig = refreshApi()
+        if (apiConfig != null && apiConfig.apiKey.isBlank()) return ToolResult(false,
+            "${apiConfig.provider} search API is selected but its saved key is missing. Add or replace the key in Web search settings.")
+        val apiBackend = searchBackendFor(apiConfig)
         val cacheKey = listOf(
             apiBackend?.label ?: "keyless", query, count, options.engine,
             options.freshness, options.language, options.country, options.deep,
+            apiConfig?.apiKey?.let(ResearchHttp::credentialIdentity),
         ).joinToString("|")
         WebResultCache.getSearch(cacheKey)?.let { cached ->
-            val suffix = cached.via?.let { "\n[via $it]" } ?: ""
+            val suffix = (cached.via?.let { "\n[via $it]" } ?: "") + "\n[cached search; no new API request]"
             return render(cached.results, count, "", suffix)
         }
         if (apiBackend != null) {
@@ -146,14 +162,19 @@ class WebSearchTool(
                     }
                     return render(outcome.results, count, notes.toString(), suffix)
                 }
-                notes.append("[note: ${apiBackend.label} returned no results; falling back to keyless engines]\n")
+                return render(emptyList(), count, "${apiBackend.label} returned no results. Try a different query.\n", "\n[via ${apiBackend.label}]")
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
-                notes.append("[note: ${apiBackend.label} failed: ${e.message}; falling back to keyless engines]\n")
+                return ToolResult(false, "${apiBackend.label} failed: ${SecretRedactor.redact(e.message.orEmpty())}. " +
+                    "The selected API was not replaced with anonymous scraping. Check the API key, available credits, or the reported cooldown.")
             }
         }
 
         val outcome = try {
             keyless.fetch(searchClient, query, count, options)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: ToolFailure) {
             return ToolResult(
                 false,
@@ -177,13 +198,14 @@ class WebSearchTool(
         val varied = diversifyResults(results)
         val budget = sourceBudget
         if (budget == null) {
-            return ToolResult(true, prefix + WebSearchText.render(varied, count) + suffix)
+            return ToolResult(true, prefix + WebSearchText.render(varied, count) + suffix,
+                research = com.androidharness.app.core.ResearchReceipt(backend = suffix.substringAfter("[via ", "").substringBefore(']')))
         }
         val claimed = budget.claim(varied.take(count))
         if (claimed.isEmpty()) {
             val message = if (budget.remaining == 0) exhaustedText()
             else "[No new sources found; ${budget.remaining} of ${budget.maxSources} sources remain this turn. Try a different query angle.]"
-            return ToolResult(true, prefix + message)
+            return ToolResult(true, prefix + message + suffix, research = budget.receipt(backend = suffix.substringAfter("[via ", "").substringBefore(']')))
         }
         val push = when (depth) {
             com.androidharness.app.data.SearchDepth.DEEP ->
@@ -201,7 +223,8 @@ class WebSearchTool(
             append(push)
             append(']')
         }
-        return ToolResult(true, prefix + WebSearchText.render(claimed, claimed.size) + suffix + note)
+        return ToolResult(true, prefix + WebSearchText.render(claimed, claimed.size) + suffix + note,
+            research = budget.receipt(backend = suffix.substringAfter("[via ", "").substringBefore(']')))
     }
 
     private fun exhaustedText(): String {

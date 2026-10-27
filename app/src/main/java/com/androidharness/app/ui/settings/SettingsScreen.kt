@@ -1025,8 +1025,9 @@ private fun checkSearchKey(provider: String, key: String): String? {
                 .build()
             else -> okhttp3.Request.Builder()
                 .url("https://api.tavily.com/search")
+                .header("Authorization", "Bearer $key")
                 .post(
-                    """{"api_key":"$key","query":"android","max_results":1}"""
+                    """{"query":"android","max_results":1}"""
                         .toRequestBody("application/json".toMediaTypeOrNull()),
                 )
                 .build()
@@ -1044,6 +1045,11 @@ private fun checkSearchKey(provider: String, key: String): String? {
                         "$name rejected that key" + (detail?.let { " ($it)" } ?: "") +
                             ". Make sure the whole key was copied, that it belongs to $name, " +
                             "and that it has not been deactivated."
+                    resp.code in setOf(402, 432, 433) ->
+                        "$name has no available credits or the plan limit was reached. Check the provider dashboard."
+                    resp.code == 429 ->
+                        "$name is temporarily rate-limiting requests. Wait" +
+                            (resp.header("Retry-After")?.toLongOrNull()?.let { " $it seconds" } ?: " before checking again") + "."
                     !resp.isSuccessful ->
                         "$name returned HTTP ${resp.code}" + (detail?.let { ": $it" } ?: "") +
                             ". Try again shortly."

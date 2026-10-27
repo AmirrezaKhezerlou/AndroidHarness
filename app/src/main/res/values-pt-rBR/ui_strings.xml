@@ -1064,7 +1064,7 @@
     <string name="ui_keyless">"Sem chave"</string>
     <string name="ui_public_search_engines_no_setup">"Mecanismos de busca públicos, sem configuração"</string>
     <string name="ui_key_saved">"%1$s · chave salva"</string>
-    <string name="ui_no_key_yet_keyless_fallback">"%1$s · ainda sem chave (fallback sem chave)"</string>
+    <string name="ui_no_key_yet_keyless_fallback">%1$s · adicione uma chave de API para usar este provedor</string>
     <string name="ui_on">"Ativado"</string>
     <string name="ui_no_key">"Sem chave"</string>
     <string name="ui_the_agent_searches_public_engines_with_zero">"O agente pesquisa em mecanismos públicos sem configuração; Brave ou Tavily "</string>

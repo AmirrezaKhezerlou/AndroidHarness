@@ -65,6 +65,7 @@ class SearchSourceBudget(
 ) {
     private val seen = LinkedHashSet<String>()
     private var reads = 0
+    private val readUrls = HashSet<String>()
     private val lock = Any()
 
     val used: Int get() = synchronized(lock) { seen.size }
@@ -72,13 +73,23 @@ class SearchSourceBudget(
     val pagesRead: Int get() = synchronized(lock) { reads }
 
     /** True while another page read fits the limit. */
-    fun canRead(): Boolean = synchronized(lock) { maxReads == null || reads < maxReads }
+    fun canRead(url: String? = null): Boolean = synchronized(lock) {
+        url?.let(::canonicalResultUrl) in readUrls || maxReads == null || reads < maxReads
+    }
 
     /** Claims one page read, or false when the read limit is already used. */
-    fun claimRead(): Boolean = synchronized(lock) {
+    fun claimRead(url: String? = null): Boolean = synchronized(lock) {
+        val key = url?.let(::canonicalResultUrl)
+        if (key != null && key in readUrls) return true
         if (maxReads != null && reads >= maxReads) return false
         reads++
+        if (key != null) readUrls += key
         true
+    }
+
+    fun receipt(url: String? = null, backend: String? = null) = synchronized(lock) {
+        com.androidharness.app.core.ResearchReceipt(seen.size, maxSources, reads, minReads,
+            pageUrl = url, pageRead = url != null, backend = backend)
     }
 
     /** Results that still fit the budget, with their URLs recorded as used. */

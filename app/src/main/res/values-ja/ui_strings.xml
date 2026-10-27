@@ -1064,7 +1064,7 @@
     <string name="ui_keyless">"キー不要"</string>
     <string name="ui_public_search_engines_no_setup">"公開検索エンジン、セットアップ不要"</string>
     <string name="ui_key_saved">"%1$s · キー保存済み"</string>
-    <string name="ui_no_key_yet_keyless_fallback">"%1$s · キー未設定（キー不要フォールバック）"</string>
+    <string name="ui_no_key_yet_keyless_fallback">%1$s · このプロバイダーを使うには API キーを追加してください</string>
     <string name="ui_on">"オン"</string>
     <string name="ui_no_key">"キーなし"</string>
     <string name="ui_the_agent_searches_public_engines_with_zero">"エージェントはセットアップなしで公開エンジンを検索します。BraveまたはTavily"</string>

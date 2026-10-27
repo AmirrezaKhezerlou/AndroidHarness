@@ -167,6 +167,14 @@ class AppContainer(val appContext: Context) {
             }
         }
 
+    private suspend fun resolveSearchApiConfig(): com.androidharness.app.tools.SearchApiConfig? {
+        val provider = settings.settings.first().webSearchProvider
+        keys.migrateLegacySearchKey(provider)
+        webSearchProvider.set(provider)
+        if (provider == "keyless") return null
+        return com.androidharness.app.tools.SearchApiConfig(provider, keys.searchApiKey(provider).orEmpty())
+    }
+
     private val cavemanSettings = AtomicReference(com.androidharness.app.data.AppSettings())
     val skills = com.androidharness.app.skills.SkillStore(
         bundled = com.androidharness.app.skills.SkillAssets.load(appContext.assets),
@@ -183,6 +191,7 @@ class AppContainer(val appContext: Context) {
         imageStore = images,
         browserController = browser,
         searchApi = { searchApiConfig },
+        searchApiRefresh = ::resolveSearchApiConfig,
         artifactLoader = sessions::artifacts,
         toolOutputLoader = sessions::toolOutput,
         fileHistory = fileHistory,

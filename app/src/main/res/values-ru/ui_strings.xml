@@ -1062,7 +1062,7 @@
     <string name="ui_keyless">"Без ключа"</string>
     <string name="ui_public_search_engines_no_setup">"Открытые поисковики без настройки"</string>
     <string name="ui_key_saved">"%1$s · Ключ сохранён"</string>
-    <string name="ui_no_key_yet_keyless_fallback">"%1$s · Ключа нет (резервный поиск без ключа)"</string>
+    <string name="ui_no_key_yet_keyless_fallback">%1$s · добавьте ключ API для этого провайдера</string>
     <string name="ui_on">"Вкл."</string>
     <string name="ui_no_key">"Нет ключа"</string>
     <string name="ui_the_agent_searches_public_engines_with_zero">"Агент использует открытые поисковики без настройки; Brave или Tavily "</string>
