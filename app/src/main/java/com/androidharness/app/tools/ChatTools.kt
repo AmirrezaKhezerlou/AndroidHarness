@@ -4,6 +4,18 @@ import com.androidharness.app.core.ChatMessage
 import com.androidharness.app.core.Role
 import kotlinx.serialization.json.*
 
+class ViewChatImageTool(private val images: com.androidharness.app.data.ImageStore) : Tool {
+    override val name = "view_chat_image"
+    override val description = "Visually inspect a public image URL from a fetched page or the conversation. Use before making claims about what a picture shows."
+    override val parametersSchema = Schema.obj(mapOf("url" to Schema.string("The direct public image URL.")), required = listOf("url"))
+    override val isReadOnly = true
+    override suspend fun execute(args: JsonObject, ctx: ToolContext): ToolResult {
+        val url = args["url"]?.jsonPrimitive?.contentOrNull ?: throw ToolFailure("Provide an image URL.")
+        val image = images.remoteImage(url) ?: return ToolResult(false, "Could not load this image for visual inspection. Do not claim to have seen it.")
+        return ToolResult(true, "Image for visual inspection: $url", image = images.saveResolved(image))
+    }
+}
+
 /** Reads conversation input, never a workspace or a user-supplied filesystem path. */
 class ReadChatTextTool(private val load: suspend (String) -> List<ChatMessage>) : Tool {
     override val name = "read_chat_text"

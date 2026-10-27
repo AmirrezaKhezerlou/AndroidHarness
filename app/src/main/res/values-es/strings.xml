@@ -939,4 +939,5 @@
     <string name="chat_memory_unchanged">"Recuerdo ya guardado"</string>
     <string name="memory_save_failed">"No se pudo guardar esta memoria. Inténtalo de nuevo."</string>
     <string name="memory_delete_digest_body">"¿Eliminar este recuerdo organizado y sus entradas originales conservadas? Ya no se usarán. Esta acción no se puede deshacer."</string>
+    <string name="chat_attachment_wait_for_reply">Espera a que termine la respuesta antes de enviar archivos adjuntos.</string>
 </resources>

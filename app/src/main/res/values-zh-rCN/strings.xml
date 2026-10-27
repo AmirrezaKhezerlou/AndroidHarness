@@ -969,4 +969,5 @@
     <string name="chat_memory_unchanged">记忆已保存过</string>
     <string name="memory_save_failed">无法保存此记忆。请重试。</string>
     <string name="memory_delete_digest_body">删除这条整理后的记忆及其保留的原始条目？它们将不再被使用。此操作无法撤销。</string>
+    <string name="chat_attachment_wait_for_reply">请等待回复完成后再发送附件。</string>
 </resources>

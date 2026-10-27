@@ -939,4 +939,5 @@
     <string name="chat_memory_unchanged">"Memória já salva"</string>
     <string name="memory_save_failed">"Não foi possível salvar esta memória. Tente novamente."</string>
     <string name="memory_delete_digest_body">"Excluir esta memória organizada e suas entradas originais preservadas? Elas não serão mais usadas. Isso não pode ser desfeito."</string>
+    <string name="chat_attachment_wait_for_reply">Aguarde a resposta terminar antes de enviar anexos.</string>
 </resources>

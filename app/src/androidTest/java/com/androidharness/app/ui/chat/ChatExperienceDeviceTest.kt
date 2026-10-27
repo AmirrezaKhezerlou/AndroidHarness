@@ -37,6 +37,94 @@ class ChatExperienceDeviceTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val c get() = (instrumentation.targetContext.applicationContext as HarnessApp).container
 
+    @Test fun userImageAttachmentReachesChatVisionProvider(): Unit = runBlocking {
+        val root = File(c.appContext.cacheDir, "shared/user-image-${System.nanoTime()}").apply { mkdirs() }
+        val source = File(root, "sample.gif")
+        val bitmap = android.graphics.Bitmap.createBitmap(8, 8, android.graphics.Bitmap.Config.ARGB_8888)
+        bitmap.eraseColor(android.graphics.Color.BLUE)
+        source.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        bitmap.recycle()
+        val uri = androidx.core.content.FileProvider.getUriForFile(c.appContext, c.appContext.packageName + ".update", source)
+        val stored = requireNotNull(c.images.import(uri))
+        val ref = ImageRef(stored.file.name, stored.mime)
+        val chat = c.sessions.createSession("User image", conversation = ConversationConfig(ConversationKind.CHAT))
+        var observed = emptyList<ChatMessage>()
+        val provider = object : LlmProvider {
+            override fun streamChat(config: ProviderConfig, apiKey: String, systemPrompt: String,
+                messages: List<ChatMessage>, tools: List<ToolSchema>, options: RequestOptions) = flow {
+                observed = messages.toList()
+                emit(StreamEvent.TextDelta("Received")); emit(StreamEvent.Done("stop"))
+            }
+        }
+        val engine = AgentEngine({ provider }, c.registry, c.checkpoints, c.images, c.linuxEnv, c.shizuku, c.skills)
+        val runs = RunManager(c.appContext, engine, c.sessions, c.checkpoints, c.workspace, c.linuxEnv, c.settings, TodoStore(), c.providers)
+        try {
+            assertEquals("image/png", stored.mime)
+            val config = ProviderConfig("fixture", "Fixture", ProviderType.OPENAI_COMPAT, "https://example.com", "gpt-4o")
+            runs.startRun(chat, "What is in my picture?", listOf(ref), config, "fixture", PermissionMode.FULL_AUTO,
+                AgentMode.ACT, 1024, 32000, ThinkingLevel.OFF, 10, notifyOnFinish = false)
+            kotlinx.coroutines.withTimeout(30_000) { while (runs.isRunning(chat)) kotlinx.coroutines.delay(50) }
+            val sent = observed.last { it.role == Role.USER }.imageData.single()
+            assertEquals("image/png", sent.mime)
+            val bytes = android.util.Base64.decode(sent.base64, android.util.Base64.DEFAULT)
+            assertEquals(0x89.toByte(), bytes[0]); assertEquals('P'.code.toByte(), bytes[1])
+            assertTrue(c.sessions.messages(chat).any { it.role == Role.USER && it.images == listOf(ref) })
+            val reported = config.copy(model = "deepseek-chat")
+            engine.run(chat, "reported-vision", reported, "fixture", listOf(ChatMessage(Role.USER, "Describe", images = listOf(ref))),
+                { PermissionMode.FULL_AUTO }, mutableSetOf(), FileFs(root),
+                RequestOptions(modelCatalogs = mapOf(reported.id to listOf(ModelEntry(reported.model, imageInput = true)))),
+                32000, AgentMode.ACT, conversation = ConversationConfig(ConversationKind.CHAT)).toList()
+            assertEquals(1, observed.last { it.role == Role.USER }.imageData.size)
+        } finally {
+            runs.stopAndJoin(chat)
+            c.sessions.session(chat)?.let { c.sessions.deleteSession(it) }
+            c.images.delete(ref.name); root.deleteRecursively()
+        }
+    }
+
+    @Test fun chatFollowUpSendsPreviouslyShownImageToVisionProvider(): Unit = runBlocking {
+        val url = "https://example.com/chat-image-fixture.png"
+        val key = java.security.MessageDigest.getInstance("SHA-256").digest(url.toByteArray()).joinToString("") { "%02x".format(it) }
+        val cache = File(c.appContext.cacheDir, "remote-images/$key.img").apply { parentFile?.mkdirs() }
+        val bitmap = android.graphics.Bitmap.createBitmap(8, 8, android.graphics.Bitmap.Config.ARGB_8888)
+        bitmap.eraseColor(android.graphics.Color.RED)
+        cache.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        bitmap.recycle()
+        val root = File(c.appContext.cacheDir, "chat-image-${System.nanoTime()}").apply { mkdirs() }
+        val chat = c.sessions.createSession("Image context", conversation = ConversationConfig(ConversationKind.CHAT))
+        var observed = emptyList<ChatMessage>()
+        var inspectionHistory = emptyList<ChatMessage>()
+        var round = 0
+        val provider = object : LlmProvider {
+            override fun streamChat(config: ProviderConfig, apiKey: String, systemPrompt: String,
+                messages: List<ChatMessage>, tools: List<ToolSchema>, options: RequestOptions) = flow {
+                if (round++ == 0) {
+                    observed = messages.toList()
+                    emit(StreamEvent.ToolCallBatch(listOf(ToolCallData("inspect", "view_chat_image", "{\"url\":\"$url\"}"))))
+                    emit(StreamEvent.Done("tool_calls"))
+                } else {
+                    inspectionHistory = messages.toList()
+                    emit(StreamEvent.TextDelta("The picture is red.")); emit(StreamEvent.Done("stop"))
+                }
+            }
+        }
+        try {
+            val engine = AgentEngine({ provider }, c.registry, c.checkpoints, c.images, c.linuxEnv, c.shizuku, c.skills,
+                chatOnlyTools = listOf(ViewChatImageTool(c.images)))
+            val history = listOf(ChatMessage(Role.USER, "Show a picture"), ChatMessage(Role.ASSISTANT, "![sample]($url)"),
+                ChatMessage(Role.USER, "What color is it?"))
+            engine.run(chat, "image-context", ProviderConfig("fixture", "Fixture", ProviderType.OPENAI_COMPAT,
+                "https://example.com", "gpt-4o"), "fixture", history, { PermissionMode.FULL_ACCESS }, mutableSetOf(),
+                FileFs(root), RequestOptions(), 100_000, AgentMode.ACT, conversation = ConversationConfig(ConversationKind.CHAT)).toList()
+            assertEquals(1, observed.last { it.role == Role.USER }.imageData.size)
+            assertTrue(observed.last { it.role == Role.USER }.text.contains(url))
+            assertTrue(inspectionHistory.any { it.role == Role.TOOL && it.toolName == "view_chat_image" && it.imageData.isNotEmpty() })
+        } finally {
+            c.sessions.session(chat)?.let { c.sessions.deleteSession(it) }
+            cache.delete(); root.deleteRecursively()
+        }
+    }
+
     @Test fun chatEngineKeepsToolsAutomaticAndRejectsProjectToolsWithoutEnvironmentSetup(): Unit = runBlocking {
         val root = File(c.appContext.cacheDir, "chat-engine-${System.nanoTime()}").apply { mkdirs() }
         val chat = c.sessions.createSession("New chat", conversation = ConversationConfig(ConversationKind.CHAT))
@@ -63,6 +151,7 @@ class ChatExperienceDeviceTest {
                 cavemanSettings = { AppSettings(cavemanInstalled = true) },
                 universalMemory = c.memory,
                 chatOnlyTools = listOf(ReadChatTextTool(c.sessions::messages), BrowserReadTool(c.browser),
+                    ViewChatImageTool(c.images),
                     SearchChatsTool { _, _, _ -> emptyList() },
                     RecentChatsTool(c.sessions.sessions),
                     ReadChatSnippetTool(c.sessions::messages, c.sessions::session),

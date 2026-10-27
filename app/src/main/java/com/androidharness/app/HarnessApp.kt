@@ -248,6 +248,7 @@ class AppContainer(val appContext: Context) {
         deviceAccess = deviceAccess,
         universalMemory = memory,
         chatOnlyTools = listOf(com.androidharness.app.tools.ReadChatTextTool(sessions::messages),
+            com.androidharness.app.tools.ViewChatImageTool(images),
             com.androidharness.app.tools.BrowserReadTool(browser),
             com.androidharness.app.tools.SearchChatsTool { query, fuzzy, limit ->
                 sessions.searchMessages(query, fuzzy, limit)

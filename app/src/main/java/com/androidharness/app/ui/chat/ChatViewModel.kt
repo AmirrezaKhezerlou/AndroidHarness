@@ -842,6 +842,10 @@ class ChatViewModel(
         val agentText = resolved.agentText ?: return false
         val sid = sessionId
         if (sid != null && c.runManager.isRunning(sid)) {
+            if (_state.value.conversation.isChat && (_state.value.attachments.isNotEmpty() || _state.value.fileAttachments.isNotEmpty())) {
+                _state.update { it.copy(error = c.appContext.getString(R.string.chat_attachment_wait_for_reply)) }
+                return false
+            }
             // Queue the expanded text for this chat's successful Run finished event.
             // Local slash commands never reach here, so /cost /skills /clear keep working mid-run.
             val target = SlashCommands.dispatchTarget(isRunning = true, agentText = agentText)

@@ -938,4 +938,5 @@
     <string name="chat_memory_unchanged">"メモリはすでに保存されています"</string>
     <string name="memory_save_failed">"このメモリを保存できませんでした。再試行してください。"</string>
     <string name="memory_delete_digest_body">"この整理済みメモリと保存された元の項目を削除しますか？今後使用されません。この操作は元に戻せません。"</string>
+    <string name="chat_attachment_wait_for_reply">添付ファイルを送信する前に、回答が終わるまでお待ちください。</string>
 </resources>

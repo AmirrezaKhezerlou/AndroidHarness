@@ -939,4 +939,5 @@
     <string name="chat_memory_unchanged">"حافظه قبلاً ذخیره شده است"</string>
     <string name="memory_save_failed">"این حافظه ذخیره نشد. دوباره امتحان کنید."</string>
     <string name="memory_delete_digest_body">"این حافظه سازمان یافته و ورودی های اصلی حفظ شده آن حذف شود؟ آنها دیگر استفاده نخواهند شد. این قابل واگرد نیست."</string>
+    <string name="chat_attachment_wait_for_reply">پیش از ارسال پیوست‌ها، منتظر بمانید تا پاسخ تمام شود.</string>
 </resources>

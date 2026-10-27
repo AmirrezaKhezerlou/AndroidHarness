@@ -971,4 +971,5 @@
     <string name="chat_memory_unchanged">Memory already saved</string>
     <string name="memory_save_failed">Could not save this memory. Try again.</string>
     <string name="memory_delete_digest_body">Delete this organized memory and its preserved original entries? They will no longer be used. This cannot be undone.</string>
+    <string name="chat_attachment_wait_for_reply">Wait for the reply to finish before sending attachments.</string>
 </resources>

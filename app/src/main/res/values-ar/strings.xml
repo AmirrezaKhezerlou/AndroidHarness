@@ -943,4 +943,5 @@
     <string name="chat_memory_unchanged">"الذكرى محفوظة بالفعل"</string>
     <string name="memory_save_failed">"تعذر حفظ هذه الذكرى. حاول مرة أخرى."</string>
     <string name="memory_delete_digest_body">"حذف هذه الذكرى المنظمة وإدخالاتها الأصلية المحفوظة؟ لن تُستخدم بعد الآن. لا يمكن التراجع عن هذا."</string>
+    <string name="chat_attachment_wait_for_reply">انتظر حتى ينتهي الرد قبل إرسال المرفقات.</string>
 </resources>

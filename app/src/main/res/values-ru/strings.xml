@@ -941,4 +941,5 @@
     <string name="chat_memory_unchanged">"Воспоминание уже сохранено"</string>
     <string name="memory_save_failed">"Не удалось сохранить воспоминание. Попробуйте снова."</string>
     <string name="memory_delete_digest_body">"Удалить это упорядоченное воспоминание и сохранённые исходные записи? Они больше не будут использоваться. Это действие нельзя отменить."</string>
+    <string name="chat_attachment_wait_for_reply">Дождитесь завершения ответа перед отправкой вложений.</string>
 </resources>

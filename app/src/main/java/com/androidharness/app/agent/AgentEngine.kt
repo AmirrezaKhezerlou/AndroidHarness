@@ -304,17 +304,22 @@ class AgentEngine(
             (chatOnlyTools.firstOrNull { it.name == "browser_read" } as? com.androidharness.app.tools.BrowserReadTool)
                 ?.forBudget(scopedSearch?.budget())
         } else null
+        val imageCapable = (if (conversation.isChat) options.modelCatalogs[config.id]?.firstOrNull { it.id == config.model }?.imageInput else null)
+            ?: com.androidharness.app.llm.visionCapable(config.model)
         val runRegistry = (if (conversation.isChat) registry.withExtra(chatOnlyTools + listOfNotNull(scopedSearch, scopedFetch, scopedBrowser)) else registry.withExtra(extraTools +
             if (subagentRuns == null) emptyList() else com.androidharness.app.tools.subagentControlTools(subagentRuns, sessionId)))
             .restrictedTo(conversation.allowedTools)
             .let { if (conversation.isChat && searchDepth == com.androidharness.app.data.SearchDepth.OFF) it.without(setOf("web_search")) else it }
             .let { if (memoryOn) it else it.without(memoryToolNames) }
             .let { if (conversation.personalizationEnabled) it else it.without(recallToolNames) }
+            .let { if (conversation.isChat && !imageCapable) it.without(setOf("view_chat_image")) else it }
         val chatHistory = if (agentContextEnabled || conversation.isChat) history else com.androidharness.app.local.LocalChatCodec.plainChatMessages(history)
-        val working = (if (localChat) chatHistory else ContextHygiene.shrinkToolResults(chatHistory))
-            .map { it.withImagesResolved() }.toMutableList()
+        val resolvedHistory = (if (localChat) chatHistory else ContextHygiene.shrinkToolResults(chatHistory))
+            .map { it.withImagesResolved() }
+        val working = (if (conversation.isChat && imageCapable)
+            ChatImageContext.attach(resolvedHistory, imageStore::remoteImage) else resolvedHistory).toMutableList()
         // If active model is known to be text-only, strip image data upfront
-        if (!localChat && !com.androidharness.app.llm.visionCapable(config.model)) {
+        if (!localChat && !imageCapable) {
             val sanitized = ContextHygiene.stripImages(working)
             working.clear()
             working.addAll(sanitized)

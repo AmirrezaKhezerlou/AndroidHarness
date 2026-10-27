@@ -15,15 +15,26 @@ class ImageStore(private val context: Context) {
     private val dir: File = File(context.filesDir, "images").apply { mkdirs() }
     val imagesDir: File get() = dir
 
+    /** Fetch through the same public-address and size checks used by Chat's image viewer. */
+    suspend fun remoteImage(url: String): com.androidharness.app.core.ImageData? {
+        val bitmap = com.androidharness.app.ui.chat.RemoteContentLoader.loadImage(context, url) ?: return null
+        val out = java.io.ByteArrayOutputStream()
+        if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)) return null
+        return com.androidharness.app.core.ImageData("image/jpeg", android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP))
+    }
+
+    fun saveResolved(image: com.androidharness.app.core.ImageData): com.androidharness.app.core.ImageRef {
+        val name = "${UUID.randomUUID()}.jpg"
+        File(dir, name).writeBytes(android.util.Base64.decode(image.base64, android.util.Base64.DEFAULT))
+        return com.androidharness.app.core.ImageRef(name, image.mime)
+    }
+
     /** Copies the picked image in, downscaling to at most 1568px on the long edge. */
     fun import(uri: Uri): StoredImage? {
-        val mime = context.contentResolver.getType(uri) ?: "image/png"
-        val ext = when (mime) {
-            "image/jpeg" -> "jpg"
-            "image/webp" -> "webp"
-            "image/gif" -> "gif"
-            else -> "png"
-        }
+        val sourceMime = context.contentResolver.getType(uri) ?: "image/png"
+        // Decoding and re-encoding produces JPEG or PNG, regardless of the source format.
+        val mime = if (sourceMime == "image/jpeg") "image/jpeg" else "image/png"
+        val ext = if (mime == "image/jpeg") "jpg" else "png"
         return runCatching {
             val decoded = context.contentResolver.openInputStream(uri)?.use { stream ->
                 val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }

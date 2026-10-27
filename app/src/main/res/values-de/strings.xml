@@ -939,4 +939,5 @@
     <string name="chat_memory_unchanged">"Erinnerung bereits gespeichert"</string>
     <string name="memory_save_failed">"Diese Erinnerung konnte nicht gespeichert werden. Versuche es erneut."</string>
     <string name="memory_delete_digest_body">"Diese organisierte Erinnerung und ihre erhaltenen ursprünglichen Einträge löschen? Sie werden nicht mehr verwendet. Dies kann nicht rückgängig gemacht werden."</string>
+    <string name="chat_attachment_wait_for_reply">Warte, bis die Antwort fertig ist, bevor du Anhänge sendest.</string>
 </resources>
