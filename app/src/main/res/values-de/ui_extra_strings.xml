@@ -438,5 +438,7 @@
     <string name="wireless_adb_pairing">Kopplung läuft</string>
     <string name="wireless_adb_paired">Mit drahtlosem Debugging gekoppelt</string>
     <string name="wireless_adb_pairing_failed">Kopplung fehlgeschlagen</string>
+    <string name="wireless_adb_paired_connect_failed">Gekoppelt, aber keine Verbindung</string>
+    <string name="wireless_adb_timeout">Zeitüberschreitung beim Koppeln. Code oder Port ist abgelaufen. Starte die Kopplung erneut.</string>
     <string name="wireless_adb_stop_search">Suche beenden</string>
 </resources>

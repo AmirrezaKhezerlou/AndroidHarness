@@ -2,16 +2,20 @@ package com.androidharness.app.data.env.adb
 
 import android.content.Context
 import android.os.Build
+import android.util.Log
 import androidx.annotation.RequiresApi
 import com.androidharness.app.data.env.ShizukuCompatClient
 import com.androidharness.app.data.env.ShizukuCompatProtocol
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import java.net.SocketTimeoutException
 
 /**
  * Optional built-in replacement for the Shizuku app. It pairs with Android's
@@ -65,9 +69,19 @@ class WirelessAdbManager(private val context: Context) {
         val pairingPort = port?.takeIf { it in 1..65535 }
             ?: AdbMdns(context, AdbMdns.TLS_PAIRING).findPort(12_000)
             ?: throw AdbException("The pairing service was not found. Keep the pairing dialog open and try again.")
-        AdbPairingClient("127.0.0.1", pairingPort, code, identity()).use { client ->
-            if (!client.start()) throw AdbException("The pairing code was rejected. Start pairing again.")
+        Log.i(TAG, "Pairing with the service on port $pairingPort")
+        try {
+            withTimeout(PAIRING_BACKSTOP_MS) {
+                AdbPairingClient("127.0.0.1", pairingPort, code, identity()).use { client ->
+                    if (!client.start()) throw AdbException("The pairing code was rejected. Start pairing again.")
+                }
+            }
+        } catch (e: TimeoutCancellationException) {
+            throw AdbException(PAIRING_TIMEOUT_MESSAGE)
+        } catch (e: SocketTimeoutException) {
+            throw AdbException(PAIRING_TIMEOUT_MESSAGE)
         }
+        Log.i(TAG, "Paired with adbd")
         _state.value = State.Paired
         pairingPort
     }
@@ -75,14 +89,19 @@ class WirelessAdbManager(private val context: Context) {
     /** Connects to the advertised wireless debugging port and starts the shell runner. */
     suspend fun connect(): Result<Unit> = withContext(Dispatchers.IO) {
         autoConnectAfter = 0
-        runCatching { connectInternal() }
+        runCatching { withTimeout(CONNECT_BACKSTOP_MS) { connectInternal() } }
+            .recoverCatching { e ->
+                if (e is TimeoutCancellationException || e is SocketTimeoutException) {
+                    throw AdbException(CONNECT_TIMEOUT_MESSAGE)
+                } else throw e
+            }
     }
 
     /** Returns a live client, reconnecting on demand with a cooldown after failures. */
     internal suspend fun client(): ShizukuCompatClient? = withContext(Dispatchers.IO) {
         compat?.takeIf { it.isAlive } ?: run {
             if (System.currentTimeMillis() < autoConnectAfter) return@withContext null
-            runCatching { connectInternal() }.onFailure {
+            runCatching { withTimeout(CONNECT_BACKSTOP_MS) { connectInternal() } }.onFailure {
                 // A failed discovery can block a terminal command for seconds; do not retry every call.
                 autoConnectAfter = System.currentTimeMillis() + AUTO_CONNECT_COOLDOWN_MS
             }
@@ -130,11 +149,13 @@ class WirelessAdbManager(private val context: Context) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
                 throw AdbException("Wireless debugging pairing needs Android 11 or newer.")
             }
+            Log.d(TAG, "Discovering the ADB connect port")
             val port = AdbMdns(context, AdbMdns.TLS_CONNECT).findPort(10_000)
             if (port == null) {
                 _state.value = State.Failed("Wireless debugging is off or no port was advertised.")
                 throw AdbException("Turn on Developer options > Wireless debugging, then try again.")
             }
+            Log.d(TAG, "Connecting to adbd on port $port")
             val adb = AdbClient("127.0.0.1", port, identity())
             try {
                 adb.connect()
@@ -148,9 +169,11 @@ class WirelessAdbManager(private val context: Context) {
                 shell = opened
                 compat = started
                 autoConnectAfter = 0
+                Log.i(TAG, "Wireless ADB runner started as UID ${started.uid} on port $port")
                 _state.value = State.Connected(started.uid, port)
             } catch (e: Exception) {
                 runCatching { adb.close() }
+                Log.w(TAG, "Wireless ADB connect failed", e)
                 _state.value = State.Failed(e.message ?: "Could not connect to wireless debugging.")
                 throw e
             }
@@ -179,7 +202,14 @@ class WirelessAdbManager(private val context: Context) {
     }
 
     private companion object {
+        const val TAG = "WirelessAdbManager"
         const val KEY_STORAGE = "adbkey"
         const val AUTO_CONNECT_COOLDOWN_MS = 30_000L
+        const val PAIRING_BACKSTOP_MS = 35_000L
+        const val CONNECT_BACKSTOP_MS = 45_000L
+        const val PAIRING_TIMEOUT_MESSAGE =
+            "The pairing service stopped answering. The code or port expired; start pairing again."
+        const val CONNECT_TIMEOUT_MESSAGE =
+            "Connecting to wireless debugging timed out. Turn the toggle off and on, then try again."
     }
 }

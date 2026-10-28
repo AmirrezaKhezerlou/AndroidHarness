@@ -436,5 +436,7 @@
     <string name="wireless_adb_pairing">Pairing in progress</string>
     <string name="wireless_adb_paired">Paired with wireless debugging</string>
     <string name="wireless_adb_pairing_failed">Pairing failed</string>
+    <string name="wireless_adb_paired_connect_failed">Paired, but could not connect</string>
+    <string name="wireless_adb_timeout">Pairing timed out. The code or port expired. Start pairing again.</string>
     <string name="wireless_adb_stop_search">Stop searching</string>
 </resources>

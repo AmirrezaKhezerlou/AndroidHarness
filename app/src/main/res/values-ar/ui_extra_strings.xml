@@ -446,5 +446,7 @@
     <string name="wireless_adb_pairing">جارٍ الاقتران</string>
     <string name="wireless_adb_paired">تم الاقتران بتصحيح الأخطاء اللاسلكي</string>
     <string name="wireless_adb_pairing_failed">فشل الاقتران</string>
+    <string name="wireless_adb_paired_connect_failed">تم الاقتران ولكن تعذّر الاتصال</string>
+    <string name="wireless_adb_timeout">انتهت مهلة الاقتران. انتهت صلاحية الرمز أو المنفذ. ابدأ الاقتران من جديد.</string>
     <string name="wireless_adb_stop_search">إيقاف البحث</string>
 </resources>

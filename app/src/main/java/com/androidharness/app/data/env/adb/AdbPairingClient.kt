@@ -6,6 +6,7 @@ import androidx.annotation.RequiresApi
 import java.io.Closeable
 import java.io.DataInputStream
 import java.io.DataOutputStream
+import java.net.InetSocketAddress
 import java.net.Socket
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -50,8 +51,13 @@ internal class AdbPairingClient(
     }
 
     private fun setupTlsConnection() {
-        socket = Socket(host, port).apply { tcpNoDelay = true }
+        socket = Socket().apply {
+            connect(InetSocketAddress(host, port), CONNECT_TIMEOUT_MS)
+            soTimeout = READ_TIMEOUT_MS
+            tcpNoDelay = true
+        }
         val secure = key.sslContext.socketFactory.createSocket(socket, host, port, true) as SSLSocket
+        secure.soTimeout = READ_TIMEOUT_MS
         secure.startHandshake()
         Log.d(TAG, "Pairing TLS handshake succeeded")
         inputStream = DataInputStream(secure.inputStream)
@@ -67,11 +73,13 @@ internal class AdbPairingClient(
 
     private fun exchangeMessages(): Boolean {
         val message = pairingContext.msg
+        Log.d(TAG, "Sending SPAKE2 message (${message.size} bytes)")
         writePacket(pairingContext.msg, PacketType.SPAKE2_MESSAGE)
         val header = readHeader() ?: return false
         if (header.type != PacketType.SPAKE2_MESSAGE) return false
         val theirMessage = ByteArray(header.payload)
         inputStream.readFully(theirMessage)
+        Log.d(TAG, "Received SPAKE2 response (${theirMessage.size} bytes)")
         return pairingContext.initCipher(theirMessage)
     }
 
@@ -81,6 +89,7 @@ internal class AdbPairingClient(
         peerInfo.put(ByteArray(MAX_PEER_INFO_SIZE - 1).also { key.adbPublicKey.copyInto(it, 0, 0, minOf(key.adbPublicKey.size, MAX_PEER_INFO_SIZE - 1)) })
 
         val encrypted = pairingContext.encrypt(peerInfo.array()) ?: return false
+        Log.d(TAG, "Sending encrypted peer info (${encrypted.size} bytes)")
         writePacket(encrypted, PacketType.PEER_INFO)
 
         val header = readHeader() ?: return false
@@ -88,6 +97,7 @@ internal class AdbPairingClient(
         val theirMessage = ByteArray(header.payload)
         inputStream.readFully(theirMessage)
         val decrypted = pairingContext.decrypt(theirMessage) ?: throw AdbInvalidPairingCodeException()
+        Log.d(TAG, "Pairing exchange complete")
         return decrypted.size == MAX_PEER_INFO_SIZE
     }
 
@@ -140,6 +150,8 @@ internal class AdbPairingClient(
         private const val EXPORTED_KEY_LABEL = "adb-label\u0000"
         private const val EXPORTED_KEY_SIZE = 64
         private const val PEER_INFO_RSA_PUBLIC_KEY: Byte = 0
+        private const val CONNECT_TIMEOUT_MS = 5_000
+        private const val READ_TIMEOUT_MS = 10_000
 
         private val loaded = runCatching { System.loadLibrary("harness_adb") }.isSuccess
 

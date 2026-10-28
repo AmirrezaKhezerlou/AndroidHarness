@@ -438,5 +438,7 @@
     <string name="wireless_adb_pairing">Emparelhando</string>
     <string name="wireless_adb_paired">Emparelhado com a depuração sem fio</string>
     <string name="wireless_adb_pairing_failed">Falha no emparelhamento</string>
+    <string name="wireless_adb_paired_connect_failed">Emparelhado, mas não foi possível conectar</string>
+    <string name="wireless_adb_timeout">O emparelhamento expirou. O código ou a porta expirou. Inicie o emparelhamento novamente.</string>
     <string name="wireless_adb_stop_search">Parar busca</string>
 </resources>

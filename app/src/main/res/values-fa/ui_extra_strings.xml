@@ -438,5 +438,7 @@
     <string name="wireless_adb_pairing">در حال جفت‌سازی</string>
     <string name="wireless_adb_paired">با اشکال‌زدایی بی‌سیم جفت شد</string>
     <string name="wireless_adb_pairing_failed">جفت‌سازی ناموفق</string>
+    <string name="wireless_adb_paired_connect_failed">جفت شد اما اتصال برقرار نشد</string>
+    <string name="wireless_adb_timeout">مهلت جفت‌سازی تمام شد. کد یا پورت منقضی شده است. جفت‌سازی را دوباره شروع کنید.</string>
     <string name="wireless_adb_stop_search">توقف جستجو</string>
 </resources>

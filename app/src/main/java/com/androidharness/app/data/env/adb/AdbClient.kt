@@ -11,6 +11,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
+import java.net.InetSocketAddress
 import java.net.Socket
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -37,13 +38,19 @@ internal class AdbClient(
     private lateinit var output: DataOutputStream
     private val writeLock = Any()
     private val readLock = Any()
+    private var secureSocket: SSLSocket? = null
 
     @Volatile private var closed = false
 
     val isConnected: Boolean get() = !closed
 
     fun connect() {
-        socket = Socket(host, port).apply { tcpNoDelay = true }
+        Log.d(TAG, "Connecting to adbd on port $port")
+        socket = Socket().apply {
+            connect(InetSocketAddress(host, port), CONNECT_TIMEOUT_MS)
+            soTimeout = READ_TIMEOUT_MS
+            tcpNoDelay = true
+        }
         plainInput = DataInputStream(socket.inputStream)
         plainOutput = DataOutputStream(socket.outputStream)
         input = plainInput
@@ -53,15 +60,19 @@ internal class AdbClient(
         var message = readMessage()
 
         if (message.command == AdbProtocol.A_STLS) {
+            Log.d(TAG, "ADB requested a TLS upgrade")
             writeMessage(AdbMessage(AdbProtocol.A_STLS, AdbProtocol.A_STLS_VERSION, 0))
             val secure = key.sslContext.socketFactory.createSocket(socket, host, port, true) as SSLSocket
+            secure.soTimeout = READ_TIMEOUT_MS
             secure.startHandshake()
+            secureSocket = secure
             input = DataInputStream(secure.inputStream)
             output = DataOutputStream(secure.outputStream)
             message = readMessage()
         }
 
         if (message.command == AdbProtocol.A_AUTH) {
+            Log.d(TAG, "ADB requested authentication")
             check(message.arg0 == AdbProtocol.ADB_AUTH_TOKEN) { "ADB asked for an unsupported authentication type." }
             val token = message.data ?: throw AdbException("ADB sent an empty authentication token.")
             writeMessage(AdbMessage(AdbProtocol.A_AUTH, AdbProtocol.ADB_AUTH_SIGNATURE, 0, key.sign(token)))
@@ -88,7 +99,15 @@ internal class AdbClient(
             throw AdbException("ADB refused to open a shell. Is wireless debugging still on?")
         }
         check(response.command == AdbProtocol.A_OKAY) { "ADB did not accept the shell stream." }
+        // The handshake is bounded; the long-lived shell must not time out while idle.
+        clearReadTimeout()
+        Log.d(TAG, "Shell opened on port $port")
         return AdbShell(this, localId, response.arg0)
+    }
+
+    private fun clearReadTimeout() {
+        runCatching { secureSocket?.soTimeout = 0 }
+        runCatching { socket.soTimeout = 0 }
     }
 
     fun shellCommand(command: String): String {
@@ -148,6 +167,8 @@ internal class AdbClient(
 
     private companion object {
         const val TAG = "AdbClient"
+        const val CONNECT_TIMEOUT_MS = 5_000
+        const val READ_TIMEOUT_MS = 10_000
     }
 }
 

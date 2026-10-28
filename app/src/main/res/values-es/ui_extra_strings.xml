@@ -438,5 +438,7 @@
     <string name="wireless_adb_pairing">Emparejando</string>
     <string name="wireless_adb_paired">Emparejado con depuración inalámbrica</string>
     <string name="wireless_adb_pairing_failed">Error de emparejamiento</string>
+    <string name="wireless_adb_paired_connect_failed">Emparejado, pero no se pudo conectar</string>
+    <string name="wireless_adb_timeout">Se agotó el tiempo de emparejamiento. El código o el puerto caducó. Inicia el emparejamiento de nuevo.</string>
     <string name="wireless_adb_stop_search">Dejar de buscar</string>
 </resources>

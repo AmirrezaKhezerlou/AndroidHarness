@@ -436,5 +436,7 @@
     <string name="wireless_adb_pairing">ペア設定中</string>
     <string name="wireless_adb_paired">ワイヤレスデバッグとペア設定しました</string>
     <string name="wireless_adb_pairing_failed">ペア設定に失敗しました</string>
+    <string name="wireless_adb_paired_connect_failed">ペア設定済みですが接続できませんでした</string>
+    <string name="wireless_adb_timeout">ペア設定がタイムアウトしました。コードまたはポートの有効期限が切れています。もう一度ペア設定を開始してください。</string>
     <string name="wireless_adb_stop_search">検索を停止</string>
 </resources>

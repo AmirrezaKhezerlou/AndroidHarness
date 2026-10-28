@@ -436,5 +436,7 @@
     <string name="wireless_adb_pairing">Sedang memasangkan</string>
     <string name="wireless_adb_paired">Dipasangkan dengan debugging nirkabel</string>
     <string name="wireless_adb_pairing_failed">Pemasangan gagal</string>
+    <string name="wireless_adb_paired_connect_failed">Dipasangkan, tetapi tidak dapat terhubung</string>
+    <string name="wireless_adb_timeout">Pemasangan habis waktu. Kode atau port kedaluwarsa. Mulai pemasangan lagi.</string>
     <string name="wireless_adb_stop_search">Hentikan pencarian</string>
 </resources>
