@@ -1,5 +1,6 @@
 package com.androidharness.app.data.env.adb
 
+import android.net.ssl.SSLSockets
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
@@ -51,8 +52,11 @@ internal class AdbPairingClient(
     }
 
     private fun setupTlsConnection() {
+        // Resolve the target before apply: inside the block `port` would bind to
+        // Socket.getPort() (0 on a new socket) instead of this class's port.
+        val address = InetSocketAddress(host, port)
         socket = Socket().apply {
-            connect(InetSocketAddress(host, port), CONNECT_TIMEOUT_MS)
+            connect(address, CONNECT_TIMEOUT_MS)
             soTimeout = READ_TIMEOUT_MS
             tcpNoDelay = true
         }
@@ -161,16 +165,37 @@ internal class AdbPairingClient(
 }
 
 /**
- * The platform Conscrypt class is not part of android.jar, so reach it at
- * runtime instead of depending on hidden-API stubs.
+ * Android 14 added a public API for exported keying material. Older builds
+ * only expose the hidden Conscrypt method, so reflect to it and lift the
+ * hidden-API policy for that class if reflection is blocked.
  */
 private fun exportKeyingMaterial(socket: SSLSocket, label: String, length: Int): ByteArray {
-    val method = Class.forName("com.android.org.conscrypt.Conscrypt").getMethod(
-        "exportKeyingMaterial",
-        SSLSocket::class.java,
-        String::class.java,
-        ByteArray::class.java,
-        Int::class.javaPrimitiveType,
-    )
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        return publicKeyingMaterial(socket, label, length)
+    }
+    val conscrypt = Class.forName("com.android.org.conscrypt.Conscrypt")
+    val method = runCatching { conscrypt.keyingMaterialMethod() }.getOrElse {
+        runCatching {
+            val runtimeClass = Class.forName("dalvik.system.VMRuntime")
+            val runtime = runtimeClass.getDeclaredMethod("getRuntime").invoke(null)
+            runtimeClass.getDeclaredMethod("setHiddenApiExemptions", Array<String>::class.java)
+                .invoke(runtime, arrayOf("Lcom/android/org/conscrypt/"))
+        }
+        conscrypt.keyingMaterialMethod()
+    }
     return method.invoke(null, socket, label, null, length) as ByteArray
 }
+
+@RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+private fun publicKeyingMaterial(socket: SSLSocket, label: String, length: Int): ByteArray =
+    checkNotNull(SSLSockets.exportKeyingMaterial(socket, label, null, length)) {
+        "The pairing TLS session did not expose keying material."
+    }
+
+private fun Class<*>.keyingMaterialMethod() = getMethod(
+    "exportKeyingMaterial",
+    SSLSocket::class.java,
+    String::class.java,
+    ByteArray::class.java,
+    Int::class.javaPrimitiveType,
+)

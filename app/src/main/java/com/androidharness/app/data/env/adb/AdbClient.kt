@@ -46,8 +46,11 @@ internal class AdbClient(
 
     fun connect() {
         Log.d(TAG, "Connecting to adbd on port $port")
+        // Resolve the target before apply: inside the block `port` would bind to
+        // Socket.getPort() (0 on a new socket) instead of this class's port.
+        val address = InetSocketAddress(host, port)
         socket = Socket().apply {
-            connect(InetSocketAddress(host, port), CONNECT_TIMEOUT_MS)
+            connect(address, CONNECT_TIMEOUT_MS)
             soTimeout = READ_TIMEOUT_MS
             tcpNoDelay = true
         }
