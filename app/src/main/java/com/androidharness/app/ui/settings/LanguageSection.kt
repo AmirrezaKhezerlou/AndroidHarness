@@ -35,6 +35,7 @@ internal fun LanguageSection() {
         locales[0]?.language == "es" -> "es"
         locales[0]?.language == "ja" -> "ja"
         locales[0]?.language == "id" || locales[0]?.language == "in" -> "id"
+        locales[0]?.language == "si" -> "si"
         else -> "en"
     }
     val context = LocalContext.current
@@ -51,6 +52,7 @@ internal fun LanguageSection() {
         "es" to R.string.settings_language_spanish,
         "ja" to R.string.settings_language_japanese,
         "id" to R.string.settings_language_indonesian,
+        "si" to R.string.settings_language_sinhala,
     )
 
     SettingsPanel(Modifier.fillMaxWidth()) {

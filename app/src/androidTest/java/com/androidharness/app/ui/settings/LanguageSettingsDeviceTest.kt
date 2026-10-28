@@ -231,6 +231,38 @@ class LanguageSettingsDeviceTest {
         }
     }
 
+    @Test fun sinhalaSelectionSurvivesRecreationAndReturnsToSystemDefault() {
+        val original = AppCompatDelegate.getApplicationLocales()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            try {
+                scenario.onActivity { AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags("en")) }
+                openLanguage(scenario)
+                scrollTo("සිංහල")
+                click("සිංහල")
+                awaitText(label(R.string.settings_page_language_title, "si"))
+                scenario.onActivity {
+                    assertEquals("si", it.resources.configuration.locales[0].language)
+                    assertEquals("si", AppCompatDelegate.getApplicationLocales().toLanguageTags())
+                    assertEquals(android.view.View.LAYOUT_DIRECTION_LTR, it.resources.configuration.layoutDirection)
+                    assertEquals("යෙදුමේ භාෂාව", it.getString(R.string.settings_page_language_title))
+                    assertEquals("මාදිලි සහ සැපයුම්කරුවන්", it.getString(R.string.settings_page_models_title))
+                }
+                screenshot("language-sinhala-phone.png")
+                scenario.recreate()
+                scrollTo("සිංහල")
+                scenario.onActivity { assertEquals("si", it.resources.configuration.locales[0].language) }
+                var chosen = find("සිංහල")
+                while (chosen != null && !chosen.isCheckable) chosen = chosen.parent
+                assertTrue("Sinhala remains selected after recreation", chosen?.isChecked == true)
+                scrollTo(label(R.string.settings_language_system, "si"))
+                click(label(R.string.settings_language_system, "si"))
+                scenario.onActivity { assertTrue(AppCompatDelegate.getApplicationLocales().isEmpty) }
+            } finally {
+                scenario.onActivity { AppCompatDelegate.setApplicationLocales(original) }
+            }
+        }
+    }
+
     @Test fun contributionButtonOpensThePublicProjectAtLargeFont() {
         var opened: String? = null
         var action = ""

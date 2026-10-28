@@ -167,7 +167,8 @@ internal fun MainHeader(
                         Icon(painterResource(R.drawable.ic_chat_menu), contentDescription = uiContext.getString(R.string.ui_open_navigation), modifier = Modifier.size(18.dp))
                     }
                     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                        HeaderModelPicker(pickerLabel, onPickModel, Modifier.weight(1f, fill = false), scopeLabel = modelScopeLabel)
+                        HeaderModelPicker(pickerLabel, onPickModel, Modifier.weight(1f, fill = false), scopeLabel = modelScopeLabel,
+                            compact = conversation.isChat)
                         if (thinkingResolved?.customConfig != null || thinkingLevels.isNotEmpty() || thinkingResolved?.spec?.style == com.androidharness.app.agent.ThinkingSpecs.Style.AUTOMATIC) {
                             Spacer(Modifier.width(4.dp))
                             HeaderThinkingControl(thinkingLevel, thinkingLevels, thinkingMenu,
@@ -417,7 +418,7 @@ private fun DesktopConversationHeader(
                 ConversationModeLabel(conversation, workspaceName)
             }
             if (busy) androidx.compose.material3.CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 1.5.dp)
-            HeaderModelPicker(model, onModel, Modifier.widthIn(max = 180.dp))
+            HeaderModelPicker(model, onModel, Modifier.widthIn(max = 180.dp), compact = chatOnly)
             if (thinkingResolved?.customConfig != null || levels.isNotEmpty() || thinkingResolved?.spec?.style == com.androidharness.app.agent.ThinkingSpecs.Style.AUTOMATIC)
                 HeaderThinkingControl(thinking, levels, thinkingMenu, { thinkingMenu = it }, onThinking, onModel, thinkingResolved, busy, onCustomizeThinking, onSetCustomThinking, onAddThinkingLevel)
             if (!chatOnly) TextButton(onClick = { onMode(if (mode == AgentMode.PLAN) AgentMode.ACT else AgentMode.PLAN) }) {
@@ -482,10 +483,12 @@ private fun DesktopConversationHeader(
 }
 
 @Composable
-private fun HeaderModelPicker(label: String, onPickModel: () -> Unit, modifier: Modifier = Modifier, scopeLabel: String? = null) {
+private fun HeaderModelPicker(label: String, onPickModel: () -> Unit, modifier: Modifier = Modifier, scopeLabel: String? = null,
+    compact: Boolean = false) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     Row(
-        modifier.clip(RoundedCornerShape(10.dp)).clickable(onClick = onPickModel)
+        modifier.then(if (compact) Modifier.widthIn(max = 136.dp).semantics { contentDescription = label } else Modifier)
+            .clip(RoundedCornerShape(10.dp)).clickable(onClick = onPickModel)
             .heightIn(min = 36.dp).padding(horizontal = 6.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
