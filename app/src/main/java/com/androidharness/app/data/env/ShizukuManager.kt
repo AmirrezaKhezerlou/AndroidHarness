@@ -79,6 +79,14 @@ class ShizukuManager(
 
     private val _state = MutableStateFlow(ShizukuState.NOT_INSTALLED)
     val state: StateFlow<ShizukuState> = _state.asStateFlow()
+    private val mutableProvider = MutableStateFlow<ShellAccessProvider?>(null)
+    val provider: StateFlow<ShellAccessProvider?> = mutableProvider.asStateFlow()
+    val providerLabel: String get() = provider.value?.label ?: "Shizuku-compatible service"
+    val transportLabel: String get() = if (wirelessTransportActive) "Wireless ADB" else providerLabel
+
+    private fun installedProviders(): Set<ShellAccessProvider> = ShellAccessProvider.entries.filterTo(mutableSetOf()) {
+        runCatching { context.packageManager.getApplicationInfo(it.packageName, 0).enabled }.getOrDefault(false)
+    }
 
     /** This build's deployed copy; see [LinuxEnvironmentManager.deployedBaseFor]. */
     private val tmpBase: String = LinuxEnvironmentManager.deployedBaseFor(context.packageName)
@@ -292,7 +300,9 @@ class ShizukuManager(
 
     /** Explicitly copied connection report, separate from the general report that excludes raw errors. */
     fun connectionReport(): String = buildString {
-        appendLine("AndroidHarness Shizuku connection")
+        appendLine("AndroidHarness privileged connection")
+        appendLine("Manager detected: $providerLabel")
+        appendLine("Transport: $transportLabel")
         appendLine("App: ${com.androidharness.app.BuildConfig.VERSION_NAME} (${com.androidharness.app.BuildConfig.VERSION_CODE})")
         appendLine("Package: ${context.packageName}")
         appendLine("Android: ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})")
@@ -300,7 +310,7 @@ class ShizukuManager(
         appendLine("Shizuku API: ${runCatching { Shizuku.getVersion().toString() }.getOrDefault("unavailable")}")
         appendLine("Shizuku server: ${runCatching { "${Shizuku.getVersion()}.${Shizuku.getServerPatchVersion()}" }.getOrDefault("unavailable")}")
         appendLine("Shizuku app: ${runCatching {
-            val info = context.packageManager.getPackageInfo("moe.shizuku.privileged.api", 0)
+            val info = context.packageManager.getPackageInfo(provider.value?.packageName ?: "moe.shizuku.privileged.api", 0)
             "${info.versionName} (${if (android.os.Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()})"
         }.getOrDefault("unavailable")}")
         appendLine("Shizuku status: ${state.value}")
@@ -352,9 +362,12 @@ class ShizukuManager(
             Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
         }.getOrDefault(false)
 
+        val installed = installedProviders()
+        mutableProvider.value = installed.singleOrNull()
         val s = when {
             hasPermission -> ShizukuState.GRANTED
             ping -> ShizukuState.RUNNING_NO_PERMISSION
+            installed.isEmpty() -> ShizukuState.NOT_INSTALLED
             else -> ShizukuState.NOT_RUNNING
         }
         workspaceWarning.onStatus(s)

@@ -119,7 +119,7 @@ fun toolPresentation(call: ToolCallData, result: ChatMessage? = null): ToolPrese
             "Syncing CodeGraph…",
             kind = ToolActivityKind.READ,
         )
-        "shell" -> {
+        "shell", "device_owner_shell" -> {
             val command = arg("command")?.trim().orEmpty()
             val verification = isVerificationCommand(command)
             val title = if (verification) {

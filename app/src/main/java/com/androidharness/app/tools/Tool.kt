@@ -87,6 +87,8 @@ class ToolRegistry(private val tools: List<Tool>) {
             fileHistory: com.androidharness.app.data.WorkspaceFileHistory? = null,
             memory: com.androidharness.app.data.MemoryRepository? = null,
             searchApiRefresh: suspend () -> SearchApiConfig? = { searchApi() },
+            dhizuku: com.androidharness.app.data.env.DhizukuManager? = null,
+            deviceAccess: com.androidharness.app.data.env.DeviceAccessManager? = null,
         ): ToolRegistry {
             val baseTools = mutableListOf<Tool>(
                 ListDirTool(),
@@ -139,6 +141,7 @@ class ToolRegistry(private val tools: List<Tool>) {
                 CodeGraphAffectedTool(codeGraph),
                 CodeGraphSyncTool(codeGraph),
             )
+            if (dhizuku != null && deviceAccess != null) baseTools += DeviceOwnerShellTool(dhizuku, deviceAccess)
             if (artifactLoader != null) {
                 baseTools.add(CreateArtifactTool(artifactLoader))
                 baseTools.add(ReadArtifactTool(artifactLoader))

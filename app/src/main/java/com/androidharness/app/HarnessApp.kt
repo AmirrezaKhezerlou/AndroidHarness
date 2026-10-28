@@ -126,8 +126,9 @@ class AppContainer(val appContext: Context) {
         com.androidharness.app.data.env.LinuxEnvironmentManager(appContext) { keys.githubToken() }
     val wirelessAdb = com.androidharness.app.data.env.adb.WirelessAdbManager(appContext)
     val shizuku = com.androidharness.app.data.env.ShizukuManager(appContext, wireless = wirelessAdb)
+    val dhizuku = com.androidharness.app.data.env.DhizukuManager(appContext)
     val deviceAccess = com.androidharness.app.data.env.DeviceAccessManager(appContext, shizuku, linuxEnv,
-        projectForSession = { sessions.session(it)?.projectId })
+        projectForSession = { sessions.session(it)?.projectId }, dhizuku = dhizuku)
     val shellRouter = com.androidharness.app.data.env.ShellTierRouter(appContext, shizuku, linuxEnv, deviceAccess)
     val codeGraph = com.androidharness.app.data.env.CodeGraphManager(linuxEnv, shellRouter)
 
@@ -198,6 +199,8 @@ class AppContainer(val appContext: Context) {
         toolOutputLoader = sessions::toolOutput,
         fileHistory = fileHistory,
         memory = memory,
+        dhizuku = dhizuku,
+        deviceAccess = deviceAccess,
     )
     val mcp = com.androidharness.app.tools.mcp.McpManager(appContext, linuxEnv, keys, codeGraph)
     val github = com.androidharness.app.github.GitHubAuth(BuildConfig.GITHUB_CLIENT_ID,

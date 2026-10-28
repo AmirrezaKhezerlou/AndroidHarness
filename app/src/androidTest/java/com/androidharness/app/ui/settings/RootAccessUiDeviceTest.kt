@@ -45,7 +45,7 @@ class RootAccessUiDeviceTest {
                 } } }
                 awaitText("Root access")
                 val bounds = Rect()
-                for (label in listOf("Auto", "Normal", "Shizuku", "Root")) {
+                for (label in listOf("Auto", "Normal", "Shizuku / Shevery", "Root")) {
                     scrollTo(label)
                     val node = awaitText(label)
                     node.getBoundsInScreen(bounds)

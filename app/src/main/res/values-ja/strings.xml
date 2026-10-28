@@ -941,4 +941,13 @@
     <string name="memory_save_failed">"このメモリを保存できませんでした。再試行してください。"</string>
     <string name="memory_delete_digest_body">"この整理済みメモリと保存された元の項目を削除しますか？今後使用されません。この操作は元に戻せません。"</string>
     <string name="chat_attachment_wait_for_reply">添付ファイルを送信する前に、回答が終わるまでお待ちください。</string>
+    <string name="shell_access_providers">Shizuku / Shevery</string>
+    <string name="shell_access_grant">%1$s へのアクセスを許可</string>
+    <string name="dhizuku_title">Dhizuku · デバイスオーナー</string>
+    <string name="dhizuku_explanation">デバイスオーナーのアクセス権を共有します。コマンドはオーナーアプリとして実行され、Android の制限が適用されます。ADB shell の権限が必要な場合は、Shizuku、Shevery、またはワイヤレス ADB に接続してください。</string>
+    <string name="dhizuku_not_running">無効 · 先に Dhizuku でデバイスオーナーを有効にしてください</string>
+    <string name="dhizuku_connected">接続済み · デバイスオーナーのアクセスが許可されています</string>
+    <string name="dhizuku_requesting">許可を待っています…</string>
+    <string name="dhizuku_denied">アクセスが拒否されました · Dhizuku でアクセスを許可してください</string>
+    <string name="dhizuku_error">接続に失敗しました · Dhizuku を確認して再試行してください</string>
 </resources>

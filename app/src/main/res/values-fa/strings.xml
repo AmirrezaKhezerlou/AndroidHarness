@@ -942,4 +942,13 @@
     <string name="memory_save_failed">"این حافظه ذخیره نشد. دوباره امتحان کنید."</string>
     <string name="memory_delete_digest_body">"این حافظه سازمان یافته و ورودی های اصلی حفظ شده آن حذف شود؟ آنها دیگر استفاده نخواهند شد. این قابل واگرد نیست."</string>
     <string name="chat_attachment_wait_for_reply">پیش از ارسال پیوست‌ها، منتظر بمانید تا پاسخ تمام شود.</string>
+    <string name="shell_access_providers">Shizuku / Shevery</string>
+    <string name="shell_access_grant">اعطای دسترسی %1$s</string>
+    <string name="dhizuku_title">Dhizuku · مالک دستگاه</string>
+    <string name="dhizuku_explanation">دسترسی مالک دستگاه را به اشتراک می‌گذارد. فرمان‌ها با هویت برنامهٔ مالک و محدودیت‌های Android اجرا می‌شوند. برای مجوزهای ADB shell، به Shizuku، Shevery یا ADB بی‌سیم متصل شوید.</string>
+    <string name="dhizuku_not_running">فعال نیست · ابتدا مالک دستگاه را در Dhizuku فعال کنید</string>
+    <string name="dhizuku_connected">متصل · دسترسی مالک دستگاه اعطا شده است</string>
+    <string name="dhizuku_requesting">در انتظار مجوز…</string>
+    <string name="dhizuku_denied">دسترسی رد شد · در Dhizuku مجوز بدهید</string>
+    <string name="dhizuku_error">اتصال ناموفق · Dhizuku را بررسی و دوباره تلاش کنید</string>
 </resources>

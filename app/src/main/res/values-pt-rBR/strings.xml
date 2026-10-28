@@ -942,4 +942,13 @@
     <string name="memory_save_failed">"Não foi possível salvar esta memória. Tente novamente."</string>
     <string name="memory_delete_digest_body">"Excluir esta memória organizada e suas entradas originais preservadas? Elas não serão mais usadas. Isso não pode ser desfeito."</string>
     <string name="chat_attachment_wait_for_reply">Aguarde a resposta terminar antes de enviar anexos.</string>
+    <string name="shell_access_providers">Shizuku / Shevery</string>
+    <string name="shell_access_grant">Permitir acesso via %1$s</string>
+    <string name="dhizuku_title">Dhizuku · Proprietário do dispositivo</string>
+    <string name="dhizuku_explanation">Compartilha o acesso de proprietário do dispositivo. Os comandos são executados como o app proprietário, com as restrições do Android. Para permissões de ADB shell, conecte Shizuku, Shevery ou ADB sem fio.</string>
+    <string name="dhizuku_not_running">Inativo · primeiro ative o proprietário do dispositivo no Dhizuku</string>
+    <string name="dhizuku_connected">Conectado · acesso de proprietário do dispositivo permitido</string>
+    <string name="dhizuku_requesting">Aguardando permissão…</string>
+    <string name="dhizuku_denied">Acesso negado · permita o acesso no Dhizuku</string>
+    <string name="dhizuku_error">Falha na conexão · verifique o Dhizuku e tente novamente</string>
 </resources>

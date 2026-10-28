@@ -1053,14 +1053,14 @@ class AgentEngine(
             return ToolResult(true, "The user answered: $answer")
         }
 
-        val command = if (call.name == "shell" || call.name == "shell_background") {
+        val command = if (com.androidharness.app.tools.ShellPolicy.isShellTool(call.name)) {
             com.androidharness.app.tools.ShellPolicy.commandOf(call.argumentsJson)
         } else null
         val root = workspace.shellRoot
         // Full access skips the shell denylist entirely, that is the point of the mode.
         if (mode != PermissionMode.FULL_ACCESS) {
             com.androidharness.app.tools.ShellPolicy.denyReason(command.orEmpty(), root, root)?.let { reason ->
-                if (call.name == "shell" || call.name == "shell_background") {
+                if (com.androidharness.app.tools.ShellPolicy.isShellTool(call.name)) {
                     return ToolResult(false, reason)
                 }
             }

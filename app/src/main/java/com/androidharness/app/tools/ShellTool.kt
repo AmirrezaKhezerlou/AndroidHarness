@@ -21,7 +21,7 @@ class ShellTool(
         "Run a shell command on the device. Uses SSH for an SSH workspace; " +
         "otherwise follows the selected Auto, Normal, Shizuku, Root or Both access mode: " +
         "a full Linux userspace (bash, git, python, node…) as the app when installed, " +
-        "Shizuku ADB-shell privileges (plus the same toolchain) when Shizuku is connected, " +
+        "Shizuku/Shevery ADB-shell privileges (plus the same toolchain) when connected, " +
         "or direct root when requested. App-workspace development uses the app UID by default. Choose access=\"shizuku\" for Android system commands. In Both mode other ordinary commands use Shizuku and " +
         "access=\"root\" uses the direct root service, so both can be used in the same task. " +
         "If the active workspace is a picked folder (SAF), the command runs in the app's shell " +
@@ -103,7 +103,7 @@ class ShellTool(
                 sb.append("[note: fell back to toybox sh, launching the Linux bash failed on this device]\n")
             }
             if (res.tier == ExecutionTier.PRIVILEGED) {
-                sb.append("[note: ran via Shizuku; the access receipt records its verified UID]\n")
+                sb.append("[note: ran through the privileged shell; the access receipt identifies the provider and verified UID]\n")
             }
             if (res.timedOut) sb.append(if (res.tier == ExecutionTier.TERMUX_SSH)
                 "[SSH channel closed after ${timeoutSec}s timeout; inspect Termux before retrying modifying commands]\n"

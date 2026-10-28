@@ -221,7 +221,7 @@ internal fun AccessModeChoices(selected: AccessMode, onSelect: (AccessMode) -> U
                             colors = CardDefaults.outlinedCardColors(containerColor = if (selected == mode) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow)) {
                             Row(Modifier.heightIn(min = 52.dp).padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 RadioButton(selected == mode, onClick = null, modifier = Modifier.size(20.dp))
-                                Text(localizedOption(mode.label), style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(if (mode == AccessMode.SHIZUKU) stringResource(R.string.shell_access_providers) else localizedOption(mode.label), style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
                     }

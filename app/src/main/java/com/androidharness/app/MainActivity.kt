@@ -202,6 +202,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        container.shizuku.refresh()
+        container.dhizuku.refresh()
         promptShownThisResume = false
         if (isUnlocked && lastPausedTimestamp > 0L) {
             val settings = runCatching {

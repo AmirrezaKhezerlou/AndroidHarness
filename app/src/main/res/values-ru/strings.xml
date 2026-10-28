@@ -944,4 +944,13 @@
     <string name="memory_save_failed">"Не удалось сохранить воспоминание. Попробуйте снова."</string>
     <string name="memory_delete_digest_body">"Удалить это упорядоченное воспоминание и сохранённые исходные записи? Они больше не будут использоваться. Это действие нельзя отменить."</string>
     <string name="chat_attachment_wait_for_reply">Дождитесь завершения ответа перед отправкой вложений.</string>
+    <string name="shell_access_providers">Shizuku / Shevery</string>
+    <string name="shell_access_grant">Разрешить доступ через %1$s</string>
+    <string name="dhizuku_title">Dhizuku · Владелец устройства</string>
+    <string name="dhizuku_explanation">Предоставляет доступ владельца устройства. Команды выполняются от имени приложения владельца с ограничениями Android. Для прав ADB shell подключите Shizuku, Shevery или беспроводной ADB.</string>
+    <string name="dhizuku_not_running">Не активирован · сначала активируйте владельца устройства в Dhizuku</string>
+    <string name="dhizuku_connected">Подключено · доступ владельца устройства разрешён</string>
+    <string name="dhizuku_requesting">Ожидание разрешения…</string>
+    <string name="dhizuku_denied">Доступ запрещён · разрешите доступ в Dhizuku</string>
+    <string name="dhizuku_error">Ошибка подключения · проверьте Dhizuku и повторите попытку</string>
 </resources>

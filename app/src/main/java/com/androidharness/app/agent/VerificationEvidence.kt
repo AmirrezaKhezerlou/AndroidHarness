@@ -13,7 +13,7 @@ internal data class VerificationCheck(val command: String, val status: CheckStat
 internal object VerificationEvidence {
     private val checkCommand = Regex("^(?:(?:\\./)?gradlew?|mvnw?|npm|pnpm|yarn|bun|pytest|python3?|cargo|go|make|npx)\\s+", RegexOption.IGNORE_CASE)
     private val checkTask = Regex("(?:^|[\\s:])(?:test\\w*|check\\w*|lint\\w*|build|assemble\\w*|verify|typecheck|tsc|pytest)(?:$|[\\s:])", RegexOption.IGNORE_CASE)
-    private val edits = setOf("write_file", "edit_file", "multi_edit", "apply_patch", "move_file", "delete_file", "shell_background", "task", "git_checkout", "git_pull", "create_dir")
+    private val edits = setOf("write_file", "edit_file", "multi_edit", "apply_patch", "move_file", "delete_file", "shell_background", "device_owner_shell", "task", "git_checkout", "git_pull", "create_dir")
     private val exit = Regex("(?m)^exit code: (-?\\d+)\\s*$")
 
     fun collect(messages: List<ChatMessage>): List<VerificationCheck> {

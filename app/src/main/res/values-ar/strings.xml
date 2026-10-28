@@ -946,4 +946,13 @@
     <string name="memory_save_failed">"تعذر حفظ هذه الذكرى. حاول مرة أخرى."</string>
     <string name="memory_delete_digest_body">"حذف هذه الذكرى المنظمة وإدخالاتها الأصلية المحفوظة؟ لن تُستخدم بعد الآن. لا يمكن التراجع عن هذا."</string>
     <string name="chat_attachment_wait_for_reply">انتظر حتى ينتهي الرد قبل إرسال المرفقات.</string>
+    <string name="shell_access_providers">Shizuku / Shevery</string>
+    <string name="shell_access_grant">منح وصول %1$s</string>
+    <string name="dhizuku_title">Dhizuku · مالك الجهاز</string>
+    <string name="dhizuku_explanation">يشارك صلاحيات مالك الجهاز. تُنفذ الأوامر بهوية تطبيق المالك مع قيود Android. للحصول على صلاحيات ADB shell، اتصل بـ Shizuku أو Shevery أو ADB اللاسلكي.</string>
+    <string name="dhizuku_not_running">غير مفعّل · فعّل مالك الجهاز في Dhizuku أولاً</string>
+    <string name="dhizuku_connected">متصل · تم منح صلاحيات مالك الجهاز</string>
+    <string name="dhizuku_requesting">بانتظار الإذن…</string>
+    <string name="dhizuku_denied">تم رفض الوصول · امنح الإذن في Dhizuku</string>
+    <string name="dhizuku_error">فشل الاتصال · تحقق من Dhizuku وحاول مجدداً</string>
 </resources>

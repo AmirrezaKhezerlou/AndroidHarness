@@ -219,6 +219,7 @@ dependencies {
     implementation(libs.xz)
     implementation("com.github.topjohnwu.libsu:core:6.0.0")
     implementation("com.github.topjohnwu.libsu:service:6.0.0")
+    implementation("io.github.iamr0s:Dhizuku-API:2.6.0")
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
     // In-app code editor (gutter, undo/redo, search engine) for the file manager.

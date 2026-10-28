@@ -41,6 +41,7 @@ class AgentDeviceEnvironmentTest {
                     val snapshot = state(mode, root, allowed, uid != null, uid, paused, fallback)
                     val decision = DeviceAccessPolicy.choose(mode, fallback, root, uid, allowed, paused)
                     val expected = when (decision.backend) {
+                        DeviceBackend.DHIZUKU -> error("Device Owner is not a shell fallback")
                         DeviceBackend.NORMAL -> "app UID"
                         DeviceBackend.SHIZUKU -> "Shizuku, UID $uid"
                         DeviceBackend.ROOT -> "direct root, UID 0"

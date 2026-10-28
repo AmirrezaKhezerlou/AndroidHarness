@@ -520,6 +520,7 @@ private fun TerminalSection(
     val storageAccess = rememberStorageAccess()
     val allFiles = storageAccess.granted
     val connectionFailure by container.shizuku.connectionFailure.collectAsStateWithLifecycle()
+    val shellProvider by container.shizuku.provider.collectAsStateWithLifecycle()
 
     SettingsHeader(uiContext.getString(R.string.ui_terminal_environment))
 
@@ -530,7 +531,7 @@ private fun TerminalSection(
     val storageText = if (allFiles) uiContext.getString(R.string.ui_granted) else uiContext.getString(R.string.ui_needs_grant)
     val systemText = if (container.shizuku.wirelessTransportActive) uiContext.getString(R.string.wireless_adb_section_title) else when (shizukuState) {
         ShizukuState.GRANTED -> when (serviceState) {
-            UserServiceState.BOUND_READY -> uiContext.getString(R.string.ui_shizuku)
+            UserServiceState.BOUND_READY -> container.shizuku.transportLabel
             UserServiceState.COMPAT_READY -> uiContext.getString(R.string.ui_compatibility)
             UserServiceState.BINDING -> uiContext.getString(R.string.ui_connecting)
             UserServiceState.BIND_FAILED -> uiContext.getString(R.string.ui_connection_failed)
@@ -589,7 +590,9 @@ private fun TerminalSection(
         startupReport = container.shizuku::startupReport,
         onRefresh = { container.shizuku.refresh() },
         onGrant = { container.shizuku.requestPermission() },
+        providerLabel = shellProvider?.label ?: stringResource(R.string.shell_access_providers),
     )
+    DhizukuCard(container.dhizuku)
     RootAccessSection(container)
     BatteryCard(container = container)
 }
@@ -2097,6 +2100,7 @@ internal fun ShizukuCard(
     startupReport: suspend () -> com.androidharness.app.data.env.ShizukuStartupReport,
     onRefresh: () -> Unit,
     onGrant: () -> Unit,
+    providerLabel: String = "Shizuku",
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     SettingsPanel(Modifier.fillMaxWidth()) {
@@ -2105,7 +2109,7 @@ internal fun ShizukuCard(
                 Icon(Icons.Outlined.Shield, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.settings_search_shizuku_title), style = MaterialTheme.typography.titleSmall)
+                    Text(providerLabel, style = MaterialTheme.typography.titleSmall)
                     Text(
                         when (state) {
                             ShizukuState.NOT_INSTALLED -> uiContext.getString(R.string.ui_not_installed_optional)
@@ -2139,7 +2143,7 @@ internal fun ShizukuCard(
                         Text(if (serviceState.isReady) uiContext.getString(R.string.ui_re_check_status) else uiContext.getString(R.string.ui_retry_connection))
                     }
                 }
-                ShizukuState.RUNNING_NO_PERMISSION -> Button(onClick = onGrant) { Text(stringResource(R.string.settings_env_grant_shizuku)) }
+                ShizukuState.RUNNING_NO_PERMISSION -> Button(onClick = onGrant) { Text(stringResource(R.string.shell_access_grant, providerLabel)) }
                 ShizukuState.NOT_RUNNING -> OutlinedButton(onClick = onRefresh) { Text(stringResource(R.string.settings_env_refresh_status)) }
                 ShizukuState.NOT_INSTALLED -> OutlinedButton(onClick = onRefresh) { Text(stringResource(R.string.settings_env_check_again)) }
             }
@@ -3369,6 +3373,8 @@ private data class Credit(val name: String, val role: String, val url: String)
 private val BUILT_WITH = listOf(
     Credit("Termux", "Linux packages and shell tooling", "https://github.com/termux"),
     Credit("Shizuku", "Elevated shell access without root", "https://github.com/RikkaApps/Shizuku"),
+    Credit("Shevery", "Compatible privileged shell provider", "https://github.com/HmnDev-Tech/shevery"),
+    Credit("Dhizuku API", "Device Owner permission sharing · MIT", "https://github.com/iamr0s/Dhizuku-API"),
     Credit("CodeGraph", "Semantic code index behind the graph tools", "https://github.com/colbymchenry/codegraph"),
     Credit("Caveman", "Terse reply modes, adapted from Julius Brussee's skills", "https://github.com/JuliusBrussee/caveman"),
     Credit("sora-editor", "The in-app code editor", "https://github.com/Rosemoe/sora-editor"),

@@ -27,6 +27,7 @@ class DeviceAccessManager(
     val linuxEnv: LinuxEnvironmentManager,
     val root: RootManager = RootManager(context),
     private val projectForSession: suspend (String) -> String? = { null },
+    private val dhizuku: DhizukuManager? = null,
 ) {
     val store = DeviceAccessStore(context)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -82,7 +83,7 @@ class DeviceAccessManager(
     fun rootUseActive(sessionId: String?, prefs: AccessPreferences): Boolean =
         !prefs.temporaryRoot || temporaryRoot.activeFor(sessionId)
     suspend fun resume(): String? = try {
-        root.resume(); shizuku.resumeCommands(); stopped.value = false; null
+        root.resume(); shizuku.resumeCommands(); dhizuku?.resumeCommands(); stopped.value = false; null
     } catch (e: CancellationException) { throw e }
     catch (e: Exception) { "Could not resume privileged access: ${e.message}" }
 
@@ -151,11 +152,11 @@ class DeviceAccessManager(
                 continue
             }
             val receipt = ExecutionReceipt(backend, decision.uid, decision.reason,
-                transport = if (backend == DeviceBackend.SHIZUKU && shizuku.wirelessTransportActive) "Wireless ADB" else null)
+                transport = if (backend == DeviceBackend.SHIZUKU) shizuku.transportLabel else null)
             active.update { it + 1 }
             val result = try {
                 withContext(VerifiedDeviceAccess(backend, decision.uid)) {
-                    when (backend) { DeviceBackend.NORMAL -> normal(); DeviceBackend.SHIZUKU -> shizukuRun(); DeviceBackend.ROOT -> rootRun() }
+                    when (backend) { DeviceBackend.DHIZUKU -> error("Device Owner requires its explicit tool"); DeviceBackend.NORMAL -> normal(); DeviceBackend.SHIZUKU -> shizukuRun(); DeviceBackend.ROOT -> rootRun() }
                 }
             } finally { active.update { (it - 1).coerceAtLeast(0) } }
             if (result == null) {
@@ -232,8 +233,9 @@ class DeviceAccessManager(
             "${it.name}: root requests ${if (rootAllowed(AccessRequest(it.id, sessionId), prefs)) "allowed" else "not allowed"}"
         }.orEmpty() + "Device access: ${prefs.mode.label}; auto fallback ${if (prefs.mode == AccessMode.AUTO || prefs.autoFallback) "on" else "off"}; " +
             "temporary root mode ${if (prefs.temporaryRoot) "on" else "off (root allowed everywhere while connected)"}; " +
-            "direct root ${root.state.value.status.label}${root.state.value.provider?.let { " (${it.label})" } ?: ""}; privileged shell ${if (shizuku.isServiceReady()) "ready (${szUid.value?.let { "UID $it" } ?: "identity checked before execution"}, ${if (shizuku.wirelessTransportActive) "Wireless ADB" else "Shizuku"})" else "unavailable"}; " +
+            "direct root ${root.state.value.status.label}${root.state.value.provider?.let { " (${it.label})" } ?: ""}; privileged shell ${if (shizuku.isServiceReady()) "ready (${szUid.value?.let { "UID $it" } ?: "identity checked before execution"}, ${shizuku.transportLabel})" else "unavailable"}; " +
             "root ${if (allowed) "allowed" else "not allowed"} for this project/chat; ${if (prefs.temporaryRoot) allowance.value else "temporary mode is off"}; privileged access ${if (stopped.value) "paused" else "enabled"}. " +
+            (dhizuku?.let { "Device Owner: ${it.state.value.status}. Use device_owner_shell only for explicit owner-app execution; it does not provide ADB/root privileges. " } ?: "") +
             modeHint + " Shizuku uses its own authorization; a root-started Shizuku server runs as UID 0 even when direct root use is disabled. " +
             "App workspaces use the app user by default for builds and file work. Use shell access=\"shizuku\" for Android system commands such as /system/bin/am or /system/bin/cmd; it never falls back to direct root or the app UID. Use access=\"root\" only when UID 0 is required; " +
             (if (prefs.temporaryRoot) "project restrictions still apply. " else "root is available in every project while the connection is active. ") +
@@ -256,7 +258,10 @@ class DeviceAccessManager(
             }
         }
 
+    internal fun recordOwnerExecution() { last.value = "Dhizuku" }
+
     suspend fun checkConnections(): String {
+        dhizuku?.checkConnection()
         root.verify()
         probeShizuku()
         return report()
@@ -269,8 +274,9 @@ class DeviceAccessManager(
         appendLine("Temporary root mode: ${if (preferences.value.temporaryRoot) "on (per-project and per-use limits)" else "off (root allowed everywhere while connected)"}")
         appendLine(root.state.value.detail)
         appendLine("Root checked at: ${root.state.value.checkedAt.takeIf { it > 0 }?.let(java.time.Instant::ofEpochMilli) ?: "Not checked"}")
-        appendLine("Privileged shell ready: ${shizuku.isServiceReady()}; transport: ${when { shizuku.wirelessTransportActive -> "Wireless ADB"; shizuku.isServiceReady() -> "Shizuku"; else -> "none" }}; UID: ${szUid.value ?: "not verified"}")
+        appendLine("Privileged shell ready: ${shizuku.isServiceReady()}; transport: ${when { shizuku.wirelessTransportActive -> "Wireless ADB"; shizuku.isServiceReady() -> shizuku.transportLabel; else -> "none" }}; UID: ${szUid.value ?: "not verified"}")
         appendLine("Temporary use: ${if (preferences.value.temporaryRoot) allowance.value else "off (root allowed everywhere while connected)"}; paused: ${stopped.value}")
+        dhizuku?.let { appendLine("Device Owner: ${it.state.value.status}; owner: ${it.state.value.ownerPackage ?: "none"}; not an ADB/root shell") }
         appendLine("Last execution: ${last.value}")
         append("Active tracked calls: ${active.value}")
     }
@@ -279,11 +285,12 @@ class DeviceAccessManager(
     suspend fun stopPrivileged(): String {
         stopped.value = true
         disableRootUse()
+        val ownerStop = dhizuku?.stopCommands().orEmpty()
         return coroutineScope {
             val backgroundStop = async { stopBackgroundTasks() }
             val rootStop = async { root.stop() }
             val shizukuStop = async { shizuku.stopActiveCommands() }
-            rootStop.await() + "\n" + shizukuStop.await() + "\n" + backgroundStop.await()
+            rootStop.await() + "\n" + shizukuStop.await() + "\n" + backgroundStop.await() + "\n" + ownerStop
         }
     }
 }

@@ -580,8 +580,10 @@ object ShellPolicy {
         return "${tokens[0]} ${tokens[1]}"
     }
 
+    fun isShellTool(tool: String): Boolean = tool in setOf("shell", "shell_background", "device_owner_shell")
+
     fun grantKey(tool: String, command: String?): String =
-        if (tool == "shell" || tool == "shell_background") {
+        if (isShellTool(tool)) {
             "$tool#${signature(command.orEmpty())}"
         } else {
             tool
@@ -591,7 +593,7 @@ object ShellPolicy {
         if (grantKey(tool, command) in allowed) return true
         // Non-shell tools may still be remembered by name. Never treat a bare
         // "shell" grant as a blank check.
-        return tool != "shell" && tool != "shell_background" && tool in allowed
+        return !isShellTool(tool) && tool in allowed
     }
 
     fun commandOf(argumentsJson: String): String? = runCatching {

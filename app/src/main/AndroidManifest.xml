@@ -34,6 +34,8 @@
          root managers on Android 11+. Root identification is display-only. -->
     <queries>
         <package android:name="moe.shizuku.privileged.api" />
+        <package android:name="com.hamondev.shevery" />
+        <package android:name="com.rosan.dhizuku" />
         <package android:name="me.weishu.kernelsu" />
         <package android:name="com.rifsxd.ksunext" />
         <package android:name="org.sukisu.manager" />

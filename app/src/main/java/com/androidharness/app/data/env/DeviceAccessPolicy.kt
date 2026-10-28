@@ -11,7 +11,7 @@ enum class AccessMode(val label: String) {
 @Serializable
 enum class RootUse(val label: String) { SESSION("App session"), CHAT("Current chat"), NEXT_ACTION("Next action") }
 @Serializable
-enum class DeviceBackend { NORMAL, SHIZUKU, ROOT }
+enum class DeviceBackend { NORMAL, SHIZUKU, ROOT, DHIZUKU }
 
 @Serializable
 data class ExecutionReceipt(
@@ -25,6 +25,7 @@ data class ExecutionReceipt(
     val label: String get() = transport ?: when (backend) {
         DeviceBackend.NORMAL -> "Normal"
         DeviceBackend.ROOT -> "Root"
+        DeviceBackend.DHIZUKU -> "Dhizuku"
         DeviceBackend.SHIZUKU -> "Shizuku"
     }
 }
@@ -78,7 +79,7 @@ object DeviceAccessPolicy {
         }
         val unavailable = mutableListOf<String>()
         for (backend in order) {
-            val uid = when (backend) { DeviceBackend.NORMAL -> null; DeviceBackend.ROOT -> if (rootReady) 0 else null; DeviceBackend.SHIZUKU -> shizukuUid }
+            val uid = when (backend) { DeviceBackend.DHIZUKU -> null; DeviceBackend.NORMAL -> null; DeviceBackend.ROOT -> if (rootReady) 0 else null; DeviceBackend.SHIZUKU -> shizukuUid }
             val issue = when {
                 backend != DeviceBackend.NORMAL && paused -> "Privileged access is paused"
                 backend == DeviceBackend.ROOT && !rootAllowed -> "Root is not allowed for this project or its temporary allowance has ended"

@@ -941,4 +941,13 @@
     <string name="memory_save_failed">"Tidak dapat menyimpan memori ini. Coba lagi."</string>
     <string name="memory_delete_digest_body">"Hapus memori teratur ini beserta entri asli yang disimpan? Keduanya tidak akan dipakai lagi. Tindakan ini tidak dapat dibatalkan."</string>
     <string name="chat_attachment_wait_for_reply">Tunggu hingga jawaban selesai sebelum mengirim lampiran.</string>
+    <string name="shell_access_providers">Shizuku / Shevery</string>
+    <string name="shell_access_grant">Izinkan akses %1$s</string>
+    <string name="dhizuku_title">Dhizuku · Pemilik Perangkat</string>
+    <string name="dhizuku_explanation">Berbagi akses Pemilik Perangkat. Perintah berjalan sebagai aplikasi pemilik, dengan pembatasan Android. Untuk izin ADB shell, hubungkan Shizuku, Shevery, atau ADB Nirkabel.</string>
+    <string name="dhizuku_not_running">Belum aktif · aktifkan Pemilik Perangkat di Dhizuku terlebih dahulu</string>
+    <string name="dhizuku_connected">Terhubung · akses Pemilik Perangkat diizinkan</string>
+    <string name="dhizuku_requesting">Menunggu izin…</string>
+    <string name="dhizuku_denied">Akses ditolak · izinkan akses di Dhizuku</string>
+    <string name="dhizuku_error">Koneksi gagal · periksa Dhizuku dan coba lagi</string>
 </resources>

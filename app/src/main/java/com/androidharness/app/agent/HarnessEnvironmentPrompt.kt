@@ -23,7 +23,7 @@ internal object HarnessEnvironmentPrompt {
         name.startsWith("git_") || name.startsWith("github_") -> "Git and GitHub"
         name.startsWith("browser_") || name in setOf("web_fetch", "web_search", "http_request") -> "Web and browser"
         name.startsWith("skill") -> "Skills"
-        name in setOf("shell", "shell_background", "bg_list", "bg_kill", "env_status", "doctor", "read_logcat") || name.startsWith("pkg_") -> "Execution and environment"
+        name in setOf("shell", "device_owner_shell", "shell_background", "bg_list", "bg_kill", "env_status", "doctor", "read_logcat") || name.startsWith("pkg_") -> "Execution and environment"
         name.startsWith("memory_") || name in setOf("remember", "recall", "search_chats", "recent_chats", "read_chat_snippet") -> "Memory and conversation recall"
         name in setOf("task", "ask_user", "todo_write") -> "Coordination"
         name in setOf("create_artifact", "read_artifact", "read_tool_output", "read_chat_text", "offer_code_handoff") -> "Conversation and artifacts"

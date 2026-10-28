@@ -25,6 +25,7 @@ internal data class AgentDeviceEnvironment(
         append(if (awaitingIdentity) "pending Shizuku UID verification at dispatch" else when (decision.backend) {
             DeviceBackend.NORMAL -> if (linuxReady) "app UID with the installed Linux userspace" else "app UID with Android toybox sh; Linux packages are not ready"
             DeviceBackend.ROOT -> "direct root, UID 0"
+            DeviceBackend.DHIZUKU -> "Dhizuku Device Owner app"
             DeviceBackend.SHIZUKU -> "Shizuku, UID ${decision.uid}"
             null -> "unavailable: ${decision.reason}"
         })
