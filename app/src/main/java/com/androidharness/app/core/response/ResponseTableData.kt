@@ -1,6 +1,16 @@
 package com.androidharness.app.core.response
 
 object ResponseTableData {
+    data class Status(val kind: String, val detail: String)
+    private val statusPrefix = Regex("""^(pass(?:ed)?|fail(?:ed)?|unverified|✅|✔️?|❌|⚠️?)(?:[.:]\s*|$)""", RegexOption.IGNORE_CASE)
+    fun status(value: String): Status? {
+        val match = statusPrefix.find(value.trim()) ?: return null
+        val label = match.groupValues[1].lowercase()
+        val kind = when { label.startsWith("pass") || label.startsWith("✅") || label.startsWith("✔") -> "passed"
+            label.startsWith("fail") || label == "❌" -> "failed"; else -> "unverified" }
+        return Status(kind, value.trim().drop(match.value.length))
+    }
+
     fun indices(table: RichResponse.Node.Table, query: String, column: Int, ascending: Boolean): List<Int> {
         val filtered = table.rows.indices.filter { index -> query.isBlank() || table.rows[index].any { it.contains(query.trim(), ignoreCase = true) } }
         if (column !in table.columns.indices) return filtered

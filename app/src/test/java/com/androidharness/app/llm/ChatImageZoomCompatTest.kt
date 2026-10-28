@@ -11,6 +11,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ChatImageZoomCompatTest {
+    @Test fun rehydratedBytesAndTheSerializedDeliveryContractAlwaysAgree() {
+        val provider = OpenAiCompatProvider(okhttp3.OkHttpClient(), ProviderFactory.json)
+        val original = ChatMessage(Role.TOOL, """{"ok":false,"image_attached":false,"error":"not_in_current_context","image_id":"img_logo","available_image":{"attachment_id":"img_crop","width":540,"height":576,"attached_bytes":123}}""",
+            toolCallId = "crop-call", toolName = "zoom_chat_image", isError = true, imageData = listOf(ImageData("image/png", "crop-bytes")))
+        val body = provider.buildRequestBody(ProviderConfig("fixture", "Fixture", ProviderType.OPENAI_COMPAT, "https://example.invalid", "gpt-4o"), "system",
+            listOf(ChatMessage(Role.ASSISTANT, toolCalls = listOf(ToolCallData("crop-call", "zoom_chat_image", "{}"))), original), emptyList(), RequestOptions())
+        val messages = body.getValue("messages").jsonArray.map { it.jsonObject }
+        val tool = kotlinx.serialization.json.Json.parseToJsonElement(messages[2].getValue("content").jsonPrimitive.content).jsonObject
+        assertEquals("true", tool.getValue("ok").jsonPrimitive.content)
+        assertEquals("true", tool.getValue("image_attached").jsonPrimitive.content)
+        assertEquals("img_crop", tool.getValue("attached_image").jsonObject.getValue("attachment_id").jsonPrimitive.content)
+        val content = messages.last().getValue("content").jsonArray
+        val label = content.first().jsonObject.getValue("text").jsonPrimitive.content
+        assertTrue(label.contains("tool_call_id=crop-call")); assertTrue(label.contains("img_crop")); assertTrue(label.contains("540"))
+        assertTrue(content[1].jsonObject.getValue("image_url").jsonObject.getValue("url").jsonPrimitive.content.endsWith("crop-bytes"))
+    }
+
     @Test fun everyToolImageReachesStrictEndpointsAfterAllResultsInCallOrder() {
         val provider = OpenAiCompatProvider(okhttp3.OkHttpClient(), ProviderFactory.json)
         val names = listOf("view_chat_image", "browser_read", "zoom_chat_image")

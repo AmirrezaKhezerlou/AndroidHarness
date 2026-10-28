@@ -33,13 +33,22 @@ internal object ChatImageInventory {
     fun remoteId(url: String): String = id("url:" + (httpImageUrl(url) ?: url))
     fun from(messages: List<ChatMessage>): List<ChatImageSource> = messages.asReversed().asSequence()
         .filter { it.role == Role.USER || it.role == Role.ASSISTANT && it.toolCallId == null ||
-            it.role == Role.TOOL && !it.isError && it.toolName in setOf("view_chat_image", "browser_read") }
+            it.role == Role.TOOL && it.toolName in setOf("view_chat_image", "browser_read") &&
+                (!it.isError || ImageInspectionDelivery.envelope(it.text)?.body?.get("available_image") is JsonObject) }
         .flatMap { message ->
             val role = message.role.name.lowercase()
             val who = if (message.role == Role.USER) "user attachment" else "assistant image"
-            val context = cleanPageImageText(message.text.substringBefore('\n'))?.take(120)
-            val stored = message.images.asReversed().map { ChatImageSource.Stored(it,
-                it.caption ?: (who + context?.let { text -> ": $text" }.orEmpty()), provenance(it, message.role), role) }
+            val envelope = if (message.role == Role.TOOL) ImageInspectionDelivery.envelope(message.text)?.body else null
+            val context = if (message.role == Role.TOOL) null else cleanPageImageText(message.text.substringBefore('\n'))?.take(120)
+            fun field(key: String) = (envelope?.get(key) as? JsonPrimitive)?.contentOrNull
+            val stored = message.images.asReversed().map { original ->
+                val ref = original.copy(
+                    imageId = original.imageId ?: field("image_id"),
+                    sourceUrl = original.sourceUrl ?: field("source_url"),
+                    caption = original.caption?.takeUnless { it.trimStart().startsWith('{') || it.contains("\"image_attached\"") } ?: field("caption"),
+                    origin = original.origin ?: field("origin"))
+                ChatImageSource.Stored(ref, ref.caption ?: (who + context?.let { text -> ": $text" }.orEmpty()), provenance(ref, message.role), role)
+            }
             val remote = if (message.role == Role.ASSISTANT) markdownImage.findAll(message.text).toList().asReversed().mapNotNull {
                 val url = httpImageUrl(it.groupValues[2]) ?: return@mapNotNull null
                 ChatImageSource.Remote(url, cleanPageImageText(it.groupValues[1])?.take(200) ?: who)
@@ -65,7 +74,8 @@ internal object ChatImageInventory {
         ref.origin == "browser_screenshot" -> "browser_screenshot"
         ref.sourceUrl != null || ref.origin in setOf("web_image", "remote_web") -> "remote_web"
         ref.origin == "user_upload" || role == Role.USER -> "user_upload"
-        ref.origin in setOf("generated_image", "image_crop") -> ref.origin!!
+        ref.origin in setOf("generated_image", "image_crop", "tool_image") -> ref.origin!!
+        role == Role.TOOL -> "tool_image"
         else -> "unknown_saved"
     }
 

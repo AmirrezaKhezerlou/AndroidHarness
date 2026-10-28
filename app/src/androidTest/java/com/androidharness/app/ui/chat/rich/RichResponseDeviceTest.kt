@@ -175,6 +175,53 @@ class RichResponseDeviceTest {
         }
     }
 
+    @Test fun phoneResultsReadNaturallyAndSelectionOnlyAppearsWhenRequested() {
+        val theme = mutableStateOf(ThemeMode.DARK)
+        val fontScale = mutableStateOf(1f)
+        var changed = ""
+        var followUp = RichResponse.FollowUp("", "", "")
+        val text = "The two blockers pass. Numbering is stable and the reduced-copy fallback works.\n\n" + ui(buildJsonObject {
+            put("type", "table"); put("title", "Re-test")
+            putJsonArray("columns") { add("Check"); add("Result") }
+            putJsonArray("rows") {
+                listOf(
+                    "Number stability" to "Pass. At turn start #1 = screenshot, #2 = logo. Adding the social card as #3 left both unchanged; view_chat_image(1) still returned the screenshot.",
+                    "Full-frame by number" to "Pass. Returned the 1080×1920 screenshot at 882×1568, scale 0.8167, with the full source region.",
+                    "Reduced-copy fallback" to "Pass. The logo returned a usable 256×256 image from its saved copy, with source and attachment sizes populated.",
+                    "Crop geometry" to "Pass. The requested 540×576 crop shows the header at the expected coordinates.",
+                    "Delivery contract" to "Failed. The original status contradicted the saved attachment metadata. This still needs a fix."
+                ).forEach { (check, result) -> add(buildJsonArray { add(check); add(result) }) }
+            }
+        })
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            scenario.onActivity { host -> host.setContent { HarnessTheme(themeMode = theme.value, dynamicColor = false) { ChatAppearance {
+                androidx.compose.runtime.CompositionLocalProvider(
+                    androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(androidx.compose.ui.platform.LocalDensity.current.density, fontScale.value),
+                    LocalResponseContext provides { _, value -> changed = value }) {
+                    Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
+                        AssistantText(text, onFollowUp = { followUp = it })
+                    }
+                }
+            } } } }
+            await("Number stability"); await("Full-frame by number"); await("Reduced-copy fallback")
+            fun checkboxes(node: AccessibilityNodeInfo?): Int = if (node == null) 0 else
+                (if (node.isVisibleToUser && node.isCheckable) 1 else 0) + (0 until node.childCount).sumOf { checkboxes(node.getChild(it)) }
+            assertEquals(0, checkboxes(instrumentation.uiAutomation.rootInActiveWindow))
+            assertNull(find(instrumentation.uiAutomation.rootInActiveWindow, "Filter rows"))
+            assertEquals("", changed)
+            screenshot("rich-table-phone-dark")
+            scenario.onActivity { theme.value = ThemeMode.LIGHT; fontScale.value = 1.5f }
+            await("Number stability"); screenshot("rich-table-phone-large-text")
+            scenario.onActivity { fontScale.value = 1f }
+            tap("Table options"); tap("Select rows")
+            tap("Number stability"); await("1 selected")
+            assertTrue(changed.contains("Selected rows:\nNumber stability"))
+            tap("Discuss selected rows"); assertTrue(followUp.context.contains("Number stability"))
+            tap("Table options"); tap("Filter rows"); await("Filter rows")
+            screenshot("rich-table-controls-on-demand")
+        }
+    }
+
     private fun showcase(): String = "A little clarity, right here\n\n" + listOf(
         buildJsonObject { put("type", "callout"); put("title", "Make room for focused work"); put("text", "One clear next step is easier to act on than a full dashboard.") },
         buildJsonObject { put("type", "metrics"); putJsonArray("items") {

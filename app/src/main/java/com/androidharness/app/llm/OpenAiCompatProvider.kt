@@ -186,19 +186,30 @@ class OpenAiCompatProvider(
                         put("content", systemPrompt)
                     })
                 }
-                val normalized = CompatHistory.normalize(messages)
+                val normalized = CompatHistory.normalize(messages).map {
+                    com.androidharness.app.tools.ImageInspectionDelivery.update(it, it.imageData)
+                }
                 val closeUps = mutableListOf<com.androidharness.app.core.ImageData>()
+                val imageLabels = mutableListOf<String>()
                 normalized.forEachIndexed { index, message ->
                     // Chat Completions accepts images in user messages, while
                     // strict endpoints reject image parts in tool messages.
                     val toolImage = message.role == Role.TOOL && message.imageData.isNotEmpty()
-                    if (toolImage) closeUps.addAll(message.imageData)
+                    if (toolImage) {
+                        val metadata = com.androidharness.app.tools.ImageInspectionDelivery.envelope(message.text)?.body
+                        message.imageData.forEachIndexed { imageIndex, data ->
+                            imageLabels += "Image ${closeUps.size + 1}: tool_call_id=${message.toolCallId}, tool=${message.toolName}, attachment_index=${imageIndex + 1}" +
+                                metadata?.let { " " + JsonObject(it.filterKeys { key -> key in setOf("source_image_id", "image_id", "caption", "attached_image", "source_region") }) }.orEmpty()
+                            closeUps += data
+                        }
+                    }
                     add(serializeMessage(if (toolImage) message.copy(imageData = emptyList()) else message, config))
                     if (closeUps.isNotEmpty() && normalized.getOrNull(index + 1)?.role != Role.TOOL) {
                         add(serializeMessage(ChatMessage(role = Role.USER,
-                            text = "Images returned by the preceding tools, in tool-call order. Match each image to its tool result's image_id and source details.",
+                            text = "Images actually attached by the preceding tools, in this exact attachment order. Match attachment_id and tool_call_id; omitted results have no image here.\n" + imageLabels.joinToString("\n"),
                             imageData = closeUps.toList()), config))
                         closeUps.clear()
+                        imageLabels.clear()
                     }
                 }
             }

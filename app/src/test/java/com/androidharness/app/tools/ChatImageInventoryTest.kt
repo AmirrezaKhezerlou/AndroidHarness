@@ -44,6 +44,18 @@ class ChatImageInventoryTest {
         assertTrue(ChatImageInventory.promptSources(turn.sources()).contains("stays fixed throughout this assistant turn"))
     }
 
+    @Test fun legacyToolImagesRecoverCleanCaptionAndOriginFromTheEnvelope() {
+        val body = """{"ok":false,"image_attached":false,"error":"not_in_current_context","caption":"A2 agent logo","origin":"tool_image","image_id":"img_legacy","available_image":{"width":256,"height":256}}"""
+        val result = ChatMessage(Role.TOOL, body, toolName = "view_chat_image", isError = true,
+            images = listOf(ImageRef("legacy.png", "image/png")))
+        val source = ChatImageInventory.from(listOf(result)).single()
+        assertEquals("A2 agent logo", source.label)
+        assertEquals("tool_image", source.origin)
+        assertEquals("tool", source.displayRole)
+        assertEquals("img_legacy", source.id)
+        assertFalse(ChatImageInventory.prompt(listOf(result)).contains("assistant image: {"))
+    }
+
     @Test fun queryCleanupDeduplicatesButPreservesImageTransformsAndSignedUrls() {
         val history = listOf(ChatMessage(Role.ASSISTANT, "![a](https://example.com/opengraph-image?c3e5ae0697f46c0e)\n![b](https://example.com/opengraph-image)"))
         assertEquals(1, ChatImageInventory.from(history).size)

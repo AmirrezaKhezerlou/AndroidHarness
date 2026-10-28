@@ -203,6 +203,53 @@ class ChatImageInspectionDeviceTest {
         } finally { c.sessions.session(sid)?.let { c.sessions.deleteSession(it) }; c.images.delete(ref.name); root.deleteRecursively() }
     }
 
+    @Test fun rehydratedLegacyLogoIsUsableOnItsFirstInspection(): Unit = runBlocking {
+        val data = picture()
+        val bitmap = BitmapFactory.decodeByteArray(data, 0, data.size)
+        val ref = try { c.images.saveCloseUp(bitmap) } finally { bitmap.recycle() }
+        val root = File(c.appContext.cacheDir, "legacy-inspection-${System.nanoTime()}").apply { mkdirs() }
+        val sid = c.sessions.createSession("Legacy delivery fixture", conversation = com.androidharness.app.data.ConversationConfig(com.androidharness.app.data.ConversationKind.CHAT))
+        val prior = ChatMessage(Role.TOOL, """{"ok":false,"image_attached":false,"error":"not_in_current_context","image_id":"img_legacy_logo","caption":"A clean logo caption","origin":"tool_image","attached_bytes":0,"available_image":{"attachment_id":"img_legacy_logo","width":96,"height":64,"attached_bytes":123}}""",
+            toolCallId = "old-view", toolName = "view_chat_image", isError = true, images = listOf(ref))
+        val history = listOf(ChatMessage(Role.ASSISTANT, toolCalls = listOf(ToolCallData("old-view", "view_chat_image", "{}"))), prior,
+            ChatMessage(Role.USER, "Inspect the logo again"))
+        var round = 0
+        val provider = object : com.androidharness.app.llm.LlmProvider {
+            override fun streamChat(config: com.androidharness.app.llm.ProviderConfig, apiKey: String, systemPrompt: String, messages: List<ChatMessage>,
+                tools: List<com.androidharness.app.llm.ToolSchema>, options: com.androidharness.app.llm.RequestOptions) = kotlinx.coroutines.flow.flow {
+                assertTrue(systemPrompt.contains("A clean logo caption")); assertFalse(systemPrompt.contains("assistant image: {"))
+                assertTrue(systemPrompt.contains("\"origin\":\"tool_image\""))
+                if (round++ == 0) {
+                    emit(com.androidharness.app.llm.StreamEvent.ToolCallBatch(listOf(
+                        ToolCallData("first-view", "view_chat_image", "{\"image_id\":\"img_legacy_logo\"}"),
+                        ToolCallData("first-zoom", "zoom_chat_image", "{\"image_id\":\"img_legacy_logo\"}"))))
+                    emit(com.androidharness.app.llm.StreamEvent.Done("tool_calls"))
+                } else {
+                    for (result in messages.filter { it.toolCallId in setOf("first-view", "first-zoom") && it.role == Role.TOOL }) {
+                        assertFalse(result.text, result.isError); assertEquals(1, result.imageData.size)
+                        val body = Json.parseToJsonElement(result.text).jsonObject
+                        assertTrue(body.getValue("ok").jsonPrimitive.boolean); assertTrue(body.getValue("image_attached").jsonPrimitive.boolean)
+                        assertTrue(body.getValue("delivered").jsonPrimitive.boolean); assertTrue(body["attached_image"] is JsonObject)
+                        assertEquals("A clean logo caption", body.getValue("caption").jsonPrimitive.content)
+                    }
+                    emit(com.androidharness.app.llm.StreamEvent.TextDelta("Both first inspections delivered the saved logo."))
+                    emit(com.androidharness.app.llm.StreamEvent.Done("stop"))
+                }
+            }
+        }
+        val created = mutableListOf<String>()
+        try {
+            val engine = com.androidharness.app.agent.AgentEngine({ provider }, c.registry, c.checkpoints, c.images, c.linuxEnv, c.shizuku, c.skills)
+            engine.run(sid, "legacy", com.androidharness.app.llm.ProviderConfig("fixture", "Fixture", com.androidharness.app.llm.ProviderType.OPENAI_COMPAT,
+                "https://example.invalid", "gpt-4o"), "", history, { com.androidharness.app.agent.PermissionMode.FULL_AUTO }, mutableSetOf(), FileFs(root),
+                com.androidharness.app.llm.RequestOptions(), 100_000, com.androidharness.app.agent.AgentMode.ACT,
+                conversation = com.androidharness.app.data.ConversationConfig(com.androidharness.app.data.ConversationKind.CHAT)).collect { event ->
+                    if (event is com.androidharness.app.agent.AgentEvent.ToolFinished) event.result.image?.name?.let(created::add)
+                }
+            assertEquals(2, round)
+        } finally { created.forEach(c.images::delete); c.images.delete(ref.name); c.sessions.session(sid)?.let { c.sessions.deleteSession(it) }; root.deleteRecursively() }
+    }
+
     @Test fun expandedImageDetailsKeepBothCollapseControlsReachable() {
         val bitmap = Bitmap.createBitmap(600, 2400, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.CYAN) }
         val ref = try { c.images.saveCloseUp(bitmap).copy(caption = "Tall inspection preview") } finally { bitmap.recycle() }

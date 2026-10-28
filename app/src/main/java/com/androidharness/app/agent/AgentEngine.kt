@@ -328,8 +328,8 @@ class AgentEngine(
         val imageCapable = (if (conversation.isChat) options.modelCatalogs[config.id]?.firstOrNull { it.id == config.model }?.imageInput else null)
             ?: com.androidharness.app.llm.visionCapable(config.model)
         val chatHistory = if (agentContextEnabled) history else com.androidharness.app.local.LocalChatCodec.plainChatMessages(history)
-        val resolvedHistory = (if (localChat) chatHistory else ContextHygiene.shrinkToolResults(chatHistory))
-            .map { it.withImagesResolved() }
+        // Resolve first; delivery status is reconciled with the actual request bytes below.
+        val resolvedHistory = chatHistory.map { it.withImagesResolved() }
         val working = (if (conversation.isChat && imageCapable)
             ChatImageContext.attach(resolvedHistory, resolve = imageStore::resolve, load = imageStore::remoteImage) else resolvedHistory).toMutableList()
         // If active model is known to be text-only, strip image data upfront
@@ -865,7 +865,11 @@ class AgentEngine(
 
     private fun ChatMessage.withImagesResolved(): ChatMessage =
         if (images.isEmpty()) this
-        else copy(imageData = images.mapNotNull { ref -> imageStore.resolve(ref) })
+        else com.androidharness.app.tools.ImageInspectionDelivery.update(this, images.mapNotNull { ref ->
+            // A transient saved-file read must not require another model/tool round trip.
+            runCatching { imageStore.resolve(ref) }.getOrNull()
+                ?: runCatching { imageStore.resolve(ref) }.getOrNull()
+        })
 
     /**
      * Executes one tool call with the current permission gating. [emitEvent]

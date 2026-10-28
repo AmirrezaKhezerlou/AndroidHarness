@@ -6,7 +6,7 @@ import kotlinx.serialization.json.*
 
 internal fun imageInspectionFailure(error: String, description: String, source: ChatImageSource? = null, fetched: RemoteImageFetch? = null): ToolResult =
     ToolResult(false, buildJsonObject {
-        put("ok", false); put("image_attached", false); put("error", error); put("message", description)
+        put("ok", false); put("image_attached", false); put("delivered", false); put("attached_image", JsonNull); put("error", error); put("message", description)
         put("image_id", source?.id?.let(::JsonPrimitive) ?: JsonNull)
         put("source_url", (fetched?.url ?: (source as? ChatImageSource.Remote)?.url ?: (source as? ChatImageSource.Stored)?.ref?.sourceUrl)?.let(::JsonPrimitive) ?: JsonNull)
         fetched?.httpStatus?.let { put("http_status", it) }
@@ -34,7 +34,7 @@ internal fun imageInspectionSuccess(
     originalAvailable: Boolean = true,
     fetchSource: String = if (cached == true) "cache" else "network",
 ): ToolResult = ToolResult(true, buildJsonObject {
-    put("ok", true); put("image_attached", true); put("error", JsonNull); put("message", description)
+    put("ok", true); put("image_attached", true); put("delivered", true); put("error", JsonNull); put("message", description)
     put("image_id", source.id); put("source_image_id", source.id)
     put("image_number", number?.let(::JsonPrimitive) ?: JsonNull)
     put("image_number_scope", "assistant_turn")

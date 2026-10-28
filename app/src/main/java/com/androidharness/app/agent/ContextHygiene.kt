@@ -32,24 +32,23 @@ object ContextHygiene {
         val keepFull = toolIndices.takeLast(recentFull).toSet()
         // Every image in the latest tool batch must reach the very next model
         // request. The normal image budget applies to older context only.
-        val lastUser = history.indexOfLast { it.role == Role.USER }
         val latestAssistant = history.indexOfLast { it.role == Role.ASSISTANT && it.toolCallId == null }
-        val freshToolIds = history.getOrNull(latestAssistant)?.takeIf { latestAssistant > lastUser }
+        val freshToolIds = history.getOrNull(latestAssistant)
             ?.toolCalls.orEmpty().mapTo(hashSetOf()) { it.id }
 
         // Count all images across the conversation from newest to oldest
         var keptImages = 0
         val withEvictedImages = history.asReversed().map { m ->
             if (m.imageData.isEmpty()) {
-                m
+                imageContextState(m, emptyList(), "attachment_unavailable", "No image bytes are included in this request. Saved metadata is listed separately and is not visual evidence.")
             } else if (m.role == Role.TOOL && m.toolCallId in freshToolIds) {
                 keptImages += m.imageData.size
-                m
+                imageContextState(m, m.imageData, "not_in_current_context", "")
             } else {
                 val availableQuota = (maxImages - keptImages).coerceAtLeast(0)
                 if (availableQuota >= m.imageData.size) {
                     keptImages += m.imageData.size
-                    m
+                    imageContextState(m, m.imageData, "not_in_current_context", "")
                 } else if (availableQuota > 0) {
                     val keptSlice = m.imageData.takeLast(availableQuota)
                     keptImages += availableQuota
@@ -90,15 +89,7 @@ object ContextHygiene {
 
     /** Keep model-facing status honest when context pruning removes an actual attachment. */
     private fun imageContextState(message: ChatMessage, kept: List<com.androidharness.app.core.ImageData>, error: String, note: String): ChatMessage {
-        val marker = "\n[screenshot result; page text read successfully]\n"
-        val prefix = message.text.indexOf(marker).takeIf { it >= 0 }?.let { message.text.substring(0, it + marker.length) }.orEmpty()
-        val envelope = runCatching { kotlinx.serialization.json.Json.parseToJsonElement(message.text.removePrefix(prefix).substringBefore("\n[took "))
-            .let { it as? kotlinx.serialization.json.JsonObject }?.takeIf { "image_attached" in it } }.getOrNull()
-        if (envelope == null) return message.copy(imageData = kept)
-        return message.copy(imageData = kept, isError = true, text = prefix + kotlinx.serialization.json.JsonObject(envelope + mapOf(
-            "ok" to kotlinx.serialization.json.JsonPrimitive(false), "image_attached" to kotlinx.serialization.json.JsonPrimitive(false),
-            "error" to kotlinx.serialization.json.JsonPrimitive(error), "message" to kotlinx.serialization.json.JsonPrimitive(note),
-        )).toString())
+        return com.androidharness.app.tools.ImageInspectionDelivery.update(message, kept, error, note)
     }
 
     fun summaryMessage(summary: String): ChatMessage = ChatMessage(
