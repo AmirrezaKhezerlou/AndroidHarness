@@ -109,6 +109,7 @@ internal fun MemoryManagerSection(container: AppContainer) {
     var editing by remember { mutableStateOf<MemoryEntity?>(null) }
     var deleting by remember { mutableStateOf<MemoryEntity?>(null) }
     var clearing by remember { mutableStateOf(false) }
+    val agentSettings by container.settings.settings.collectAsStateWithLifecycle(initialValue = com.androidharness.app.data.AppSettings())
     val projectNames = remember(projects) { projects.associate { it.id to it.name } }
     var section by rememberSaveable { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
@@ -200,6 +201,7 @@ internal fun MemoryManagerSection(container: AppContainer) {
                 MemoryRow(
                     memory = memory,
                     projectName = memory.projectId?.let { projectNames[it] },
+                    agentName = agentSettings.chatAgents.firstOrNull { it.id == memory.agentId }?.name,
                     onEdit = { if (!saving) { editing = memory; error = null } },
                     onPinned = { pinned -> mutate({ container.memory.setPinned(memory.id, pinned) }) },
                     onEnabled = { enabled -> mutate({ container.memory.setEnabled(memory.id, enabled) }) },
@@ -280,6 +282,7 @@ internal fun MemoryManagerSection(container: AppContainer) {
 private fun MemoryRow(
     memory: MemoryEntity,
     projectName: String?,
+    agentName: String? = null,
     onEdit: () -> Unit,
     onPinned: (Boolean) -> Unit,
     onEnabled: (Boolean) -> Unit,
@@ -303,7 +306,8 @@ private fun MemoryRow(
             )
             Text(
                 listOfNotNull(
-                    stringResource(sectionLabel(MemorySection.fromStored(memory.section))),
+                    if (memory.agentId == null) stringResource(sectionLabel(MemorySection.fromStored(memory.section))) else
+                        stringResource(R.string.chat_agents_private_memory_label) + " · " + (agentName ?: memory.agentId.take(8)),
                     stringResource(if (memory.isSummary) R.string.memory_consolidated else categoryLabel(memory.category)),
                     if (memory.scope == MemoryScope.PROJECT.name) projectName ?: stringResource(R.string.settings_memory_project)
                     else stringResource(R.string.settings_memory_global),
@@ -372,7 +376,7 @@ internal fun MemoryEditDialog(
                 Text(stringResource(R.string.memory_section_label), style = MaterialTheme.typography.labelLarge)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     MemorySection.entries.forEach { option ->
-                        FilterChip(enabled = enabled, selected = owner == option, onClick = { owner = option }, label = { Text(stringResource(sectionLabel(option))) })
+                        FilterChip(enabled = enabled && initial?.agentId == null, selected = owner == option, onClick = { owner = option }, label = { Text(stringResource(sectionLabel(option))) })
                     }
                 }
                 Text(stringResource(R.string.settings_memory_category_label), style = MaterialTheme.typography.labelLarge)
@@ -396,7 +400,7 @@ internal fun MemoryEditDialog(
                     )
                     projects.forEach { project ->
                         FilterChip(
-                            enabled = enabled,
+                            enabled = enabled && initial?.agentId == null,
                             selected = scope == MemoryScope.PROJECT && projectId == project.id,
                             onClick = { scope = MemoryScope.PROJECT; projectId = project.id },
                             label = { Text(project.name) },

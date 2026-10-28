@@ -96,18 +96,26 @@ class MemoryRepository(private val db: AppDatabase, private val settings: Settin
     suspend fun sectionForSession(sessionId: String?): MemorySection =
         if (sessionId != null && ConversationConfig.decode(dao.session(sessionId)?.conversationJson).isChat) MemorySection.CHAT else MemorySection.CODE
 
+    private suspend fun agentForSession(sessionId: String?): ChatAgentProfile? = sessionId?.let {
+        ConversationConfig.decode(dao.session(it)?.conversationJson).takeIf { config -> config.isChat }?.agent
+    }
+
+    private suspend fun agentOwner(sessionId: String?): String? = agentForSession(sessionId)?.takeIf { it.memory == AgentMemory.PRIVATE }?.id
+
     suspend fun isEnabled(sessionId: String? = null): Boolean =
+        agentForSession(sessionId)?.memory != AgentMemory.OFF &&
         (sessionId == null || ConversationConfig.decode(dao.session(sessionId)?.conversationJson).personalizationEnabled) &&
             MemoryAccess.enabled(settings.settings.first(), sectionForSession(sessionId))
 
-    suspend fun projectIdForSession(sessionId: String?): String? = sessionId?.takeIf { it.isNotBlank() }?.let { dao.projectIdForSession(it) }
+    suspend fun projectIdForSession(sessionId: String?): String? = if (agentOwner(sessionId) != null) null else sessionId?.takeIf { it.isNotBlank() }?.let { dao.projectIdForSession(it) }
 
     /** Always supplies own/shared memories. Other-section lookup requires an explicit recall request. */
     suspend fun promptBlock(sessionId: String?, query: String = "", onUsed: (List<MemoryEntity>) -> Unit = {}): String? {
         onUsed(emptyList())
         if (!isEnabled(sessionId)) return null
         val section = sectionForSession(sessionId)
-        val available = dao.activeMemories(projectIdForSession(sessionId)).filter { MemoryAccess.belongsTo(it, section) }
+        val owner = agentOwner(sessionId)
+        val available = dao.activeMemories(projectIdForSession(sessionId)).filter { MemoryAccess.belongsTo(it, section, owner) }
         val block = MemoryPrompt.build(available, query = query)
         if (block.text.isBlank()) return null
         onUsed(block.supplied)
@@ -127,9 +135,10 @@ class MemoryRepository(private val db: AppDatabase, private val settings: Settin
     ): WriteResult {
         check(isEnabled(sessionId)) { "Memory is off for this section." }
         val section = sectionForSession(sessionId)
+        val owner = agentOwner(sessionId)
         val project = projectIdForSession(sessionId)
         return db.withTransaction {
-            val available = dao.allMemories().filter { it.consolidatedInto == null && MemoryAccess.belongsTo(it, section) &&
+            val available = dao.allMemories().filter { it.consolidatedInto == null && MemoryAccess.belongsTo(it, section, owner) &&
                 (it.scope == MemoryScope.GLOBAL.name || it.projectId == project && project != null) }
             if (memoryId != null) {
                 val current = available.firstOrNull { it.id == memoryId } ?: error("Memory is not available in this section/project. Recall it first.")
@@ -157,7 +166,7 @@ class MemoryRepository(private val db: AppDatabase, private val settings: Settin
                     val near = candidates.firstOrNull { MemoryMatch.key(it.text) != MemoryMatch.key(clean) && MemoryMatch.similar(it.text, clean) }
                     check(near == null) { "Similar memory [id:${near?.id}]: ${near?.text}. Recall it and update by memory_id, or set allow_similar only if these are distinct facts." }
                 }
-                save(clean, category ?: MemoryCategory.FACT, scope, projectId, sessionId, section)
+                save(clean, category ?: MemoryCategory.FACT, scope, projectId, sessionId, section, owner)
             }
         }
     }
@@ -165,18 +174,18 @@ class MemoryRepository(private val db: AppDatabase, private val settings: Settin
     suspend fun add(text: String, category: MemoryCategory, requestedScope: MemoryScope, projectId: String?, section: MemorySection = MemorySection.SHARED): MemoryEntity? =
         if (text.isBlank()) null else db.withTransaction { save(checkedText(text), category, requestedScope, projectId, null, section).memory }
 
-    private suspend fun save(text: String, category: MemoryCategory, requestedScope: MemoryScope, projectId: String?, sessionId: String?, section: MemorySection): WriteResult {
+    private suspend fun save(text: String, category: MemoryCategory, requestedScope: MemoryScope, projectId: String?, sessionId: String?, section: MemorySection, owner: String? = null): WriteResult {
         val scope = if (requestedScope == MemoryScope.PROJECT && projectId != null) MemoryScope.PROJECT else MemoryScope.GLOBAL
         val actualProject = projectId.takeIf { scope == MemoryScope.PROJECT }
         val existing = dao.allMemories().firstOrNull { it.consolidatedInto == null && !it.isSummary && it.scope == scope.name &&
-            it.projectId == actualProject && MemoryAccess.belongsTo(it, section) && MemoryMatch.key(it.text) == MemoryMatch.key(text) }
+            it.projectId == actualProject && MemoryAccess.belongsTo(it, section, owner) && MemoryMatch.key(it.text) == MemoryMatch.key(text) }
         if (existing != null) {
             check(existing.enabled) { "This fact already exists as a disabled memory. Enable it in Settings before using it again." }
             return WriteResult(existing, Action.UNCHANGED)
         }
         val now = System.currentTimeMillis()
         val memory = MemoryEntity(UUID.randomUUID().toString(), text, category.name, scope.name, actualProject,
-            sessionId, createdAt = now, updatedAt = now, section = section.name)
+            sessionId, createdAt = now, updatedAt = now, section = section.name, agentId = owner)
         dao.upsertMemory(memory)
         trim()
         return WriteResult(memory, Action.SAVED)
@@ -192,9 +201,10 @@ class MemoryRepository(private val db: AppDatabase, private val settings: Settin
     suspend fun update(memory: MemoryEntity, text: String, category: MemoryCategory, scope: MemoryScope, projectId: String?, section: MemorySection = MemorySection.fromStored(memory.section)) = db.withTransaction {
         val current = dao.memory(memory.id) ?: error("This memory was deleted.")
         check(current.updatedAt == memory.updatedAt && current.text == memory.text && current.consolidatedInto == null) { "This memory changed. Reopen it before saving." }
+        check(current.agentId == null || section == MemorySection.CHAT && scope == MemoryScope.GLOBAL) { "Private agent memories stay in this agent." }
         val clean = checkedText(text, current.isSummary)
         val actualProject = projectId.takeIf { scope == MemoryScope.PROJECT }
-        check(dao.allMemories().none { it.id != memory.id && it.consolidatedInto == null && it.section == section.name &&
+        check(dao.allMemories().none { it.id != memory.id && it.consolidatedInto == null && it.section == section.name && it.agentId == current.agentId &&
             it.scope == scope.name && it.projectId == actualProject && MemoryMatch.key(it.text) == MemoryMatch.key(clean) }) { "This memory already exists." }
         dao.upsertMemory(current.copy(text = clean, category = category.name, scope = if (actualProject != null) "PROJECT" else "GLOBAL",
             projectId = actualProject, section = section.name, updatedAt = System.currentTimeMillis()))
@@ -206,11 +216,11 @@ class MemoryRepository(private val db: AppDatabase, private val settings: Settin
             check(latest != null && latest.copy(lastUsedAt = original.lastUsedAt, useCount = original.useCount) == original && latest.consolidatedInto == null && latest.enabled) { "Memories changed. Review the consolidation again." }
             latest
         }
-        check(current.size >= 2 && current.map { Triple(it.section, it.scope, it.projectId) }.distinct().size == 1) { "Choose memories from one section and scope." }
+        check(current.size >= 2 && current.map { listOf(it.section, it.scope, it.projectId, it.agentId) }.distinct().size == 1) { "Choose memories from one section and scope." }
         val text = checkedText(reviewedText, summary = true)
         val now = System.currentTimeMillis()
         val summary = MemoryEntity(UUID.randomUUID().toString(), text, scope = plan.scope.name, projectId = plan.projectId,
-            createdAt = now, updatedAt = now, pinned = current.any { it.pinned }, section = plan.section.name, isSummary = true)
+            createdAt = now, updatedAt = now, pinned = current.any { it.pinned }, section = plan.section.name, isSummary = true, agentId = plan.agentId)
         dao.upsertMemory(summary)
         dao.consolidateMemories(current.map { it.id }, summary.id)
         summary
@@ -263,20 +273,26 @@ class MemoryRepository(private val db: AppDatabase, private val settings: Settin
     }
 
     suspend fun recallById(id: String, sessionId: String?, requestedSection: MemorySection? = null): MemoryEntity {
+        check(isEnabled(sessionId)) { "Memory is off for this conversation." }
+        val owner = agentOwner(sessionId)
         val from = sectionForSession(sessionId)
         val target = requestedSection ?: from
+        check(owner == null || target == MemorySection.CHAT) { "This agent only has access to its own memory." }
         check(MemoryAccess.canRecall(settings.settings.first(), from, target)) { "Memory lookup for that section is off in Settings > Memory." }
-        return dao.activeMemories(projectIdForSession(sessionId)).firstOrNull { it.id == id && MemoryAccess.belongsTo(it, target) }
+        return dao.activeMemories(projectIdForSession(sessionId)).firstOrNull { it.id == id && MemoryAccess.belongsTo(it, target, owner) }
             ?: error("This memory is not available in this section/project. Recall current memories first.")
     }
 
     /** Explicit cross-section lookup is possible only when its switch is enabled. */
     suspend fun search(query: String, sessionId: String?, requestedSection: MemorySection? = null): List<MemoryEntity> {
+        check(isEnabled(sessionId)) { "Memory is off for this conversation." }
+        val owner = agentOwner(sessionId)
         val from = sectionForSession(sessionId)
         val target = requestedSection ?: from
+        check(owner == null || target == MemorySection.CHAT) { "This agent only has access to its own memory." }
         val prefs = settings.settings.first()
         check(MemoryAccess.canRecall(prefs, from, target)) { "Memory lookup for that section is off in Settings > Memory." }
-        val active = dao.activeMemories(projectIdForSession(sessionId)).filter { MemoryAccess.belongsTo(it, target) }
+        val active = dao.activeMemories(projectIdForSession(sessionId)).filter { MemoryAccess.belongsTo(it, target, owner) }
         return active.filter { query.isBlank() || MemoryMatch.relevance(it.text + " " + it.category, query) > 0 }
             .sortedWith(compareByDescending<MemoryEntity> { MemoryMatch.relevance(it.text, query) }
                 .thenByDescending { it.pinned }.thenByDescending { it.updatedAt }).take(if (query.isBlank()) 20 else 40)

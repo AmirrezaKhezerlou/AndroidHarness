@@ -22,6 +22,8 @@ object RichResponse {
     data class Series(val name: String, val points: List<Point>)
     data class Tab(val title: String, val children: List<Node>)
     data class GalleryImage(val url: String, val caption: String, val source: String)
+    data class ProfileFact(val label: String, val value: String, val source: String)
+    data class ProfileSource(val title: String, val url: String)
     data class NumberInput(val id: String, val label: String, val value: Double, val min: Double, val max: Double, val step: Double)
     data class Calculation(val label: String, val expression: String, val unit: String)
     data class EvidenceItem(val title: String, val text: String, val url: String, val path: String, val line: Int?, val status: String)
@@ -42,6 +44,8 @@ object RichResponse {
         data class Table(val title: String, val columns: List<String>, val rows: List<List<String>>, val caption: String) : Node
         data class Tabs(val title: String, val tabs: List<Tab>) : Node
         data class Gallery(val title: String, val images: List<GalleryImage>) : Node
+        data class Profile(val name: String, val subtitle: String, val description: String, val image: String,
+            val imageSource: String, val facts: List<ProfileFact>, val sources: List<ProfileSource>) : Node
         data class Calculator(val title: String, val inputs: List<NumberInput>, val outputs: List<Calculation>, val caption: String) : Node
         data class Evidence(val title: String, val items: List<EvidenceItem>) : Node
         data class Diff(val title: String, val before: String, val after: String, val path: String, val line: Int?, val language: String) : Node
@@ -119,6 +123,20 @@ object RichResponse {
                 "gallery" -> Node.Gallery(o.str("title", 100, true), o.array("images", 12).map { it.jsonObject.let { image ->
                     GalleryImage(image.str("url", 2048, true).also(::requireWebUrl), image.str("caption", 500), image.str("source", 2048).also { url -> if (url.isNotBlank()) requireWebUrl(url) })
                 } })
+                "profile" -> {
+                    val sources = o.array("sources", 6).map { it.jsonObject.let { source ->
+                        ProfileSource(source.str("title", 100, true), source.str("url", 2048, true).also(::requireWebUrl))
+                    } }
+                    val image = o.str("image", 2048).also { if (it.isNotBlank()) requireWebUrl(it) }
+                    val imageSource = o.str("image_source", 2048).also { if (it.isNotBlank()) requireWebUrl(it) }
+                    require(image.isBlank() || imageSource.isNotBlank())
+                    val facts = o.array("facts", 8, false).map { it.jsonObject.let { fact ->
+                        ProfileFact(fact.str("label", 60, true), fact.str("value", 500, true),
+                            fact.str("source", 2048, true).also(::requireWebUrl))
+                    } }
+                    Node.Profile(o.str("name", 120, true), o.str("subtitle", 160), o.str("description", 2000, true),
+                        image, imageSource, facts, sources)
+                }
                 "calculator" -> {
                     val inputs = o.array("inputs", 6).map { it.jsonObject.let { input ->
                         val low = input.number("min"); val high = input.number("max"); val step = input.number("step")
@@ -180,6 +198,20 @@ object RichResponse {
     }
     /** Legacy URL discovery must not probe URLs inside isolated preview code or duplicate native link cards. */
     fun markdownText(text: String): String = if (!text.contains(LANGUAGE)) text else parse(text).filterIsInstance<Part.Markdown>().joinToString("\n\n") { it.text }
+    /** Image discovery for follow-up inspection includes native cards, not just Markdown. */
+    fun images(text: String): List<GalleryImage> = buildList {
+        fun visit(node: Node) {
+            when (node) {
+                is Node.Profile -> if (node.image.isNotBlank()) add(GalleryImage(node.image, node.name, node.imageSource))
+                is Node.Gallery -> addAll(node.images)
+                is Node.Card -> node.children.forEach(::visit)
+                is Node.Layout -> node.children.forEach(::visit)
+                is Node.Tabs -> node.tabs.forEach { it.children.forEach(::visit) }
+                else -> Unit
+            }
+        }
+        parse(text).filterIsInstance<Part.Content>().forEach { visit(it.node) }
+    }
     fun describe(node: Node): String = when (node) {
         is Node.Text -> node.text
         is Node.Callout -> "${node.title}\n${node.text}"
@@ -197,6 +229,8 @@ object RichResponse {
         is Node.Table -> node.title + "\n" + node.columns.joinToString(" | ") + "\n" + node.rows.joinToString("\n") { it.joinToString(" | ") } + "\n" + node.caption
         is Node.Tabs -> node.title + "\n" + node.tabs.joinToString("\n") { it.title + "\n" + it.children.joinToString("\n", transform = ::describe) }
         is Node.Gallery -> node.title + "\n" + node.images.joinToString("\n") { "${it.caption}\n${it.url}\n${it.source}" }
+        is Node.Profile -> (listOf(node.name, node.subtitle, node.description) + node.facts.map { "${it.label}: ${it.value}\n${it.source}" } +
+            node.sources.map { "${it.title}: ${it.url}" } + listOfNotNull(node.imageSource.takeIf { it.isNotBlank() }?.let { "Image source: $it" })).filter(String::isNotBlank).joinToString("\n")
         is Node.Calculator -> node.title + "\n" + node.inputs.joinToString("\n") { "${it.label}: ${CalculatorMath.format(it.value)}" } + "\n" +
             node.outputs.joinToString("\n") { output -> "${output.label}: ${CalculatorMath.evaluate(output.expression, node.inputs.associate { it.id to it.value })?.let(CalculatorMath::format) ?: "—"} ${output.unit}" } + "\n" + node.caption
         is Node.Evidence -> node.title + "\n" + node.items.joinToString("\n") { "${it.title} ${it.status}\n${it.text}\n${it.url.ifBlank { it.path + (it.line?.let { line -> ":$line" } ?: "") }}" }
@@ -228,6 +262,7 @@ Additional native components work in BOTH Chat and Code. Prefer these over custo
 {"type":"table","title":"Recorded measurements","columns":["Run","Latency, ms"],"rows":[["A","12"],["B","18"]],"caption":"Example structure; replace with supplied or verified measurements"} (filter, numeric/text column sorting, row selection, pagination, CSV copy/share; up to 8 columns and 100 rows; cells must be strings)
 {"type":"tabs","title":"Explore the answer","tabs":[{"title":"Overview","children":[{"type":"text","text":"Main answer"}]},{"title":"Examples","children":[{"type":"text","text":"A concrete example"}]}]} (up to 6 tabs; nest any supported components in children; selected-tab controls retain state)
 {"type":"gallery","title":"Visual comparison","images":[{"url":"https://example.com/actual-image.jpg","caption":"What this image shows","source":"https://example.com/source-page"}]} (swipe, previous/next, expand with zoom, and source links; up to 12 images; ONLY actual image URLs returned by tools or supplied by the user, never invented URLs; respect the chat image setting)
+{"type":"profile","name":"Subject name","subtitle":"Verified role or category","description":"A short introduction supported by the sources below.","image":"https://example.com/actual-portrait.jpg","image_source":"https://example.com/biography","facts":[{"label":"Known for","value":"A verified contribution","source":"https://example.com/biography"}],"sources":[{"title":"Biography","url":"https://example.com/biography"}]} (native knowledge/profile card for a person, place, organization, or other named subject; optional image/image_source, up to 8 sourced facts and 6 source links; sources required; use only pages actually read and image URLs returned by tools or supplied by the user; omit unverified facts and resolve ambiguous names before making a card; respect the chat image setting)
 {"type":"chart","title":"Performance over time","kind":"line","unit":"ms","series":[{"name":"Before","points":[{"label":"Day 1","value":18},{"label":"Day 2","value":20}]},{"name":"After","points":[{"label":"Day 1","value":12},{"label":"Day 2","value":14}]}],"caption":"Measured data or clearly marked illustrative values"} (bar or line, up to 6 datasets and 120 points each, aligned labels in exactly the same order; legends toggle datasets, visible-range sliders zoom the data, data view exposes exact values; existing single-series points form still works)
 {"type":"calculator","title":"Try different values","inputs":[{"id":"hours","label":"Hours","value":4,"min":0,"max":24,"step":0.5},{"id":"rate","label":"Rate","value":10,"min":0,"max":100,"step":1}],"outputs":[{"label":"Total","expression":"hours * rate","unit":"credits"}],"caption":"Illustrative estimate; explain assumptions"} (up to 6 numeric inputs and 6 calculated outputs, sliders and editable numbers; use input IDs in arithmetic expressions; supports + - * / ^, parentheses, min(a,b), max(a,b), abs(x), sqrt(x), round(x); NO scripts, functions beyond this list, network, or tool actions)
 {"type":"evidence","title":"Sources and checks","items":[{"title":"Supporting reference","text":"The claim this supports","url":"https://example.com/reference"},{"title":"Focused test","text":"Actual command and observed result","path":"src/example.kt","line":12,"status":"passed"}]} (up to 12 items; optional url, workspace path, positive line, status passed/failed/unverified; file navigation is available only in Code; statuses are agent-reported, never claim a test passed without an actual successful tool result; prefer unverified when uncertain; preserve claim-level citations in prose)

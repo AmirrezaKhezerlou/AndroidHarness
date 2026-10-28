@@ -338,7 +338,7 @@ class AgentEngine(
             working.clear()
             working.addAll(sanitized)
         }
-        val runRegistry = (if (conversation.isChat) registry.withExtra(chatOnlyTools + listOfNotNull(scopedSearch, scopedFetch, scopedBrowser) +
+        val runRegistry = (if (conversation.isChat) registry.withExtra(chatOnlyTools + com.androidharness.app.tools.chatAgentTools(conversation.agent) + listOfNotNull(scopedSearch, scopedFetch, scopedBrowser) +
             if (imageCapable) listOf(com.androidharness.app.tools.ChatImageZoomTool(imageStore) { working.toList() }) else emptyList()) else registry.withExtra(extraTools +
             if (subagentRuns == null) emptyList() else com.androidharness.app.tools.subagentControlTools(subagentRuns, sessionId)))
             .restrictedTo(conversation.allowedTools)
@@ -1755,7 +1755,7 @@ class AgentEngine(
             (chatOnlyTools.firstOrNull { it.name == "browser_read" } as? com.androidharness.app.tools.BrowserReadTool)
                 ?.forBudget(scopedSearch?.budget())
         } else null
-        val tools = (if (conversation.isChat) registry.withExtra(chatOnlyTools + listOfNotNull(scopedSearch, scopedFetch, scopedBrowser)) else registry)
+        val tools = (if (conversation.isChat) registry.withExtra(chatOnlyTools + com.androidharness.app.tools.chatAgentTools(conversation.agent) + listOfNotNull(scopedSearch, scopedFetch, scopedBrowser)) else registry)
             .restrictedTo(conversation.allowedTools)
             .let { if (conversation.isChat && searchDepth == com.androidharness.app.data.SearchDepth.OFF) it.without(setOf("web_search")) else it }
             .let { if (memoryOn) it else it.without(memoryToolNames) }
@@ -1890,6 +1890,7 @@ class AgentEngine(
             .effectiveImageFrequency(conversation.imageFrequency, chatImageFrequency)
         sb.append("\n\n# Images in answers\n")
             .append(com.androidharness.app.core.ChatExperience.imageFrequencyPrompt(effectiveImageFrequency))
+        conversation.agent?.let { sb.append(com.androidharness.app.data.ChatAgentPolicy.prompt(it)) }
         if (conversation.personalizationEnabled) {
             val instructions = conversation.effectiveInstructions(chatInstructions)
             if (instructions.isNotEmpty()) {

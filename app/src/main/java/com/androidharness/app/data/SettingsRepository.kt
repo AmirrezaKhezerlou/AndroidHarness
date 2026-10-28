@@ -123,6 +123,7 @@ data class AppSettings(
     /** Default image appetite for chats that have not overridden it. */
     val chatImageFrequency: ImageFrequency = ImageFrequency.DEFAULT,
     val chatInstructions: String = "",
+    val chatAgents: List<ChatAgentProfile> = emptyList(),
     /** Code opens a fresh conversation unless the user asks to continue the latest one. */
     val codeStart: CodeStartMode = CodeStartMode.LAST_CODE,
     /** Web research effort for Chat turns. */
@@ -254,6 +255,7 @@ class SettingsRepository(private val context: Context) {
         val CHAT_KEEP_THINKING_COLLAPSED = booleanPreferencesKey("chat_keep_thinking_collapsed")
         val CHAT_IMAGE_FREQUENCY = stringPreferencesKey("chat_image_frequency")
         val CHAT_INSTRUCTIONS = stringPreferencesKey("chat_instructions")
+        val CHAT_AGENTS = stringPreferencesKey("chat_agents")
         val CHAT_START = stringPreferencesKey("chat_start")
         val CODE_START = stringPreferencesKey("code_start")
         val SEARCH_DEPTH = stringPreferencesKey("search_depth")
@@ -355,6 +357,7 @@ class SettingsRepository(private val context: Context) {
             chatStart = ChatStartMode.fromStored(prefs[Keys.CHAT_START]),
             chatKeepThinkingCollapsed = prefs[Keys.CHAT_KEEP_THINKING_COLLAPSED] ?: true,
             chatInstructions = prefs[Keys.CHAT_INSTRUCTIONS].orEmpty(),
+            chatAgents = ChatAgentProfile.decodeList(prefs[Keys.CHAT_AGENTS]),
             chatImageFrequency = prefs[Keys.CHAT_IMAGE_FREQUENCY]?.let {
                 runCatching { ImageFrequency.valueOf(it) }.getOrNull()
             } ?: ImageFrequency.DEFAULT,
@@ -421,6 +424,7 @@ class SettingsRepository(private val context: Context) {
             p[Keys.CHAT_KEEP_THINKING_COLLAPSED] = s.chatKeepThinkingCollapsed
             p[Keys.CHAT_IMAGE_FREQUENCY] = s.chatImageFrequency.name
             p[Keys.CHAT_INSTRUCTIONS] = s.chatInstructions.take(ConversationConfig.MAX_INSTRUCTIONS_CHARS)
+            p[Keys.CHAT_AGENTS] = ChatAgentProfile.encodeList(s.chatAgents)
             p[Keys.CODE_START] = s.codeStart.name
             p[Keys.SEARCH_DEPTH] = s.searchDepth.name
             p[Keys.CHAT_MEMORY_ENABLED] = s.chatMemoryEnabled
@@ -795,6 +799,20 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setChatInstructions(value: String) {
         context.settingsStore.edit { it[Keys.CHAT_INSTRUCTIONS] = value.trim().take(ConversationConfig.MAX_INSTRUCTIONS_CHARS) }
+    }
+
+    suspend fun saveChatAgent(profile: ChatAgentProfile) {
+        profile.validated()
+        context.settingsStore.edit { prefs ->
+            val current = ChatAgentProfile.decodeList(prefs[Keys.CHAT_AGENTS])
+            prefs[Keys.CHAT_AGENTS] = ChatAgentProfile.encodeList(current.filterNot { it.id == profile.id } + profile.copy(updatedAt = System.currentTimeMillis()))
+        }
+    }
+
+    suspend fun deleteChatAgent(id: String) {
+        context.settingsStore.edit { prefs ->
+            prefs[Keys.CHAT_AGENTS] = ChatAgentProfile.encodeList(ChatAgentProfile.decodeList(prefs[Keys.CHAT_AGENTS]).filterNot { it.id == id })
+        }
     }
 
     suspend fun setChatStart(value: ChatStartMode) {

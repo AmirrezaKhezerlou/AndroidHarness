@@ -98,7 +98,7 @@ class AppContainer(val appContext: Context) {
 
     private val db = Room.databaseBuilder(appContext, AppDatabase::class.java, "harness.db")
         .addMigrations(
-            AppDatabase.MIGRATION_22_23, AppDatabase.MIGRATION_21_22, AppDatabase.MIGRATION_20_21, AppDatabase.MIGRATION_19_20, AppDatabase.MIGRATION_18_19, AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6,
+            AppDatabase.MIGRATION_23_24, AppDatabase.MIGRATION_22_23, AppDatabase.MIGRATION_21_22, AppDatabase.MIGRATION_20_21, AppDatabase.MIGRATION_19_20, AppDatabase.MIGRATION_18_19, AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6,
             AppDatabase.MIGRATION_6_7, AppDatabase.MIGRATION_7_8,
             AppDatabase.MIGRATION_8_9, AppDatabase.MIGRATION_9_10, AppDatabase.MIGRATION_10_11, AppDatabase.MIGRATION_11_12, AppDatabase.MIGRATION_12_13, AppDatabase.MIGRATION_13_14, AppDatabase.MIGRATION_14_15, AppDatabase.MIGRATION_15_16, AppDatabase.MIGRATION_16_17, AppDatabase.MIGRATION_17_18,
         )
@@ -111,6 +111,22 @@ class AppContainer(val appContext: Context) {
     val sessions = SessionRepository(db, images)
     val memory = com.androidharness.app.data.MemoryRepository(db, settings)
     val chatModels = com.androidharness.app.data.ChatModelRepository(settings, providers, sessions)
+    suspend fun startChatAgent(profile: com.androidharness.app.data.ChatAgentProfile): String {
+        profile.validated()
+        val id = sessions.createSession(profile.name, workspace.currentProjectOnce().id,
+            com.androidharness.app.data.ConversationConfig(kind = com.androidharness.app.data.ConversationKind.CHAT, agent = profile))
+        chatModels.initialize(id)
+        settings.setLastActiveSessionId(id)
+        return id
+    }
+
+    private suspend fun canRecallChat(from: String?, target: String): Boolean {
+        val source = from?.let { sessions.session(it) } ?: return false
+        val destination = sessions.session(target) ?: return false
+        val config = com.androidharness.app.data.ConversationConfig.decode(source.conversationJson)
+        return config.personalizationEnabled && com.androidharness.app.data.ChatAgentPolicy.canReadHistory(config,
+            com.androidharness.app.data.ConversationConfig.decode(destination.conversationJson))
+    }
     val chatBackup by lazy { ChatBackupManager(db, appContext, workspace) }
     val snippets = com.androidharness.app.data.SnippetRepository(db.dao())
 
@@ -256,9 +272,9 @@ class AppContainer(val appContext: Context) {
             com.androidharness.app.tools.BrowserReadTool(browser),
             com.androidharness.app.tools.SearchChatsTool { query, fuzzy, limit ->
                 sessions.searchMessages(query, fuzzy, limit)
-            },
-            com.androidharness.app.tools.RecentChatsTool(sessions.sessions),
-            com.androidharness.app.tools.ReadChatSnippetTool(sessions::messages, sessions::session),
+            }.apply { canAccess = ::canRecallChat },
+            com.androidharness.app.tools.RecentChatsTool(sessions.sessions).apply { canAccess = ::canRecallChat },
+            com.androidharness.app.tools.ReadChatSnippetTool(sessions::messages, sessions::session).apply { canAccess = ::canRecallChat },
             com.androidharness.app.tools.OfferCodeHandoffTool(),
             com.androidharness.app.tools.GitHubApiTool(fetchClient) { github.accessToken() },
             com.androidharness.app.tools.GitHubSearchTool(fetchClient) { github.accessToken() },

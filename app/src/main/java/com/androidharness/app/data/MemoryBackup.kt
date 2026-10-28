@@ -22,6 +22,7 @@ data class BackupMemory(
     val section: String = "SHARED",
     val consolidatedInto: String? = null,
     val isSummary: Boolean = false,
+    val agentId: String? = null,
 )
 
 /** A saved prompt snippet, the chat's custom slash commands. */
@@ -44,6 +45,7 @@ internal fun MemoryEntity.toBackupMemory(): BackupMemory = BackupMemory(
     section = section,
     consolidatedInto = consolidatedInto,
     isSummary = isSummary,
+    agentId = agentId,
 )
 
 internal fun SnippetEntity.toBackupSnippet(): BackupSnippet = BackupSnippet(id, name, body)
@@ -63,10 +65,10 @@ internal object MemoryBackupMerge {
         remapProject: (String?) -> String? = { it },
     ): List<BackupMemory> {
         val ids = existing.mapTo(mutableSetOf()) { it.id }
-        val facts = existing.mapTo(mutableSetOf()) { key(it.text, it.scope, it.projectId, it.section, it.consolidatedInto, it.isSummary) }
+        val facts = existing.mapTo(mutableSetOf()) { key(it.text, it.scope, it.projectId, it.section, it.consolidatedInto, it.isSummary, it.agentId) }
         val plan = incoming.mapNotNull { normalize(it, remapProject) }
             .filter { entry ->
-                val fact = key(entry.text, entry.scope, entry.projectId, entry.section, entry.consolidatedInto, entry.isSummary)
+                val fact = key(entry.text, entry.scope, entry.projectId, entry.section, entry.consolidatedInto, entry.isSummary, entry.agentId)
                 if (entry.id in ids || fact in facts) false else { ids += entry.id; facts += fact; true }
             }
         val summaries = (existing.filter { it.isSummary } .map { it.id } + plan.filter { it.isSummary }.map { it.id }).toSet()
@@ -74,6 +76,7 @@ internal object MemoryBackupMerge {
     }
 
     fun normalize(entry: BackupMemory, remapProject: (String?) -> String? = { it }): BackupMemory? {
+        if (entry.agentId != null && (entry.agentId.length !in 1..100 || entry.section != "CHAT")) return null
         if (entry.section !in MemorySection.entries.map { it.name }) return null
         val text = if (entry.isSummary) entry.text.trim().takeIf { it.isNotBlank() && it.length <= MemoryConsolidation.MAX_CHARS }
             else MemoryText.normalize(entry.text)
@@ -110,10 +113,11 @@ internal object MemoryBackupMerge {
         section = entry.section,
         consolidatedInto = entry.consolidatedInto,
         isSummary = entry.isSummary,
+        agentId = entry.agentId,
     )
 
-    private fun key(text: String, scope: String, projectId: String?, section: String, parent: String?, summary: Boolean): String =
-        MemoryMatch.key(text) + "\u0000" + scope + "\u0000" + projectId.orEmpty() + "\u0000" + section + "\u0000" + parent.orEmpty() + "\u0000" + summary
+    private fun key(text: String, scope: String, projectId: String?, section: String, parent: String?, summary: Boolean, agentId: String?): String =
+        MemoryMatch.key(text) + "\u0000" + scope + "\u0000" + projectId.orEmpty() + "\u0000" + section + "\u0000" + parent.orEmpty() + "\u0000" + summary + "\u0000" + agentId.orEmpty()
 
 }
 

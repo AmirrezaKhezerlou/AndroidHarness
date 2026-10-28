@@ -520,6 +520,7 @@ private fun activityLabel(name: String, running: Boolean): String = stringResour
     "github_api", "github_search", "github_file" -> if (running) R.string.chat_reading_github else R.string.chat_read_github
     "create_artifact" -> if (running) R.string.chat_creating_artifact else R.string.chat_created_artifact
     "read_artifact" -> if (running) R.string.chat_reading_artifact else R.string.chat_read_artifact
+    "search_agent_knowledge" -> if (running) R.string.chat_agents_knowledge_activity else R.string.chat_agents_knowledge_done
     "read_chat_text" -> if (running) R.string.chat_reading_text else R.string.chat_read_text
     "zoom_chat_image" -> if (running) R.string.chat_zooming_image else R.string.chat_zoomed_image
     "remember" -> if (running) R.string.chat_saving_memory else R.string.chat_memory_saved

@@ -111,6 +111,7 @@ data class MemoryEntity(
     @ColumnInfo(defaultValue = "'SHARED'") val section: String = "SHARED",
     val consolidatedInto: String? = null,
     @ColumnInfo(defaultValue = "0") val isSummary: Boolean = false,
+    val agentId: String? = null,
 )
 
 @Entity(tableName = "checkpoints", indices = [Index("sessionId")])
@@ -700,13 +701,18 @@ interface HarnessDao {
         MemoryEntity::class,
         ChatAnswerVersionEntity::class,
     ],
-    version = 23,
+    version = 24,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun dao(): HarnessDao
 
     companion object {
+        val MIGRATION_23_24 = object : androidx.room.migration.Migration(23, 24) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE memories ADD COLUMN agentId TEXT")
+            }
+        }
         val MIGRATION_22_23 = object : androidx.room.migration.Migration(22, 23) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE memories ADD COLUMN section TEXT NOT NULL DEFAULT 'SHARED'")

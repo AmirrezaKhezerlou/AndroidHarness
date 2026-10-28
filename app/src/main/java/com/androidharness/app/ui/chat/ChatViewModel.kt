@@ -702,7 +702,7 @@ class ChatViewModel(
             providers = models.providers,
             activeProviderId = selection.active?.providerId,
             activeModel = selection.active?.model,
-            sameModelAcrossChats = settings.sameModelAcrossChats,
+            sameModelAcrossChats = settings.sameModelAcrossChats && !models.agentChat,
             fallbackDefaults = settings.fallbackPolicy,
             modelSelectionReady = true,
             modelSelectionError = models.error,
@@ -1436,6 +1436,29 @@ class ChatViewModel(
         viewModelScope.launch {
             try { _navEvents.emit(NavEvent.OpenSession(c.sessions.continueInCode(ensureSession(), projectId))) }
             catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { _state.update { it.copy(error = e.message) } }
+            finally { _state.update { it.copy(conversationSaving = false) } }
+        }
+    }
+
+    fun startAgentChat(profile: com.androidharness.app.data.ChatAgentProfile, draft: String, onOpened: () -> Unit = {}) {
+        if (!_state.value.conversationReady || _state.value.conversationSaving || startingRun || _state.value.busy) return
+        if (pendingAttachments.isNotEmpty() || pendingFileAttachments.isNotEmpty() || _state.value.attachmentImports.isNotEmpty()) {
+            _state.update { it.copy(error = c.appContext.getString(R.string.chat_switch_attachments)) }; return
+        }
+        draftSaveJob?.cancel()
+        _state.update { it.copy(conversationSaving = true) }
+        viewModelScope.launch {
+            try {
+                if (sessionId != null || draft.isNotBlank()) {
+                    val sid = ensureSession()
+                    val config = com.androidharness.app.data.ConversationConfig.decode(c.sessions.session(sid)?.conversationJson)
+                    c.sessions.saveConversation(sid, config.copy(draftText = draft))
+                }
+                val id = c.startChatAgent(profile)
+                onOpened()
+                _navEvents.emit(NavEvent.OpenSession(id))
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (e: Exception) { _state.update { it.copy(error = e.message) } }
             finally { _state.update { it.copy(conversationSaving = false) } }
         }

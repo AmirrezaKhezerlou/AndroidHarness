@@ -269,6 +269,8 @@ private val searchableSettingsEntries = SettingsPage.entries.map { page ->
 }
 
 private val subSettingsEntries = listOfNotNull(
+    SettingsSearchEntry(R.string.chat_agents_title, R.string.chat_agents_description, SettingsPage.CHAT_OPTIONS,
+        "personal agents persona assistant knowledge skills tools model tutor researcher", anchor = R.string.chat_agents_title),
     SettingsSearchEntry(R.string.background_run_title, R.string.background_run_description, SettingsPage.BACKGROUND, "background running leave minimize", anchor = R.string.background_run_title),
     SettingsSearchEntry(R.string.background_notifications_title, R.string.background_notifications_description, SettingsPage.BACKGROUND, "notifications alerts", anchor = R.string.background_notifications_title),
     SettingsSearchEntry(
@@ -633,6 +635,7 @@ internal fun matchingSettingsPages(query: String, text: (Int) -> String): List<S
     matchingSettingsEntries(query, text).map { it.page }.distinct()
 
 internal fun settingsDeepLink(target: String): SettingsPage? = when (target) {
+    "chat-agents" -> SettingsPage.CHAT_OPTIONS
     "sync" -> SettingsPage.SYNC
     "ftp-server" -> SettingsPage.FTP_SERVER
     "updates" -> SettingsPage.UPDATES

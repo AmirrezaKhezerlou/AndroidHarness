@@ -24,6 +24,7 @@ private const val MAX_SNIPPET_CHARS = 260
 class SearchChatsTool(
     private val search: suspend (rawQuery: String, fuzzy: Boolean, limit: Int) -> List<MessageHit>,
 ) : Tool {
+    var canAccess: suspend (String?, String) -> Boolean = { _, _ -> true }
     override val name = "search_chats"
     override val description =
         "Search the user's other AndroidHarness chats for relevant messages. Use it when the user " +
@@ -46,7 +47,7 @@ class SearchChatsTool(
         val limit = (args["limit"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 5).coerceIn(1, 8)
         val fuzzy = args["fuzzy"]?.jsonPrimitive?.booleanOrNull == true
         val hits = search(query, fuzzy, 24)
-            .filter { it.sessionId != ctx.sessionId }
+            .filter { it.sessionId != ctx.sessionId && canAccess(ctx.sessionId, it.sessionId) }
         if (hits.isEmpty()) {
             return ToolResult(true, "No matching messages in other chats. Try fewer or different keywords.")
         }
@@ -81,6 +82,7 @@ class SearchChatsTool(
 class RecentChatsTool(
     private val sessions: Flow<List<SessionEntity>>,
 ) : Tool {
+    var canAccess: suspend (String?, String) -> Boolean = { _, _ -> true }
     override val name = "recent_chats"
     override val description =
         "List the user's most recent AndroidHarness chats and Code sessions with titles, dates, and session IDs. " +
@@ -94,7 +96,7 @@ class RecentChatsTool(
     override suspend fun execute(args: JsonObject, ctx: ToolContext): ToolResult {
         val limit = (args["limit"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 8).coerceIn(1, 12)
         val list = sessions.first()
-            .filter { it.id != ctx.sessionId && it.title.isNotBlank() }
+            .filter { it.id != ctx.sessionId && it.title.isNotBlank() && canAccess(ctx.sessionId, it.id) }
             .sortedByDescending { it.updatedAt }
             .take(limit)
         if (list.isEmpty()) return ToolResult(true, "No other chats yet.")
@@ -115,6 +117,7 @@ class ReadChatSnippetTool(
     private val load: suspend (String) -> List<ChatMessage>,
     private val session: suspend (String) -> SessionEntity?,
 ) : Tool {
+    var canAccess: suspend (String?, String) -> Boolean = { _, _ -> true }
     override val name = "read_chat_snippet"
     override val description =
         "Read a small window of visible messages around a chat search hit, or the latest messages when " +
@@ -133,6 +136,7 @@ class ReadChatSnippetTool(
     override suspend fun execute(args: JsonObject, ctx: ToolContext): ToolResult {
         val sid = args["session_id"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
         if (sid.isBlank()) throw ToolFailure("Missing required argument: session_id")
+        if (!canAccess(ctx.sessionId, sid)) throw ToolFailure("That conversation is outside this agent's history access.")
         val meta = session(sid) ?: throw ToolFailure("That chat no longer exists.")
         val visible = load(sid).mapNotNull { message ->
             if (message.role != Role.USER && message.role != Role.ASSISTANT) return@mapNotNull null

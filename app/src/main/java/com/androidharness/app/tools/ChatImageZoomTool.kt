@@ -30,7 +30,9 @@ internal object ChatImageInventory {
             val stored = message.images.asReversed().map { ChatImageSource.Stored(it, who) }
             val remote = if (message.role == Role.ASSISTANT) markdownImage.findAll(message.text).toList()
                 .asReversed().map { ChatImageSource.Remote(it.groupValues[2], who) } else emptyList()
-            (remote + stored).asSequence()
+            val rich = if (message.role == Role.ASSISTANT) com.androidharness.app.core.response.RichResponse.images(message.text)
+                .asReversed().map { ChatImageSource.Remote(it.url, it.caption.ifBlank { who }) } else emptyList()
+            (rich + remote + stored).distinctBy { if (it is ChatImageSource.Remote) it.url else it }.asSequence()
         }.take(20).toList()
 
     fun prompt(messages: List<ChatMessage>): String {

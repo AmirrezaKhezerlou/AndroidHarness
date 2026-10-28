@@ -222,6 +222,7 @@ class WebFetchTool(
     private val readBudget: SearchSourceBudget? = null,
     private val searchApi: () -> SearchApiConfig? = { null },
     private val refreshApi: suspend () -> SearchApiConfig? = { searchApi() },
+    private val renderedReader: ((SearchSourceBudget?) -> Tool)? = null,
 ) : Tool {
     override val name = "web_fetch"
     override val description =
@@ -240,7 +241,7 @@ class WebFetchTool(
     )
     override val isReadOnly = true
 
-    internal fun forBudget(budget: SearchSourceBudget?): WebFetchTool = WebFetchTool(client, budget, searchApi, refreshApi)
+    internal fun forBudget(budget: SearchSourceBudget?): WebFetchTool = WebFetchTool(client, budget, searchApi, refreshApi, renderedReader)
 
     override suspend fun execute(args: JsonObject, ctx: ToolContext): ToolResult = withContext(Dispatchers.IO) {
         val url = args["url"]?.jsonPrimitive?.content ?: throw ToolFailure("Missing required argument: url")
@@ -248,7 +249,23 @@ class WebFetchTool(
         try {
             ResearchHttp.page(url) { readPage(url, args) }
         } catch (ce: kotlinx.coroutines.CancellationException) { throw ce }
-        catch (e: Exception) { ToolResult(false, SecretRedactor.redact("Could not read $url: ${e.message}")) }
+        catch (e: Exception) {
+            if (e is RenderedPageRequired && renderedReader != null) {
+                // The direct-page lock has been released before the browser acquires its own lock.
+                val rendered = renderedReader.invoke(readBudget).execute(args, ctx)
+                val cached = WebResultCache.getPage(url)
+                if (rendered.ok && rendered.research?.pageRead == true && cached != null) {
+                    return@withContext success(url, cached, WebResultCache.getPageImages(url).orEmpty(), "browser_read",
+                        (args["offset"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0).coerceAtLeast(0),
+                        (args["max_chars"]?.jsonPrimitive?.content?.toIntOrNull() ?: 20000).coerceIn(1000, 60000),
+                        args["find"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf(String::isNotBlank),
+                        args["images"]?.jsonPrimitive?.booleanOrNull == true)
+                }
+                return@withContext rendered.copy(output = SecretRedactor.redact(rendered.output +
+                    if (rendered.ok) "\n[rendered-page fallback]" else "\n[Direct extraction and browser reading failed. Use another accessible source; do not retry this page unchanged.]"))
+            }
+            ToolResult(false, SecretRedactor.redact("Could not read $url: ${e.message}"))
+        }
     }
 
     private suspend fun readPage(url: String, args: JsonObject): ToolResult {
@@ -274,8 +291,9 @@ class WebFetchTool(
                 WebResultCache.putPage(url, page.text, "Tavily Extract")
                 if (includeImages) WebResultCache.putPageImages(url, page.images)
                 return success(url, page.text, page.images, "Tavily Extract", offset, maxChars, find, includeImages)
-            } catch (e: TavilyPageUnavailable) {
-                extractionNote = "\n[note: ${e.message}; trying the original page directly]"
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) {
+                extractionNote = "\n[note: ${SecretRedactor.redact(e.message ?: "Configured extraction service unavailable")}; trying the original page directly]"
             }
         }
         val page = ResearchHttp.read(fetchClient, Request.Builder().url(url)
@@ -307,13 +325,17 @@ class WebFetchTool(
                     com.androidharness.app.workspace.isBinaryStream(java.io.ByteArrayInputStream(bytes)))
                     throw ToolFailure("Unsupported binary content: $mime; it was not counted as a page read.")
                 val raw = bytes.toString(media?.charset() ?: Charsets.UTF_8)
-                val text = htmlToText(raw, media?.subtype)
+                val visible = htmlToText(raw, media?.subtype)
                 val scan = scanPageImages(raw, response.request.url.toString())
-                ReadableWebPage.problem(text, scan.title.orEmpty())?.let { problem ->
-                    ReadableWebPage.cooldownStatus(text, scan.title.orEmpty())?.let { ResearchHttp.policy.cooldown(response.request.url, it) }
-                    throw ToolFailure(problem)
+                ReadableWebPage.cooldownStatus(visible, scan.title.orEmpty())?.let { code ->
+                    ResearchHttp.policy.cooldown(response.request.url, code)
+                    throw ToolFailure(ReadableWebPage.problem(visible, scan.title.orEmpty()) ?: "Page access is blocked.")
                 }
-                if (looksJavascriptOnly(raw, text)) throw ToolFailure("This page requires JavaScript and was not counted as read. Use browser_read with this URL, or an accessible alternative.")
+                val structured = StructuredPageText.reddit(raw, response.request.url.toString())
+                    ?: StructuredPageText.extract(raw)
+                val text = structured ?: visible
+                ReadableWebPage.problem(text, scan.title.orEmpty())?.let { problem -> throw RenderedPageRequired(problem) }
+                if (structured == null && looksJavascriptOnly(raw, text)) throw RenderedPageRequired("This page requires JavaScript and was not counted as read. Use browser_read with this URL, or an accessible alternative.")
                 ExtractedPage(text, scan.images.map { image -> PageImage(image.alt ?: scan.title ?: response.request.url.host,
                     image.url, response.request.url.toString(), response.request.url.host) })
             }
@@ -476,18 +498,18 @@ internal fun scanPageImages(html: String, baseUrl: String): PageImageScan {
 internal fun htmlToText(raw: String, contentTypeSubtype: String? = null): String {
     if (!looksLikeHtml(raw, contentTypeSubtype)) return raw
     return mainContent(raw)
-        .replace(Regex("(?s)<script.*?</script>"), " ")
-        .replace(Regex("(?s)<style.*?</style>"), " ")
-        .replace(Regex("(?s)<noscript.*?</noscript>"), " ")
-        .replace(Regex("(?s)<svg.*?</svg>"), " ")
-        .replace(Regex("(?s)<canvas.*?</canvas>"), " ")
-        .replace(Regex("(?s)<iframe.*?</iframe>"), " ")
-        .replace(Regex("(?s)<nav\\b.*?</nav>"), " ")
-        .replace(Regex("(?s)<aside\\b.*?</aside>"), " ")
-        .replace(Regex("(?s)<footer\\b.*?</footer>"), " ")
-        .replace(Regex("(?s)<form\\b.*?</form>"), " ")
-        .replace(Regex("(?s)<!--.*?-->"), " ")
-        .replace(Regex("<br\\s*/?>"), "\n")
+        .replace(Regex("(?is)<script.*?</script>"), " ")
+        .replace(Regex("(?is)<style.*?</style>"), " ")
+        .replace(Regex("(?is)<noscript.*?</noscript>"), " ")
+        .replace(Regex("(?is)<svg.*?</svg>"), " ")
+        .replace(Regex("(?is)<canvas.*?</canvas>"), " ")
+        .replace(Regex("(?is)<iframe.*?</iframe>"), " ")
+        .replace(Regex("(?is)<nav\\b.*?</nav>"), " ")
+        .replace(Regex("(?is)<aside\\b.*?</aside>"), " ")
+        .replace(Regex("(?is)<footer\\b.*?</footer>"), " ")
+        .replace(Regex("(?is)<form\\b.*?</form>"), " ")
+        .replace(Regex("(?is)<!--.*?-->"), " ")
+        .replace(Regex("(?i)<br\\s*/?>"), "\n")
         // Block-level boundaries become line breaks, on BOTH sides of the tag.
         // Dropping tags with no separator ran the whole page together, so a
         // doctype-less fixture came back as "Next 731HomeNEXT_731" (retest,

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.selection.selectable
@@ -36,7 +37,23 @@ internal fun ChatOptionsSection(
     onKeepThinkingCollapsed: (Boolean) -> Unit,
     onImageFrequency: (ImageFrequency) -> Unit,
     onInstructions: suspend (String) -> Unit,
+    agentCount: Int = 0,
+    onManageAgents: () -> Unit = {},
 ) {
+    SettingsAnchor(R.string.chat_agents_title) {
+        SettingsPanel(Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth().clickable(onClick = onManageAgents).padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                com.androidharness.app.ui.chat.components.AgentAvatar("spark")
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.chat_agents_title), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(if (agentCount == 0) R.string.chat_agents_description else R.string.chat_agents_count, agentCount),
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Icon(androidx.compose.material.icons.Icons.Outlined.ChevronRight, null)
+            }
+        }
+    }
     SettingsAnchor(R.string.chat_global_instructions) {
         val scope = rememberCoroutineScope()
         var editing by rememberSaveable { mutableStateOf(false) }

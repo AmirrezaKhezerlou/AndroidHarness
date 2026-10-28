@@ -414,7 +414,7 @@ class RunManager(
         }
         val runConfig = providers.resolveHarnessConfig(config)
         val reasoningPrefs = settings.settings.first()
-        val customLevels = if (reasoningPrefs.sameModelAcrossChats) reasoningPrefs.customThinkingLevels else
+        val customLevels = if (reasoningPrefs.sameModelAcrossChats && com.androidharness.app.data.ConversationConfig.decode(sessions.session(sid)?.conversationJson).agent == null) reasoningPrefs.customThinkingLevels else
             com.androidharness.app.data.ChatModelSelection.decode(sessions.session(sid)?.modelSelectionJson)?.customThinkingLevels.orEmpty()
         check(allowModelFallback || runConfig.model == config.model) {
             "This chat's model is no longer available. Choose another model in the picker."

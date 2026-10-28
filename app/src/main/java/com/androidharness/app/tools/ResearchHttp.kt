@@ -200,6 +200,8 @@ internal object ReadableWebPage {
 
     fun problem(text: String, title: String = ""): String? {
         val clean = text.trim()
+        if (clean.lowercase().replace(Regex("\\s+"), " ").trim() in setOf("loading", "loading...", "loading…", "please wait", "please wait...", "please wait…", "something went wrong", "something went wrong.", "this page is not available", "page not found", "404 not found"))
+            return "The page returned only a loading or error placeholder, not readable content. Try browser_read or another source."
         if (clean.isEmpty()) return "No readable page content was returned. Try browser_read for a JavaScript-rendered page or choose another source."
         if (cooldownStatus(clean, title) != null)
             return "The site returned an access-check or rate-limit page, not the requested article. Use an authorized browser session, Tavily extraction when configured, or another accessible source."

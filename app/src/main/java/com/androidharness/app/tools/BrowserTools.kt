@@ -1,5 +1,7 @@
 package com.androidharness.app.tools
 
+import kotlinx.coroutines.sync.withLock
+
 import com.androidharness.app.browser.BrowserConsoleLog
 import com.androidharness.app.browser.BrowserController
 import com.androidharness.app.browser.BrowserElement
@@ -256,6 +258,8 @@ class BrowserReadTool(
     )
     override val isReadOnly = true
 
+    private companion object { val renderedReads = kotlinx.coroutines.sync.Mutex() }
+
     internal fun forBudget(budget: SearchSourceBudget?): BrowserReadTool = BrowserReadTool(controller, budget)
 
     override suspend fun execute(args: JsonObject, ctx: ToolContext): ToolResult {
@@ -269,6 +273,7 @@ class BrowserReadTool(
         val includeImages = args["images"]?.jsonPrimitive?.booleanOrNull == true
         if (readBudget != null && !readBudget.canRead(url)) return ToolResult(true, readLimitText(), research = readBudget.receipt())
         return try {
+            renderedReads.withLock {
             ResearchHttp.page(url) { ResearchHttp.policy.access(requireNotNull(url.toHttpUrlOrNull()), "rendered-browser") {
             val state = controller.navigate(url, ctx.workspace)
             // Prefer the article/main container when it carries real text, then
@@ -311,6 +316,7 @@ class BrowserReadTool(
                 }, research = readBudget?.receipt(url, "browser_read") ?:
                     com.androidharness.app.core.ResearchReceipt(pageUrl = url, pageRead = true, backend = "browser_read"))
             } }
+            }
         } catch (ce: kotlinx.coroutines.CancellationException) {
             throw ce
         } catch (e: Exception) {

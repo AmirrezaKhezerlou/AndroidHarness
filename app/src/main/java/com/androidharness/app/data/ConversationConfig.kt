@@ -32,6 +32,7 @@ data class ConversationConfig(
     val imageFrequency: ImageFrequency = ImageFrequency.DEFAULT,
     /** Old nonempty per-chat instructions remain overrides; other chats inherit the app setting. */
     val useGlobalInstructions: Boolean = instructions.isBlank(),
+    val agent: ChatAgentProfile? = null,
 ) {
     val isChat: Boolean get() = kind == ConversationKind.CHAT
 
@@ -40,7 +41,8 @@ data class ConversationConfig(
             (if (useGlobalInstructions) global else instructions).trim().take(MAX_INSTRUCTIONS_CHARS)
 
     /** Legacy toggle fields remain readable in backups; Chat now has a fixed conversation-only tool set. */
-    val allowedTools: Set<String>? get() = if (!isChat) null else com.androidharness.app.core.ChatExperience.tools
+    val allowedTools: Set<String>? get() = if (!isChat) null else agent?.let(ChatAgentPolicy::tools)
+        ?: com.androidharness.app.core.ChatExperience.tools
 
     companion object {
         const val MAX_INSTRUCTIONS_CHARS = 4_000
@@ -49,7 +51,7 @@ data class ConversationConfig(
             runCatching {
                 val fields = json.parseToJsonElement(value).jsonObject
                 require("kind" in fields)
-                json.decodeFromJsonElement<ConversationConfig>(fields)
+                json.decodeFromJsonElement<ConversationConfig>(fields).also { config -> config.agent?.validated() }
             }
                 // Unknown or damaged configuration must never unlock coding tools.
                 .getOrElse { ConversationConfig(kind = ConversationKind.CHAT) }

@@ -171,6 +171,23 @@ fun SettingsScreen(
     // web-search entry forms below, plus the MCP dialogs).
 
     var showAddWorkspace by remember { mutableStateOf(false) }
+    var showChatAgents by rememberSaveable { mutableStateOf(false) }
+    var startingChatAgent by remember { mutableStateOf(false) }
+    if (showChatAgents) com.androidharness.app.ui.chat.components.ChatAgentsSheet(container,
+        onDismiss = { showChatAgents = false }, onStart = { profile ->
+            if (!startingChatAgent) {
+            startingChatAgent = true
+            scope.launch {
+                try {
+                    val id = container.startChatAgent(profile)
+                    showChatAgents = false
+                    container.pendingSessionId.emit(id)
+                } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (e: Exception) { android.widget.Toast.makeText(uiContext, e.message, android.widget.Toast.LENGTH_LONG).show() }
+                finally { startingChatAgent = false }
+            }
+            }
+        })
     var pendingDelete by remember { mutableStateOf<ProjectEntity?>(null) }
 
     var pageName by rememberSaveable { mutableStateOf<String?>(null) }
@@ -202,6 +219,7 @@ fun SettingsScreen(
     LaunchedEffect(Unit) {
         container.pendingSettingsScroll.filterNotNull().collect { target ->
             settingsDeepLink(target)?.let { destination ->
+                if (target == "chat-agents") showChatAgents = true
                 val current = pageName
                 if (current != null && current != destination.name) pageHistory = pageHistory + current
                 pageName = destination.name
@@ -273,6 +291,8 @@ fun SettingsScreen(
                             onKeepThinkingCollapsed = { value -> scope.launch { container.settings.setChatKeepThinkingCollapsed(value) } },
                             onImageFrequency = { value -> scope.launch { container.settings.setChatImageFrequency(value) } },
                             onInstructions = { container.settings.setChatInstructions(it) },
+                            agentCount = settings.chatAgents.size,
+                            onManageAgents = { showChatAgents = true },
                         )
                         SettingsPage.MEMORY -> {
                             MemoryOptionsSection(

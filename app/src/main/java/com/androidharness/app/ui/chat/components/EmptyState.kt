@@ -82,12 +82,13 @@ internal fun EmptyState(
     onSuggestion: (String) -> Unit,
     onAddProvider: () -> Unit,
     chatOnly: Boolean = false,
+    agent: com.androidharness.app.data.ChatAgentProfile? = null,
     /** Fill the chat list's viewport (fillParentMaxHeight) so content can center. */
     modifier: Modifier = Modifier,
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
-    val suggestions = if (chatOnly) listOf(
+    val suggestions = if (chatOnly && agent != null && agent.starters.isNotEmpty()) agent.starters.map { agentIcon(agent.avatar) to it } else if (chatOnly) listOf(
         Icons.Outlined.School to uiContext.getString(R.string.chat_suggestion_explain),
         Icons.Outlined.Lightbulb to uiContext.getString(R.string.chat_suggestion_ideas),
         Icons.Outlined.EditNote to uiContext.getString(R.string.chat_suggestion_draft),
@@ -118,14 +119,18 @@ internal fun EmptyState(
                     ),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
+                if (chatOnly && agent != null) {
+                    AgentAvatar(agent.avatar)
+                    Spacer(Modifier.height(16.dp))
+                }
                 Text(
-                    if (hasProvider) uiContext.getString(if (chatOnly) R.string.chat_empty_title else R.string.ui_what_do_you_want_to_build) else uiContext.getString(R.string.ui_connect_a_provider),
+                    if (hasProvider && chatOnly && agent != null) agent.name else if (hasProvider) uiContext.getString(if (chatOnly) R.string.chat_empty_title else R.string.ui_what_do_you_want_to_build) else uiContext.getString(R.string.ui_connect_a_provider),
                     style = MaterialTheme.typography.headlineSmallEmphasized,
                     textAlign = TextAlign.Center,
                 )
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    if (hasProvider) uiContext.getString(if (chatOnly) R.string.chat_empty_description else R.string.ui_start_with_an_idea_or_create_a)
+                    if (hasProvider && chatOnly && agent != null && agent.description.isNotBlank()) agent.description else if (hasProvider) uiContext.getString(if (chatOnly) R.string.chat_empty_description else R.string.ui_start_with_an_idea_or_create_a)
                     else uiContext.getString(R.string.ui_add_an_api_key_for_openai_anthropic),
                     style = MaterialTheme.typography.bodyMedium,
                     color = scheme.onSurfaceVariant,

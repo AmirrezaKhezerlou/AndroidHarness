@@ -26,8 +26,8 @@ internal object MemoryAccess {
             MemorySection.SHARED -> false
         })
 
-    fun belongsTo(memory: MemoryEntity, section: MemorySection): Boolean =
-        memory.section == section.name || memory.section == MemorySection.SHARED.name
+    fun belongsTo(memory: MemoryEntity, section: MemorySection, agentId: String? = null): Boolean =
+        memory.agentId == agentId && (memory.section == section.name || memory.section == MemorySection.SHARED.name)
 }
 
 internal object MemoryMatch {
@@ -61,12 +61,13 @@ data class MemoryConsolidation(
     val section get() = MemorySection.fromStored(originals.first().section)
     val scope get() = MemoryScope.fromStored(originals.first().scope)
     val projectId get() = originals.first().projectId
+    val agentId get() = originals.first().agentId
 
     companion object {
         const val MAX_CHARS = 20_000
         fun plans(memories: List<MemoryEntity>): List<MemoryConsolidation> = memories
             .filter { it.enabled && it.consolidatedInto == null && !it.isSummary }
-            .groupBy { Triple(it.section, it.scope, it.projectId) }.values.mapNotNull { group ->
+            .groupBy { listOf(it.section, it.scope, it.projectId, it.agentId) }.values.mapNotNull { group ->
                 val batch = mutableListOf<MemoryEntity>()
                 for (entry in group.sortedBy { it.createdAt }) {
                     if (digest(batch + entry).length > MAX_CHARS) break

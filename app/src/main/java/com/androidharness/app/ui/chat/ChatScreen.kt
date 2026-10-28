@@ -7,6 +7,9 @@ import com.androidharness.app.artifacts.ArtifactAttachment
 import com.androidharness.app.core.response.ResponseAttachment
 import com.androidharness.app.core.response.UserMessageContent
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.material3.AssistChip
+import androidx.compose.material.icons.outlined.ExpandMore
 import com.androidharness.app.R
 import com.androidharness.app.ui.chat.components.ChatAppearance
 
@@ -497,11 +500,17 @@ private fun ChatScreenContent(
     // Chosen checkpoint awaiting confirmation with a per-file preview.
     var confirmRewindTurn by remember { mutableStateOf<String?>(null) }
     var showChatSettings by rememberSaveable(viewModel) { mutableStateOf(false) }
+    var showChatAgents by rememberSaveable(viewModel) { mutableStateOf(false) }
     var showChatSources by remember(state.sessionId) { mutableStateOf(false) }
     var chatSources by remember(state.sessionId) {
         mutableStateOf<List<com.androidharness.app.core.ChatActivityPresentation.Source>?>(null)
     }
     val scope = rememberCoroutineScope()
+
+    if (showChatAgents) com.androidharness.app.ui.chat.components.ChatAgentsSheet(viewModel.container,
+        onDismiss = { showChatAgents = false },
+        onStart = { agent -> viewModel.startAgentChat(agent, composerValue.text) { showChatAgents = false } },
+        onRegularChat = { viewModel.prepareSectionSwitch(composerValue.text) { showChatAgents = false; onNewChat() } })
 
     val latestUserTurnId = state.messages.lastOrNull { it.role == Role.USER }?.turnId
     // Follow new content until the reader scrolls away.
@@ -675,7 +684,7 @@ private fun ChatScreenContent(
             onRefreshCatalog = viewModel::refreshCatalog,
             onAddCustomModel = viewModel::addCustomModel,
             onDeleteCustomModel = viewModel::deleteCustomModel,
-            sameModelAcrossChats = state.sameModelAcrossChats,
+            sameModelAcrossChats = state.sameModelAcrossChats.takeIf { state.conversation.agent == null },
             onModelScopeChange = viewModel::setSameModelAcrossChats,
             modelScopeEnabled = state.modelSelectionReady && !state.modelSelectionBusy,
             fallbackSummary = when (state.taskControl.fallbackMode) {
@@ -1335,6 +1344,14 @@ private fun ChatScreenContent(
                     pinnedToBottom = false
                 },
             )
+            if (state.conversation.isChat) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.Center) {
+                    AssistChip(onClick = { showChatAgents = true }, enabled = state.conversationReady && !state.busy && !state.conversationSaving,
+                        label = { Text(state.conversation.agent?.name ?: stringResource(R.string.chat_agents_choose), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        leadingIcon = { Icon(com.androidharness.app.ui.chat.components.agentIcon(state.conversation.agent?.avatar ?: "spark"), null, Modifier.size(18.dp)) },
+                        trailingIcon = { Icon(Icons.Outlined.ExpandMore, null, Modifier.size(18.dp)) })
+                }
+            }
             if (state.conversation.isChat && state.conversationReady && !state.isLoadingMessages &&
                 state.messages.isEmpty() && !state.busy && state.streamingText == null) {
                 com.androidharness.app.ui.chat.components.ChatPersonalizationDropdown(
@@ -1578,6 +1595,7 @@ private fun ChatScreenContent(
                                         modifier = Modifier.fillParentMaxHeight(),
                                         hasProvider = state.activeProvider != null,
                                         chatOnly = state.conversation.isChat,
+                                        agent = state.conversation.agent,
                                         onSuggestion = { viewModel.send(it) },
                                         onAddProvider = { addProviderInitially = true; activeProviderManagerTarget = ModelSelectionTarget.ACTIVE },
                                     )

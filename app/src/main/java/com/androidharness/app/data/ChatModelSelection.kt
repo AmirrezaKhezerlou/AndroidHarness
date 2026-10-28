@@ -62,7 +62,7 @@ data class ChatModelSelection(
 }
 
 data class ChatModelState(val settings: AppSettings, val providers: List<ProviderConfig>,
-    val selection: ChatModelSelection, val error: String? = null)
+    val selection: ChatModelSelection, val error: String? = null, val agentChat: Boolean = false)
 
 /** One shared preference chooses the scope; per-chat snapshots never overwrite the shared defaults. */
 class ChatModelRepository(
@@ -77,25 +77,28 @@ class ChatModelRepository(
         sessionId?.let(sessions::sessionFlow) ?: flowOf(null),
     ) { prefs, available, session ->
         val shared = ChatModelSelection.from(prefs, available)
-        if (prefs.sameModelAcrossChats || sessionId == null) ChatModelState(prefs, available, shared)
+        val agent = ConversationConfig.decode(session?.conversationJson).agent
+        if (prefs.sameModelAcrossChats && agent == null || sessionId == null) ChatModelState(prefs, available, shared)
         else try {
             check(session != null) { "This chat is no longer available." }
             val selection = ChatModelSelection.decode(session.modelSelectionJson)
                 ?: edits.withLock { sessions.initializeModelSelection(sessionId, shared) }
-            ChatModelState(prefs, available, selection)
+            ChatModelState(prefs, available, selection, agentChat = agent != null)
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            ChatModelState(prefs, available, ChatModelSelection(), e.message)
+            ChatModelState(prefs, available, ChatModelSelection(), e.message, agentChat = agent != null)
         }
     }
 
     suspend fun initialize(sessionId: String) = edits.withLock {
         val prefs = settings.settings.first()
-        if (!prefs.sameModelAcrossChats) sessions.initializeModelSelection(sessionId,
-            ChatModelSelection.from(prefs, providers.providers.first()))
+        val agent = ConversationConfig.decode(sessions.session(sessionId)?.conversationJson).agent
+        if (!prefs.sameModelAcrossChats || agent != null) sessions.initializeModelSelection(sessionId,
+            ChatModelSelection.from(prefs, providers.providers.first()).let { if (agent == null) it else it.copy(thinking = agent.thinking) })
     }
 
     suspend fun setShared(sessionId: String, shared: Boolean) = edits.withLock {
+        check(ConversationConfig.decode(sessions.session(sessionId)?.conversationJson).agent == null) { "Agent conversations keep their own model." }
         val prefs = settings.settings.first()
         if (prefs.sameModelAcrossChats == shared) return@withLock
         val selection = sessions.initializeModelSelection(sessionId,
@@ -109,7 +112,7 @@ class ChatModelRepository(
         val provider = providers.providers.first().firstOrNull { it.id == providerId }
             ?: error("This provider is no longer available. Choose another provider.")
         val choice = ChatModelChoice(providerId, model?.takeIf { it.isNotBlank() } ?: provider.model)
-        if (prefs.sameModelAcrossChats) {
+        if (sharedFor(sessionId, prefs)) {
             when (target) {
                 ChatModelTarget.ACTIVE -> settings.setActiveSelection(choice.providerId, model)
                 ChatModelTarget.PLANNING -> settings.setPlanningModel(choice.providerId, model)
@@ -126,7 +129,7 @@ class ChatModelRepository(
 
     suspend fun setThinking(sessionId: String?, level: ThinkingLevel) = edits.withLock {
         val prefs = settings.settings.first()
-        if (prefs.sameModelAcrossChats) settings.setThinkingLevel(level)
+        if (sharedFor(sessionId, prefs)) settings.setThinkingLevel(level)
         else {
             val sid = requireNotNull(sessionId) { "Open a chat before choosing its thinking level." }
             val selection = sessions.initializeModelSelection(sid,
@@ -137,7 +140,7 @@ class ChatModelRepository(
 
     suspend fun setCustomThinking(sessionId: String?, key: String, level: String?) = edits.withLock {
         val prefs = settings.settings.first()
-        if (prefs.sameModelAcrossChats) settings.setCustomThinkingLevel(key, level)
+        if (sharedFor(sessionId, prefs)) settings.setCustomThinkingLevel(key, level)
         else {
             val sid = requireNotNull(sessionId) { "Open a chat before choosing its thinking level." }
             val selection = sessions.initializeModelSelection(sid,
@@ -150,11 +153,14 @@ class ChatModelRepository(
 
     /** Account rotation may update only the selection that still matches the run, never another chat. */
     suspend fun providerChanged(sessionId: String, from: ProviderConfig, to: ProviderConfig) = edits.withLock {
-        if (settings.settings.first().sameModelAcrossChats) settings.switchActiveSelection(from, to)
+        if (sharedFor(sessionId, settings.settings.first())) settings.switchActiveSelection(from, to)
         else {
             val old = ChatModelSelection.decode(sessions.session(sessionId)?.modelSelectionJson) ?: return@withLock
             val next = old.switchIfMatching(from, to)
             if (next != old) sessions.saveModelSelection(sessionId, next)
         }
     }
+
+    private suspend fun sharedFor(sessionId: String?, prefs: AppSettings): Boolean = prefs.sameModelAcrossChats &&
+        (sessionId == null || ConversationConfig.decode(sessions.session(sessionId)?.conversationJson).agent == null)
 }

@@ -51,6 +51,7 @@ object SettingsBackupPolicy {
         val execution = settings.executionProviderId?.let(keep) == true
         val subagent = settings.subagentProviderId?.let(keep) == true
         return settings.copy(
+            chatAgents = settings.chatAgents.map { it.copy(model = it.model?.takeIf { choice -> keep(choice.providerId) }) },
             activeProviderId = settings.activeProviderId.takeIf { active },
             activeModel = settings.activeModel.takeIf { active },
             planningProviderId = settings.planningProviderId.takeIf { planning },
@@ -114,6 +115,7 @@ enum class SettingsBackupProblem(val hint: String) {
     PROVIDER_CONTROLS("An API key pool or proxy setting is invalid. Review connection controls."),
     PROVIDER_HEADERS("A custom provider header is invalid. Review Manage providers in Models settings."),
     MCP("An MCP server name or transport is invalid, or names are duplicated. Review MCP servers settings."),
+    CHAT_AGENTS("A saved Chat agent is invalid. Review Chat agents in Settings."),
     MEMORY("A saved memory is invalid or duplicated. Review Memory settings."),
 }
 
@@ -137,6 +139,7 @@ object SettingsBackupValidation {
             (file.settings.providerOrder + file.settings.disabledProviderIds).all { it.length <= 500 }, SettingsBackupProblem.PROVIDERS)
         check(file.searchKeys.keys.all { it in setOf("brave", "tavily") }, SettingsBackupProblem.SEARCH)
         val s = file.settings
+        check(runCatching { ChatAgentProfile.encodeList(s.chatAgents) }.isSuccess, SettingsBackupProblem.CHAT_AGENTS)
         check(s.maxContextTokens in 8192..2_000_000 && s.maxOutputTokens in 1..1_000_000 && s.maxIterations in 0..10_000, SettingsBackupProblem.MODEL_LIMITS)
         check(s.webSearchProvider in setOf("keyless", "brave", "tavily"), SettingsBackupProblem.SEARCH)
         check(s.voiceEngine in setOf("inbuilt", "groq"), SettingsBackupProblem.VOICE)
@@ -171,6 +174,7 @@ object SettingsBackupValidation {
             check((memory.consolidatedInto?.length ?: 0) <= 200 && memory.consolidatedInto != memory.id, SettingsBackupProblem.MEMORY)
             check(memory.scope != MemoryScope.PROJECT.name || !memory.projectId.isNullOrBlank(), SettingsBackupProblem.MEMORY)
             check((memory.projectId?.length ?: 0) <= 500 && (memory.sourceSessionId?.length ?: 0) <= 200, SettingsBackupProblem.MEMORY)
+            check(memory.agentId == null || memory.agentId.length in 1..100 && memory.section == "CHAT", SettingsBackupProblem.MEMORY)
             check(memory.useCount >= 0, SettingsBackupProblem.MEMORY)
         }
     }
@@ -267,7 +271,8 @@ class SettingsBackup(private val c: AppContainer) {
         file.searchKeys.forEach { (name, key) -> if (c.keys.searchApiKey(name) == null) c.keys.putSearchApiKey(name, key) }
         file.groqKey?.let { if (c.keys.groqApiKey() == null) c.keys.putGroqApiKey(it) }
         val s = file.settings
-        c.settings.restorePortable(s.copy(activeProviderId = ids[s.activeProviderId],
+        c.settings.restorePortable(s.copy(chatAgents = s.chatAgents.map { agent -> agent.copy(model = agent.model?.let { choice -> ids[choice.providerId]?.let { choice.copy(providerId = it) } }) },
+            activeProviderId = ids[s.activeProviderId],
             planningProviderId = ids[s.planningProviderId], executionProviderId = ids[s.executionProviderId],
             subagentProviderId = ids[s.subagentProviderId],
             providerOrder = s.providerOrder.mapNotNull(ids::get),

@@ -194,7 +194,10 @@ class SessionRepository(
         if (projectId != null) requireNotNull(db.dao().project(projectId)) { "This project is no longer available." }
         val id = UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
-        db.dao().insertSession(SessionEntity(id, title, now, now, projectId = projectId, conversationJson = ConversationConfig.encode(conversation)))
+        conversation.agent?.validated()
+        val model = conversation.agent?.model?.let { ChatModelSelection(active = it, thinking = conversation.agent.thinking) }
+        db.dao().insertSession(SessionEntity(id, title, now, now, projectId = projectId, conversationJson = ConversationConfig.encode(conversation),
+            modelSelectionJson = model?.let(ChatModelSelection::encode)))
         id
     }
 
