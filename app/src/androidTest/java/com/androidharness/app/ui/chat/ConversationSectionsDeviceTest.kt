@@ -204,7 +204,7 @@ class ConversationSectionsDeviceTest {
                     CompositionLocalProvider(LocalDensity provides Density(density.density, scale.value)) { AppNav(c) }
                 } } }
                 // Even a previously active normal Chat does not change the default section.
-                await("Workspace files"); await("Code · ${project.name}")
+                await("Workspace files")
                 await("Message input")
                 val input = nodes().last { it.isEditable && it.isVisibleToUser }
                 assertTrue(input.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, android.os.Bundle().apply {
@@ -214,7 +214,7 @@ class ConversationSectionsDeviceTest {
                     tap("Open navigation"); await("New Code chat")
                     tap("Chat"); awaitSelected("Chat"); await("New chat")
                     assertNull("Code histories are filtered from Chat", find(instrumentation.uiAutomation.rootInActiveWindow, "Recent Code chats"))
-                    tap("Collapse sidebar"); await("Chat")
+                    tap("Collapse sidebar"); await("Auto")
                     tap("Open navigation"); tap("Code"); await("New Code chat")
                     tap("Collapse sidebar"); await("Workspace files")
                 }
@@ -230,7 +230,7 @@ class ConversationSectionsDeviceTest {
                 tap("Open navigation"); tap("Chat"); awaitSelected("Chat"); await("New chat")
                 assertNull(find(instrumentation.uiAutomation.rootInActiveWindow, "Chat tools off"))
                 screenshot("sidebar-chat")
-                tap("Collapse sidebar"); await("Chat")
+                tap("Collapse sidebar"); await("Auto")
                 assertNull(find(instrumentation.uiAutomation.rootInActiveWindow, "Continue in Code"))
                 scenario.onActivity { scale.value = 1.5f }
                 await("Message input")

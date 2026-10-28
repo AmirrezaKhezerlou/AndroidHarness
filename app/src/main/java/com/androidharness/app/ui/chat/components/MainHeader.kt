@@ -29,11 +29,13 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.ForkRight
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.QueryStats
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SwapHoriz
@@ -125,6 +127,10 @@ internal fun MainHeader(
     onOpenAgents: (() -> Unit)? = null,
     showCompactAgent: Boolean = false,
     agentPickerEnabled: Boolean = true,
+    chatPinned: Boolean = false,
+    chatArchived: Boolean = false,
+    onToggleChatPin: (() -> Unit)? = null,
+    onToggleChatArchive: (() -> Unit)? = null,
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     var menu by remember { mutableStateOf(false) }
@@ -144,7 +150,8 @@ internal fun MainHeader(
             workspaceName = workspaceName, onOpenDrawer = onOpenDrawer,
             searchDepth = searchDepth, onSetSearchDepth = onSetSearchDepth, onFind = onFind,
             onOpenChatSettings = onOpenChatSettings, onOpenSources = onOpenSources,
-            onOpenAgents = onOpenAgents, showCompactAgent = showCompactAgent, agentPickerEnabled = agentPickerEnabled)
+            onOpenAgents = onOpenAgents, showCompactAgent = showCompactAgent, agentPickerEnabled = agentPickerEnabled,
+            chatPinned = chatPinned, chatArchived = chatArchived, onToggleChatPin = onToggleChatPin, onToggleChatArchive = onToggleChatArchive)
         }
         return
     }
@@ -290,6 +297,7 @@ internal fun MainHeader(
                                 onClick = { menu = false; permissionMenu = true },
                             )
                             if (conversation.isChat) {
+                                ChatOrganizationMenuItems(chatPinned, chatArchived, onToggleChatPin, onToggleChatArchive) { menu = false }
                                 if (onOpenAgents != null) DropdownMenuItem(
                                     text = { Text(uiContext.getString(R.string.chat_agents_choose)) },
                                     leadingIcon = { Icon(Icons.Outlined.AutoAwesome, null) },
@@ -415,6 +423,10 @@ private fun DesktopConversationHeader(
     onOpenAgents: (() -> Unit)? = null,
     showCompactAgent: Boolean = false,
     agentPickerEnabled: Boolean = true,
+    chatPinned: Boolean = false,
+    chatArchived: Boolean = false,
+    onToggleChatPin: (() -> Unit)? = null,
+    onToggleChatArchive: (() -> Unit)? = null,
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
@@ -459,6 +471,7 @@ private fun DesktopConversationHeader(
                 }
                 DropdownMenu(menu, { menu = false }) {
                     if (!chatOnly) WorkspaceMenuEntries { menu = false }
+                    if (chatOnly) ChatOrganizationMenuItems(chatPinned, chatArchived, onToggleChatPin, onToggleChatArchive) { menu = false }
                     DropdownMenuItem(
                         text = { Text(uiContext.getString(R.string.ui_find_in_chat)) },
                         enabled = onFind != null,
@@ -523,6 +536,28 @@ private fun HeaderModelPicker(label: String, onPickModel: () -> Unit, modifier: 
         Icon(Icons.Filled.KeyboardArrowDown, contentDescription = uiContext.getString(R.string.ui_switch_model),
             tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
     }
+}
+
+@Composable
+private fun ChatOrganizationMenuItems(
+    pinned: Boolean,
+    archived: Boolean,
+    onTogglePin: (() -> Unit)?,
+    onToggleArchive: (() -> Unit)?,
+    onDismiss: () -> Unit,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    if (onTogglePin != null) DropdownMenuItem(
+        text = { Text(context.getString(if (pinned) R.string.ui_unpin else R.string.ui_pin)) },
+        leadingIcon = { Icon(Icons.Outlined.PushPin, null) },
+        onClick = { onDismiss(); onTogglePin() },
+    )
+    if (onToggleArchive != null) DropdownMenuItem(
+        text = { Text(context.getString(if (archived) R.string.ui_unarchive else R.string.ui_archive)) },
+        leadingIcon = { Icon(Icons.Outlined.Archive, null) },
+        onClick = { onDismiss(); onToggleArchive() },
+    )
+    if (onTogglePin != null || onToggleArchive != null) HorizontalDivider()
 }
 
 /** Compact entry to the agent library before the first agent is saved. */

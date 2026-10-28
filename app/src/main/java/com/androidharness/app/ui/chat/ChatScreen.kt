@@ -1336,6 +1336,24 @@ private fun ChatScreenContent(
                 onOpenAgents = { showChatAgents = true },
                 showCompactAgent = !hasChatAgents,
                 agentPickerEnabled = state.conversationReady && !state.busy && !state.conversationSaving,
+                chatPinned = state.sessionId in globalSettings.pinnedSessions,
+                chatArchived = state.sessionId in globalSettings.archivedSessions,
+                onToggleChatPin = state.sessionId?.takeIf { state.conversation.isChat }?.let { sid -> {
+                    scope.launch { viewModel.container.settings.setPinned(sid, sid !in globalSettings.pinnedSessions) }
+                    Unit
+                } },
+                onToggleChatArchive = state.sessionId?.takeIf { state.conversation.isChat }?.let { sid -> {
+                    scope.launch {
+                        val wasArchived = sid in globalSettings.archivedSessions
+                        viewModel.container.settings.setArchived(sid, !wasArchived)
+                        val result = snackbar.showSnackbar(
+                            uiContext.getString(if (wasArchived) R.string.ui_chat_restored else R.string.ui_chat_archived),
+                            actionLabel = uiContext.getString(R.string.ui_undo), duration = SnackbarDuration.Short,
+                        )
+                        if (result == SnackbarResult.ActionPerformed) viewModel.container.settings.setArchived(sid, wasArchived)
+                    }
+                    Unit
+                } },
                 onOpenUndo = { showUndoDialog = true },
                 onOpenFiles = onOpenFiles,
                 canOpenGitHub = currentProject != null,

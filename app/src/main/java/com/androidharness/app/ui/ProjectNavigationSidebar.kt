@@ -187,16 +187,21 @@ internal fun ProjectNavigationSidebar(
                                         style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant, maxLines = 1)
                                     field()
                                 }
-                                if (chatOnly) ExpressiveIconButton(onClick = { onQueryChange(""); showArchived = !showArchived }) {
-                                    Icon(if (showArchived) Icons.AutoMirrored.Outlined.ArrowBack else Icons.Outlined.Archive,
-                                        uiContext.getString(if (showArchived) R.string.ui_back_to_active else R.string.ui_show_archived, "chats"),
-                                        Modifier.size(19.dp), tint = if (showArchived) scheme.primary else scheme.onSurfaceVariant)
-                                }
                                 if (query.isNotEmpty()) ExpressiveIconButton(onClick = { onQueryChange("") }) {
                                     Icon(Icons.Outlined.Close, uiContext.getString(R.string.settings_search_clear), Modifier.size(17.dp))
                                 }
                             }
                         })
+                    if (chatOnly) TextButton(
+                        onClick = { onQueryChange(""); showArchived = !showArchived },
+                        modifier = Modifier.align(Alignment.End).padding(horizontal = 14.dp),
+                    ) {
+                        Icon(if (showArchived) Icons.AutoMirrored.Outlined.ArrowBack else Icons.Outlined.Archive,
+                            null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(uiContext.getString(if (showArchived) R.string.ui_back_to_active else R.string.ui_archived_chats,
+                            uiContext.getString(R.string.ui_chats)))
+                    }
                     if (!chatOnly) Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, top = 2.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         FlowRow(Modifier.weight(1f).background(scheme.surfaceContainer, RoundedCornerShape(12.dp)).padding(3.dp),

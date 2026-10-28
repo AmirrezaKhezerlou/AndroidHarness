@@ -291,7 +291,7 @@ fun AppNav(container: AppContainer) {
             if (destination != null) {
                 val (sid, callId) = destination
                 if (container.sessions.session(sid) != null) {
-                    nav.navigate("chat/${encode(sid)}") { launchSingleTop = true }
+                    nav.navigateToConversation("chat/${encode(sid)}")
                     nav.navigate("subagent/${encode(sid)}/${encode(callId)}") { launchSingleTop = true }
                 }
                 container.pendingSubagentChat.compareAndSet(destination, null)
@@ -299,7 +299,7 @@ fun AppNav(container: AppContainer) {
         }
     }
     androidx.compose.runtime.LaunchedEffect(Unit) {
-        container.pendingSessionId.collect { sid -> nav.navigate("chat/$sid") }
+        container.pendingSessionId.collect { sid -> nav.navigateToConversation("chat/$sid") }
     }
     androidx.compose.runtime.LaunchedEffect(Unit) {
         container.pendingSettingsScroll.collect { target ->
@@ -312,10 +312,10 @@ fun AppNav(container: AppContainer) {
         if (sessionId == null) {
             draftSessionId = null
             scope.launch { container.settings.setLastActiveSessionId(null) }
-            nav.navigate("chat?kind=${kind.name}")
+            nav.navigateToConversation("chat?kind=${kind.name}")
         } else {
             val target = messageId?.let { "?messageId=${encode(it)}" }.orEmpty()
-            nav.navigate("chat/$sessionId$target")
+            nav.navigateToConversation("chat/${encode(sessionId)}$target")
         }
     }
 
@@ -358,7 +358,7 @@ fun AppNav(container: AppContainer) {
             ?.takeIf { resume }
         val availablePrevious = previous?.takeIf { route -> sessions.any { "chat/${it.id}" == route && it.id !in settings.archivedSessions } }
         val target = availablePrevious ?: last?.let { "chat/${it.id}" } ?: "chat?kind=${kind.name}"
-        if (!nav.popBackStack(target, inclusive = false)) nav.navigate(target)
+        nav.navigateToConversation(target)
     }
     val sectionRtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
     fun sectionMotion(from: androidx.navigation.NavBackStackEntry, to: androidx.navigation.NavBackStackEntry): Int {
@@ -603,7 +603,7 @@ fun AppNav(container: AppContainer) {
                     },
                     onOpenSettings = { nav.navigate("settings") },
                     onNavigateToSession = { sid ->
-                        nav.navigate("chat/$sid")
+                        nav.navigateToConversation("chat/$sid")
                     },
                 )
             }
@@ -651,7 +651,7 @@ fun AppNav(container: AppContainer) {
                     },
                     onOpenSettings = { nav.navigate("settings") },
                     onNavigateToSession = { sid ->
-                        nav.navigate("chat/$sid")
+                        nav.navigateToConversation("chat/$sid")
                     },
                 )
             }
@@ -703,7 +703,7 @@ fun AppNav(container: AppContainer) {
                     onBack = { nav.popBackStack() },
                     onAskAgent = { prompt ->
                         container.pendingAgentPrompt.value = prompt
-                        nav.navigate("chat/${encode(sid)}") { popUpTo("changes/{sessionId}") { inclusive = true } }
+                        nav.navigateToConversation("chat/${encode(sid)}")
                     },
                 )
             }
@@ -749,7 +749,7 @@ fun AppNav(container: AppContainer) {
             composable("automation") {
                 com.androidharness.app.ui.automation.AutomationScreen(container,
                     onBack = { nav.popBackStack() },
-                    onOpenSession = { nav.navigate("chat/$it") })
+                    onOpenSession = { openChat(it) })
             }
             composable("projects") {
                 ProjectsScreen(container, onBack = { nav.popBackStack() },
@@ -768,14 +768,14 @@ fun AppNav(container: AppContainer) {
                         try {
                             val sid = container.sessions.createProjectSession(projectId)
                             if (prompt != null) container.pendingAgentPrompt.value = prompt
-                            nav.navigate("chat/${encode(sid)}")
+                            nav.navigateToConversation("chat/${encode(sid)}")
                         } catch (e: kotlinx.coroutines.CancellationException) { throw e }
                         catch (e: Exception) { workspaceError = e.message }
                         finally { creatingProjectChat = false }
                     }
                 }
                 ProjectScreen(container, id, onBack = { nav.popBackStack() },
-                    onOpenChat = { nav.navigate("chat/${encode(it)}") },
+                    onOpenChat = { openChat(it) },
                     onNewChat = { openProjectChat(it) }, creatingChat = creatingProjectChat,
                     onMemory = { nav.navigate("project/${encode(id)}/memory") },
                     onAutomation = { taskId, create ->
@@ -799,7 +799,7 @@ fun AppNav(container: AppContainer) {
                 navArgument("create") { type = NavType.BoolType; defaultValue = false },
             )) { entry ->
                 com.androidharness.app.ui.automation.AutomationScreen(container,
-                    onBack = { nav.popBackStack() }, onOpenSession = { nav.navigate("chat/${encode(it)}") },
+                    onBack = { nav.popBackStack() }, onOpenSession = { openChat(it) },
                     projectId = entry.arguments?.getString("projectId"),
                     initialTaskId = entry.arguments?.getString("taskId")?.takeIf { it.isNotBlank() },
                     createOnOpen = entry.arguments?.getBoolean("create") == true)
@@ -823,8 +823,8 @@ fun AppNav(container: AppContainer) {
                             try {
                                 val sid = buildSessionId ?: buildProjectId?.let { container.sessions.createProjectSession(it) }
                                 container.pendingAgentPrompt.value = prompt
-                                if (sid != null) nav.navigate("chat/${encode(sid)}")
-                                else { draftSessionId = null; nav.navigate("chat") }
+                                if (sid != null) nav.navigateToConversation("chat/${encode(sid)}")
+                                else openChat(null, kind = com.androidharness.app.data.ConversationKind.CODE)
                             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
                             catch (e: Exception) { workspaceError = e.message }
                             finally { creatingProjectChat = false }
@@ -874,6 +874,10 @@ fun AppNav(container: AppContainer) {
     }
 
     }
+    }
+
+    androidx.activity.compose.BackHandler(enabled = !desktopNavigation && drawerState.isOpen) {
+        scope.launch { drawerState.close() }
     }
 
     com.androidharness.app.ui.common.ShizukuDisabledWarning(container.shizuku.workspaceWarning)
@@ -1127,3 +1131,11 @@ private fun SessionAction(
 }
 
 private fun encode(value: String): String = android.net.Uri.encode(value)
+
+/** Conversations are peer destinations; Back must not replay previously selected chats. */
+private fun androidx.navigation.NavHostController.navigateToConversation(route: String) {
+    navigate(route) {
+        popUpTo(graph.id)
+        launchSingleTop = true
+    }
+}
