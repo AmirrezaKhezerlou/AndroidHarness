@@ -12,6 +12,7 @@ buildscript {
                 "org.bitbucket.b_c:jose4j:0.9.6" to "CVE-2024-29371",
                 "org.apache.httpcomponents:httpclient:4.5.14" to "CVE-2020-13956",
                 "org.apache.commons:commons-lang3:3.18.0" to "CVE-2025-48924",
+                "com.google.guava:guava:33.7.2-jre" to "CVE-2026-102554 deserialization heap exhaustion",
             ).forEach { (gav, cve) ->
                 add("classpath", gav) { because(cve) }
             }

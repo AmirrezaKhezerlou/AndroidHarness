@@ -165,12 +165,22 @@ configurations.configureEach {
                 requested.group == "org.bouncycastle" -> useVersion("1.85")
                 requested.name == "httpclient" -> useVersion("4.5.14")
                 requested.name == "commons-lang3" -> useVersion("3.18.0")
+                // CVE-2026-102554: 33.7.2 bounds the collections deserialization
+                // arrays that 33.4 and 33.6 sized from attacker-declared counts.
+                requested.group == "com.google.guava" && requested.name == "guava" -> useVersion("33.7.2-jre")
             }
         }
     }
 }
 
 dependencies {
+    constraints {
+        // dev.cel asks for Guava 33.6 and room-compiler for 33.2.1. 33.7.2 is
+        // the first release that stops sizing collection arrays from the
+        // declared element count during deserialization (CVE-2026-102554).
+        implementation("com.google.guava:guava:33.7.2-jre")
+        ksp("com.google.guava:guava:33.7.2-jre")
+    }
     ksp(libs.room.compiler)
 
     implementation(platform(libs.compose.bom))
