@@ -83,6 +83,7 @@ internal fun EmptyState(
     onAddProvider: () -> Unit,
     chatOnly: Boolean = false,
     agent: com.androidharness.app.data.ChatAgentProfile? = null,
+    agentSetup: (@Composable () -> Unit)? = null,
     /** Fill the chat list's viewport (fillParentMaxHeight) so content can center. */
     modifier: Modifier = Modifier,
 ) {
@@ -147,6 +148,10 @@ internal fun EmptyState(
                             .animateContentSize(),
                     ) {
                         Column {
+                            if (chatOnly && agent == null && agentSetup != null) {
+                                agentSetup()
+                                HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.5f), modifier = Modifier.padding(start = 56.dp))
+                            }
                             suggestions.forEachIndexed { index, (icon, suggestion) ->
                                 AnimatedVisibility(
                                     visible = entered,

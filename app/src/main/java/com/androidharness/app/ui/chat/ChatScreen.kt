@@ -8,8 +8,6 @@ import com.androidharness.app.core.response.ResponseAttachment
 import com.androidharness.app.core.response.UserMessageContent
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.material3.AssistChip
-import androidx.compose.material.icons.outlined.ExpandMore
 import com.androidharness.app.R
 import com.androidharness.app.ui.chat.components.ChatAppearance
 
@@ -219,7 +217,6 @@ private fun ChatScreenContent(
             ?: kotlinx.coroutines.flow.flowOf(emptyMap())
     }.collectAsStateWithLifecycle(initialValue = emptyMap())
     val globalSettings by viewModel.container.settings.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
-    val hasChatAgents = globalSettings.chatAgents.isNotEmpty() || state.conversation.agent != null
     val showChatStartControls = state.conversation.isChat && state.conversationReady && !state.isLoadingMessages &&
         state.messages.isEmpty() && !state.busy && state.streamingText == null
     val effectiveImageFrequency = com.androidharness.app.core.ChatExperience
@@ -504,11 +501,27 @@ private fun ChatScreenContent(
     var confirmRewindTurn by remember { mutableStateOf<String?>(null) }
     var showChatSettings by rememberSaveable(viewModel) { mutableStateOf(false) }
     var showChatAgents by rememberSaveable(viewModel) { mutableStateOf(false) }
+    var newAgentId by rememberSaveable(viewModel) { mutableStateOf<String?>(null) }
     var showChatSources by remember(state.sessionId) { mutableStateOf(false) }
     var chatSources by remember(state.sessionId) {
         mutableStateOf<List<com.androidharness.app.core.ChatActivityPresentation.Source>?>(null)
     }
     val scope = rememberCoroutineScope()
+
+    fun chooseChatAgent(agent: com.androidharness.app.data.ChatAgentProfile?) {
+        if (agent != null) viewModel.startAgentChat(agent, composerValue.text)
+        else viewModel.prepareSectionSwitch(composerValue.text, onNewChat)
+    }
+    newAgentId?.let { id ->
+        val initial = remember(id) { com.androidharness.app.data.ChatAgentProfile(id = id) }
+        com.androidharness.app.ui.chat.components.ChatAgentEditor(viewModel.container, initial,
+            onDismiss = { newAgentId = null }, onSaved = {
+                newAgentId = null
+                scope.launch {
+                    viewModel.container.settings.settings.first().chatAgents.firstOrNull { it.id == id }?.let(::chooseChatAgent)
+                }
+            })
+    }
 
     if (showChatAgents) com.androidharness.app.ui.chat.components.ChatAgentsSheet(viewModel.container,
         onDismiss = { showChatAgents = false },
@@ -615,6 +628,7 @@ private fun ChatScreenContent(
                 viewModel.setChatSettings(text, enabled, frequency, inherit, onSaved = { showChatSettings = false })
             },
             onDismiss = { showChatSettings = false },
+            onOpenAgents = { showChatSettings = false; showChatAgents = true },
         )
     }
     if (showChatSources) {
@@ -1333,9 +1347,6 @@ private fun ChatScreenContent(
                 onOpenContext = { showContext = true },
                 onOpenChatSettings = { showChatSettings = true },
                 onOpenSources = { chatSources = null; showChatSources = true },
-                onOpenAgents = { showChatAgents = true },
-                showCompactAgent = !hasChatAgents,
-                agentPickerEnabled = state.conversationReady && !state.busy && !state.conversationSaving,
                 chatPinned = state.sessionId in globalSettings.pinnedSessions,
                 chatArchived = state.sessionId in globalSettings.archivedSessions,
                 onToggleChatPin = state.sessionId?.takeIf { state.conversation.isChat }?.let { sid -> {
@@ -1368,22 +1379,27 @@ private fun ChatScreenContent(
                     pinnedToBottom = false
                 },
             )
-            if (hasChatAgents && showChatStartControls) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.Center) {
-                    AssistChip(onClick = { showChatAgents = true }, enabled = state.conversationReady && !state.busy && !state.conversationSaving,
-                        label = { Text(state.conversation.agent?.name ?: stringResource(R.string.chat_agents_choose), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        leadingIcon = { Icon(com.androidharness.app.ui.chat.components.agentIcon(state.conversation.agent?.avatar ?: "spark"), null, Modifier.size(18.dp)) },
-                        trailingIcon = { Icon(Icons.Outlined.ExpandMore, null, Modifier.size(18.dp)) })
-                }
-            }
             if (showChatStartControls) {
-                com.androidharness.app.ui.chat.components.ChatPersonalizationDropdown(
-                    personalized = state.conversation.personalizationEnabled,
-                    enabled = !state.conversationSaving,
-                    onSelect = { enabled ->
-                        viewModel.setChatSettings(state.conversation.instructions, enabled, state.conversation.imageFrequency)
-                    },
-                )
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically) {
+                    com.androidharness.app.ui.chat.components.ChatPersonalizationDropdown(
+                        personalized = state.conversation.personalizationEnabled,
+                        enabled = !state.conversationSaving,
+                        modifier = if (state.conversation.agent != null) Modifier.weight(1f) else Modifier.fillMaxWidth(),
+                        onSelect = { enabled ->
+                            viewModel.setChatSettings(state.conversation.instructions, enabled, state.conversation.imageFrequency)
+                        },
+                    )
+                    state.conversation.agent?.let { agent ->
+                        com.androidharness.app.ui.chat.components.ChatAgentDropdown(
+                            selected = agent, agents = globalSettings.chatAgents,
+                            enabled = !state.busy && !state.conversationSaving,
+                            onSelect = ::chooseChatAgent,
+                            onCreate = { newAgentId = java.util.UUID.randomUUID().toString() },
+                            onManage = { showChatAgents = true }, modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
             }
             if (findOpen) {
                 com.androidharness.app.ui.chat.components.FindInChatBar(
@@ -1619,6 +1635,16 @@ private fun ChatScreenContent(
                                         hasProvider = state.activeProvider != null,
                                         chatOnly = state.conversation.isChat,
                                         agent = state.conversation.agent,
+                                        agentSetup = {
+                                            com.androidharness.app.ui.chat.components.ChatAgentDropdown(
+                                                selected = null, agents = globalSettings.chatAgents,
+                                                enabled = !state.busy && !state.conversationSaving,
+                                                onSelect = ::chooseChatAgent,
+                                                onCreate = { newAgentId = java.util.UUID.randomUUID().toString() },
+                                                onManage = { showChatAgents = true },
+                                                modifier = Modifier.fillMaxWidth(), setupCard = true,
+                                            )
+                                        },
                                         onSuggestion = { viewModel.send(it) },
                                         onAddProvider = { addProviderInitially = true; activeProviderManagerTarget = ModelSelectionTarget.ACTIVE },
                                     )

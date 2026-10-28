@@ -30,6 +30,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -56,6 +57,7 @@ internal fun ChatSettingsSheet(
     onDismiss: () -> Unit,
     globalImageFrequency: ImageFrequency = ImageFrequency.DEFAULT,
     saveError: String? = null,
+    onOpenAgents: (() -> Unit)? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var text by rememberSaveable { mutableStateOf(instructions) }
@@ -70,6 +72,16 @@ internal fun ChatSettingsSheet(
             Text(stringResource(R.string.chat_settings_title), style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(10.dp))
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+                if (onOpenAgents != null) {
+                    OutlinedCard(onClick = onOpenAgents, enabled = !saving, modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text(stringResource(R.string.chat_agents_title), style = MaterialTheme.typography.titleSmall)
+                            Text(stringResource(R.string.chat_agents_description), style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Spacer(Modifier.height(16.dp))
+                }
                 Row(Modifier.fillMaxWidth().toggleable(value = enabled, enabled = !saving, role = Role.Switch,
                     onValueChange = { enabled = it }).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {

@@ -90,4 +90,5 @@
     <string name="chat_agents_delete_action">"Excluir"</string>
     <string name="chat_agents_done">"Concluído"</string>
     <string name="chat_agents_short">Agente</string>
+    <string name="chat_agents_set">Definir um agente de conversa</string>
 </resources>

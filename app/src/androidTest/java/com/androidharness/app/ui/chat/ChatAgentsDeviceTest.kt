@@ -258,43 +258,81 @@ class ChatAgentsDeviceTest {
         } finally { shell("settings put system font_scale $oldScale") }
     }
 
-    @Test fun agentChooserStartsBesideSearchMovesWhenSavedAndDisappearsAfterFirstMessage(): Unit = runBlocking {
+    @Test fun agentSetupSitsAbovePromptsAndSelectionMovesRightOfPersonalization(): Unit = runBlocking {
         val original = c.settings.settings.first()
+        val before = c.sessions.sessions.first().map { it.id }.toSet()
         val store = ViewModelStore()
         val session = c.sessions.createSession("Chooser layout fixture", conversation = ConversationConfig(ConversationKind.CHAT))
+        val current = mutableStateOf(session)
+        val scale = mutableStateOf(1f)
         try {
             c.settings.restorePortable(original.copy(chatAgents = emptyList(), searchDepth = SearchDepth.AUTO))
             ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
                 scenario.onActivity { host ->
-                    val vm = ChatViewModel(c, session); store.put("chooser-layout", vm)
-                    host.setContent { HarnessTheme { ChatScreen(vm, {}, { _, _ -> }, {}, {}, onOpenSubagent = {}) } }
+                    host.setContent { HarnessTheme {
+                        val density = LocalDensity.current
+                        CompositionLocalProvider(LocalDensity provides Density(density.density, scale.value)) {
+                            key(current.value) {
+                                val vm = remember(current.value) { ChatViewModel(c, current.value).also { store.put(current.value, it) } }
+                                ChatScreen(vm, {}, { _, _ -> }, { current.value = session }, {}, onOpenSubagent = {},
+                                    onNavigateToSession = { current.value = it })
+                            }
+                        }
+                    } }
                 }
-                val compact = awaitText("Agent")
-                val search = awaitText("Auto")
-                val a = Rect().also(compact::getBoundsInScreen)
-                val b = Rect().also(search::getBoundsInScreen)
-                assertTrue("Agent must be left of search", a.right <= b.left)
-                assertTrue("Agent and search share a row", kotlin.math.abs(a.centerY() - b.centerY()) < 12)
-                assertNull(find { it.text?.toString() == "Choose an agent" })
-                screenshot("agent-compact-left-of-search")
-                val agent = ChatAgentProfile(name = "Layout tutor")
-                c.settings.saveChatAgent(agent)
-                val chooser = awaitText("Choose an agent")
+                val setup = Rect().also(awaitText("Set a chat agent")::getBoundsInScreen)
+                val firstPrompt = Rect().also(awaitText("Explain a tricky topic simply")::getBoundsInScreen)
+                assertTrue("Agent setup goes before starter prompts", setup.bottom < firstPrompt.top)
+                awaitText("Auto")
                 assertNull(find { it.text?.toString() == "Agent" })
-                val chooseBounds = Rect().also(chooser::getBoundsInScreen)
-                val searchBounds = Rect().also(awaitText("Auto")::getBoundsInScreen)
-                assertTrue("Saved-agent chooser goes below header", chooseBounds.top > searchBounds.bottom)
-                screenshot("agent-saved-wide-chooser")
-                c.sessions.addMessage(session, com.androidharness.app.core.ChatMessage(com.androidharness.app.core.Role.USER, "First sent message"), "chooser-turn")
+                screenshot("agent-setup-above-prompts")
+                val agent = ChatAgentProfile(name = "Layout tutor", description = "A patient guide", starters = listOf("Start a lesson"))
+                val other = ChatAgentProfile(name = "Writing partner", description = "A helpful editor", starters = listOf("Shape my draft"))
+                c.settings.saveChatAgent(agent); c.settings.saveChatAgent(other)
+                // Saving a profile alone does not add another header control.
+                awaitText("Set a chat agent")
+                tap("Set a chat agent"); awaitText("Regular Chat"); tap("Layout tutor")
+                awaitText("Start a lesson")
+                assertNull(find { it.text?.toString() == "Set a chat agent" })
+                val personal = Rect().also(awaitChoice("Personalized")::getBoundsInScreen)
+                val selected = Rect().also(awaitChoice("Layout tutor")::getBoundsInScreen)
+                screenshot("agent-right-of-personalization")
+                assertTrue("Agent must be right of personalization: $selected / $personal", selected.left >= personal.right - 1)
+                assertTrue("The dropdowns share a row: $selected / $personal", kotlin.math.abs(selected.centerY() - personal.centerY()) < 12)
+                tap("Layout tutor"); awaitText("Regular Chat"); awaitText("Create agent")
+                screenshot("agent-matching-dropdown")
+                tap("Writing partner"); awaitText("Shape my draft")
+                tap("Personalized"); tap("Unpersonalized"); awaitText("Unpersonalized")
+                scenario.onActivity { scale.value = 1.5f }
+                awaitText("Writing partner")
+                screenshot("agent-start-controls-large-text")
+                scenario.onActivity { scale.value = 1f }
+                tap("Writing partner"); tap("Regular Chat"); awaitText("Set a chat agent")
+                tap("More options"); tap("Chat settings"); awaitText("Chat agents"); tap("Chat agents")
+                awaitText("Start a conversation")
+                screenshot("agents-from-chat-settings")
+                instrumentation.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
+                awaitText("Set a chat agent")
+                tap("Set a chat agent"); tap("Create agent"); tap("Identity")
+                val name = requireNotNull(find { it.isEditable })
+                assertTrue(name.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+                    putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "Fresh helper")
+                }))
+                tap("Save agent"); awaitText("Fresh helper")
+                val createdDeadline = SystemClock.uptimeMillis() + 10_000
+                while (current.value == session && SystemClock.uptimeMillis() < createdDeadline) SystemClock.sleep(100)
+                assertNotEquals("Creating an agent opens its conversation", session, current.value)
+                assertNull(find { it.text?.toString() == "Set a chat agent" })
+                c.sessions.addMessage(current.value, com.androidharness.app.core.ChatMessage(com.androidharness.app.core.Role.USER, "First sent message"), "chooser-turn")
                 awaitText("First sent message")
                 instrumentation.waitForIdleSync(); SystemClock.sleep(300)
-                assertNull(find { it.text?.toString() == "Choose an agent" })
                 assertNull(find { it.text?.toString() == "Personalized" })
-                screenshot("agent-chooser-hidden-after-send")
+                assertNull(find { it.text?.toString() == "Set a chat agent" })
+                screenshot("agent-controls-hidden-after-send")
             }
         } finally {
             instrumentation.runOnMainSync { store.clear() }
-            c.sessions.session(session)?.let { c.sessions.deleteSession(it) }
+            c.sessions.sessions.first().filter { it.id !in before }.forEach { c.sessions.deleteSession(it) }
             c.settings.restorePortable(original)
         }
     }
@@ -361,11 +399,19 @@ class ChatAgentsDeviceTest {
         error("Missing UI text: $text")
     }
     private fun tap(text: String) {
-        var node = awaitText(text)
-        while (!node.isClickable && node.parent != null) node = node.parent
+        var node = find { it.contentDescription?.toString() == text } ?: awaitText(text)
         val rect = Rect().also(node::getBoundsInScreen)
+        while (!node.isClickable && node.parent != null) node = node.parent
         if (!node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) shell("input tap ${rect.centerX()} ${rect.centerY()}")
         SystemClock.sleep(300)
+    }
+    private fun awaitChoice(text: String): AccessibilityNodeInfo {
+        val deadline = SystemClock.uptimeMillis() + 10_000
+        while (SystemClock.uptimeMillis() < deadline) {
+            find { it.contentDescription?.toString() == text }?.let { return it }
+            SystemClock.sleep(100)
+        }
+        error("Missing dropdown: $text")
     }
     private fun scrollTo(text: String) {
         repeat(18) {

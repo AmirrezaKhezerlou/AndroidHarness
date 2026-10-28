@@ -107,6 +107,43 @@ class ReasoningDeviceTest {
         }
     }
 
+    @Test fun longChatModelKeepsThinkingAndSearchVisibleAtLargeText() {
+        val label = "A long provider / dots-3-note-preview-2026-10-28"
+        val scale = mutableStateOf(1f)
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            scenario.onActivity { it.setContent { HarnessTheme {
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                androidx.compose.runtime.CompositionLocalProvider(
+                    androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, scale.value),
+                ) {
+                    Surface(Modifier.fillMaxSize()) {
+                        Column {
+                            MainHeader("Long model", false, label, AgentMode.ACT,
+                                thinkingLevel = ThinkingLevel.MAX,
+                                thinkingLevels = listOf(ThinkingLevel.LOW, ThinkingLevel.HIGH, ThinkingLevel.MAX),
+                                permissionMode = PermissionMode.CONFIRM_ALL, canUndo = false,
+                                conversation = ConversationConfig(ConversationKind.CHAT),
+                                onOpenDrawer = {}, onPickModel = {}, onOpenTerminal = {}, onSetThinking = {},
+                                onSetPermission = {}, onSetMode = {}, onOpenContext = {}, onOpenUndo = {},
+                                onOpenFiles = {}, onOpenGitHub = {})
+                        }
+                    }
+                }
+            } } }
+            for (font in listOf(1f, 1.5f)) {
+                scenario.onActivity { scale.value = font }
+                val model = Rect().also(await(label)::getBoundsInScreen)
+                val thinking = Rect().also(await("Thinking level")::getBoundsInScreen)
+                val search = Rect().also(await("Auto")::getBoundsInScreen)
+                assertTrue("Model retains visible space", model.width() > 40)
+                assertTrue("Thinking stays after the model", thinking.centerX() > model.centerX())
+                assertTrue("Search stays after thinking", search.centerX() > thinking.centerX())
+                assertTrue("Header stays on one row", kotlin.math.abs(model.centerY() - search.centerY()) < 24)
+                screenshot("long-chat-header-$font")
+            }
+        }
+    }
+
     @Test fun thinkingPopupStaysCenteredOnItsButtonAndInsetFromWindowEdges() {
         val label = mutableStateOf("deepseek-v4-1-flash")
         val direction = mutableStateOf(androidx.compose.ui.unit.LayoutDirection.Ltr)

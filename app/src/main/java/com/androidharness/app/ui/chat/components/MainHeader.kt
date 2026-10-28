@@ -28,7 +28,6 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.ForkRight
@@ -124,9 +123,6 @@ internal fun MainHeader(
     onSetSearchDepth: (com.androidharness.app.data.SearchDepth) -> Unit = {},
     onOpenChatSettings: (() -> Unit)? = null,
     onOpenSources: (() -> Unit)? = null,
-    onOpenAgents: (() -> Unit)? = null,
-    showCompactAgent: Boolean = false,
-    agentPickerEnabled: Boolean = true,
     chatPinned: Boolean = false,
     chatArchived: Boolean = false,
     onToggleChatPin: (() -> Unit)? = null,
@@ -138,8 +134,6 @@ internal fun MainHeader(
     var permissionMenu by remember { mutableStateOf(false) }
     val scheme = MaterialTheme.colorScheme
     val thinkingOn = thinkingLevel != ThinkingLevel.OFF
-    val density = LocalDensity.current
-    val separateAgentRow = showCompactAgent && LocalWindowInfo.current.containerSize.width / density.density < 370 * density.fontScale
 
     if (com.androidharness.app.ui.LocalDesktopLayout.current) {
         Column {
@@ -150,7 +144,6 @@ internal fun MainHeader(
             workspaceName = workspaceName, onOpenDrawer = onOpenDrawer,
             searchDepth = searchDepth, onSetSearchDepth = onSetSearchDepth, onFind = onFind,
             onOpenChatSettings = onOpenChatSettings, onOpenSources = onOpenSources,
-            onOpenAgents = onOpenAgents, showCompactAgent = showCompactAgent, agentPickerEnabled = agentPickerEnabled,
             chatPinned = chatPinned, chatArchived = chatArchived, onToggleChatPin = onToggleChatPin, onToggleChatArchive = onToggleChatArchive)
         }
         return
@@ -196,11 +189,7 @@ internal fun MainHeader(
                         Icon(painterResource(R.drawable.ic_github), contentDescription = uiContext.getString(R.string.ui_open_github),
                             modifier = Modifier.size(18.dp))
                     }
-                    if (conversation.isChat && !separateAgentRow) {
-                        if (showCompactAgent && onOpenAgents != null) {
-                            HeaderAgentControl(onOpenAgents, agentPickerEnabled)
-                            Spacer(Modifier.width(6.dp))
-                        }
+                    if (conversation.isChat) {
                         SearchDepthControl(searchDepth, onSetSearchDepth)
                         Spacer(Modifier.width(2.dp))
                     }
@@ -298,12 +287,6 @@ internal fun MainHeader(
                             )
                             if (conversation.isChat) {
                                 ChatOrganizationMenuItems(chatPinned, chatArchived, onToggleChatPin, onToggleChatArchive) { menu = false }
-                                if (onOpenAgents != null) DropdownMenuItem(
-                                    text = { Text(uiContext.getString(R.string.chat_agents_choose)) },
-                                    leadingIcon = { Icon(Icons.Outlined.AutoAwesome, null) },
-                                    enabled = agentPickerEnabled,
-                                    onClick = { menu = false; onOpenAgents() },
-                                )
                                 DropdownMenuItem(
                                     text = { Text(uiContext.getString(R.string.chat_settings_title)) },
                                     leadingIcon = { Icon(Icons.Outlined.EditNote, contentDescription = null) },
@@ -386,14 +369,6 @@ internal fun MainHeader(
                         }
                     }
                 }
-                if (conversation.isChat && separateAgentRow) Row(
-                    Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 6.dp),
-                    horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (onOpenAgents != null) HeaderAgentControl(onOpenAgents, agentPickerEnabled)
-                    Spacer(Modifier.width(6.dp))
-                    SearchDepthControl(searchDepth, onSetSearchDepth)
-                }
             }
         }
         HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.5f))
@@ -420,9 +395,6 @@ private fun DesktopConversationHeader(
     onFind: (() -> Unit)? = null,
     onOpenChatSettings: (() -> Unit)? = null,
     onOpenSources: (() -> Unit)? = null,
-    onOpenAgents: (() -> Unit)? = null,
-    showCompactAgent: Boolean = false,
-    agentPickerEnabled: Boolean = true,
     chatPinned: Boolean = false,
     chatArchived: Boolean = false,
     onToggleChatPin: (() -> Unit)? = null,
@@ -459,10 +431,6 @@ private fun DesktopConversationHeader(
             }
             if (chatOnly) {
                 Spacer(Modifier.width(6.dp))
-                if (showCompactAgent && onOpenAgents != null) {
-                    HeaderAgentControl(onOpenAgents, agentPickerEnabled)
-                    Spacer(Modifier.width(6.dp))
-                }
                 SearchDepthControl(searchDepth, onSetSearchDepth)
             }
             Box {
@@ -478,10 +446,6 @@ private fun DesktopConversationHeader(
                         onClick = { menu = false; onFind?.invoke() },
                     )
                     DropdownMenuItem(text = { Text(uiContext.getString(R.string.ui_context_limits)) }, onClick = { menu = false; onContext() })
-                    if (chatOnly && onOpenAgents != null) DropdownMenuItem(
-                        text = { Text(uiContext.getString(R.string.chat_agents_choose)) },
-                        enabled = agentPickerEnabled, onClick = { menu = false; onOpenAgents() },
-                    )
                     if (chatOnly) DropdownMenuItem(
                         text = { Text(uiContext.getString(R.string.chat_settings_title)) },
                         onClick = { menu = false; onOpenChatSettings?.invoke() },
@@ -527,8 +491,8 @@ private fun HeaderModelPicker(label: String, onPickModel: () -> Unit, modifier: 
     ) {
         Column(Modifier.weight(1f, fill = false)) {
             Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface)
             scopeLabel?.let { Text(it, style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary) }
         }
@@ -558,22 +522,6 @@ private fun ChatOrganizationMenuItems(
         onClick = { onDismiss(); onToggleArchive() },
     )
     if (onTogglePin != null || onToggleArchive != null) HorizontalDivider()
-}
-
-/** Compact entry to the agent library before the first agent is saved. */
-@Composable
-private fun HeaderAgentControl(onClick: () -> Unit, enabled: Boolean) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val scheme = MaterialTheme.colorScheme
-    Surface(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(50),
-        color = scheme.surfaceContainerHigh, contentColor = scheme.onSurfaceVariant,
-        modifier = Modifier.semantics { contentDescription = context.getString(R.string.chat_agents_choose) }) {
-        Row(Modifier.heightIn(min = 32.dp).padding(horizontal = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(15.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(context.getString(R.string.chat_agents_short), style = MaterialTheme.typography.labelSmall, maxLines = 1)
-        }
-    }
 }
 
 /** Compact badge for Chat's research depth, next to the conversation menu. */
@@ -675,8 +623,8 @@ internal fun HeaderThinkingControl(
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val thinkingOn = resolved?.active ?: (thinkingLevel != ThinkingLevel.OFF)
-    val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
+    val density = LocalDensity.current
     val windowWidth = LocalWindowInfo.current.containerSize.width
     val edgeMargin = with(density) { 12.dp.roundToPx() }
     val maxMenuWidth = with(density) { (windowWidth - 2 * edgeMargin).coerceAtLeast(0).toDp() }.coerceAtMost(320.dp)

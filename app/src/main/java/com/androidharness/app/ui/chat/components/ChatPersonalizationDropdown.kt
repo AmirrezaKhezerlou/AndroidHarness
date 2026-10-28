@@ -22,7 +22,9 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextOverflow
 import com.androidharness.app.R
 
 /** Outside the transcript so scrolling content can never cover its touch target. */
@@ -31,41 +33,64 @@ internal fun ChatPersonalizationDropdown(
     personalized: Boolean,
     enabled: Boolean,
     onSelect: (Boolean) -> Unit,
+    modifier: Modifier = Modifier.fillMaxWidth(),
+) {
+    ChatStartDropdown(stringResource(if (personalized) R.string.chat_personalized else R.string.chat_unpersonalized), enabled, modifier) { dismiss ->
+        for (option in listOf(true, false)) {
+            ChatStartDropdownItem(
+                stringResource(if (option) R.string.chat_personalized else R.string.chat_unpersonalized),
+                stringResource(if (option) R.string.chat_settings_personalization_desc else R.string.chat_unpersonalized_desc),
+                option == personalized,
+            ) { dismiss(); onSelect(option) }
+        }
+    }
+}
+
+@Composable
+internal fun ChatStartDropdown(
+    label: String,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    trigger: (@Composable (Boolean, () -> Unit) -> Unit)? = null,
+    content: @Composable ColumnScope.(() -> Unit) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val chevron by animateFloatAsState(if (expanded) 180f else 0f, expressiveSpatialSpec(), label = "personalizationChevron")
-    // DropdownMenu aligns its start edge to the anchor, so the anchor must be
-    // as wide as the menu for a centered trigger to produce a centered menu.
     val menuWidth = with(LocalDensity.current) {
         LocalWindowInfo.current.containerSize.width.toDp() - 32.dp
     }.coerceIn(48.dp, 360.dp).coerceAtMost(320.dp)
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        Box(Modifier.width(menuWidth), contentAlignment = Alignment.Center) {
-            TextButton(onClick = { expanded = true }, enabled = enabled,
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
-                modifier = Modifier.heightIn(min = 48.dp)) {
-                Text(stringResource(if (personalized) R.string.chat_personalized else R.string.chat_unpersonalized),
-                    style = MaterialTheme.typography.bodyLarge)
-                Spacer(Modifier.width(8.dp))
-                Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(20.dp).graphicsLayer { rotationZ = chevron })
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Box(if (trigger != null) Modifier.fillMaxWidth() else Modifier.width(menuWidth), contentAlignment = Alignment.Center) {
+            if (trigger != null) trigger(expanded) { expanded = true }
+            else {
+                TextButton(onClick = { expanded = true }, enabled = enabled,
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
+                    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = label }) {
+                    Text(label, style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Spacer(Modifier.width(8.dp))
+                    Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(20.dp).graphicsLayer { rotationZ = chevron })
+                }
             }
             DropdownMenu(expanded = expanded && enabled, onDismissRequest = { expanded = false },
-                modifier = Modifier.width(menuWidth)) {
-                for (option in listOf(true, false)) {
-                    DropdownMenuItem(
-                        text = { Column {
-                            Text(stringResource(if (option) R.string.chat_personalized else R.string.chat_unpersonalized))
-                            Text(stringResource(if (option) R.string.chat_settings_personalization_desc else R.string.chat_unpersonalized_desc),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        } },
-                        leadingIcon = { if (option == personalized) Icon(Icons.Filled.Check, null) else Spacer(Modifier.size(24.dp)) },
-                        modifier = Modifier.background(if (option == personalized) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent, RoundedCornerShape(16.dp))
-                            .semantics { selected = option == personalized },
-                        onClick = { expanded = false; onSelect(option) },
-                    )
-                }
+                modifier = Modifier.width(menuWidth).heightIn(max = 440.dp)) {
+                content { expanded = false }
             }
         }
     }
+}
+
+@Composable
+internal fun ChatStartDropdownItem(title: String, description: String, selected: Boolean, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Column {
+            Text(title)
+            if (description.isNotBlank()) Text(description, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } },
+        leadingIcon = { if (selected) Icon(Icons.Filled.Check, null) else Spacer(Modifier.size(24.dp)) },
+        modifier = Modifier.background(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent, RoundedCornerShape(16.dp))
+            .semantics { this.selected = selected },
+        onClick = onClick,
+    )
 }

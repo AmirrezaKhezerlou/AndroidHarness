@@ -90,4 +90,5 @@
     <string name="chat_agents_delete_action">Delete</string>
     <string name="chat_agents_done">Done</string>
     <string name="chat_agents_short">Agent</string>
+    <string name="chat_agents_set">Set a chat agent</string>
 </resources>
