@@ -75,6 +75,18 @@ class CustomModelsTest {
         assertThrows(IllegalArgumentException::class.java) { CustomModelResolver(htmlClient).resolve("https://example.org/model.gguf") }
     }
 
+    @Test fun `removing LiteRT support preserves GGUF entries and source files`() = temporary { root ->
+        val model = model(header())
+        val encoded = Json.encodeToString(LocalModelSpec.serializer(), model)
+        val removed = encoded.dropLast(1) + ",\"format\":\"LITERT_LM\"}"
+        File(root, "custom-models.json").writeText("[$encoded,$removed]")
+        val weights = File(root, "old.litertlm").apply { writeText("preserve") }
+        val registry = CustomModelRegistry(root)
+        assertNull(registry.loadError)
+        assertEquals(listOf(model), registry.models)
+        assertEquals("preserve", weights.readText())
+    }
+
     @Test fun `custom registry reload installs checks checksum and deletes model plus limits`() = temporary { root ->
         val bytes = header()
         val model = model(bytes)

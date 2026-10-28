@@ -2,7 +2,8 @@ package com.androidharness.app.local
 
 import java.io.File
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.*
+import kotlinx.serialization.decodeFromString
 
 /** Download jobs and provider IDs survive process death through this catalog. */
 class CustomModelRegistry(private val root: File) {
@@ -11,7 +12,9 @@ class CustomModelRegistry(private val root: File) {
     var loadError: String? = null
         private set
     var models: List<LocalModelSpec> = runCatching {
-        if (target.exists()) json.decodeFromString<List<LocalModelSpec>>(target.readText()).onEach(::validate)
+        if (target.exists()) json.parseToJsonElement(target.readText()).jsonArray
+            .filter { it.jsonObject["format"]?.jsonPrimitive?.content != "LITERT_LM" }
+            .map { json.decodeFromJsonElement<LocalModelSpec>(it).also(::validate) }
         else emptyList()
     }.getOrElse {
         loadError = "Custom model catalog could not be read. Model files were kept. Paste their links again to recover them."
