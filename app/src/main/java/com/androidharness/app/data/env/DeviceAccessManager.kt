@@ -186,7 +186,13 @@ class DeviceAccessManager(
             rootState = state.status.label + state.provider?.let { " (${it.label})" }.orEmpty(),
             rootAllowed = rootAllowed(AccessRequest(project, sessionId), prefs),
             shizukuState = shizuku.state.value, shizukuService = shizuku.serviceState.value,
-            shizukuReady = shizuku.isServiceReady(), shizukuUid = szUid.value, paused = stopped.value)
+            shizukuReady = shizuku.hasPrivilegedAccess(),
+            // A live Wireless ADB runner is the authority for its own UID; the
+            // probe value may still describe an earlier Shizuku connection.
+            shizukuUid = if (shizuku.wirelessTransportActive) shizuku.liveUid ?: szUid.value
+                else szUid.value ?: shizuku.liveUid,
+            paused = stopped.value, wirelessPaired = shizuku.wirelessPaired,
+            wirelessConnected = shizuku.wirelessConnected, wirelessActive = shizuku.wirelessTransportActive)
     }
 
     internal suspend fun runRoot(command: String, cwd: File, timeoutMs: Int, maxOutput: Int): ShellRunResult? {

@@ -449,6 +449,18 @@ class ShizukuManager(
     val wirelessTransportActive: Boolean
         get() = wireless?.isConnected == true && service == null && compatibility?.isAlive != true
 
+    /** True when the built-in wireless ADB transport has a live runner. */
+    val wirelessConnected: Boolean get() = wireless?.isConnected == true
+
+    /** True when a wireless ADB pairing is stored, even if not connected right now. */
+    val wirelessPaired: Boolean get() = wireless?.isPaired == true
+
+    /** UID of the live privileged runner, read without executing a command. */
+    val liveUid: Int?
+        get() = service?.let { runCatching { it.uid }.getOrNull() }
+            ?: compatibility?.takeIf { it.isAlive }?.uid
+            ?: wireless?.takeIf { it.isConnected }?.uid
+
     /** The living compatibility runner, reconnecting the wireless transport on demand. */
     private suspend fun activeCompat(): ShizukuCompatClient? =
         compatibility?.takeIf { it.isAlive } ?: wireless?.client()

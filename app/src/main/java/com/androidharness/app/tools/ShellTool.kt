@@ -21,8 +21,8 @@ class ShellTool(
         "Run a shell command on the device. Uses SSH for an SSH workspace; " +
         "otherwise follows the selected Auto, Normal, Shizuku, Root or Both access mode: " +
         "a full Linux userspace (bash, git, python, node…) as the app when installed, " +
-        "Shizuku/Shevery ADB-shell privileges (plus the same toolchain) when connected, " +
-        "or direct root when requested. App-workspace development uses the app UID by default. Choose access=\"shizuku\" for Android system commands. In Both mode other ordinary commands use Shizuku and " +
+        "Shizuku/Shevery or the app's built-in Wireless ADB shell (same ADB-shell privileges plus the same toolchain) when connected, " +
+        "or direct root when requested. App-workspace development uses the app UID by default. Choose access=\"shizuku\" for Android system commands; it pins Shizuku, Shevery or the built-in Wireless ADB shell. In Both mode other ordinary commands use the privileged shell and " +
         "access=\"root\" uses the direct root service, so both can be used in the same task. " +
         "If the active workspace is a picked folder (SAF), the command runs in the app's shell " +
         "workspace and a note is added. Returns the exit code plus captured stdout and stderr " +
@@ -30,7 +30,7 @@ class ShellTool(
     override val parametersSchema = Schema.obj(
         mapOf(
             "command" to Schema.string("The shell command to run."),
-            "access" to Schema.string("auto (default), shizuku, or root. App-workspace development uses the app UID by default. Choose shizuku for Android system commands; this explicitly pins Shizuku and never falls back to root or the app UID. In Both mode auto uses Shizuku and root uses the direct root service. Root requires a verified root-capable backend and project permission; it never falls back to non-root execution."),
+            "access" to Schema.string("auto (default), shizuku, or root. App-workspace development uses the app UID by default. Choose shizuku for Android system commands; this explicitly pins the privileged shell (Shizuku, Shevery or the app's built-in Wireless ADB) and never falls back to root or the app UID. In Both mode auto uses the privileged shell and root uses the direct root service. Root requires a verified root-capable backend and project permission; it never falls back to non-root execution."),
             "cwd" to Schema.string(
                 "Working directory relative to the workspace root (default: the root). " +
                     "Use it instead of 'cd dir && …' chains.",

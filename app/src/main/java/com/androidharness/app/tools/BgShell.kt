@@ -16,15 +16,15 @@ class ShellBackgroundTool(
     override val name = "shell_background"
     override val description =
         "Start a long-running shell command in the background (e.g. a dev server). " +
-        "When Shizuku is connected the process runs inside its server and survives the app " +
+        "When a privileged shell is connected (Shizuku, Shevery or the app's built-in Wireless ADB) the process runs inside it and survives the app " +
         "being minimized or even killed; otherwise it runs as an app child kept alive by the " +
-        "foreground service. App-workspace development uses the app UID by default; access=\"shizuku\" explicitly selects Shizuku. In Both mode other background commands use Shizuku and " +
+        "foreground service. App-workspace development uses the app UID by default; access=\"shizuku\" explicitly selects the privileged shell. In Both mode other background commands use the privileged shell and " +
         "access=\"root\" uses the direct root service, which lasts only while that connection " +
         "survives. Returns a process id; its output goes to a log file. " +
         "Use bg_list to inspect and bg_kill to stop it."
     override val parametersSchema = Schema.obj(
         mapOf("command" to Schema.string("The shell command to run in the background."),
-            "access" to Schema.string("auto (default), shizuku, or root. App-workspace development uses the app UID by default. Choose shizuku for Android system commands; this explicitly pins Shizuku and never falls back to root or the app UID. In Both mode auto uses Shizuku and root uses the direct root service. Root requires a verified backend and project permission.")),
+            "access" to Schema.string("auto (default), shizuku, or root. App-workspace development uses the app UID by default. Choose shizuku for Android system commands; this explicitly pins the privileged shell (Shizuku, Shevery or the app's built-in Wireless ADB) and never falls back to root or the app UID. In Both mode auto uses the privileged shell and root uses the direct root service. Root requires a verified backend and project permission.")),
         required = listOf("command"),
     )
     override val isReadOnly = false
@@ -62,7 +62,7 @@ class ShellBackgroundTool(
                 npmNote?.let { notes.append(it).append('\n') }
                 if (started.entry.source == "ROOT") notes.append("[note: running via direct root; tied to this root service/app session]\n")
                 if (started.viaShizuku) {
-                    notes.append("[note: running under Shizuku: survives the app being minimized or killed]\n")
+                    notes.append("[note: running under the privileged shell (Shizuku or Wireless ADB): survives the app being minimized or killed]\n")
                 }
                 ToolResult(
                     true,
@@ -73,11 +73,11 @@ class ShellBackgroundTool(
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (e: Exception) {
                 // App-tier background processes run as the app uid, which may
-                // not reach folders outside its own; start Shizuku for those.
+                // not reach folders outside its own; a privileged shell is needed for those.
                 val hint =
                     if (router?.deviceAccess != null) "[note: check access mode, connection readiness and project root permission in Settings → Terminal & device.]"
-                    else "[note: without Shizuku, background processes run as the app user and could not " +
-                        "start in $cwd. Start Shizuku (Settings → Terminal) to run servers anywhere, " +
+                    else "[note: without a privileged shell, background processes run as the app user and could not " +
+                        "start in $cwd. Connect Shizuku or Wireless ADB (Settings → Terminal) to run servers anywhere, " +
                         "or move the project into the app workspace or a folder the app can reach directly.]"
                 ToolResult(false, hint + "\nFailed to start background process: ${e.message}")
             }
