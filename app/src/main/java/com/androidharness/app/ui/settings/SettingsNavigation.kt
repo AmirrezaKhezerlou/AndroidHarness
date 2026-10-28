@@ -174,7 +174,7 @@ internal enum class SettingsPage(
         R.string.settings_page_environment_title,
         R.string.settings_page_environment_desc,
         R.string.settings_group_coding,
-        "shizuku shell packages environment battery optimization keep alive",
+        "shizuku shell packages environment battery optimization keep alive wireless adb wifi pairing debugging developer options notification",
         onHome = false,
     ),
     TROUBLESHOOTING(

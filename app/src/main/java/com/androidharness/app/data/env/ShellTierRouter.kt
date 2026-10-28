@@ -74,7 +74,7 @@ class ShellTierRouter(
             PathClassifier.Region.SYSTEM -> when {
                 // The shell uid can reach both /sdcard and system paths, and the
                 // deployed tmp toolchain execs normally, so it's the best tier.
-                shizuku.isGranted() -> ExecutionTier.PRIVILEGED
+                shizuku.hasPrivilegedAccess() -> ExecutionTier.PRIVILEGED
                 isAllFilesAccess() -> if (linuxEnv.isReady) ExecutionTier.APP_LINUX else ExecutionTier.TOYBOX
                 else -> if (linuxEnv.isReady) ExecutionTier.APP_LINUX else ExecutionTier.TOYBOX
             }
@@ -88,12 +88,12 @@ class ShellTierRouter(
             tier == ExecutionTier.APP_LINUX &&
                 region == PathClassifier.Region.SHARED_STORAGE &&
                 !isAllFilesAccess() ->
-                "[note: shared storage access is not granted: expect permission errors here. Grant it in Settings → Storage access, use the app workspace, or start Shizuku for shell access.]"
+                "[note: shared storage access is not granted: expect permission errors here. Grant it in Settings → Storage access, use the app workspace, or connect a privileged shell in Settings → Terminal.]"
 
             tier == ExecutionTier.TOYBOX &&
                 region == PathClassifier.Region.SYSTEM &&
-                !shizuku.isGranted() ->
-                "[note: this is a system path the app cannot touch on its own. Start Shizuku in Settings → Terminal to unlock it.]"
+                !shizuku.hasPrivilegedAccess() ->
+                "[note: this is a system path the app cannot touch on its own. Start Shizuku or connect Wireless ADB in Settings → Terminal to unlock it.]"
 
             else -> null
         }

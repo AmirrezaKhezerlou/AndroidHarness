@@ -137,11 +137,16 @@ android {
         buildConfig = true
         compose = true
         aidl = true
+        // BoringSSL ships as a prefab package for the on-device ADB pairing SPAKE2 step.
+        prefab = true
     }
 
     packaging {
         resources {
-            excludes += setOf("META-INF/DEPENDENCIES", "META-INF/LICENSE", "META-INF/LICENSE.txt", "META-INF/NOTICE", "META-INF/NOTICE.txt")
+            excludes += setOf(
+                "META-INF/DEPENDENCIES", "META-INF/LICENSE", "META-INF/LICENSE.txt", "META-INF/NOTICE", "META-INF/NOTICE.txt",
+                "META-INF/LICENSE.md", "META-INF/LICENSE-notice.md", "META-INF/NOTICE.md",
+            )
         }
     }
 }
@@ -200,6 +205,10 @@ dependencies {
     implementation("com.github.mwiede:jsch:2.28.7")
     // Ed25519 SSH keys on Android versions without a matching platform provider.
     implementation("org.bouncycastle:bcprov-jdk18on:1.85")
+    // Self-signed certificates for the local ADB key used by wireless pairing.
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.85")
+    // SPAKE2 for Android 11+ wireless debugging pairing, compiled into libadb.so.
+    implementation("io.github.vvb2060.ndk:boringssl:20250114")
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
     // CEL compiles and checks optional per-model reasoning request mappings on device.

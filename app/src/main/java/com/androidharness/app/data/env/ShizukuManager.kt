@@ -69,6 +69,8 @@ class ShizukuManager(
     private val userServiceClassName: String = HarnessUserService::class.java.name,
     private val userServiceTimeoutMs: Long = 15_000,
     private val userServiceTag: String? = null,
+    /** Optional built-in wireless ADB transport used when Shizuku is not connected. */
+    private val wireless: com.androidharness.app.data.env.adb.WirelessAdbManager? = null,
 ) {
 
     internal val workspaceWarning = shizukuWarningController(
@@ -242,7 +244,7 @@ class ShizukuManager(
         compatibilityJob = scope.launch {
             var launched: ShizukuCompatClient? = null
             try {
-                val client = ShizukuCompatClient.start(context.applicationInfo.sourceDir) {
+                val client = ShizukuCompatClient.startWithShizuku(context.applicationInfo.sourceDir) {
                     synchronized(this@ShizukuManager) {
                         if (compatibility === launched && launched != null) {
                             clearCompatibility()
@@ -421,7 +423,26 @@ class ShizukuManager(
     }
 
     /** True when permission and a callable normal or compatibility runner are available. */
-    fun isServiceReady(): Boolean = isGranted() && (service != null || compatibility?.isAlive == true)
+    fun isServiceReady(): Boolean =
+        (isGranted() && (service != null || compatibility?.isAlive == true)) || wireless?.isConnected == true
+
+    /** Shizuku or a paired wireless ADB transport can run privileged commands (connecting on demand). */
+    fun hasPrivilegedAccess(): Boolean = isServiceReady() || wireless?.isPaired == true
+
+    /** The built-in wireless ADB transport, when one was wired into this manager. */
+    val wirelessTransport: com.androidharness.app.data.env.adb.WirelessAdbManager? get() = wireless
+
+    /** True when the current privileged execution is the built-in ADB shell rather than Shizuku. */
+    val wirelessTransportActive: Boolean
+        get() = wireless?.isConnected == true && service == null && compatibility?.isAlive != true
+
+    /** The living compatibility runner, reconnecting the wireless transport on demand. */
+    private suspend fun activeCompat(): ShizukuCompatClient? =
+        compatibility?.takeIf { it.isAlive } ?: wireless?.client()
+
+    /** Do not reconnect just to pause or resume; only touch a transport that is already live. */
+    private suspend fun compatIfConnected(): ShizukuCompatClient? =
+        compatibility?.takeIf { it.isAlive } ?: wireless?.takeIf { it.isConnected }?.client()
 
     /**
      * Runs [cmd] inside the Shizuku server process (shell/root uid). Returns null
@@ -443,7 +464,7 @@ class ShizukuManager(
             catch (_: Exception) { null }
                 ?: return@withContext PrivilegedResult(-1, false, "", "Shizuku connection lost after dispatch. The command may have run; it was not retried.")
         } else {
-            val client = compatibility?.takeIf { it.isAlive } ?: return@withContext null
+            val client = activeCompat() ?: return@withContext null
             if (expectedUid != null && client.uid != expectedUid) return@withContext null
             try {
                 client.request(CompatRequest(0, "exec", cmd.toList(), withDeployPaths(env).toList(), dir,
@@ -494,7 +515,7 @@ class ShizukuManager(
 
     internal suspend fun resumeCommands() = withContext(Dispatchers.IO) {
         service?.resumeCommands()
-        compatibility?.request(CompatRequest(0, "resume"))
+        compatIfConnected()?.request(CompatRequest(0, "resume"))
         Unit
     }
 
@@ -509,12 +530,12 @@ class ShizukuManager(
                 }
                 "Shizuku: stop requested for $count commands; termination is not confirmed."
             }.getOrElse { "Shizuku: termination could not be verified (${it.message})." }
-        } else if (compatibility != null) {
+        } else if (compatIfConnected() != null) {
             runCatching {
-                val count = compatibility?.request(CompatRequest(0, "stop"))
-                "Shizuku compatibility: stopped $count active commands; runner paused."
-            }.getOrElse { "Shizuku compatibility: stop could not be verified (${it.message})." }
-        } else "Shizuku: no connected runner; termination cannot be verified."
+                val count = compatIfConnected()?.request(CompatRequest(0, "stop"))
+                "Privileged shell: stopped $count active commands; runner paused."
+            }.getOrElse { "Privileged shell: stop could not be verified (${it.message})." }
+        } else "Privileged shell: no connected runner; termination cannot be verified."
     }
 
     private fun parseResult(raw: String): PrivilegedResult {
@@ -676,7 +697,7 @@ class ShizukuManager(
         if (svc != null && expectedUid != null && runCatching { svc.uid }.getOrNull() != expectedUid) return@withContext null
         if (svc != null) runCatching { svc.spawnDetached(cmd, env, dir, logPath) }.getOrDefault(-1)
         else {
-            val client = compatibility?.takeIf { it.isAlive } ?: return@withContext null
+            val client = activeCompat() ?: return@withContext null
             if (expectedUid != null && client.uid != expectedUid) return@withContext null
             try { client.request(CompatRequest(0, "spawn", cmd.toList(),
                 withDeployPaths(env).toList(), dir, logPath)).toIntOrNull() ?: -1 }
@@ -690,7 +711,7 @@ class ShizukuManager(
         val svc = service
         try {
             if (svc != null) svc.isProcessAlive(pid)
-            else compatibility?.takeIf { it.isAlive }?.request(CompatRequest(0, "alive", pid = pid))?.toBooleanStrictOrNull()
+            else activeCompat()?.request(CompatRequest(0, "alive", pid = pid))?.toBooleanStrictOrNull()
         } catch (e: CancellationException) { throw e }
         catch (_: Exception) { null }
     }
@@ -700,6 +721,6 @@ class ShizukuManager(
     suspend fun killProcess(pid: Int, expectedLog: String? = null): Boolean = withContext(Dispatchers.IO) {
         val svc = service
         if (svc != null) runCatching { if (expectedLog != null) svc.killTrackedProcess(pid, expectedLog) else svc.killProcess(pid) }.getOrDefault(false)
-        else compatibility?.takeIf { it.isAlive }?.request(CompatRequest(0, if (expectedLog != null) "killTracked" else "kill", pid = pid, logPath = expectedLog))?.toBooleanStrictOrNull() ?: false
+        else activeCompat()?.request(CompatRequest(0, if (expectedLog != null) "killTracked" else "kill", pid = pid, logPath = expectedLog))?.toBooleanStrictOrNull() ?: false
     }
 }

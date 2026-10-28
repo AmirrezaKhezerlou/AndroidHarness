@@ -124,6 +124,7 @@ class DeviceAccessPolicyTest {
         assertEquals("Shizuku", metadata.execution[1].label)
         assertEquals("Root", metadata.execution[2].label)
         assertEquals("Normal", ExecutionReceipt(DeviceBackend.NORMAL).label)
+        assertEquals("Wireless ADB", ExecutionReceipt(DeviceBackend.SHIZUKU, 2000, transport = "Wireless ADB").label)
         assertTrue(GenerationMetadata.decode("{\"reasoningTokens\":42}").execution.isEmpty())
     }
 }

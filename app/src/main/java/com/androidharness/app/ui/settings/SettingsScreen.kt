@@ -2,8 +2,10 @@ package com.androidharness.app.ui.settings
 
 import com.androidharness.app.ui.common.localizedOption
 import com.androidharness.app.ui.common.localizedThinkingOption
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -34,6 +36,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -101,6 +104,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.androidharness.app.AppContainer
 import com.androidharness.app.R
@@ -118,6 +122,8 @@ import com.androidharness.app.ui.settings.ProviderManagerSheet
 import com.androidharness.app.data.db.ProjectEntity
 import com.androidharness.app.data.env.ShizukuState
 import com.androidharness.app.data.env.UserServiceState
+import com.androidharness.app.data.env.adb.AdbPairingService
+import com.androidharness.app.data.env.adb.WirelessAdbManager
 import com.androidharness.app.ui.common.formatTokenCount
 import com.androidharness.app.ui.common.AppHeader
 import com.androidharness.app.ui.common.HarnessMark
@@ -522,7 +528,7 @@ private fun TerminalSection(
     // What the shell can reach right now.
     val appShellOk = envState is com.androidharness.app.data.env.EnvState.Ready
     val storageText = if (allFiles) uiContext.getString(R.string.ui_granted) else uiContext.getString(R.string.ui_needs_grant)
-    val systemText = when (shizukuState) {
+    val systemText = if (container.shizuku.wirelessTransportActive) uiContext.getString(R.string.wireless_adb_section_title) else when (shizukuState) {
         ShizukuState.GRANTED -> when (serviceState) {
             UserServiceState.BOUND_READY -> uiContext.getString(R.string.ui_shizuku)
             UserServiceState.COMPAT_READY -> uiContext.getString(R.string.ui_compatibility)
@@ -567,13 +573,14 @@ private fun TerminalSection(
                     title = stringResource(R.string.settings_anchor_system_paths),
                     subtitle = stringResource(R.string.settings_env_shizuku_subtitle),
                     divider = false,
-                    trailing = { StatusText(systemText, ok = shizukuState == ShizukuState.GRANTED && serviceState.isReady) },
+                    trailing = { StatusText(systemText, ok = container.shizuku.isServiceReady()) },
                 )
             }
         }
     }
 
     StorageAccessCard(allFiles = allFiles, onGrant = storageAccess.request)
+    WirelessAdbSection(container)
     ShizukuCard(
         state = shizukuState,
         serviceState = serviceState,
@@ -2137,6 +2144,218 @@ internal fun ShizukuCard(
                 ShizukuState.NOT_INSTALLED -> OutlinedButton(onClick = onRefresh) { Text(stringResource(R.string.settings_env_check_again)) }
             }
         }
+    }
+}
+
+@Composable
+private fun WirelessAdbSection(container: AppContainer) {
+    val context = LocalContext.current
+    val manager = container.wirelessAdb
+    val state by manager.state.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    var manual by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var test by remember { mutableStateOf<String?>(null) }
+    val supported = manager.isSupported()
+    val notifications = remember(state, manual) { wirelessNotificationsEnabled(context) }
+    val localNetwork = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        startWirelessPairing(context)
+    }
+
+    fun beginPairing() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        if (!notifications) {
+            // Without a notification there is no reply field for the code.
+            manual = true
+            return
+        }
+        if (Build.VERSION.SDK_INT >= 36 &&
+            context.checkSelfPermission(Manifest.permission.ACCESS_LOCAL_NETWORK) != PackageManager.PERMISSION_GRANTED
+        ) {
+            localNetwork.launch(Manifest.permission.ACCESS_LOCAL_NETWORK)
+        } else {
+            startWirelessPairing(context)
+        }
+    }
+
+    fun reconnect() {
+        scope.launch {
+            busy = true
+            message = null
+            manager.connect().onFailure { message = it.message ?: it.javaClass.simpleName }
+            busy = false
+        }
+    }
+
+    SettingsPanel(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Terminal, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.wireless_adb_section_title), style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(R.string.wireless_adb_subtitle), style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text(wirelessAdbStatus(state), style = MaterialTheme.typography.labelMedium,
+                    color = if (state is WirelessAdbManager.State.Connected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(stringResource(R.string.wireless_adb_explain), style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.wireless_adb_explain_steps), style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.wireless_adb_explain_notification), style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.wireless_adb_explain_requirements), style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.wireless_adb_explain_miui), style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.wireless_adb_explain_security), style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.wireless_adb_privileged_note), style = MaterialTheme.typography.bodySmall)
+
+            if (!supported) {
+                Text(stringResource(R.string.wireless_adb_unsupported), style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error)
+            } else {
+                if (!notifications) {
+                    Text(stringResource(R.string.wireless_adb_notifications_disabled), style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error)
+                    TextButton(onClick = { openWirelessNotificationSettings(context) }) {
+                        Text(stringResource(R.string.wireless_adb_notification_settings))
+                    }
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (state !is WirelessAdbManager.State.Connected) {
+                        Button(onClick = { beginPairing() }, enabled = !busy) {
+                            Text(stringResource(R.string.wireless_adb_pair_button))
+                        }
+                    }
+                    if (state is WirelessAdbManager.State.Paired || state is WirelessAdbManager.State.Failed) {
+                        Button(onClick = { reconnect() }, enabled = !busy) {
+                            Text(stringResource(R.string.wireless_adb_reconnect))
+                        }
+                    }
+                    if (state is WirelessAdbManager.State.Connected) {
+                        OutlinedButton(onClick = {
+                            scope.launch {
+                                test = runCatching { manager.testUid() }
+                                    .fold({ "UID $it" }, { it.message ?: "failed" })
+                            }
+                        }, enabled = !busy) { Text(stringResource(R.string.wireless_adb_test)) }
+                    }
+                    if (manager.isPaired) {
+                        OutlinedButton(onClick = { manager.forget(); message = null; test = null }, enabled = !busy) {
+                            Text(stringResource(R.string.wireless_adb_forget))
+                        }
+                    }
+                    TextButton(onClick = { manual = true }, enabled = !busy) {
+                        Text(stringResource(R.string.wireless_adb_manual_pairing))
+                    }
+                    TextButton(onClick = { openDeveloperOptions(context) }) {
+                        Text(stringResource(R.string.wireless_adb_developer_options))
+                    }
+                }
+            }
+            message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+            test?.let {
+                Text(stringResource(R.string.wireless_adb_test_result, it), style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary)
+            }
+        }
+    }
+
+    if (manual) {
+        var port by remember { mutableStateOf("") }
+        var code by remember { mutableStateOf("") }
+        var dialogError by remember { mutableStateOf<String?>(null) }
+        AlertDialog(
+            onDismissRequest = { if (!busy) manual = false },
+            title = { Text(stringResource(R.string.wireless_adb_manual_pairing)) },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(stringResource(R.string.wireless_adb_manual_hint), style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(
+                        value = port,
+                        onValueChange = { port = it.filter(Char::isDigit).take(5) },
+                        label = { Text(stringResource(R.string.wireless_adb_port)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = code,
+                        onValueChange = { code = it.filter(Char::isDigit).take(6) },
+                        label = { Text(stringResource(R.string.wireless_adb_code)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    dialogError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !busy && port.toIntOrNull()?.let { it in 1..65535 } == true && code.length == 6,
+                    onClick = {
+                        scope.launch {
+                            busy = true
+                            dialogError = null
+                            runCatching { manager.pair(code, port.toInt()) }
+                                .onFailure { dialogError = it.message }
+                                .onSuccess {
+                                    manager.connect().onFailure { dialogError = it.message }.onSuccess { manual = false }
+                                }
+                            busy = false
+                        }
+                    },
+                ) { Text(stringResource(R.string.wireless_adb_pair_action)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { manual = false }, enabled = !busy) {
+                    Text(stringResource(R.string.wireless_adb_cancel))
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun wirelessAdbStatus(state: WirelessAdbManager.State): String = when (state) {
+    WirelessAdbManager.State.Unpaired -> stringResource(R.string.wireless_adb_status_unpaired)
+    WirelessAdbManager.State.Paired -> stringResource(R.string.wireless_adb_status_paired)
+    WirelessAdbManager.State.Connecting -> stringResource(R.string.wireless_adb_status_connecting)
+    is WirelessAdbManager.State.Connected -> stringResource(R.string.wireless_adb_status_connected, state.uid)
+    is WirelessAdbManager.State.Failed -> stringResource(R.string.wireless_adb_status_failed, state.message)
+}
+
+private fun wirelessNotificationsEnabled(context: Context): Boolean {
+    val manager = context.getSystemService(android.app.NotificationManager::class.java) ?: return false
+    if (!manager.areNotificationsEnabled()) return false
+    val channel = manager.getNotificationChannel("wireless_adb_pairing") ?: return true
+    return channel.importance != android.app.NotificationManager.IMPORTANCE_NONE
+}
+
+private fun startWirelessPairing(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) AdbPairingService.start(context)
+}
+
+private fun openDeveloperOptions(context: Context) {
+    runCatching {
+        context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra(":settings:fragment_args_key", "toggle_adb_wireless")
+        })
+    }
+}
+
+private fun openWirelessNotificationSettings(context: Context) {
+    runCatching {
+        context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        })
     }
 }
 

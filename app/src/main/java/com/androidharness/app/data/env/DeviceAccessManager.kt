@@ -105,7 +105,7 @@ class DeviceAccessManager(
         return claimed
     }
     private suspend fun probeShizuku(): Int? {
-        if (!shizuku.isServiceReady()) { szUid.value = null; return null }
+        if (!shizuku.hasPrivilegedAccess()) { szUid.value = null; return null }
         val probe = shizuku.runPrivileged(arrayOf("/system/bin/sh", "-c", "id -u"), null, null, 2_000, 1024)
         return probe?.takeIf { it.exitCode == 0 }?.output?.trim()?.toIntOrNull()?.takeIf { it == 0 || it == 2000 }.also { szUid.value = it }
     }
@@ -150,7 +150,8 @@ class DeviceAccessManager(
                 excluded += backend
                 continue
             }
-            val receipt = ExecutionReceipt(backend, decision.uid, decision.reason)
+            val receipt = ExecutionReceipt(backend, decision.uid, decision.reason,
+                transport = if (backend == DeviceBackend.SHIZUKU && shizuku.wirelessTransportActive) "Wireless ADB" else null)
             active.update { it + 1 }
             val result = try {
                 withContext(VerifiedDeviceAccess(backend, decision.uid)) {
@@ -231,7 +232,7 @@ class DeviceAccessManager(
             "${it.name}: root requests ${if (rootAllowed(AccessRequest(it.id, sessionId), prefs)) "allowed" else "not allowed"}"
         }.orEmpty() + "Device access: ${prefs.mode.label}; auto fallback ${if (prefs.mode == AccessMode.AUTO || prefs.autoFallback) "on" else "off"}; " +
             "temporary root mode ${if (prefs.temporaryRoot) "on" else "off (root allowed everywhere while connected)"}; " +
-            "direct root ${root.state.value.status.label}${root.state.value.provider?.let { " (${it.label})" } ?: ""}; Shizuku ${if (shizuku.isServiceReady()) "ready (${szUid.value?.let { "UID $it" } ?: "identity checked before execution"})" else "unavailable"}; " +
+            "direct root ${root.state.value.status.label}${root.state.value.provider?.let { " (${it.label})" } ?: ""}; privileged shell ${if (shizuku.isServiceReady()) "ready (${szUid.value?.let { "UID $it" } ?: "identity checked before execution"}, ${if (shizuku.wirelessTransportActive) "Wireless ADB" else "Shizuku"})" else "unavailable"}; " +
             "root ${if (allowed) "allowed" else "not allowed"} for this project/chat; ${if (prefs.temporaryRoot) allowance.value else "temporary mode is off"}; privileged access ${if (stopped.value) "paused" else "enabled"}. " +
             modeHint + " Shizuku uses its own authorization; a root-started Shizuku server runs as UID 0 even when direct root use is disabled. " +
             "App workspaces use the app user by default for builds and file work. Use shell access=\"shizuku\" for Android system commands such as /system/bin/am or /system/bin/cmd; it never falls back to direct root or the app UID. Use access=\"root\" only when UID 0 is required; " +
@@ -268,7 +269,7 @@ class DeviceAccessManager(
         appendLine("Temporary root mode: ${if (preferences.value.temporaryRoot) "on (per-project and per-use limits)" else "off (root allowed everywhere while connected)"}")
         appendLine(root.state.value.detail)
         appendLine("Root checked at: ${root.state.value.checkedAt.takeIf { it > 0 }?.let(java.time.Instant::ofEpochMilli) ?: "Not checked"}")
-        appendLine("Shizuku ready: ${shizuku.isServiceReady()}; UID: ${szUid.value ?: "not verified"}")
+        appendLine("Privileged shell ready: ${shizuku.isServiceReady()}; transport: ${when { shizuku.wirelessTransportActive -> "Wireless ADB"; shizuku.isServiceReady() -> "Shizuku"; else -> "none" }}; UID: ${szUid.value ?: "not verified"}")
         appendLine("Temporary use: ${if (preferences.value.temporaryRoot) allowance.value else "off (root allowed everywhere while connected)"}; paused: ${stopped.value}")
         appendLine("Last execution: ${last.value}")
         append("Active tracked calls: ${active.value}")

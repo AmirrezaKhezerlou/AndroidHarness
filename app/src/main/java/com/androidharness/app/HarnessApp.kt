@@ -124,7 +124,8 @@ class AppContainer(val appContext: Context) {
     private val fetchClient = OkHttpClient()
     val linuxEnv =
         com.androidharness.app.data.env.LinuxEnvironmentManager(appContext) { keys.githubToken() }
-    val shizuku = com.androidharness.app.data.env.ShizukuManager(appContext)
+    val wirelessAdb = com.androidharness.app.data.env.adb.WirelessAdbManager(appContext)
+    val shizuku = com.androidharness.app.data.env.ShizukuManager(appContext, wireless = wirelessAdb)
     val deviceAccess = com.androidharness.app.data.env.DeviceAccessManager(appContext, shizuku, linuxEnv,
         projectForSession = { sessions.session(it)?.projectId })
     val shellRouter = com.androidharness.app.data.env.ShellTierRouter(appContext, shizuku, linuxEnv, deviceAccess)

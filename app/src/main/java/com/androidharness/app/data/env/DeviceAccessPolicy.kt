@@ -18,9 +18,11 @@ data class ExecutionReceipt(
     val backend: DeviceBackend,
     val uid: Int? = null,
     val fallbackReason: String? = null,
+    /** Concrete transport when more than one provides [backend], for example Wireless ADB. */
+    val transport: String? = null,
 ) {
     // The badge names the transport. Keep the verified UID separately for diagnostics.
-    val label: String get() = when (backend) {
+    val label: String get() = transport ?: when (backend) {
         DeviceBackend.NORMAL -> "Normal"
         DeviceBackend.ROOT -> "Root"
         DeviceBackend.SHIZUKU -> "Shizuku"

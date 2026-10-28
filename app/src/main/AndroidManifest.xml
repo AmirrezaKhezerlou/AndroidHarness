@@ -18,6 +18,8 @@
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
     <!-- In-app updates: request the install session for downloaded release APKs. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Wireless ADB pairing talks to the device's own adbd over loopback. -->
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
@@ -72,6 +74,12 @@
         android:theme="@style/Theme.AndroidHarness">
 
         <service android:name=".data.transfer.FtpShareService" android:exported="false" android:foregroundServiceType="dataSync" />
+
+        <!-- Finds the wireless debugging pairing port while the user is in Settings. -->
+        <service
+            android:name=".data.env.adb.AdbPairingService"
+            android:exported="false"
+            android:foregroundServiceType="shortService" />
 
         <!-- Persist language overrides on Android 12 and earlier; Android 13+
              shares the same preference with the system's per-app language UI. -->

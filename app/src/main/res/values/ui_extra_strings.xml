@@ -394,4 +394,47 @@
     <string name="local_gpu_auto_note">Prefers GPU when supported. Falls back to CPU if GPU is unavailable or cannot start a reply.</string>
     <string name="local_gpu_fallback">GPU could not start. Retrying on CPU…</string>
     <string name="local_gpu_ready_fallback">Ready · CPU (GPU fallback)</string>
+
+    <!-- Wireless ADB: built-in pairing with Android's own wireless debugging. -->
+    <string name="wireless_adb_section_title">Wireless ADB</string>
+    <string name="wireless_adb_subtitle">Pair with Android\'s own wireless debugging and run shell commands as UID 2000, without the Shizuku app.</string>
+    <string name="wireless_adb_explain">Wireless ADB is optional and does not replace Shizuku. It uses the same pairing flow Shizuku uses on a non-rooted phone. Android shows a six-digit code, this app proves it knows the code over a local TLS connection, and the device then trusts the app\'s key. Commands run as the ADB shell user, not as root, so UID 0 features and app-private files stay out of reach.</string>
+    <string name="wireless_adb_explain_steps">Steps: 1) Enable Developer options. 2) Open Wireless debugging and turn it on. 3) Tap Pair device with pairing code. 4) Tap Pair below and type the code in the notification. Keep the Android pairing dialog open until the notification says paired.</string>
+    <string name="wireless_adb_explain_notification">The code is entered in a notification on purpose. Android keeps its pairing dialog on top of the app, so on a phone the notification shade is the only place where both stay usable. The code is used once and never saved.</string>
+    <string name="wireless_adb_explain_requirements">Requires Android 11 or newer, Wi-Fi enabled and notification permission. Wireless debugging turns off after a reboot: the pairing survives, but you must turn the toggle on again before reconnecting. Android 16 may also ask for local network access.</string>
+    <string name="wireless_adb_explain_security">The ADB shell can read shared storage, change settings, grant permissions, install apps and inspect system services. Only connect on a device you control. Forgetting the pairing removes this app\'s stored key; you can also unpair it in the system Wireless debugging screen.</string>
+    <string name="wireless_adb_explain_miui">Some Xiaomi and MIUI builds block notification replies unless notifications use the Android style. If the reply action does not appear, open the app\'s notification settings and switch the style.</string>
+    <string name="wireless_adb_privileged_note">When connected, the privileged shell tier uses this connection automatically for terminal commands, Linux environment setup, package work and background jobs. The Shizuku transport stays available and is used when it is connected.</string>
+    <string name="wireless_adb_status_unpaired">Not paired</string>
+    <string name="wireless_adb_status_paired">Paired, not connected</string>
+    <string name="wireless_adb_status_connecting">Connecting…</string>
+    <string name="wireless_adb_status_connected">Connected as UID %1$d</string>
+    <string name="wireless_adb_status_failed">Connection failed: %1$s</string>
+    <string name="wireless_adb_unsupported">Needs Android 11 or newer and a build with the pairing library.</string>
+    <string name="wireless_adb_pair_button">Pair</string>
+    <string name="wireless_adb_reconnect">Reconnect</string>
+    <string name="wireless_adb_test">Test shell</string>
+    <string name="wireless_adb_test_result">Shell test: %1$s</string>
+    <string name="wireless_adb_forget">Forget pairing</string>
+    <string name="wireless_adb_developer_options">Developer options</string>
+    <string name="wireless_adb_notification_settings">Notification settings</string>
+    <string name="wireless_adb_notifications_disabled">Notifications are off, so the pairing code cannot be entered from the shade. Enable notifications, or use the manual fields below.</string>
+    <string name="wireless_adb_manual_pairing">Manual pairing</string>
+    <string name="wireless_adb_manual_hint">If the notification reply does not appear, enter the port and code from the Android dialog here.</string>
+    <string name="wireless_adb_port">Port</string>
+    <string name="wireless_adb_code">Code</string>
+    <string name="wireless_adb_pair_action">Pair</string>
+    <string name="wireless_adb_cancel">Cancel</string>
+    <string name="wireless_adb_pairing_started">Pairing notification posted. Enter the code there.</string>
+    <string name="wireless_adb_channel">Wireless debugging pairing</string>
+    <string name="wireless_adb_searching">Searching for the pairing service</string>
+    <string name="wireless_adb_searching_hint">Turn on Wireless debugging and tap Pair device with pairing code.</string>
+    <string name="wireless_adb_pairing_found">Pairing service found</string>
+    <string name="wireless_adb_pairing_found_hint">Tap Enter pairing code and type the six digits shown by Android.</string>
+    <string name="wireless_adb_enter_code">Enter pairing code</string>
+    <string name="wireless_adb_code_label">Pairing code</string>
+    <string name="wireless_adb_pairing">Pairing in progress</string>
+    <string name="wireless_adb_paired">Paired with wireless debugging</string>
+    <string name="wireless_adb_pairing_failed">Pairing failed</string>
+    <string name="wireless_adb_stop_search">Stop searching</string>
 </resources>
