@@ -26,6 +26,37 @@ class ImageStore(private val context: Context) {
     internal suspend fun remoteOriginal(url: String): ByteArray? =
         com.androidharness.app.ui.chat.RemoteContentLoader.downloadOriginal(context, url)?.bytes
 
+    internal suspend fun fetchRemote(url: String) = com.androidharness.app.ui.chat.RemoteContentLoader.fetchOriginal(context, url)
+
+    internal fun metadata(ref: com.androidharness.app.core.ImageRef): com.androidharness.app.core.ImageRef {
+        val file = savedImageFile(ref.name) ?: return ref
+        val info = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.path, info)
+        val original = originalFile(ref.name).takeIf { it.isFile }?.let { saved -> BitmapFactory.Options().apply {
+            inJustDecodeBounds = true; BitmapFactory.decodeFile(saved.path, this)
+        } }
+        return ref.copy(width = ref.width ?: info.outWidth.takeIf { it > 0 }, height = ref.height ?: info.outHeight.takeIf { it > 0 },
+            bytes = ref.bytes ?: file.length(), originalWidth = ref.originalWidth ?: original?.outWidth?.takeIf { it > 0 },
+            originalHeight = ref.originalHeight ?: original?.outHeight?.takeIf { it > 0 }, originalMime = ref.originalMime ?: original?.outMimeType,
+            originalBytes = ref.originalBytes ?: originalFile(ref.name).takeIf { it.isFile }?.length())
+    }
+
+    internal fun saveRemote(fetched: com.androidharness.app.ui.chat.RemoteImageFetch, imageId: String, caption: String): com.androidharness.app.core.ImageRef? {
+        val bytes = fetched.bytes ?: return null
+        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply {
+            inSampleSize = sampleSize(fetched.width ?: 1, fetched.height ?: 1, MAX_EDGE)
+        }) ?: return null
+        return try {
+            val ref = saveCloseUp(bitmap, "chat-image")
+            try {
+                val original = originalFile(ref.name)
+                original.parentFile?.mkdirs(); original.writeBytes(bytes)
+                ref.copy(imageId = imageId, sourceUrl = fetched.url, caption = caption,
+                    originalWidth = fetched.width, originalHeight = fetched.height, originalMime = fetched.mimeType, originalBytes = bytes.size.toLong(), origin = "remote_web")
+            } catch (e: Exception) { delete(ref.name); throw e }
+        } finally { bitmap.recycle() }
+    }
+
     fun saveResolved(image: com.androidharness.app.core.ImageData): com.androidharness.app.core.ImageRef {
         val name = "${UUID.randomUUID()}.jpg"
         File(dir, name).writeBytes(android.util.Base64.decode(image.base64, android.util.Base64.DEFAULT))
@@ -85,12 +116,29 @@ class ImageStore(private val context: Context) {
     internal fun savedImageFile(name: String): File? =
         if (name == File(name).name) File(dir, name).takeIf { it.isFile } else null
 
-    internal fun saveCloseUp(bitmap: Bitmap): com.androidharness.app.core.ImageRef {
-        val file = File(dir, "chat-zoom-${UUID.randomUUID()}.png")
+    internal fun saveCloseUp(bitmap: Bitmap, prefix: String = "chat-zoom"): com.androidharness.app.core.ImageRef {
+        val file = File(dir, "$prefix-${UUID.randomUUID()}.png")
         try {
             file.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
-            return com.androidharness.app.core.ImageRef(file.name, "image/png")
+            return com.androidharness.app.core.ImageRef(file.name, "image/png", width = bitmap.width, height = bitmap.height, bytes = file.length())
         } catch (e: Exception) { file.delete(); throw e }
+    }
+
+    internal fun savePageCapture(bitmap: Bitmap, pageUrl: String, caption: String): com.androidharness.app.core.ImageRef {
+        val scale = (MAX_EDGE.toFloat() / maxOf(bitmap.width, bitmap.height)).coerceAtMost(1f)
+        val preview = if (scale < 1f) Bitmap.createScaledBitmap(bitmap, (bitmap.width * scale).toInt().coerceAtLeast(1),
+            (bitmap.height * scale).toInt().coerceAtLeast(1), true) else bitmap
+        return try {
+            val ref = saveCloseUp(preview, "chat-page")
+            try {
+                if (preview !== bitmap) originalFile(ref.name).also { it.parentFile?.mkdirs() }.outputStream().use {
+                    check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+                }
+                ref.copy(imageId = com.androidharness.app.tools.ChatImageInventory.id("stored:" + ref.name), sourceUrl = pageUrl,
+                    caption = caption, origin = "browser_screenshot", originalWidth = bitmap.width, originalHeight = bitmap.height,
+                    originalBytes = originalFile(ref.name).takeIf { it.isFile }?.length() ?: ref.bytes)
+            } catch (e: Exception) { delete(ref.name); throw e }
+        } finally { if (preview !== bitmap) preview.recycle() }
     }
 
     internal fun deleteChatZoom(name: String) {

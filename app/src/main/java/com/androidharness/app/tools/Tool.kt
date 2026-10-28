@@ -19,6 +19,7 @@ data class ToolContext(
     val sessionId: String? = null,
     /** Scoped to this call by the engine; never shared across chats or concurrent installs. */
     val onPackageProgress: suspend (com.androidharness.app.data.env.PackageInstallStatus) -> Unit = {},
+    val imageInputAllowed: Boolean = true,
 )
 
 data class ToolResult(

@@ -439,12 +439,12 @@ internal fun scanPageImages(html: String, baseUrl: String): PageImageScan {
     )
     val out = LinkedHashMap<String, PageImageRef>()
     fun add(raw: String?, alt: String?) {
-        val value = raw?.trim()?.substringBefore(' ')?.takeIf { it.isNotEmpty() } ?: return
+        val value = raw?.let(::decodePageEntities)?.trim()?.substringBefore(' ')?.takeIf { it.isNotEmpty() } ?: return
         if (value.startsWith("data:")) return
         val resolved = if (value.startsWith("http://") || value.startsWith("https://")) value
         else base.resolve(value)?.toString() ?: return
-        if (resolved.endsWith(".svg", ignoreCase = true)) return
-        out.putIfAbsent(resolved, PageImageRef(resolved, cleanPageImageText(alt)?.take(200)))
+        val normalized = httpImageUrl(resolved) ?: return
+        out.putIfAbsent(normalized, PageImageRef(normalized, cleanPageImageText(alt)?.take(200)))
     }
     val ogAlts = metas["og:image:alt"].orEmpty()
     (metas["og:image"].orEmpty() + metas["og:image:url"].orEmpty()).forEachIndexed { index, url ->

@@ -17,6 +17,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -575,9 +577,15 @@ internal fun TurnActivityCard(
  * pixel work. Provider payloads never include them.
  */
 @Composable
-private fun ToolResultImage(ref: ImageRef) {
+internal fun ToolResultImage(ref: ImageRef, previewHeight: androidx.compose.ui.unit.Dp? = null) {
     val context = LocalContext.current
     val scheme = MaterialTheme.colorScheme
+    var fullScreen by rememberSaveable(ref.name) { mutableStateOf(false) }
+    if (fullScreen) {
+        val dir = File(context.filesDir, "images")
+        val fullDir = File(dir, "originals").takeIf { File(it, ref.name).isFile } ?: dir
+        ImagePreviewDialog(ref, fullDir) { fullScreen = false }
+    }
     val bitmap by produceState<Bitmap?>(initialValue = null, ref.name) {
         value = withContext(Dispatchers.IO) {
             runCatching {
@@ -597,11 +605,13 @@ private fun ToolResultImage(ref: ImageRef) {
     bitmap?.let { bmp ->
         Image(
             bitmap = bmp.asImageBitmap(),
-            contentDescription = ref.name,
-            contentScale = ContentScale.FillWidth,
+            contentDescription = ref.caption ?: ref.name,
+            contentScale = if (previewHeight == null) ContentScale.FillWidth else ContentScale.Fit,
             modifier = Modifier
                 .fillMaxWidth()
+                .then(if (previewHeight != null) Modifier.heightIn(max = previewHeight) else Modifier)
                 .clip(RoundedCornerShape(10.dp))
+                .then(if (previewHeight != null) Modifier.clickable(onClickLabel = context.getString(R.string.ui_open_image)) { fullScreen = true } else Modifier)
                 .border(1.dp, scheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(10.dp)),
         )
     }

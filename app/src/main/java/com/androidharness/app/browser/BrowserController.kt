@@ -161,6 +161,8 @@ data class BrowserScreenshotResult(
     val mime: String = "image/jpeg",
 )
 
+internal data class BrowserPageCapture(val image: com.androidharness.app.core.ImageRef, val fullPage: Boolean, val truncated: Boolean)
+
 /**
  * Manages headless and GUI-mirrored WebView automation for the Agent.
  *
@@ -1230,13 +1232,85 @@ class BrowserController(
             .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
+    private var readCaptureHost: WeakReference<android.view.ViewGroup>? = null
+
+    /** Chat can render a public page behind its own UI, without a workspace write or app screenshot. */
+    fun bindReadCaptureHost(host: android.view.ViewGroup) { readCaptureHost = WeakReference(host) }
+    fun unbindReadCaptureHost(host: android.view.ViewGroup) {
+        if (readCaptureHost?.get() === host) readCaptureHost = null
+    }
+
+    internal suspend fun captureReadPage(fullPage: Boolean): BrowserPageCapture = withContext(Dispatchers.Main) {
+        val view = getOrCreateWebView()
+        val host = readCaptureHost?.get()
+        val needsHost = view.parent == null
+        if (needsHost) check(host != null && host.isAttachedToWindow && host.isShown && host.hasWindowFocus()) {
+            "Keep the unlocked app visible to capture a rendered page. No screenshot was captured."
+        }
+        val oldWidth = view.width.coerceAtLeast(1)
+        val oldHeight = view.height.coerceAtLeast(1)
+        val oldLayer = view.layerType
+        val oldAccessibility = view.importantForAccessibility
+        val oldFocusable = view.isFocusable
+        val oldTouchFocusable = view.isFocusableInTouchMode
+        val oldPreRaster = view.settings.offscreenPreRaster
+        val oldParams = view.layoutParams
+        val width = oldWidth.coerceIn(320, 1440)
+        var height = oldHeight.coerceIn(320, 2560)
+        var fullHeight = height
+        try {
+            view.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+            view.isFocusable = false; view.isFocusableInTouchMode = false
+            view.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+            view.settings.offscreenPreRaster = true
+            // Index zero puts this page below the Compose content, never over the conversation.
+            if (needsHost) host!!.addView(view, 0, android.widget.FrameLayout.LayoutParams(width, height))
+            requireVisibleCapture(view)
+            evalRawOn(view, "window.__harnessSurfaceHidden=false; window.scrollTo(0,0);")
+            view.scrollTo(0, 0)
+            if (fullPage) {
+                val raw = evalRawOn(view, "Math.ceil(Math.max(document.body ? document.body.scrollHeight : 0, document.documentElement.scrollHeight) * (window.devicePixelRatio || 1))")
+                fullHeight = raw.toDoubleOrNull()?.toInt()?.coerceAtLeast(height) ?: height
+                height = fullHeight.coerceAtMost(minOf(8192, 8_000_000 / width))
+            }
+            if (needsHost) view.layoutParams = android.widget.FrameLayout.LayoutParams(width, height)
+            view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
+            view.layout(0, 0, width, height)
+            awaitCaptureFrame(view, visibleImagesOnly = true)
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            try {
+                val canvas = Canvas(bitmap)
+                canvas.drawColor(android.graphics.Color.WHITE)
+                view.draw(canvas)
+                // A detached/blank compositor frame is a capture failure, never visual evidence.
+                val sample = Bitmap.createScaledBitmap(bitmap, 64, 64, true)
+                val colors = IntArray(64 * 64)
+                sample.getPixels(colors, 0, 64, 0, 0, 64, 64); sample.recycle()
+                check(colors.any { it != colors[0] }) { "The browser produced an empty frame. No screenshot was attached." }
+                val sourceUrl = view.url.orEmpty()
+                val caption = "${if (fullPage) "Full-page" else "Viewport"} screenshot: ${view.title.orEmpty()}"
+                val ref = withContext(Dispatchers.IO) { imageStore.savePageCapture(bitmap, sourceUrl, caption) }
+                BrowserPageCapture(ref, fullPage, fullPage && fullHeight > height)
+            } finally { bitmap.recycle() }
+        } finally {
+            if (needsHost) (view.parent as? android.view.ViewGroup)?.removeView(view)
+            if (oldParams != null) view.layoutParams = oldParams
+            view.measure(View.MeasureSpec.makeMeasureSpec(oldWidth, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(oldHeight, View.MeasureSpec.EXACTLY))
+            view.layout(0, 0, oldWidth, oldHeight)
+            view.setLayerType(oldLayer, null)
+            view.settings.offscreenPreRaster = oldPreRaster
+            view.importantForAccessibility = oldAccessibility
+            view.isFocusable = oldFocusable; view.isFocusableInTouchMode = oldTouchFocusable
+        }
+    }
+
     private fun requireVisibleCapture(view: WebView) {
         check(view.isAttachedToWindow && view.isShown && view.windowVisibility == View.VISIBLE) {
             "Browser preview is hidden or detached. Open the browser preview and keep Harness visible, then retry the screenshot. No image was captured."
         }
     }
 
-    private suspend fun awaitCaptureFrame(view: WebView) {
+    private suspend fun awaitCaptureFrame(view: WebView, visibleImagesOnly: Boolean = false) {
         requireVisibleCapture(view)
         val ready = withTimeoutOrNull(5_000) {
             while (isActive) {
@@ -1244,7 +1318,11 @@ class BrowserController(
                 val raw = evalRawOn(view, """
                     (function(){return document.visibilityState === 'visible' && document.readyState === 'complete' &&
                       (!document.fonts || document.fonts.status === 'loaded') &&
-                      Array.from(document.images).every(function(i){return i.complete;}) &&
+                      Array.from(document.images).every(function(i){
+                        if (i.complete) return true;
+                        var r=i.getBoundingClientRect();
+                        return $visibleImagesOnly && (r.bottom <= 0 || r.top >= window.innerHeight || r.right <= 0 || r.left >= window.innerWidth);
+                      }) &&
                       (!document.getAnimations || !document.getAnimations().some(function(a){
                         var t=a.effect && a.effect.getComputedTiming();
                         return a.playState === 'running' && t && isFinite(t.endTime);

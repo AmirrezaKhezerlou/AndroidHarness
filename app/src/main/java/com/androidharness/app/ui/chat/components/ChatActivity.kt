@@ -69,21 +69,29 @@ internal fun ChatActivity(
     val thoughtChunks = remember { mutableMapOf<String, com.androidharness.app.core.ReasoningTextChunks.Stream>() }
     val active = remember(messages, runningCalls) { ChatActivityPresentation.activeCall(messages, runningCalls) }
     val research = remember(messages) { ChatActivityPresentation.researchProgress(messages) }
-    // Fast tools can start and finish between frames, so the live title keeps the
-    // latest call visible until another starts or the answer begins streaming.
     val lastTool = remember(entries) {
         entries.filterIsInstance<ChatActivityPresentation.Entry.Tool>().lastOrNull()
     }
+    // Tool updates are two-second notices; resumed thinking does not shorten them.
+    val phaseKey = active?.let { "${it.id}:running" }
+        ?: lastTool?.takeIf { it.result != null }?.let { "${it.call.id}:finished" }
+    var showToolPhase by remember(phaseKey) { mutableStateOf(phaseKey != null) }
+    LaunchedEffect(phaseKey, live) {
+        showToolPhase = live && phaseKey != null
+        if (showToolPhase) kotlinx.coroutines.delay(2_000)
+        showToolPhase = false
+    }
+    val completedPhase = showToolPhase && active == null && lastTool?.result != null
     val seconds = messages.sumOf { it.thinkingMs }.coerceAtLeast(0) / 1000
     val title = when {
-        live && active != null -> activityLabel(active.name, true)
+        live && showToolPhase && active != null -> activityLabel(active.name, true)
+        live && completedPhase -> if (lastTool!!.result?.isError == true) stringResource(R.string.chat_tool_failed) else activityLabel(lastTool.call.name, false)
         live && writing -> stringResource(R.string.chat_writing_reply)
-        live && lastTool != null -> activityLabel(lastTool.call.name, lastTool.result == null)
         live -> stringResource(R.string.chat_thinking)
         seconds > 0 && !showThinkingMetrics -> stringResource(R.string.chat_thought_seconds, seconds)
         else -> stringResource(R.string.chat_thought)
     }
-    ChatActivityRow(title, if (live) (active ?: lastTool?.call)?.name else null, live, entries.isNotEmpty(), followLatest = true, autoExpand = autoExpand,
+    ChatActivityRow(title, if (live && showToolPhase) (active ?: lastTool?.call?.takeIf { completedPhase })?.name else null, live, entries.isNotEmpty(), followLatest = true, autoExpand = autoExpand,
         progress = research,
         trailing = if (showThinkingMetrics) ({ ChatThinkingMetrics(messages, streamingThinking, thinkingTiming, reasoningTokens, live,
             turnStartedAt = turnStartedAt, streamId = streamId) }) else null) {
@@ -125,6 +133,7 @@ internal fun ChatToolActivity(call: ToolCallData, result: ChatMessage?, running:
         result?.isError == true -> stringResource(when (call.name) {
             "web_search" -> R.string.chat_search_failed
             "web_fetch", "browser_read" -> R.string.chat_page_failed
+            "view_chat_image", "zoom_chat_image" -> R.string.chat_image_failed
             "github_api", "github_search", "github_file" -> R.string.chat_github_failed
             else -> R.string.chat_tool_failed
         })
@@ -141,9 +150,12 @@ internal fun ChatToolActivity(call: ToolCallData, result: ChatMessage?, running:
             result?.text?.take(1_800)
         else null
     }
-    ChatActivityRow(title, call.name, running, result != null || sources.isNotEmpty()) {
+    val imagePreview = result?.images?.isNotEmpty() == true && call.name in setOf("view_chat_image", "zoom_chat_image", "browser_read")
+    ChatActivityRow(title, call.name, running, result != null || sources.isNotEmpty(), compactPreview = imagePreview) {
         item {
-        if (recall != null) {
+        if (result?.images?.isNotEmpty() == true && call.name in setOf("view_chat_image", "zoom_chat_image", "browser_read")) {
+            result.images.forEach { image -> ToolResultImage(image, previewHeight = 120.dp) }
+        } else if (recall != null) {
             Text(
                 recall,
                 style = MaterialTheme.typography.bodySmall,
@@ -177,6 +189,8 @@ internal fun ChatToolActivity(call: ToolCallData, result: ChatMessage?, running:
     }
 }
 
+private val LocalActivityInteraction = staticCompositionLocalOf<() -> Unit> { {} }
+
 @Composable
 private fun ChatActivityRow(
     title: String,
@@ -187,9 +201,11 @@ private fun ChatActivityRow(
     autoExpand: Boolean = true,
     progress: ChatActivityPresentation.ResearchProgress? = null,
     trailing: (@Composable () -> Unit)? = null,
+    compactPreview: Boolean = false,
     details: LazyListScope.() -> Unit,
 ) {
     val detailScroll = com.androidharness.app.ui.chat.LocalChatDetailScroll.current
+    val pauseParent = LocalActivityInteraction.current
     var expanded by rememberSaveable { mutableStateOf(false) }
     var autoOpened by remember { mutableStateOf(false) }
     // A live turn opens its working log so streamed commentary never disappears
@@ -283,16 +299,19 @@ private fun ChatActivityRow(
             }
         }
         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
-            if (expandable) TextButton(onClick = { detailScroll?.pause(); expanded = !expanded }, modifier = Modifier.fillMaxWidth(),
+            if (expandable) TextButton(onClick = { pauseParent(); detailScroll?.pause(); expanded = !expanded }, modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp), contentPadding = PaddingValues(horizontal = 4.dp)) { header() }
             else Box(Modifier.fillMaxWidth().heightIn(min = 36.dp).padding(horizontal = 4.dp), contentAlignment = Alignment.CenterStart) { header() }
         }
         AnimatedVisibility(expanded && expandable,
             enter = fadeIn(tween(120)) + expandVertically(tween(160)),
             exit = fadeOut(tween(100)) + shrinkVertically(tween(160))) {
-            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 240.dp).containChatDetailScroll().nestedScroll(userScroll), state = scroll,
-                contentPadding = PaddingValues(top = 4.dp, bottom = 6.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp), content = details)
+            CompositionLocalProvider(LocalActivityInteraction provides { following = false; userDragged = true }) {
+                LazyColumn(Modifier.fillMaxWidth().heightIn(max = if (compactPreview) 140.dp else 240.dp)
+                    .containChatDetailScroll().nestedScroll(userScroll), state = scroll, userScrollEnabled = !compactPreview,
+                    contentPadding = PaddingValues(top = 4.dp, bottom = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp), content = details)
+            }
         }
         progress?.let { counters ->
             val style = MaterialTheme.typography.labelSmall
@@ -482,7 +501,7 @@ private fun ChatActivityGlyph(name: String?, live: Boolean, motion: Boolean) {
                 "search_chats", "recent_chats", "read_chat_snippet" -> Icon(
                     Icons.Outlined.History, null, Modifier.size(15.dp), tint = scheme.onSurfaceVariant,
                 )
-                "web_fetch", "browser_read", "zoom_chat_image" -> Box(Modifier.size(15.dp)) {
+                "web_fetch", "browser_read", "view_chat_image", "zoom_chat_image" -> Box(Modifier.size(15.dp)) {
                     Icon(painterResource(R.drawable.ic_chat_eyes), null, Modifier.fillMaxSize().graphicsLayer {
                         scaleY = blink
                         alpha = blinkAlpha
@@ -522,6 +541,7 @@ private fun activityLabel(name: String, running: Boolean): String = stringResour
     "read_artifact" -> if (running) R.string.chat_reading_artifact else R.string.chat_read_artifact
     "search_agent_knowledge" -> if (running) R.string.chat_agents_knowledge_activity else R.string.chat_agents_knowledge_done
     "read_chat_text" -> if (running) R.string.chat_reading_text else R.string.chat_read_text
+    "view_chat_image" -> if (running) R.string.chat_viewing_image else R.string.chat_viewed_image
     "zoom_chat_image" -> if (running) R.string.chat_zooming_image else R.string.chat_zoomed_image
     "remember" -> if (running) R.string.chat_saving_memory else R.string.chat_memory_saved
     "recall" -> if (running) R.string.chat_searching_memory else R.string.chat_searched_memory

@@ -331,22 +331,23 @@ class AgentEngine(
         val resolvedHistory = (if (localChat) chatHistory else ContextHygiene.shrinkToolResults(chatHistory))
             .map { it.withImagesResolved() }
         val working = (if (conversation.isChat && imageCapable)
-            ChatImageContext.attach(resolvedHistory, imageStore::remoteImage) else resolvedHistory).toMutableList()
+            ChatImageContext.attach(resolvedHistory, resolve = imageStore::resolve, load = imageStore::remoteImage) else resolvedHistory).toMutableList()
         // If active model is known to be text-only, strip image data upfront
         if (!localChat && !imageCapable) {
             val sanitized = ContextHygiene.stripImages(working)
             working.clear()
             working.addAll(sanitized)
         }
-        val runRegistry = (if (conversation.isChat) registry.withExtra(chatOnlyTools + com.androidharness.app.tools.chatAgentTools(conversation.agent) + listOfNotNull(scopedSearch, scopedFetch, scopedBrowser) +
-            if (imageCapable) listOf(com.androidharness.app.tools.ChatImageZoomTool(imageStore) { working.toList() }) else emptyList()) else registry.withExtra(extraTools +
+        val turnImages = com.androidharness.app.tools.ChatImageTurnInventory(working)
+        var visionAvailable = imageCapable
+        val runRegistry = (if (conversation.isChat) registry.withExtra(chatOnlyTools + com.androidharness.app.tools.chatAgentTools(conversation.agent) + listOfNotNull(scopedSearch, scopedFetch, scopedBrowser?.forImageInput { visionAvailable }) +
+            if (imageCapable) listOf(com.androidharness.app.tools.ChatImageZoomTool(imageStore) { working.toList() }.forInventory(turnImages::sources), com.androidharness.app.tools.ViewChatImageTool(imageStore) { working.toList() }.forInventory(turnImages::sources)) else emptyList()) else registry.withExtra(extraTools +
             if (subagentRuns == null) emptyList() else com.androidharness.app.tools.subagentControlTools(subagentRuns, sessionId)))
             .restrictedTo(conversation.allowedTools)
             .let { if (conversation.isChat && searchDepth == com.androidharness.app.data.SearchDepth.OFF) it.without(setOf("web_search")) else it }
             .let { if (memoryOn) it else it.without(memoryToolNames) }
             .let { if (conversation.personalizationEnabled) it else it.without(recallToolNames) }
             .let { if (conversation.isChat && !imageCapable) it.without(setOf("view_chat_image", "zoom_chat_image")) else it }
-        var visionAvailable = imageCapable
         val provider = providerFactory(config)
         // Stable per-session cache routing for providers that support it.
         val requestOptions = options.copy(cacheKey = sessionId)
@@ -425,8 +426,9 @@ class AgentEngine(
             val environment = if (agentContextEnabled)
                 runtimeEnvironment(workspace, sessionId, mode, effectiveMode, tools, conversation.isChat) +
                     searchConfiguration?.let { "\n## Current web research configuration\n$it\n" }.orEmpty() else ""
+            turnImages.update(working)
             val imageInventory = if (conversation.isChat && visionAvailable)
-                com.androidharness.app.tools.ChatImageInventory.prompt(working) else ""
+                com.androidharness.app.tools.ChatImageInventory.promptSources(turnImages.sources(), imageStore::metadata) else ""
             var requestSystemPrompt = if (!agentContextEnabled) "" else if (conversation.isChat) systemPrompt + environment + imageInventory else com.androidharness.app.caveman.CavemanPolicy.apply(
                 systemPrompt + environment + TodoPrompt.format(
                     todoStore?.takeIf { !conversation.isChat && it.owner.value == sessionId }?.todos?.value.orEmpty(),
@@ -939,7 +941,9 @@ class AgentEngine(
         val workspace = route.workspace
         val sandboxOff = mode == PermissionMode.FULL_ACCESS && checkpointWorkspace !is ChatWorkspaceFs
         val toolContext = ToolContext(workspace, sandboxOff, sessionId,
-            onPackageProgress = { emitEvent(AgentEvent.PackageProgress(call.id, it)) })
+            onPackageProgress = { emitEvent(AgentEvent.PackageProgress(call.id, it)) },
+            imageInputAllowed = requestOptions.modelCatalogs[config.id]?.firstOrNull { it.id == config.model }?.imageInput
+                ?: com.androidharness.app.llm.visionCapable(config.model))
 
         // The model sometimes tries to modify files in plan mode, refuse cleanly.
         if (agentMode == AgentMode.PLAN && !tool.isReadOnly) {
@@ -1227,7 +1231,10 @@ class AgentEngine(
         val result = if (executed.output.length < 100_000) {
             val secs = elapsedMs / 1000.0
             val note = if (elapsedMs >= 60_000) "[took ${"%.0f".format(secs)}s]" else "[took ${"%.1f".format(secs)}s]"
-            executed.copy(output = executed.output + (if (executed.output.isEmpty()) "" else "\n") + note)
+            val envelope = runCatching { Json.parseToJsonElement(executed.output).jsonObject.takeIf { "image_attached" in it } }.getOrNull()
+            executed.copy(output = if (envelope != null) kotlinx.serialization.json.JsonObject(envelope +
+                ("elapsed_ms" to kotlinx.serialization.json.JsonPrimitive(elapsedMs))).toString()
+                else executed.output + (if (executed.output.isEmpty()) "" else "\n") + note)
         } else {
             executed
         }

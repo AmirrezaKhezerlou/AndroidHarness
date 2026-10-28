@@ -241,18 +241,21 @@ class BrowserGetDomTool(
 class BrowserReadTool(
     private val controller: BrowserController,
     private val readBudget: SearchSourceBudget? = null,
+    private val imageInputAvailable: () -> Boolean = { true },
 ) : Tool {
     override val name = "browser_read"
     override val description =
         "Render a URL in the in-app browser, let JavaScript run, and return the visible text with the " +
             "final URL and title. Use it when web_fetch reports that a page requires JavaScript or returns " +
             "almost no readable text. max_chars caps the returned text. Set images=true to collect the " +
-            "image URLs the rendered page actually shows, including lazy-loaded gallery images."
+            "image URLs the rendered page actually shows, including lazy-loaded gallery images. These are assets, not screenshots of HTML/CSS mockups. " +
+            "Set screenshot=viewport or full_page to inspect the rendered page itself. A screenshot requires the unlocked app to be visible; the screenshot result explicitly reports whether an image was attached."
     override val parametersSchema = Schema.obj(
         mapOf(
             "url" to Schema.string("The http(s) URL to render."),
             "max_chars" to Schema.integer("Maximum characters to return (default 20000, max 60000)."),
             "images" to Schema.boolean("Also return direct image URLs rendered on the page (default false)."),
+            "screenshot" to Schema.string("Optional: none (default), viewport, or full_page. Captures rendered HTML/CSS, not just image assets. Full pages are capped at 8 megapixels / 8192px height; inspect image_id with zoom_chat_image for detail."),
         ),
         required = listOf("url"),
     )
@@ -260,7 +263,8 @@ class BrowserReadTool(
 
     private companion object { val renderedReads = kotlinx.coroutines.sync.Mutex() }
 
-    internal fun forBudget(budget: SearchSourceBudget?): BrowserReadTool = BrowserReadTool(controller, budget)
+    internal fun forBudget(budget: SearchSourceBudget?): BrowserReadTool = BrowserReadTool(controller, budget, imageInputAvailable)
+    internal fun forImageInput(available: () -> Boolean): BrowserReadTool = BrowserReadTool(controller, readBudget, available)
 
     override suspend fun execute(args: JsonObject, ctx: ToolContext): ToolResult {
         val url = args["url"]?.jsonPrimitive?.content
@@ -271,6 +275,8 @@ class BrowserReadTool(
         val maxChars = (args["max_chars"]?.jsonPrimitive?.content?.toIntOrNull() ?: 20_000)
             .coerceIn(1_000, 60_000)
         val includeImages = args["images"]?.jsonPrimitive?.booleanOrNull == true
+        val screenshot = args["screenshot"]?.jsonPrimitive?.contentOrNull ?: "none"
+        if (screenshot !in setOf("none", "viewport", "full_page")) return ToolResult(false, "Use screenshot=none, viewport, or full_page.")
         if (readBudget != null && !readBudget.canRead(url)) return ToolResult(true, readLimitText(), research = readBudget.receipt())
         return try {
             renderedReads.withLock {
@@ -304,6 +310,20 @@ class BrowserReadTool(
             if (includeImages) WebResultCache.putPageImages(url, images)
             val imageNote = if (!includeImages) "" else if (images.isEmpty()) "\n[no image urls found]"
                 else "\n" + PageImageText.render(images, images.size)
+            val capture = if (screenshot == "none") null else if (!ctx.imageInputAllowed || !imageInputAvailable())
+                imageInspectionFailure("images_disabled", "The page text was read, but this model cannot receive a screenshot.")
+            else try {
+                val captured = controller.captureReadPage(screenshot == "full_page")
+                val ref = captured.image
+                val inspected = imageInspectionSuccess(ref, ChatImageSource.Stored(ref, ref.caption.orEmpty(), "browser_screenshot", "tool"),
+                    fetchSource = "browser_capture", description = "Rendered ${if (captured.fullPage) "full page" else "viewport"} screenshot. " +
+                        if (captured.truncated) "The full page exceeds the capture limit; the bottom is truncated." else "The requested capture is complete.")
+                val envelope = Json.parseToJsonElement(inspected.output).jsonObject
+                inspected.copy(output = kotlinx.serialization.json.JsonObject(envelope + mapOf(
+                    "truncated" to kotlinx.serialization.json.JsonPrimitive(captured.truncated),
+                    "capture_mode" to kotlinx.serialization.json.JsonPrimitive(screenshot))).toString())
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { imageInspectionFailure("capture_failed", "The page text was read but no screenshot was attached: ${e.message}") }
                 val body = text.take(maxChars)
                 ToolResult(true, buildString {
                     append("URL: ").append(state.url).append('\n')
@@ -312,8 +332,9 @@ class BrowserReadTool(
                     append(body)
                     if (body.length < text.length) append("\n[truncated at ").append(maxChars).append(" chars]")
                     append(imageNote)
+                    if (capture != null) append("\n[screenshot result; page text read successfully]\n").append(capture.output)
                     readSourceNote()?.let { append(it) }
-                }, research = readBudget?.receipt(url, "browser_read") ?:
+                }, image = capture?.image, research = readBudget?.receipt(url, "browser_read") ?:
                     com.androidharness.app.core.ResearchReceipt(pageUrl = url, pageRead = true, backend = "browser_read"))
             } }
             }

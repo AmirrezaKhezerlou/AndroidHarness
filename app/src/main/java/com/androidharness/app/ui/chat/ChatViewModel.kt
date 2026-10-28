@@ -1012,9 +1012,10 @@ class ChatViewModel(
                             com.androidharness.app.data.ConversationConfig.decode(it.conversationJson).isChat
                         } ?: snapshot.conversation.isChat
                     val stored = c.images.import(uri, keepOriginal = keepOriginal) ?: throw IllegalStateException(c.appContext.getString(R.string.ui_could_not_load_that_image))
+                    val image = c.images.metadata(ImageRef(stored.file.name, stored.mime, caption = name.take(200), origin = "user_upload"))
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
                         if (active()) {
-                            pendingAttachments += ImageRef(stored.file.name, stored.mime)
+                            pendingAttachments += image
                             _state.update { it.copy(attachments = it.attachments + stored.file.name) }
                         } else c.images.delete(stored.file.name)
                     }

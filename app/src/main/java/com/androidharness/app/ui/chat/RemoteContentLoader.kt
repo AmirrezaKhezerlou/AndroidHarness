@@ -27,6 +27,16 @@ import java.util.concurrent.TimeUnit
  * injection class of bug does not apply.
  */
 internal data class RemoteImageBytes(val bytes: ByteArray, val mimeType: String)
+internal data class RemoteImageFetch(
+    val bytes: ByteArray? = null,
+    val mimeType: String? = null,
+    val url: String? = null,
+    val httpStatus: Int? = null,
+    val cached: Boolean = false,
+    val width: Int? = null,
+    val height: Int? = null,
+    val error: String? = null,
+)
 
 internal object RemoteContentLoader {
     private const val MAX_IMAGE_BYTES = 8 * 1024 * 1024
@@ -53,7 +63,7 @@ internal object RemoteContentLoader {
     private val previews = ConcurrentHashMap<String, CachedPreview>()
 
     suspend fun loadImage(context: Context, rawUrl: String): Bitmap? = withContext(Dispatchers.IO) {
-        val url = rawUrl.toHttpUrlOrNull() ?: return@withContext null
+        val url = com.androidharness.app.tools.httpImageUrl(rawUrl)?.toHttpUrlOrNull() ?: return@withContext null
         val key = url.toString()
         memory.get(key)?.let { return@withContext it }
         if (!isHttp(url) || !isPublic(url)) return@withContext null
@@ -73,16 +83,76 @@ internal object RemoteContentLoader {
 
     /** Original bytes for saving or sharing, reusing the image disk cache when possible. */
     suspend fun downloadOriginal(context: Context, rawUrl: String): RemoteImageBytes? = withContext(Dispatchers.IO) {
-        val url = rawUrl.toHttpUrlOrNull() ?: return@withContext null
-        if (!isHttp(url) || !isPublic(url)) return@withContext null
+        val fetched = fetchOriginal(context, rawUrl)
+        fetched.bytes?.takeIf { fetched.error == null }?.let { RemoteImageBytes(it, fetched.mimeType ?: imageMimeType(it)) }
+    }
+
+    /** Status is retained on failures; a cache hit has no invented HTTP response code. */
+    suspend fun fetchOriginal(context: Context, rawUrl: String, httpClient: OkHttpClient = noRedirectClient): RemoteImageFetch = withContext(Dispatchers.IO) {
+        val url = com.androidharness.app.tools.httpImageUrl(rawUrl)?.toHttpUrlOrNull()
+            ?: return@withContext RemoteImageFetch(error = "invalid_url")
+        if (!isHttp(url) || !isPublic(url)) return@withContext RemoteImageFetch(url = url.toString(), error = "blocked")
         val file = imageCacheFile(context, url.toString())
         val cached = if (file.exists()) runCatching { file.readBytes() }.getOrNull() else null
-        val bytes = cached ?: runCatching { downloadImage(url) }.getOrNull() ?: return@withContext null
-        if (cached == null) {
-            runCatching { file.writeBytes(bytes) }
-            trimDiskCache(context)
+        fun checked(result: RemoteImageFetch): RemoteImageFetch {
+            val bytes = result.bytes ?: return result
+            if (bytes.size > MAX_IMAGE_BYTES) return result.copy(bytes = null, error = "image_too_large")
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return result.copy(bytes = null, error = "decode_failed")
+            return result.copy(width = bounds.outWidth, height = bounds.outHeight)
         }
-        RemoteImageBytes(bytes, imageMimeType(bytes))
+        if (cached != null) {
+            val result = checked(RemoteImageFetch(cached, imageMimeType(cached), url.toString(), cached = true))
+            if (result.error == null) return@withContext result
+            file.delete()
+        }
+        var failure = RemoteImageFetch(url = url.toString(), error = "fetch_failed")
+        for (agent in imageUserAgents) {
+            val result = try {
+                var current = url
+                var outcome: RemoteImageFetch? = null
+                for (hop in 0..4) {
+                    if (!isHttp(current) || !isPublic(current)) { outcome = RemoteImageFetch(url = current.toString(), error = "blocked"); break }
+                    val request = Request.Builder().url(current).header("Accept", "image/*").apply {
+                        if (agent != null) header("User-Agent", agent)
+                    }.build()
+                    val next = httpClient.newCall(request).execute().use { response ->
+                        val type = response.body?.contentType()?.let { "${it.type}/${it.subtype}" }
+                        if (response.code in 301..308) response.header("Location")?.let(current::resolve)
+                        else {
+                            outcome = when {
+                                !response.isSuccessful -> RemoteImageFetch(url = current.toString(), httpStatus = response.code, mimeType = type, error = "fetch_failed")
+                                type != null && !type.startsWith("image/") -> RemoteImageFetch(url = current.toString(), httpStatus = response.code, mimeType = type, error = "decode_failed")
+                                (response.body?.contentLength() ?: 0) > MAX_IMAGE_BYTES -> RemoteImageFetch(url = current.toString(), httpStatus = response.code, mimeType = type, error = "image_too_large")
+                                else -> {
+                                    val source = response.body?.source()
+                                    source?.request(MAX_IMAGE_BYTES.toLong() + 1)
+                                    if (source == null || source.buffer.size > MAX_IMAGE_BYTES) RemoteImageFetch(url = current.toString(), httpStatus = response.code, error = "image_too_large")
+                                    else {
+                                        val bytes = source.readByteArray()
+                                        checked(RemoteImageFetch(bytes, type ?: imageMimeType(bytes), current.toString(), response.code))
+                                    }
+                                }
+                            }
+                            null
+                        }
+                    }
+                    if (outcome != null || next == null) break
+                    current = next
+                }
+                outcome ?: RemoteImageFetch(url = current.toString(), error = "fetch_failed")
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { RemoteImageFetch(url = url.toString(), error = "fetch_failed") }
+            if (result.error == null && result.bytes != null) {
+                runCatching { file.writeBytes(result.bytes) }
+                trimDiskCache(context)
+                return@withContext result
+            }
+            failure = result
+            if (result.error == "blocked" || result.httpStatus !in listOf(null, 403)) break
+        }
+        failure
     }
 
     private fun imageMimeType(bytes: ByteArray): String = when {

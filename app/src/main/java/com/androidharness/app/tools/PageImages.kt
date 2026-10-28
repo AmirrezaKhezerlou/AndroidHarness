@@ -26,7 +26,8 @@ internal object PageImageText {
 
     fun render(images: List<PageImage>, count: Int): String = buildString {
         append(MARKER).append('\n')
-        images.take(count).forEachIndexed { index, image ->
+        images.mapNotNull { image -> httpImageUrl(image.imageUrl)?.let { image.copy(imageUrl = it) } }
+            .distinctBy { it.imageUrl }.take(count).forEachIndexed { index, image ->
             append(index + 1).append(". ").append(image.title.replace('\n', ' ').take(200)).append('\n')
             append("   image: ").append(image.imageUrl).append('\n')
             append("   page: ").append(image.pageUrl).append('\n')
@@ -75,15 +76,23 @@ internal object PageImageText {
             }
             index = cursor
         }
-        return out
+        return out.distinctBy { it.imageUrl }
     }
 }
 
 internal fun httpImageUrl(raw: String?): String? {
-    val value = raw?.trim().orEmpty()
+    val value = decodePageEntities(raw?.trim().orEmpty())
     if (!value.startsWith("http://") && !value.startsWith("https://")) return null
-    if (value.endsWith(".svg", ignoreCase = true)) return null
-    return value.toHttpUrlOrNull()?.toString()
+    val url = value.toHttpUrlOrNull() ?: return null
+    if (url.encodedPath.endsWith(".svg", ignoreCase = true) || url.username.isNotEmpty() || url.password.isNotEmpty()) return null
+    val cleaned = url.newBuilder().fragment(null)
+    // Only tracking and opaque version tokens are discarded. Size/format and
+    // signed URL parameters can identify different images and must be retained.
+    url.queryParameterNames.filter { key -> key.startsWith("utm_", true) || key in setOf("fbclid", "gclid") ||
+        url.encodedPath.substringAfterLast('/').startsWith("opengraph-image") &&
+            key.matches(Regex("[0-9a-fA-F]{8,64}")) && url.queryParameterValues(key).all { it.isNullOrEmpty() }
+    }.forEach(cleaned::removeAllQueryParameters)
+    return cleaned.build().toString()
 }
 
 internal fun httpPageUrl(raw: String?): String? {
@@ -103,7 +112,7 @@ internal fun cleanPageImageText(value: String?): String? {
     return text.takeIf { it.isNotEmpty() }
 }
 
-private fun decodePageEntities(value: String): String = value
+internal fun decodePageEntities(value: String): String = value
     .replace("&quot;", "\"")
     .replace("&#34;", "\"")
     .replace("&amp;", "&")

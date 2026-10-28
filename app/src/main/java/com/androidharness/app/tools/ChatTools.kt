@@ -4,15 +4,52 @@ import com.androidharness.app.core.ChatMessage
 import com.androidharness.app.core.Role
 import kotlinx.serialization.json.*
 
-class ViewChatImageTool(private val images: com.androidharness.app.data.ImageStore) : Tool {
+class ViewChatImageTool(private val images: com.androidharness.app.data.ImageStore, private val history: () -> List<ChatMessage> = { emptyList() }) : Tool {
+    private var sourceLookup: (() -> List<ChatImageSource>)? = null
+    internal fun forInventory(lookup: () -> List<ChatImageSource>) = ViewChatImageTool(images, history).apply { sourceLookup = lookup }
     override val name = "view_chat_image"
-    override val description = "Visually inspect a public image URL from a fetched page or the conversation. Use before making claims about what a picture shows."
-    override val parametersSchema = Schema.obj(mapOf("url" to Schema.string("The direct public image URL.")), required = listOf("url"))
+    override val description = "Inspect a full image. Provide exactly one of image_id (preferred), image_number from the current chat image list, or a direct public image URL. The result explicitly reports success/failure and identifies the attached image. Do not describe an image if image_attached is false."
+    override val parametersSchema = Schema.obj(mapOf("url" to Schema.string("A direct public image URL; omit for a chat image."),
+        "image_id" to Schema.string("Stable image_id from the current chat's image list."),
+        "image_number" to Schema.integer("Position in the current chat image list. Prefer image_id.")))
     override val isReadOnly = true
-    override suspend fun execute(args: JsonObject, ctx: ToolContext): ToolResult {
-        val url = args["url"]?.jsonPrimitive?.contentOrNull ?: throw ToolFailure("Provide an image URL.")
-        val image = images.remoteImage(url) ?: return ToolResult(false, "Could not load this image for visual inspection. Do not claim to have seen it.")
-        return ToolResult(true, "Image for visual inspection: $url", image = images.saveResolved(image))
+    override suspend fun execute(args: JsonObject, ctx: ToolContext): ToolResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        if (!ctx.imageInputAllowed) return@withContext imageInspectionFailure("images_disabled", "This model cannot receive image input.")
+        val selectors = listOf("url", "image_id", "image_number").count { it in args }
+        if (selectors != 1) return@withContext imageInspectionFailure("invalid_selection", "Provide exactly one of url, image_id, or image_number.")
+        val sources = sourceLookup?.invoke() ?: ChatImageInventory.from(history())
+        val source = if ("url" in args) {
+            val raw = (args["url"] as? JsonPrimitive)?.contentOrNull
+            val url = httpImageUrl(raw) ?: return@withContext imageInspectionFailure("invalid_url", "Provide a direct http(s) image URL.")
+            ChatImageSource.Remote(url, "Image from $url", displayRole = "tool")
+        } else {
+            if (ctx.sessionId == null) return@withContext imageInspectionFailure("image_not_found", "Open a chat first.")
+            ChatImageInventory.select(args, sources) ?: return@withContext imageInspectionFailure("image_not_found", "That image is not in the current chat image list.")
+        }
+        val number = sources.indexOfFirst { it.id == source.id }.takeIf { it >= 0 }?.plus(1)
+        try {
+            when (source) {
+                is ChatImageSource.Stored -> {
+                    val ref = images.metadata(source.ref).copy(imageId = source.id)
+                    if (images.savedImageFile(ref.name) == null || images.resolve(ref) == null) return@withContext imageInspectionFailure("original_evicted_no_fallback", "Neither the original nor a usable saved copy is available. Reattach the image to inspect it.", source)
+                    if (ref.width == null || ref.height == null) return@withContext imageInspectionFailure("decode_failed", "The saved image cannot be decoded.", source)
+                    val originalAvailable = images.originalFile(ref.name).isFile
+                    imageInspectionSuccess(ref, source, number, cached = true, degraded = !originalAvailable,
+                        originalAvailable = originalAvailable, fetchSource = "saved_copy",
+                        description = if (originalAvailable) "The attached full frame is available for visual inspection."
+                            else "The original is unavailable; the attached full frame uses the saved reduced copy. Fine detail may be lost.")
+                }
+                is ChatImageSource.Remote -> {
+                    val fetched = images.fetchRemote(source.url)
+                    if (fetched.error != null) return@withContext imageInspectionFailure(fetched.error, "Image inspection failed. No image was attached; do not invent its visual details.", source, fetched)
+                    val ref = images.saveRemote(fetched, source.id, source.label)
+                        ?: return@withContext imageInspectionFailure("decode_failed", "The image could not be decoded for the model.", source, fetched)
+                    imageInspectionSuccess(ref, source, number, httpStatus = fetched.httpStatus, cached = fetched.cached,
+                        contentType = fetched.mimeType, sourceWidth = fetched.width, sourceHeight = fetched.height, sourceBytes = fetched.bytes?.size?.toLong())
+                }
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) { imageInspectionFailure("attachment_failed", "Could not prepare the image attachment.", source) }
     }
 }
 

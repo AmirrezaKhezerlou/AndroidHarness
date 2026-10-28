@@ -247,7 +247,8 @@ class ChatImageZoomDeviceTest {
             assertFalse(emitted.toString(), emitted.any { it is AgentEvent.Error || it is AgentEvent.ApprovalNeeded })
             assertEquals(2, requests.size)
             assertTrue(names.first().contains("zoom_chat_image"))
-            assertTrue(prompts.first().contains("1: user attachment"))
+            assertTrue(prompts.first().contains("\"image_number\":1"))
+            assertTrue(prompts.first().contains("\"origin\":\"user_upload\""))
             val toolResult = requests.last().single { it.role == Role.TOOL && it.toolName == "zoom_chat_image" }
             assertFalse(toolResult.isError)
             assertEquals(1, toolResult.imageData.size)

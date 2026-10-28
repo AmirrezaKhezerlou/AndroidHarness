@@ -300,9 +300,10 @@ class ChatExperienceDeviceTest {
             val latest = android.graphics.Rect().also { await("Latest thought 12").getBoundsInScreen(it) }
             assertTrue("The latest thought is within the visible inner viewport", latest.top > 0 && latest.bottom < instrumentation.targetContext.resources.displayMetrics.heightPixels)
             screenshot("chat-nested-activity-auto-follow")
-            // The live header retains the latest tool phase after that tool completes.
-            tap("Read web pages"); awaitGone("Latest thought 12")
-            tap("Read web pages"); await("Latest thought 12")
+            // A finished tool is only a brief phase; ongoing model work returns to Thinking.
+            SystemClock.sleep(2_250)
+            tap("Thinking"); awaitGone("Latest thought 12")
+            tap("Thinking"); await("Latest thought 12")
             scenario.onActivity { live.value = false }
             await("Thoughts"); await("Latest thought 12")
             screenshot("chat-nested-completed-latest")

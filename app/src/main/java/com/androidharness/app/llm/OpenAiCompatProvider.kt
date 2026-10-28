@@ -191,12 +191,12 @@ class OpenAiCompatProvider(
                 normalized.forEachIndexed { index, message ->
                     // Chat Completions accepts images in user messages, while
                     // strict endpoints reject image parts in tool messages.
-                    val zoom = message.role == Role.TOOL && message.toolName == "zoom_chat_image"
-                    if (zoom) closeUps.addAll(message.imageData)
-                    add(serializeMessage(if (zoom) message.copy(imageData = emptyList()) else message, config))
+                    val toolImage = message.role == Role.TOOL && message.imageData.isNotEmpty()
+                    if (toolImage) closeUps.addAll(message.imageData)
+                    add(serializeMessage(if (toolImage) message.copy(imageData = emptyList()) else message, config))
                     if (closeUps.isNotEmpty() && normalized.getOrNull(index + 1)?.role != Role.TOOL) {
                         add(serializeMessage(ChatMessage(role = Role.USER,
-                            text = "Images returned by the preceding chat image zoom tool, in call order.",
+                            text = "Images returned by the preceding tools, in tool-call order. Match each image to its tool result's image_id and source details.",
                             imageData = closeUps.toList()), config))
                         closeUps.clear()
                     }

@@ -154,6 +154,11 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 } else {
+                    androidx.compose.runtime.DisposableEffect(Unit) {
+                        val host = window.decorView as android.view.ViewGroup
+                        container.browser.bindReadCaptureHost(host)
+                        onDispose { container.browser.unbindReadCaptureHost(host) }
+                    }
                     AppNav(container)
                 }
 
@@ -196,6 +201,7 @@ class MainActivity : AppCompatActivity() {
     private var lastPausedTimestamp: Long = 0L
 
     override fun onPause() {
+        container.browser.unbindReadCaptureHost(window.decorView as android.view.ViewGroup)
         super.onPause()
         lastPausedTimestamp = System.currentTimeMillis()
     }
@@ -218,6 +224,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+        if (isUnlocked) container.browser.bindReadCaptureHost(window.decorView as android.view.ViewGroup)
     }
 
     private fun promptBiometricUnlock() {

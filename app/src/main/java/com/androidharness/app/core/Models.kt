@@ -27,6 +27,17 @@ data class ToolCodeChange(val path: String, val added: Int, val removed: Int)
 data class ImageRef(
     val name: String,
     val mime: String,
+    val imageId: String? = null,
+    val sourceUrl: String? = null,
+    val caption: String? = null,
+    val width: Int? = null,
+    val height: Int? = null,
+    val bytes: Long? = null,
+    val origin: String? = null,
+    val originalWidth: Int? = null,
+    val originalHeight: Int? = null,
+    val originalMime: String? = null,
+    val originalBytes: Long? = null,
 )
 
 /** Resolved image bytes for provider requests (transient, never persisted). */

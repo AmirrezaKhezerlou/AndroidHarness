@@ -8,6 +8,30 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ContextHygieneTest {
+    @Test fun evictedAndUnsupportedToolImagesNeverRetainATrueAttachmentClaim() {
+        val tool = ChatMessage(Role.TOOL, "{\"ok\":true,\"image_attached\":true,\"image_id\":\"img_one\"}",
+            toolName = "view_chat_image", imageData = listOf(com.androidharness.app.core.ImageData("image/png", "first")))
+        val evicted = ContextHygiene.shrinkToolResults(listOf(tool), maxImages = 0).single()
+        assertTrue(evicted.isError); assertTrue(evicted.text.contains("\"image_attached\":false"))
+        assertTrue(evicted.text.contains("not_in_current_context")); assertTrue(evicted.imageData.isEmpty())
+        val unsupported = ContextHygiene.stripImages(listOf(tool)).single()
+        assertTrue(unsupported.isError); assertTrue(unsupported.text.contains("images_disabled"))
+        assertTrue(unsupported.text.contains("\"image_attached\":false"))
+        assertTrue(tool.text.contains("\"image_attached\":true"))
+    }
+
+    @Test fun newestToolBatchImagesAllReachTheNextRequest() {
+        val calls = (1..4).map { com.androidharness.app.core.ToolCallData("image-$it", "view_chat_image", "{}") }
+        val history = listOf(ChatMessage(Role.ASSISTANT, toolCalls = calls)) + calls.map {
+            ChatMessage(Role.TOOL, "{\"ok\":true,\"image_attached\":true}", toolCallId = it.id,
+                toolName = it.name, imageData = listOf(com.androidharness.app.core.ImageData("image/png", it.id)))
+        }
+        val current = ContextHygiene.shrinkToolResults(history)
+        assertEquals(4, current.sumOf { it.imageData.size })
+        assertTrue(current.drop(1).all { !it.isError && it.text.contains("\"image_attached\":true") })
+        val later = ContextHygiene.shrinkToolResults(history + ChatMessage(Role.ASSISTANT, "Finished inspecting"))
+        assertEquals(2, later.sumOf { it.imageData.size })
+    }
 
     @Test
     fun `recent tool results stay intact`() {
