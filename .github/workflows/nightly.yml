@@ -47,7 +47,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y glslc
 
       - name: Run unit tests
-        run: ./gradlew -Pdistribution=github :app:testDebugUnitTest --no-daemon --stacktrace
+        run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
 
       - name: Upload test report (on failure)
         if: failure()
@@ -57,7 +57,7 @@ jobs:
           path: app/build/reports/tests/testDebugUnitTest
 
       - name: Build debug APK
-        run: ./gradlew -Pdistribution=github :app:assembleDebug --no-daemon --stacktrace
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
       - name: Stamp APK with date + commit
         id: apk

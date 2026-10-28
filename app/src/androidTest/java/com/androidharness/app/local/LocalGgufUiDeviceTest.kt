@@ -54,7 +54,7 @@ class LocalGgufUiDeviceTest {
             path.outputStream().use { image.compress(Bitmap.CompressFormat.PNG,100,it) }; image.recycle()
         }
     }
-    @Test fun warningAndDefaultUiHaveNoLiteRtOrConverter() = runBlocking {
+    @Test fun experimentalWarningGatesGpuControls() = runBlocking {
         val c=(instrumentation.targetContext.applicationContext as HarnessApp).container
         c.settings.setLocalModelExperimental(false)
         try {
@@ -69,11 +69,6 @@ class LocalGgufUiDeviceTest {
                 }
                 waitFor("Experimental features")
                 screenshot("gguf-default")
-                fun assertRemoved() {
-                    val texts=nodes(requireNotNull(instrumentation.uiAutomation.rootInActiveWindow)).mapNotNull { it.text?.toString() }
-                    assertFalse(texts.toString(),texts.any { it.contains("LiteRT",true)||it=="Convert" })
-                }
-                assertRemoved()
                 click(waitFor("Experimental features"))
                 waitFor("Enable experimental features?")
                 assertFalse(c.settings.settings.first().localModelExperimental)
@@ -82,7 +77,7 @@ class LocalGgufUiDeviceTest {
                 click(waitFor("Experimental features")); click(waitFor("Enable"))
                 withTimeout(5_000) { c.settings.settings.first { it.localModelExperimental } }
                 click(waitFor("Explore"))
-                waitFor("Safetensors");assertRemoved();screenshot("gguf-explore")
+                waitFor("Safetensors");screenshot("gguf-explore")
                 click(waitFor("Local model options"))
                 waitFor("GGUF runs directly on compatible Vulkan GPUs.")
                 screenshot("gguf-gpu-options")

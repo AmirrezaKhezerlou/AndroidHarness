@@ -3,7 +3,6 @@ package com.androidharness.app.local
 import java.io.File
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import kotlinx.serialization.json.*
-import kotlinx.serialization.decodeFromString
 
 /** Download jobs and provider IDs survive process death through this catalog. */
 class CustomModelRegistry(private val root: File) {
@@ -13,7 +12,10 @@ class CustomModelRegistry(private val root: File) {
         private set
     var models: List<LocalModelSpec> = runCatching {
         if (target.exists()) json.parseToJsonElement(target.readText()).jsonArray
-            .filter { it.jsonObject["format"]?.jsonPrimitive?.content != "LITERT_LM" }
+            .filter { entry ->
+                val format = entry.jsonObject["format"]?.jsonPrimitive?.content
+                format == null || LocalModelFormat.entries.any { it.name == format }
+            }
             .map { json.decodeFromJsonElement<LocalModelSpec>(it).also(::validate) }
         else emptyList()
     }.getOrElse {

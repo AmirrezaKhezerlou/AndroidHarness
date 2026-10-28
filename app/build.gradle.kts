@@ -15,8 +15,6 @@ plugins {
 // the NDK is absent. Real builds install the pinned NDK and keep native code.
 // AGP resolves a pinned version only from <sdk>/ndk/<version>, so a foreign
 // ANDROID_NDK_HOME (CI images export one) must not enable the native block.
-val distribution = providers.gradleProperty("distribution").getOrElse("github").lowercase()
-require(distribution in setOf("github", "play")) { "distribution must be github or play" }
 val pinnedNdk = "27.2.12479018"
 val githubBuildProperties = Properties().apply {
     rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
@@ -57,7 +55,6 @@ android {
         targetSdk = 36
         versionCode = 33
         versionName = "2.9"
-        buildConfigField("String", "DISTRIBUTION", "\"${distribution.uppercase()}\"")
         buildConfigField("String", "GITHUB_CLIENT_ID", "\"$githubClientId\"")
         if (hasNdk) {
             ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64") }

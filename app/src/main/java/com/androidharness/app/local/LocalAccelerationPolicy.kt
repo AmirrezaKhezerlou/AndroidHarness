@@ -2,14 +2,8 @@ package com.androidharness.app.local
 
 import kotlinx.serialization.Serializable
 
-enum class LocalDistribution {
-    GITHUB, PLAY;
-    companion object { fun parse(value: String) = entries.firstOrNull { it.name == value }
-        ?: error("Unknown app distribution: $value") }
-}
-
 @Serializable
-enum class LocalBackend(val nativeId: Int) { AUTO(0), CPU(1), GPU(2) }
+enum class LocalBackend { AUTO, CPU, GPU }
 
 /** Runtime capability decides availability, independent of phone brand or chipset. */
 object LocalAccelerationPolicy {
