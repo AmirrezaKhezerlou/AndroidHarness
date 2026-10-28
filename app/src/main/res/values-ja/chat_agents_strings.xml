@@ -89,4 +89,5 @@
     <string name="chat_agents_private_memory_label">"エージェント専用メモリ"</string>
     <string name="chat_agents_delete_action">"削除"</string>
     <string name="chat_agents_done">"完了"</string>
+    <string name="chat_agents_short">エージェント</string>
 </resources>

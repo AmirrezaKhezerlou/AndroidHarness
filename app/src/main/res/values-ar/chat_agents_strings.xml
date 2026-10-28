@@ -89,4 +89,5 @@
     <string name="chat_agents_private_memory_label">"ذاكرة خاصة بالوكيل"</string>
     <string name="chat_agents_delete_action">"حذف"</string>
     <string name="chat_agents_done">"تم"</string>
+    <string name="chat_agents_short">وكيل</string>
 </resources>

@@ -195,7 +195,7 @@ class SessionRepository(
         val id = UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
         conversation.agent?.validated()
-        val model = conversation.agent?.model?.let { ChatModelSelection(active = it, thinking = conversation.agent.thinking) }
+        val model = conversation.agent?.model?.let { ChatModelSelection(active = it, thinking = conversation.agent.thinking, customThinkingLevels = conversation.agent.customThinkingLevels) }
         db.dao().insertSession(SessionEntity(id, title, now, now, projectId = projectId, conversationJson = ConversationConfig.encode(conversation),
             modelSelectionJson = model?.let(ChatModelSelection::encode)))
         id

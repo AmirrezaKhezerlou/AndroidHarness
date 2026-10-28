@@ -33,7 +33,7 @@ import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -294,7 +294,7 @@ internal fun ToolCallCard(
 
 /**
  * Collapses a run of consecutive tool calls behind one quiet header row.
- * A batch made entirely of task calls is a subagent spawn: robot icon,
+ * A batch made entirely of task calls is a subagent spawn: sparkle icon,
  * "Spawned N subagents" wording, and each child renders as its own
  * [SubagentCard] section with live steps instead of a bare tool row.
  */
@@ -344,7 +344,7 @@ internal fun ToolGroupCard(
                         .background(scheme.surfaceContainerHigh, RoundedCornerShape(9.dp)),
                 ) {
                     Icon(
-                        if (allSubagents) Icons.Filled.SmartToy else Icons.Outlined.Build,
+                        if (allSubagents) Icons.Filled.AutoAwesome else Icons.Outlined.Build,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
                         tint = scheme.onSurfaceVariant,

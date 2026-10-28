@@ -66,10 +66,13 @@ class ResponseProfileDeviceTest {
                         }
                     }
                 } }
-                await("Example scientist"); await("Making astronomy accessible"); await("Source biography")
+                await("Example scientist")
+                screenshot("profile-photo-top")
+                scrollTo("Source biography"); await("Making astronomy accessible"); await("Source biography")
                 assertNull(find { it.text?.toString()?.contains("harness-ui") == true })
                 screenshot("profile-light")
                 tap("Source biography"); assertEquals(source, opened)
+                scrollBackToPortrait()
                 tapPortrait()
                 await(c.appContext.getString(com.androidharness.app.R.string.chat_image_close)); screenshot("profile-expanded-image")
                 instrumentation.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
@@ -146,6 +149,14 @@ class ResponseProfileDeviceTest {
             SystemClock.sleep(100)
         }
         screenshot("missing-${text.take(20)}"); error("Missing profile text: $text")
+    }
+    private fun scrollBackToPortrait() {
+        repeat(16) {
+            instrumentation.uiAutomation.clearCache()
+            if (find { it.contentDescription?.toString() == "Example scientist" } != null) return
+            find { it.isScrollable }?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+            SystemClock.sleep(250)
+        }
     }
     private fun tapPortrait() {
         val deadline = SystemClock.uptimeMillis() + 15_000

@@ -3,6 +3,7 @@ package com.androidharness.app.ui.chat.components
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.animateColorAsState
@@ -81,7 +82,11 @@ internal fun agentIconLabel(key: String): String = stringResource(when (key) {
 internal fun AgentAvatar(key: String, modifier: Modifier = Modifier) {
     Surface(modifier.size(48.dp), shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer) {
-        Box(contentAlignment = Alignment.Center) { Icon(agentIcon(key), null, Modifier.size(26.dp)) }
+        Box(contentAlignment = Alignment.Center) {
+            Crossfade(targetState = key, animationSpec = expressiveEffectsSpec(), label = "agent avatar") { iconKey ->
+                Icon(agentIcon(iconKey), null, Modifier.size(26.dp))
+            }
+        }
     }
 }
 
@@ -218,6 +223,22 @@ internal fun ChatAgentEditor(container: AppContainer, initial: ChatAgentProfile,
     val context = LocalContext.current
     val providers by container.providers.providers.collectAsStateWithLifecycle(initialValue = emptyList())
     val catalogs by container.providers.catalogs.collectAsStateWithLifecycle(initialValue = emptyMap())
+    val appSettings by container.settings.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
+    val currentChatModel by remember(appSettings.lastActiveSessionId) { container.chatModels.observe(appSettings.lastActiveSessionId) }
+        .collectAsStateWithLifecycle(initialValue = ChatModelState(AppSettings(), emptyList(), ChatModelSelection()))
+    var inheritThinking by rememberSaveable(initial.id) { mutableStateOf(initial.name.isBlank()) }
+    val thinkingLevel = if (inheritThinking) currentChatModel.selection.thinking else profile.thinking
+    val modelChoice = profile.model ?: currentChatModel.selection.active
+    val thinkingProvider = providers.firstOrNull { it.id == modelChoice?.providerId }?.copy(model = modelChoice?.model.orEmpty())
+    val reasoningRevision by com.androidharness.app.llm.ModelsDev.revision.collectAsStateWithLifecycle()
+    val resolvedThinking = remember(thinkingProvider, thinkingLevel, appSettings.reasoningConfigs, appSettings.maxOutputTokens,
+        currentChatModel.selection.customThinkingLevels, profile.customThinkingLevels, catalogs, reasoningRevision) {
+        thinkingProvider?.let { config -> com.androidharness.app.llm.RequestOptions(thinking = thinkingLevel,
+            maxOutputTokens = appSettings.maxOutputTokens, customReasoning = appSettings.reasoningConfigs,
+            customThinkingLevels = currentChatModel.selection.customThinkingLevels + profile.customThinkingLevels)
+            .resolveThinking(config, catalogs[config.id].orEmpty().firstOrNull { it.id == config.model }) }
+    }
+    var thinkingMenu by remember { mutableStateOf(false) }
     fun close() { if (saving || importing) return; if (profile != initial || starters != initial.starters.joinToString("\n")) discard = true else onDismiss() }
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -284,7 +305,11 @@ internal fun ChatAgentEditor(container: AppContainer, initial: ChatAgentProfile,
                                 saving = true; error = null
                                 scope.launch {
                                     try {
-                                        val next = profile.copy(name = profile.name.trim(), starters = starters.lines().map(String::trim).filter(String::isNotBlank))
+                                        val chosenLevels = if (thinkingProvider != null && resolvedThinking?.customLevel != null)
+                                            mapOf(com.androidharness.app.agent.CustomReasoning.key(thinkingProvider) to resolvedThinking.customLevel) else emptyMap()
+                                        val next = profile.copy(name = profile.name.trim(), thinking = thinkingLevel,
+                                            customThinkingLevels = chosenLevels,
+                                            starters = starters.lines().map(String::trim).filter(String::isNotBlank))
                                         container.settings.saveChatAgent(next); onSaved()
                                     } catch (e: CancellationException) { throw e }
                                     catch (e: Exception) { error = e.message }
@@ -308,7 +333,7 @@ internal fun ChatAgentEditor(container: AppContainer, initial: ChatAgentProfile,
                                 }
                             }
                         }
-                        AgentEditorGroup(stringResource(R.string.chat_agents_basics), Icons.Outlined.Badge, initiallyOpen = true) {
+                        AgentEditorGroup(stringResource(R.string.chat_agents_basics), Icons.Outlined.Badge) {
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 ChatAgentProfile.AVATARS.forEach { key ->
                                     val selected = profile.avatar == key
@@ -317,7 +342,7 @@ internal fun ChatAgentEditor(container: AppContainer, initial: ChatAgentProfile,
                                     FilledTonalIconToggleButton(checked = selected, onCheckedChange = { profile = profile.copy(avatar = key) }, enabled = !saving,
                                         colors = IconButtonDefaults.filledTonalIconToggleButtonColors(containerColor = color, checkedContainerColor = color,
                                             contentColor = MaterialTheme.colorScheme.onSurfaceVariant, checkedContentColor = MaterialTheme.colorScheme.onPrimaryContainer)) {
-                                        Icon(agentIcon(key), stringResource(R.string.chat_agents_icon, agentIconLabel(key)))
+                                        AnimatedAgentIcon(key, selected, stringResource(R.string.chat_agents_icon, agentIconLabel(key)))
                                     }
                                 }
                             }
@@ -333,16 +358,27 @@ internal fun ChatAgentEditor(container: AppContainer, initial: ChatAgentProfile,
                             Text(stringResource(R.string.chat_agents_model_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             val provider = providers.firstOrNull { it.id == profile.model?.providerId }
                             OutlinedButton(onClick = { pickModel = true }, enabled = !saving, modifier = Modifier.fillMaxWidth()) {
-                                Icon(Icons.Outlined.SmartToy, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp))
+                                Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp))
                                 Text(if (profile.model == null) stringResource(R.string.chat_agents_inherit_model) else
                                     if (provider == null) stringResource(R.string.chat_agents_missing_model) else "${provider.name} · ${profile.model?.model}", maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
                             if (profile.model != null) TextButton(onClick = { profile = profile.copy(model = null) }, enabled = !saving) { Text(stringResource(R.string.chat_agents_inherit_model)) }
-                            Text(stringResource(R.string.chat_agents_thinking), style = MaterialTheme.typography.titleSmall)
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                com.androidharness.app.agent.ThinkingLevel.entries.forEach { level ->
-                                    FilterChip(selected = profile.thinking == level, onClick = { profile = profile.copy(thinking = level) }, enabled = !saving,
-                                        label = { Text(com.androidharness.app.ui.common.localizedThinkingOption(level.label)) })
+                            if (profile.model == null && modelChoice != null) Text(modelChoice.model,
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            val thinking = resolvedThinking
+                            if (thinking != null && (thinking.customConfig != null || thinking.spec.levels.isNotEmpty() || thinking.spec.reasoningSupported)) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Text(stringResource(R.string.chat_agents_thinking), style = MaterialTheme.typography.titleSmall)
+                                    HeaderThinkingControl(thinking.level, thinking.spec.levels, thinkingMenu, { thinkingMenu = it },
+                                        onSetThinking = { level ->
+                                            inheritThinking = false
+                                            profile = profile.copy(thinking = level)
+                                        }, onPickModel = { pickModel = true }, resolved = thinking,
+                                        onCustomLevel = { name -> thinkingProvider?.let { config ->
+                                            inheritThinking = false
+                                            profile = profile.copy(thinking = thinking.level, customThinkingLevels = profile.customThinkingLevels +
+                                                (com.androidharness.app.agent.CustomReasoning.key(config) to com.androidharness.app.agent.CustomReasoning.wire(name)))
+                                        } })
                                 }
                             }
                         }

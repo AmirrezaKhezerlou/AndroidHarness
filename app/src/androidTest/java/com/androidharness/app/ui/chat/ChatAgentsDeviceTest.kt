@@ -116,6 +116,12 @@ class ChatAgentsDeviceTest {
                 awaitText("Study partner"); screenshot("library-phone")
                 scenario.onActivity { editing.value = true }
                 awaitText("Identity"); screenshot("editor-phone")
+                assertNull(find { it.isEditable })
+                tap("Identity")
+                for (icon in listOf("Study", "Writing", "Research", "Ideas", "Travel", "Spark")) {
+                    tap("Agent icon: $icon")
+                }
+                tap("Identity")
                 scrollTo("Knowledge"); tap("Knowledge")
                 scrollTo("study-notes.md"); screenshot("editor-knowledge")
                 scenario.onActivity { large.value = true }
@@ -250,6 +256,89 @@ class ChatAgentsDeviceTest {
                 screenshot("knowledge-system-large-text")
             }
         } finally { shell("settings put system font_scale $oldScale") }
+    }
+
+    @Test fun agentChooserStartsBesideSearchMovesWhenSavedAndDisappearsAfterFirstMessage(): Unit = runBlocking {
+        val original = c.settings.settings.first()
+        val store = ViewModelStore()
+        val session = c.sessions.createSession("Chooser layout fixture", conversation = ConversationConfig(ConversationKind.CHAT))
+        try {
+            c.settings.restorePortable(original.copy(chatAgents = emptyList(), searchDepth = SearchDepth.AUTO))
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { host ->
+                    val vm = ChatViewModel(c, session); store.put("chooser-layout", vm)
+                    host.setContent { HarnessTheme { ChatScreen(vm, {}, { _, _ -> }, {}, {}, onOpenSubagent = {}) } }
+                }
+                val compact = awaitText("Agent")
+                val search = awaitText("Auto")
+                val a = Rect().also(compact::getBoundsInScreen)
+                val b = Rect().also(search::getBoundsInScreen)
+                assertTrue("Agent must be left of search", a.right <= b.left)
+                assertTrue("Agent and search share a row", kotlin.math.abs(a.centerY() - b.centerY()) < 12)
+                assertNull(find { it.text?.toString() == "Choose an agent" })
+                screenshot("agent-compact-left-of-search")
+                val agent = ChatAgentProfile(name = "Layout tutor")
+                c.settings.saveChatAgent(agent)
+                val chooser = awaitText("Choose an agent")
+                assertNull(find { it.text?.toString() == "Agent" })
+                val chooseBounds = Rect().also(chooser::getBoundsInScreen)
+                val searchBounds = Rect().also(awaitText("Auto")::getBoundsInScreen)
+                assertTrue("Saved-agent chooser goes below header", chooseBounds.top > searchBounds.bottom)
+                screenshot("agent-saved-wide-chooser")
+                c.sessions.addMessage(session, com.androidharness.app.core.ChatMessage(com.androidharness.app.core.Role.USER, "First sent message"), "chooser-turn")
+                awaitText("First sent message")
+                instrumentation.waitForIdleSync(); SystemClock.sleep(300)
+                assertNull(find { it.text?.toString() == "Choose an agent" })
+                assertNull(find { it.text?.toString() == "Personalized" })
+                screenshot("agent-chooser-hidden-after-send")
+            }
+        } finally {
+            instrumentation.runOnMainSync { store.clear() }
+            c.sessions.session(session)?.let { c.sessions.deleteSession(it) }
+            c.settings.restorePortable(original)
+        }
+    }
+
+    @Test fun agentEditorOnlyShowsTheSelectedModelsExistingThinkingAndKeepsCustomChoice(): Unit = runBlocking {
+        val original = c.settings.settings.first()
+        val provider = c.providers.add("Agent reasoning fixture", com.androidharness.app.llm.ProviderType.OPENAI_COMPAT,
+            "https://example.com/v1", "agent-reasoning-fixture", "")
+        val config = provider.copy(model = "agent-reasoning-fixture")
+        val key = com.androidharness.app.agent.CustomReasoning.key(config)
+        val initial = ChatAgentProfile(name = "Thinking fixture", model = ChatModelChoice(config.id, config.model),
+            customThinkingLevels = mapOf(key to "quiet"))
+        try {
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { host -> host.setContent { HarnessTheme {
+                    ChatAgentEditor(c, initial, onDismiss = {}, onSaved = {})
+                } } }
+                tap("Model and thinking")
+                instrumentation.waitForIdleSync(); SystemClock.sleep(300)
+                assertNull(find { it.text?.toString() == "Thinking" })
+                assertNull(find { it.text?.toString() == "Minimal" })
+            }
+            c.settings.setReasoningConfig(key, com.androidharness.app.agent.CustomReasoningConfig(listOf("Quiet", "Focused"),
+                "{\"reasoning_effort\": level}"))
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                var saved = false
+                scenario.onActivity { host -> host.setContent { HarnessTheme {
+                    ChatAgentEditor(c, initial, onDismiss = {}, onSaved = { saved = true })
+                } } }
+                tap("Model and thinking"); awaitText("Thinking"); tap("Quiet")
+                tap("Focused"); tap("Save agent")
+                val deadline = SystemClock.uptimeMillis() + 10_000
+                while (!saved && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(100)
+                assertTrue(saved)
+                val agent = c.settings.settings.first().chatAgents.first { it.id == initial.id }
+                assertEquals("focused", agent.customThinkingLevels[key])
+                val session = c.startChatAgent(agent)
+                try { assertEquals("focused", c.chatModels.observe(session).first().selection.customThinkingLevels[key]) }
+                finally { c.sessions.session(session)?.let { c.sessions.deleteSession(it) } }
+            }
+        } finally {
+            c.providers.delete(provider.id)
+            c.settings.restorePortable(original)
+        }
     }
 
     private fun root(): AccessibilityNodeInfo? {

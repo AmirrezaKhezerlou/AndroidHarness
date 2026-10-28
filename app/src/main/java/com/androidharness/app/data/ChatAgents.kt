@@ -30,6 +30,7 @@ data class ChatAgentProfile(
     val persona: String = "",
     val model: ChatModelChoice? = null,
     val thinking: ThinkingLevel = ThinkingLevel.OFF,
+    val customThinkingLevels: Map<String, String> = emptyMap(),
     val capabilities: Set<AgentCapability> = setOf(AgentCapability.WEB, AgentCapability.IMAGES),
     val memory: AgentMemory = AgentMemory.PRIVATE,
     val sharedHistory: Boolean = false,
@@ -44,6 +45,7 @@ data class ChatAgentProfile(
         require(avatar in AVATARS) { "Choose an agent icon." }
         require(description.length <= 240 && persona.length <= 2_000 && instructions.length <= 8_000) { "Agent instructions are too long." }
         require(model == null || model.providerId.length in 1..500 && model.model.length in 1..500) { "Choose a valid model." }
+        require(customThinkingLevels.size <= 64 && customThinkingLevels.all { (key, value) -> key.length in 1..200 && value.length in 1..100 }) { "Invalid saved thinking selection." }
         require(starters.size <= 4 && starters.all { it.isNotBlank() && it.length <= 200 }) { "Use up to four short conversation starters." }
         require(knowledge.size <= MAX_FILES && knowledge.map { it.id }.distinct().size == knowledge.size) { "Use up to eight knowledge files." }
         require(knowledge.all { it.id.length in 1..100 && it.name.length in 1..180 && it.text.isNotBlank() && it.text.length <= MAX_FILE_CHARS }) { "A knowledge file is empty or too large." }

@@ -82,7 +82,7 @@ class ChatModelRepository(
         else try {
             check(session != null) { "This chat is no longer available." }
             val selection = ChatModelSelection.decode(session.modelSelectionJson)
-                ?: edits.withLock { sessions.initializeModelSelection(sessionId, shared) }
+                ?: edits.withLock { sessions.initializeModelSelection(sessionId, agentSelection(shared, agent)) }
             ChatModelState(prefs, available, selection, agentChat = agent != null)
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -94,7 +94,7 @@ class ChatModelRepository(
         val prefs = settings.settings.first()
         val agent = ConversationConfig.decode(sessions.session(sessionId)?.conversationJson).agent
         if (!prefs.sameModelAcrossChats || agent != null) sessions.initializeModelSelection(sessionId,
-            ChatModelSelection.from(prefs, providers.providers.first()).let { if (agent == null) it else it.copy(thinking = agent.thinking) })
+            agentSelection(ChatModelSelection.from(prefs, providers.providers.first()), agent))
     }
 
     suspend fun setShared(sessionId: String, shared: Boolean) = edits.withLock {
@@ -160,6 +160,10 @@ class ChatModelRepository(
             if (next != old) sessions.saveModelSelection(sessionId, next)
         }
     }
+
+    private fun agentSelection(shared: ChatModelSelection, agent: ChatAgentProfile?): ChatModelSelection =
+        if (agent == null) shared else shared.copy(active = agent.model ?: shared.active, thinking = agent.thinking,
+            customThinkingLevels = shared.customThinkingLevels + agent.customThinkingLevels)
 
     private suspend fun sharedFor(sessionId: String?, prefs: AppSettings): Boolean = prefs.sameModelAcrossChats &&
         (sessionId == null || ConversationConfig.decode(sessions.session(sessionId)?.conversationJson).agent == null)

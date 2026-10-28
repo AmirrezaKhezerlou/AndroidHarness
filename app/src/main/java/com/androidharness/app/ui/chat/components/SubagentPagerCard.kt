@@ -31,7 +31,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -105,7 +105,7 @@ internal fun SubagentPagerCard(
                         .background(scheme.surfaceContainerHigh, RoundedCornerShape(9.dp)),
                 ) {
                     Icon(
-                        Icons.Filled.SmartToy,
+                        Icons.Filled.AutoAwesome,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
                         tint = scheme.onSurfaceVariant,

@@ -211,7 +211,7 @@ internal fun ScheduleMessageSheet(
                                 Column {
                                     ScheduleRow(Icons.AutoMirrored.Outlined.Chat, uiContext.getString(R.string.ui_chat), if (sessionId == null) uiContext.getString(R.string.settings_telegram_new_chat) else session?.title ?: uiContext.getString(R.string.ui_chat_unavailable)) { page = SchedulePage.CHAT }
                                     ScheduleRow(Icons.Outlined.Folder, uiContext.getString(R.string.ui_workspace), project?.name ?: uiContext.getString(R.string.ui_choose_workspace), enabled = sessionId == null) { page = SchedulePage.WORKSPACE }
-                                    ScheduleRow(Icons.Outlined.SmartToy, uiContext.getString(R.string.ui_model), model ?: uiContext.getString(R.string.settings_provider_choose_model_title)) { page = SchedulePage.MODEL }
+                                    ScheduleRow(Icons.Outlined.AutoAwesome, uiContext.getString(R.string.ui_model), model ?: uiContext.getString(R.string.settings_provider_choose_model_title)) { page = SchedulePage.MODEL }
                                 }
                             }
                             if (sessionId != null) Text(uiContext.getString(R.string.ui_workspace_follows_the_selected_chat), style = MaterialTheme.typography.labelSmall,
@@ -245,7 +245,7 @@ internal fun ScheduleMessageSheet(
                             }
                         } else {
                             items(providers.filter { (it.enabled || query.isNotBlank()) && it.name.contains(query, ignoreCase = true) }, key = { it.id }) { p ->
-                                ScheduleRow(Icons.Outlined.SmartToy, p.name, if (p.enabled) p.model else uiContext.getString(R.string.ui_disabled_enable_use)) {
+                                ScheduleRow(Icons.Outlined.AutoAwesome, p.name, if (p.enabled) p.model else uiContext.getString(R.string.ui_disabled_enable_use)) {
                                     if (!p.enabled) scope.launch { container.providers.setEnabled(p.id, true) }
                                     providerId = p.id; model = p.model; page = SchedulePage.MODEL }
                             }

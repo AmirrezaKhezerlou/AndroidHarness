@@ -219,6 +219,9 @@ private fun ChatScreenContent(
             ?: kotlinx.coroutines.flow.flowOf(emptyMap())
     }.collectAsStateWithLifecycle(initialValue = emptyMap())
     val globalSettings by viewModel.container.settings.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
+    val hasChatAgents = globalSettings.chatAgents.isNotEmpty() || state.conversation.agent != null
+    val showChatStartControls = state.conversation.isChat && state.conversationReady && !state.isLoadingMessages &&
+        state.messages.isEmpty() && !state.busy && state.streamingText == null
     val effectiveImageFrequency = com.androidharness.app.core.ChatExperience
         .effectiveImageFrequency(state.conversation.imageFrequency, globalSettings.chatImageFrequency)
     var showCodeHandoff by remember(state.sessionId) { mutableStateOf(false) }
@@ -1330,6 +1333,9 @@ private fun ChatScreenContent(
                 onOpenContext = { showContext = true },
                 onOpenChatSettings = { showChatSettings = true },
                 onOpenSources = { chatSources = null; showChatSources = true },
+                onOpenAgents = { showChatAgents = true },
+                showCompactAgent = !hasChatAgents,
+                agentPickerEnabled = state.conversationReady && !state.busy && !state.conversationSaving,
                 onOpenUndo = { showUndoDialog = true },
                 onOpenFiles = onOpenFiles,
                 canOpenGitHub = currentProject != null,
@@ -1344,7 +1350,7 @@ private fun ChatScreenContent(
                     pinnedToBottom = false
                 },
             )
-            if (state.conversation.isChat) {
+            if (hasChatAgents && showChatStartControls) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.Center) {
                     AssistChip(onClick = { showChatAgents = true }, enabled = state.conversationReady && !state.busy && !state.conversationSaving,
                         label = { Text(state.conversation.agent?.name ?: stringResource(R.string.chat_agents_choose), maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -1352,8 +1358,7 @@ private fun ChatScreenContent(
                         trailingIcon = { Icon(Icons.Outlined.ExpandMore, null, Modifier.size(18.dp)) })
                 }
             }
-            if (state.conversation.isChat && state.conversationReady && !state.isLoadingMessages &&
-                state.messages.isEmpty() && !state.busy && state.streamingText == null) {
+            if (showChatStartControls) {
                 com.androidharness.app.ui.chat.components.ChatPersonalizationDropdown(
                     personalized = state.conversation.personalizationEnabled,
                     enabled = !state.conversationSaving,
