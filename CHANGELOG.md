@@ -1,5 +1,35 @@
 # Changelog
 
+## 3.0 (2026-10-28)
+
+### Added
+
+- **Chat agents**: create personal assistants with their own name, description, instructions, personality and tone, model and thinking level, knowledge files, tools and memory mode. Knowledge accepts text, Markdown and readable PDFs up to 8 files and 96,000 characters, and relevant passages are searched locally and supplied to the chosen model. The agent picker sits in the composer, changes apply to new conversations while existing chats keep their saved setup, and deleting an agent keeps its conversations, knowledge snapshots and saved memories. Answers can use a sourced profile card for a person, place or organization, with up to 8 sourced facts and 6 source links.
+- **Wireless ADB**: Settings → Terminal & device → Wireless ADB pairs with Android's own wireless debugging and runs shell commands as UID 2000 without Shizuku or root. The six-digit code is entered from a notification, with manual port and code fields as a fallback, and the stored key can be reused or forgotten. A connected session is used automatically by terminal commands, Linux environment setup, package work and background jobs, while Shizuku stays available when it is connected. Requires Android 11 or newer, Wi-Fi and notification permission; pairing survives a reboot, but Wireless debugging must be turned on again.
+- **Dhizuku Device Owner access**: the `device_owner_shell` tool runs commands through an explicitly authorized Dhizuku Device Owner service as the owner app, with Android app limits and no fallback to ADB, root or Shizuku. Settings → Root access gains a Dhizuku card with its real connection state, and Shevery is recognized as a compatible privileged shell provider.
+- **Chat pinning and archiving**: pin chats to the top of the list, archive them out of recents, and unarchive to restore one, from the chat menu or the sidebar. Chats are now peers in navigation, so switching conversations replaces the open one instead of stacking them and Back returns to the screen you came from.
+- **Chat context**: Chat has its own ceiling of 250,000 tokens, independent of the Code context setting, and compacts automatically as the window fills. Compaction keeps the latest user turn, the summary and pinned instructions, while the full history stays visible in the app.
+- **Image inspection in Chat**: `view_chat_image` lists and reads images from the conversation, including attachments sent earlier and page screenshots captured by browser reads, and `zoom_chat_image` returns a magnified region for detail. Inspected images keep a stable identity, appear inline in the final answer, and a failed inspection is reported as a failure instead of returning nothing.
+- **Background and notification controls**: Settings → Background & notifications adds a Run in background switch that stops agents when you leave the app, a notifications switch, and a shortcut to Android's notification settings. Each row states the current state and what it changes.
+- **Local GPU support**: local GGUF models can run on Vulkan on 64-bit devices, behind the experimental switch, with Auto, CPU and GPU choices. Auto prefers the GPU and retries on CPU when the backend is unavailable or cannot start a reply before output begins. The Vulkan runtime ships outside the base APK: GitHub builds download the package that matches the installed app and device from a pinned release and verify its size and SHA-256 before loading it, while Play builds deliver the same library as an on-demand feature module. The GPU support card shows checking, download progress, install, retry and cancel, links to the runtime repository, and CPU inference works without it.
+- **A2Agent**: a new preconfigured OpenAI-compatible provider, pinned above the other brands with a New badge. Its API key and model setup work like any other provider.
+- **Sinhala**: සිංහල joins App language, the Android per-app language list and the locale configuration, with the interface translated across chat, settings, rich replies and local models.
+
+### Changed
+
+- **Settings home**: the home screen is grouped by purpose (Your assistant, Integrations, Personalize, Connections, Workspace & device, App & data, Coding) with grouped rows, and search still finds every entry with its deep link. Pages keep a back history, so Back returns to the previous settings page instead of leaving Settings.
+- **Local models page**: the page splits into My models and Explore tabs, with the experimental switch, GPU support and model actions grouped above the tabs.
+- **Chat header**: the model picker is narrower in phone Chat conversations so the title and controls fit, and the agent picker now lives in the composer.
+- **Provider keys**: the key editor is shared between provider management and connection controls, with show and hide per key, the saved key count, and a clear message when saved keys cannot be loaded.
+- **Linux setup prompt**: the setup card appears when a command actually fails with a missing tool, instead of offering the full environment before anything is needed.
+- **Rich tables**: table options, row selection and sorting now live in a real toolbar.
+- **Release builds**: release APKs are minified and resource-shrunk, with keep rules for native pairing, JavaScript bridges, WorkManager and SSH, so the download is smaller without changing behavior.
+
+### Fixed
+
+- **Web research**: a rate-limited search backend is paused instead of being retried immediately, a page that blocks the browser reader can fall back to a configured extraction service, and each answer records a receipt with the sources, pages and backend it used.
+- **Chat continuation**: the internal prompt that resumes an interrupted answer stays out of the transcript instead of appearing as a user message.
+
 ## 2.9 (2026-10-26)
 
 ### Added
