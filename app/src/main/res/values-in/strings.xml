@@ -409,6 +409,7 @@
     <string name="settings_action_back">"Kembali"</string>
     <string name="settings_provider_custom_endpoint">"Endpoint kustom"</string>
     <string name="settings_provider_custom_endpoint_desc">"Hubungkan API yang kompatibel atau server lokal"</string>
+    <string name="settings_provider_badge_new">"Baru"</string>
     <string name="settings_providers_intro">"Hubungkan model dan pilih penggerak chat Anda"</string>
     <string name="settings_providers_search_placeholder">"Cari penyedia atau model"</string>
     <string name="settings_providers_search_all_models">"Cari semua model"</string>
@@ -950,4 +951,5 @@
     <string name="dhizuku_requesting">Menunggu izin…</string>
     <string name="dhizuku_denied">Akses ditolak · izinkan akses di Dhizuku</string>
     <string name="dhizuku_error">Koneksi gagal · periksa Dhizuku dan coba lagi</string>
+    <string name="settings_language_sinhala">සිංහල</string>
 </resources>

@@ -409,6 +409,7 @@
     <string name="settings_action_back">"رجوع"</string>
     <string name="settings_provider_custom_endpoint">"نقطة اتصال مخصصة"</string>
     <string name="settings_provider_custom_endpoint_desc">"ربط أي API متوافق أو خادم محلي"</string>
+    <string name="settings_provider_badge_new">"جديد"</string>
     <string name="settings_providers_intro">"اربط النماذج واختر ما يشغّل محادثاتك"</string>
     <string name="settings_providers_search_placeholder">"البحث عن مزوّدين أو نماذج"</string>
     <string name="settings_providers_search_all_models">"البحث في كل النماذج"</string>
@@ -955,4 +956,5 @@
     <string name="dhizuku_requesting">بانتظار الإذن…</string>
     <string name="dhizuku_denied">تم رفض الوصول · امنح الإذن في Dhizuku</string>
     <string name="dhizuku_error">فشل الاتصال · تحقق من Dhizuku وحاول مجدداً</string>
+    <string name="settings_language_sinhala">සිංහල</string>
 </resources>

@@ -429,6 +429,7 @@
     <string name="settings_action_back">返回</string>
     <string name="settings_provider_custom_endpoint">自定义端点</string>
     <string name="settings_provider_custom_endpoint_desc">连接任何兼容的 API 或本地服务器</string>
+    <string name="settings_provider_badge_new">新</string>
     <string name="settings_providers_intro">连接模型并选择为对话提供支持的引擎</string>
     <string name="settings_providers_search_placeholder">搜索提供商或模型</string>
     <string name="settings_providers_search_all_models">搜索所有模型</string>
@@ -981,4 +982,5 @@
     <string name="dhizuku_requesting">正在等待授权…</string>
     <string name="dhizuku_denied">访问被拒绝 · 请在 Dhizuku 中授权</string>
     <string name="dhizuku_error">连接失败 · 请检查 Dhizuku 后重试</string>
+    <string name="settings_language_sinhala">සිංහල</string>
 </resources>

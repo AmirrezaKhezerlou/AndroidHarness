@@ -409,6 +409,7 @@
     <string name="settings_action_back">"戻る"</string>
     <string name="settings_provider_custom_endpoint">"カスタムエンドポイント"</string>
     <string name="settings_provider_custom_endpoint_desc">"互換性のあるAPIまたはローカルサーバーに接続"</string>
+    <string name="settings_provider_badge_new">"新規"</string>
     <string name="settings_providers_intro">"モデルを接続し、チャットを動かすものを選択"</string>
     <string name="settings_providers_search_placeholder">"プロバイダーまたはモデルを検索"</string>
     <string name="settings_providers_search_all_models">"すべてのモデルを検索"</string>
@@ -950,4 +951,5 @@
     <string name="dhizuku_requesting">許可を待っています…</string>
     <string name="dhizuku_denied">アクセスが拒否されました · Dhizuku でアクセスを許可してください</string>
     <string name="dhizuku_error">接続に失敗しました · Dhizuku を確認して再試行してください</string>
+    <string name="settings_language_sinhala">සිංහල</string>
 </resources>

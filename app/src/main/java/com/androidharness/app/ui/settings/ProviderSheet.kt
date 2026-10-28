@@ -1,6 +1,8 @@
 package com.androidharness.app.ui.settings
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -85,9 +87,17 @@ data class ProviderBrand(
     val needsKey: Boolean,
     /** Pre-filled model, when a brand has one obvious default. */
     val suggestedModel: String? = null,
+    /** Short pill next to the name, used to introduce a newly added brand. */
+    @StringRes val badge: Int? = null,
+    /** Rendered above every other entry, outside the Popular group. */
+    val pinned: Boolean = false,
 )
 
 internal val ProviderBrands: List<ProviderBrand?> = listOf(
+    // Curated brands are compiled in, so a brand keeps its position here even
+    // after the fetched models.dev directory refreshes.
+    ProviderBrand("A2Agent", ProviderType.OPENAI_COMPAT, "https://api.a2agent.me/v1", true,
+        badge = R.string.settings_provider_badge_new, pinned = true),
     ProviderBrand("OpenRouter", ProviderType.OPENAI_COMPAT, "https://openrouter.ai/api/v1", true),
     ProviderBrand("Anthropic", ProviderType.ANTHROPIC, "https://api.anthropic.com", true, "claude-sonnet-4-5"),
     ProviderBrand("Gemini", ProviderType.GEMINI, "https://generativelanguage.googleapis.com/v1beta", true, "gemini-2.5-flash"),
@@ -741,10 +751,10 @@ private fun ModelPickRow(
 }
 
 /**
- * The searchable provider directory: "Custom endpoint" first, then curated
- * brands under "Popular", then every models.dev provider the app can speak
- * to under "All providers". Divider-separated tap targets, selection shown
- * with a trailing check.
+ * The searchable provider directory: pinned brands at the very top, then
+ * "Custom endpoint", then curated brands under "Popular", then every
+ * models.dev provider the app can speak to under "All providers".
+ * Divider-separated tap targets, selection shown with a trailing check.
  */
 @Composable
 private fun ColumnScope.ProviderDirectory(
@@ -763,6 +773,8 @@ private fun ColumnScope.ProviderDirectory(
         ProviderBrands.filterNotNull()
             .filter { q.isBlank() || it.label.lowercase().contains(q) }
     }
+    val pinned = curated.filter { it.pinned }
+    val popular = curated.filterNot { it.pinned }
     val dev = remember(q, devProviders) {
         devProviders.filter {
             q.isBlank() || it.name.lowercase().contains(q) || it.id.lowercase().contains(q)
@@ -775,6 +787,15 @@ private fun ColumnScope.ProviderDirectory(
             .weight(1f),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        items(pinned, key = { "pinned-${it.label}" }) { b ->
+            ProviderRow(
+                title = b.label,
+                subtitle = if (b.needsKey) uiContext.getString(R.string.ui_api_key_required) else uiContext.getString(R.string.ui_runs_locally_without_a_key),
+                selected = b.label == selectedBrand?.label,
+                badge = b.badge?.let(uiContext::getString),
+                onClick = { onSelectBrand(b) },
+            )
+        }
         if (q.isBlank() || "custom".contains(q)) {
             item(key = "custom") {
                 ProviderRow(
@@ -786,15 +807,16 @@ private fun ColumnScope.ProviderDirectory(
                 )
             }
         }
-        if (curated.isNotEmpty()) {
+        if (popular.isNotEmpty()) {
             item(key = "popular-label") {
                 DirectoryLabel(if (q.isBlank()) uiContext.getString(R.string.ui_popular) else uiContext.getString(R.string.settings_providers_title))
             }
-            items(curated, key = { "brand-${it.label}" }) { b ->
+            items(popular, key = { "brand-${it.label}" }) { b ->
                 ProviderRow(
                     title = b.label,
                     subtitle = if (b.needsKey) uiContext.getString(R.string.ui_api_key_required) else uiContext.getString(R.string.ui_runs_locally_without_a_key),
                     selected = b.label == selectedBrand?.label,
+                    badge = b.badge?.let(uiContext::getString),
                     onClick = { onSelectBrand(b) },
                 )
             }
@@ -831,6 +853,7 @@ private fun ProviderRow(
     subtitle: String,
     selected: Boolean,
     custom: Boolean = false,
+    badge: String? = null,
     onClick: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -858,13 +881,28 @@ private fun ProviderRow(
             }
             Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = if (selected) scheme.onSecondaryContainer else scheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = if (selected) scheme.onSecondaryContainer else scheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (badge != null) Text(
+                        badge,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (selected) scheme.onSecondaryContainer else scheme.onTertiaryContainer,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(if (selected) scheme.primary.copy(alpha = 0.16f) else scheme.tertiaryContainer)
+                            .padding(horizontal = 7.dp, vertical = 2.dp),
+                    )
+                }
                 Text(
                     subtitle,
                     style = MaterialTheme.typography.labelSmall,

@@ -409,6 +409,7 @@
     <string name="settings_action_back">"Voltar"</string>
     <string name="settings_provider_custom_endpoint">"Endpoint personalizado"</string>
     <string name="settings_provider_custom_endpoint_desc">"Conecte qualquer API compatível ou servidor local"</string>
+    <string name="settings_provider_badge_new">"Novo"</string>
     <string name="settings_providers_intro">"Conecte modelos e escolha o que alimenta seus chats"</string>
     <string name="settings_providers_search_placeholder">"Buscar provedores ou modelos"</string>
     <string name="settings_providers_search_all_models">"Buscar todos os modelos"</string>
@@ -951,4 +952,5 @@
     <string name="dhizuku_requesting">Aguardando permissão…</string>
     <string name="dhizuku_denied">Acesso negado · permita o acesso no Dhizuku</string>
     <string name="dhizuku_error">Falha na conexão · verifique o Dhizuku e tente novamente</string>
+    <string name="settings_language_sinhala">සිංහල</string>
 </resources>

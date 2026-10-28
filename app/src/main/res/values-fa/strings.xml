@@ -409,6 +409,7 @@
     <string name="settings_action_back">"برگشت"</string>
     <string name="settings_provider_custom_endpoint">"نقطه پایان سفارشی"</string>
     <string name="settings_provider_custom_endpoint_desc">"هر API سازگار یا سرور محلی را وصل کنید"</string>
+    <string name="settings_provider_badge_new">"جدید"</string>
     <string name="settings_providers_intro">"مدل ها را به هم وصل کنید و انتخاب کنید چه چیزی به گفتگوی شما قدرت می دهد"</string>
     <string name="settings_providers_search_placeholder">"ارائه دهندگان یا مدل ها را جستجو کنید"</string>
     <string name="settings_providers_search_all_models">"جستجو در تمام مدل ها"</string>
@@ -951,4 +952,5 @@
     <string name="dhizuku_requesting">در انتظار مجوز…</string>
     <string name="dhizuku_denied">دسترسی رد شد · در Dhizuku مجوز بدهید</string>
     <string name="dhizuku_error">اتصال ناموفق · Dhizuku را بررسی و دوباره تلاش کنید</string>
+    <string name="settings_language_sinhala">සිංහල</string>
 </resources>

@@ -409,6 +409,7 @@
     <string name="settings_action_back">"Назад"</string>
     <string name="settings_provider_custom_endpoint">"Свой адрес API"</string>
     <string name="settings_provider_custom_endpoint_desc">"Подключите любой совместимый API или локальный сервер"</string>
+    <string name="settings_provider_badge_new">"Новое"</string>
     <string name="settings_providers_intro">"Подключите модели и выберите их для чатов"</string>
     <string name="settings_providers_search_placeholder">"Поиск провайдеров или моделей"</string>
     <string name="settings_providers_search_all_models">"Поиск всех моделей"</string>
@@ -953,4 +954,5 @@
     <string name="dhizuku_requesting">Ожидание разрешения…</string>
     <string name="dhizuku_denied">Доступ запрещён · разрешите доступ в Dhizuku</string>
     <string name="dhizuku_error">Ошибка подключения · проверьте Dhizuku и повторите попытку</string>
+    <string name="settings_language_sinhala">සිංහල</string>
 </resources>

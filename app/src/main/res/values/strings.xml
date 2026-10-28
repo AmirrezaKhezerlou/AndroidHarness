@@ -431,6 +431,7 @@
     <string name="settings_action_back">Back</string>
     <string name="settings_provider_custom_endpoint">Custom endpoint</string>
     <string name="settings_provider_custom_endpoint_desc">Connect any compatible API or local server</string>
+    <string name="settings_provider_badge_new">New</string>
     <string name="settings_providers_intro">Connect models and choose what powers your chats</string>
     <string name="settings_providers_search_placeholder">Search providers or models</string>
     <string name="settings_providers_search_all_models">Search all models</string>
@@ -983,4 +984,5 @@
     <string name="dhizuku_requesting">Waiting for permission…</string>
     <string name="dhizuku_denied">Access denied · grant access in Dhizuku</string>
     <string name="dhizuku_error">Connection failed · check Dhizuku and try again</string>
+    <string name="settings_language_sinhala">සිංහල</string>
 </resources>
