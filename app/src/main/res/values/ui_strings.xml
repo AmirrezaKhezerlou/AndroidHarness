@@ -1653,4 +1653,23 @@
     <string name="background_android_description">Manage all Android notification settings.</string>
     <string name="background_run_blocked">Background running is off. Open AndroidHarness to start or continue a task.</string>
     <string name="background_service_notice">Background service is running</string>
+    <string name="local_gpu_download_title">GPU support</string>
+    <string name="local_gpu_runtime_repository">Source: Sanuu7/AH-GPU-Runtime</string>
+    <string name="local_gpu_delivery_play">Installed securely through Google Play.</string>
+    <string name="local_gpu_delivery_github">Downloads the GPU package matching this app and device from GitHub.</string>
+    <string name="local_gpu_optional_download">Optional download. CPU inference works without it; GPU support stays available offline after installation.</string>
+    <string name="local_gpu_checking">Checking GPU support…</string>
+    <string name="local_gpu_waiting">Waiting for download…</string>
+    <string name="local_gpu_downloading">Downloading GPU support…</string>
+    <string name="local_gpu_installing">Installing GPU support…</string>
+    <string name="local_gpu_confirmation">Google Play needs your confirmation to continue.</string>
+    <string name="local_gpu_installed">GPU support installed</string>
+    <string name="local_gpu_cancelled">Download cancelled. CPU inference is still available.</string>
+    <string name="local_gpu_download_unsupported">GPU support is unavailable for this app architecture.</string>
+    <string name="local_gpu_download_failed">GPU support could not be installed. CPU inference is still available.</string>
+    <string name="local_gpu_download_progress">%1$s of %2$s · %3$d%%</string>
+    <string name="local_gpu_continue">Continue with Google Play</string>
+    <string name="local_gpu_download_action">Download GPU support</string>
+    <string name="local_gpu_retry_download">Retry download</string>
+    <string name="local_gpu_cancel_download">Cancel download</string>
 </resources>

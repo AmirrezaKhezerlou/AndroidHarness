@@ -23,6 +23,12 @@ public final class ReleaseProbe {
                 throw new AssertionError("Environment label changed: " + state + " -> " + type.getSimpleName());
         }
         System.out.println("ENVIRONMENT_LABELS_OK");
+        if (args.length > 1 && !args[1].isEmpty()) {
+            Class<?> local = Class.forName(LOCAL);
+            if (!(Boolean) local.getMethod("loadBackend", String.class).invoke(local.getField("INSTANCE").get(null), args[1]))
+                throw new AssertionError("Downloaded GPU backend did not load");
+            System.out.println("DOWNLOADED_GPU_BACKEND_OK");
+        }
         checkPairing();
         checkSshKeys();
         checkNative(args[0], false);

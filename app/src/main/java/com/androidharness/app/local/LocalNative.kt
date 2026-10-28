@@ -4,7 +4,11 @@ import androidx.annotation.Keep
 
 @Keep
 object LocalNative {
-    init { System.loadLibrary("harness_local") }
+    init {
+        System.loadLibrary("harness_local")
+        if (android.os.Process.is64Bit()) check(loadBackend("libggml-cpu.so")) { "CPU inference backend could not load." }
+    }
+    external fun loadBackend(path: String): Boolean
     external fun gpuDevice(): String
     external fun create(): Long
     external fun isCancelled(handle: Long): Boolean

@@ -1659,4 +1659,23 @@
     <string name="background_android_description">Gerencie todas as notificações do Android.</string>
     <string name="background_run_blocked">A execução em segundo plano está desativada. Abra o AndroidHarness para iniciar ou continuar uma tarefa.</string>
     <string name="background_service_notice">Serviço em segundo plano ativo</string>
+    <string name="local_gpu_download_title">Suporte a GPU</string>
+    <string name="local_gpu_runtime_repository">Fonte: Sanuu7/AH-GPU-Runtime</string>
+    <string name="local_gpu_delivery_play">Instalado com segurança pelo Google Play.</string>
+    <string name="local_gpu_delivery_github">Baixa do GitHub o pacote de GPU correspondente a este aplicativo e dispositivo.</string>
+    <string name="local_gpu_optional_download">Download opcional. A inferência na CPU funciona sem ele; o suporte a GPU continua disponível offline após a instalação.</string>
+    <string name="local_gpu_checking">Verificando suporte a GPU…</string>
+    <string name="local_gpu_waiting">Aguardando download…</string>
+    <string name="local_gpu_downloading">Baixando suporte a GPU…</string>
+    <string name="local_gpu_installing">Instalando suporte a GPU…</string>
+    <string name="local_gpu_confirmation">O Google Play precisa da sua confirmação para continuar.</string>
+    <string name="local_gpu_installed">Suporte a GPU instalado</string>
+    <string name="local_gpu_cancelled">Download cancelado. A inferência na CPU continua disponível.</string>
+    <string name="local_gpu_download_unsupported">O suporte a GPU não está disponível para esta arquitetura do aplicativo.</string>
+    <string name="local_gpu_download_failed">Não foi possível instalar o suporte a GPU. A inferência na CPU continua disponível.</string>
+    <string name="local_gpu_download_progress">%1$s de %2$s · %3$d%%</string>
+    <string name="local_gpu_continue">Continuar com o Google Play</string>
+    <string name="local_gpu_download_action">Baixar suporte a GPU</string>
+    <string name="local_gpu_retry_download">Tentar baixar novamente</string>
+    <string name="local_gpu_cancel_download">Cancelar download</string>
 </resources>

@@ -1663,4 +1663,23 @@
     <string name="background_android_description">Все настройки уведомлений Android.</string>
     <string name="background_run_blocked">Фоновая работа отключена. Откройте AndroidHarness, чтобы начать или продолжить задачу.</string>
     <string name="background_service_notice">Фоновая служба работает</string>
+    <string name="local_gpu_download_title">Поддержка GPU</string>
+    <string name="local_gpu_runtime_repository">Источник: Sanuu7/AH-GPU-Runtime</string>
+    <string name="local_gpu_delivery_play">Устанавливается безопасно через Google Play.</string>
+    <string name="local_gpu_delivery_github">Загружает с GitHub пакет GPU, подходящий для этого приложения и устройства.</string>
+    <string name="local_gpu_optional_download">Необязательная загрузка. Вывод на CPU работает и без неё; поддержка GPU остаётся доступной офлайн после установки.</string>
+    <string name="local_gpu_checking">Проверка поддержки GPU…</string>
+    <string name="local_gpu_waiting">Ожидание загрузки…</string>
+    <string name="local_gpu_downloading">Загрузка поддержки GPU…</string>
+    <string name="local_gpu_installing">Установка поддержки GPU…</string>
+    <string name="local_gpu_confirmation">Google Play требует вашего подтверждения, чтобы продолжить.</string>
+    <string name="local_gpu_installed">Поддержка GPU установлена</string>
+    <string name="local_gpu_cancelled">Загрузка отменена. Вывод на CPU по-прежнему доступен.</string>
+    <string name="local_gpu_download_unsupported">Поддержка GPU недоступна для этой архитектуры приложения.</string>
+    <string name="local_gpu_download_failed">Не удалось установить поддержку GPU. Вывод на CPU по-прежнему доступен.</string>
+    <string name="local_gpu_download_progress">%1$s из %2$s · %3$d%%</string>
+    <string name="local_gpu_continue">Продолжить в Google Play</string>
+    <string name="local_gpu_download_action">Загрузить поддержку GPU</string>
+    <string name="local_gpu_retry_download">Повторить загрузку</string>
+    <string name="local_gpu_cancel_download">Отменить загрузку</string>
 </resources>

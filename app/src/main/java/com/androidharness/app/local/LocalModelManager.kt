@@ -42,6 +42,10 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 class LocalModelManager(private val context: Context) {
+    val gpuSupport = GpuSupport(context)
+    suspend fun gpuDevice(): String = withContext(Dispatchers.IO) {
+        inference.withLock { runCatching { gpuSupport.device() }.getOrDefault("") }
+    }
     val consent = LocalModelConsent()
     private fun resourceKey(model: LocalModelSpec, value: LocalModelLimits, downloading: Boolean, profile: LocalDeviceProfile) =
         "${model.id}:${value.context}:${value.input}:${value.output}:${value.threads}:${value.backend}:$downloading:${profile.lowMemory}:${model.projector?.url}"
@@ -482,7 +486,7 @@ class LocalModelManager(private val context: Context) {
         val experimental = com.androidharness.app.data.SettingsRepository(context).settings.first().localModelExperimental
         val gpu = withContext(Dispatchers.IO) {
             LocalAccelerationPolicy.useGpu(experimental, limits.backend,
-                experimental && limits.backend != LocalBackend.CPU && runCatching { LocalNative.gpuDevice().isNotBlank() }.getOrDefault(false))
+                experimental && limits.backend != LocalBackend.CPU && runCatching { gpuSupport.device().isNotBlank() }.getOrDefault(false))
         }
         synchronized(gate) {
             check(id !in blocked && store.installed(model)) { "Local model is not installed. Download it in Settings > Local models." }

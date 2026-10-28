@@ -13,10 +13,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 @Composable
-internal fun LocalGpuInformation() {
+internal fun LocalGpuInformation(manager: LocalModelManager) {
     val uri = LocalUriHandler.current
     var device by remember { mutableStateOf("") }
-    LaunchedEffect(Unit) { device = withContext(Dispatchers.IO) { runCatching { LocalNative.gpuDevice() }.getOrDefault("") } }
+    val support by manager.gpuSupport.state.collectAsState()
+    LaunchedEffect(support.phase) { device = manager.gpuDevice() }
     Text(stringResource(R.string.local_gpu_scope), style = MaterialTheme.typography.bodySmall)
     Text(if (device.isNotBlank()) stringResource(R.string.local_gpu_detected, device) else stringResource(R.string.local_gpu_unavailable),
         style = MaterialTheme.typography.bodySmall)
@@ -25,11 +26,10 @@ internal fun LocalGpuInformation() {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun LocalBackendPicker(selected: LocalBackend, enabled: Boolean, onSelect: (LocalBackend) -> Unit) {
+internal fun LocalBackendPicker(manager: LocalModelManager, selected: LocalBackend, enabled: Boolean, onSelect: (LocalBackend) -> Unit) {
     var available by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        available = withContext(Dispatchers.IO) { runCatching { LocalNative.gpuDevice().isNotBlank() }.getOrDefault(false) }
-    }
+    val support by manager.gpuSupport.state.collectAsState()
+    LaunchedEffect(support.phase) { available = manager.gpuDevice().isNotBlank() }
     Text(stringResource(R.string.local_gpu_processor), style = MaterialTheme.typography.titleSmall)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         LocalBackend.entries.forEach { backend ->

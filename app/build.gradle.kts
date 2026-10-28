@@ -1,4 +1,9 @@
 import java.util.Properties
+import java.security.MessageDigest
+import java.util.zip.GZIPOutputStream
+import java.util.zip.GZIPInputStream
+import org.gradle.process.ExecOperations
+import javax.inject.Inject
 
 plugins {
     alias(libs.plugins.android.application)
@@ -22,6 +27,8 @@ val githubBuildProperties = Properties().apply {
 // Load only from the ignored local build settings; never from public CI variables.
 // Device Flow never embeds an OAuth client secret or auth backend.
 val githubClientId = githubBuildProperties.getProperty("GITHUB_CLIENT_ID", "")
+val distributionChannel = providers.gradleProperty("distribution").getOrElse("github")
+require(distributionChannel in setOf("github", "play")) { "distribution must be github or play" }
 require(githubClientId.matches(Regex("[A-Za-z0-9]*"))) { "Invalid GitHub OAuth Client ID" }
 val hasNdk: Boolean = run {
     val sdk = System.getenv("ANDROID_HOME")?.takeIf { it.isNotBlank() }?.let { File(it) }
@@ -33,6 +40,8 @@ val hasNdk: Boolean = run {
 }
 
 android {
+    if (distributionChannel == "play") dynamicFeatures += setOf(":local_gpu")
+    sourceSets.getByName("main").java.srcDir("src/${distributionChannel}Delivery/java")
     namespace = "com.androidharness.app"
     // The in-app picker must be able to switch languages without a Play download.
     bundle { language { enableSplit = false } }
@@ -56,10 +65,11 @@ android {
         versionCode = 33
         versionName = "2.9"
         buildConfigField("String", "GITHUB_CLIENT_ID", "\"$githubClientId\"")
+        buildConfigField("boolean", "PLAY_DISTRIBUTION", (distributionChannel == "play").toString())
         if (hasNdk) {
             ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64") }
             externalNativeBuild {
-                cmake { arguments += "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON" }
+                cmake { arguments += listOf("-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON", "-DHARNESS_GPU_OUTPUT=${layout.buildDirectory.dir("generated/gpuNative").get().asFile}") }
             }
         }
         // Instrumented tests drive the real WebView (screenshots, history,
@@ -143,6 +153,9 @@ android {
     }
 
     packaging {
+        // Delivered separately by Play or the pinned GitHub runtime package.
+        jniLibs.excludes += "**/libggml-vulkan.so"
+        jniLibs.excludes += "**/libharness_gpu_unavailable.so"
         resources {
             excludes += setOf(
                 "META-INF/DEPENDENCIES", "META-INF/LICENSE", "META-INF/LICENSE.txt", "META-INF/NOTICE", "META-INF/NOTICE.txt",
@@ -175,6 +188,7 @@ configurations.configureEach {
 }
 
 dependencies {
+    if (distributionChannel == "play") implementation("com.google.android.play:feature-delivery:2.1.0")
     constraints {
         // dev.cel asks for Guava 33.6 and room-compiler for 33.2.1. 33.7.2 is
         // the first release that stops sizing collection arrays from the
@@ -241,4 +255,69 @@ dependencies {
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.test.ext.junit)
+}
+
+// The hash is bundled in the base app, so neither a changed release manifest nor
+// a replaced download can authorize different executable code.
+abstract class PrepareGpuRuntime @Inject constructor(private val execOps: ExecOperations) : DefaultTask() {
+    @get:InputDirectory abstract val nativeDirectory: DirectoryProperty
+    @get:Optional @get:InputDirectory abstract val externalPackages: DirectoryProperty
+    @get:InputFile abstract val stripTool: RegularFileProperty
+    @get:OutputDirectory abstract val assetDirectory: DirectoryProperty
+    @get:OutputDirectory abstract val packageDirectory: DirectoryProperty
+    @get:OutputDirectory abstract val featureDirectory: DirectoryProperty
+
+    @TaskAction fun prepare() {
+        listOf(assetDirectory, packageDirectory, featureDirectory).forEach { it.get().asFile.deleteRecursively(); it.get().asFile.mkdirs() }
+        for (abi in listOf("armeabi-v7a", "x86")) {
+            val stub = featureDirectory.file("$abi/libharness_gpu_unavailable.so").get().asFile
+            stub.parentFile.mkdirs()
+            nativeDirectory.file("$abi/libharness_gpu_unavailable.so").get().asFile.copyTo(stub, overwrite = true)
+            execOps.exec { commandLine(stripTool.get().asFile, "--strip-unneeded", stub) }.assertNormalExitValue()
+        }
+        for (abi in listOf("arm64-v8a", "x86_64")) {
+            val source = nativeDirectory.file("$abi/libggml-vulkan.so").get().asFile
+            val library = featureDirectory.file("$abi/libggml-vulkan.so").get().asFile
+            library.parentFile.mkdirs()
+            val external = externalPackages.orNull?.asFile
+            val supplied = external?.let { folder ->
+                val manifest = folder.resolve("manifest.json").readText()
+                check(manifest.contains("19cce6919992fdffd92e0ac152caaf1e2b8f254e")) { "GPU package revision must match this app's ggml core" }
+                val pattern = Regex("\"asset\"\\s*:\\s*\"(gpu-$abi-[a-f0-9]{64}\\.so\\.gz)\"")
+                folder.resolve(pattern.findAll(manifest).single().groupValues[1])
+            }
+            if (supplied == null) {
+                check(source.isFile) { "GPU backend for $abi was not built" }
+                source.copyTo(library, overwrite = true)
+                execOps.exec { commandLine(stripTool.get().asFile, "--strip-unneeded", library) }.assertNormalExitValue()
+            } else GZIPInputStream(supplied.inputStream()).use { input -> library.outputStream().use { output ->
+                var bytes = 0L; val buffer = ByteArray(65536)
+                while (true) { val size = input.read(buffer); if (size < 0) break; bytes += size; check(bytes <= 134217728); output.write(buffer, 0, size) }
+            } }
+            val digest = MessageDigest.getInstance("SHA-256").digest(library.readBytes()).joinToString("") { "%02x".format(it) }
+            val name = "gpu-$abi-$digest.so.gz"
+            if (supplied == null) GZIPOutputStream(packageDirectory.file(name).get().asFile.outputStream()).use { output -> library.inputStream().use { it.copyTo(output) } }
+            else { check(supplied.name == name) { "GPU package hash does not match its filename" }; supplied.copyTo(packageDirectory.file(name).get().asFile, overwrite = true) }
+            val manifest = assetDirectory.file("gpu-runtime/$abi.json").get().asFile
+            manifest.parentFile.mkdirs()
+            manifest.writeText("""{"schema":1,"abi":"$abi","sha256":"$digest","bytes":${library.length()},"asset":"$name","downloadBytes":${packageDirectory.file(name).get().asFile.length()}}""")
+        }
+    }
+}
+
+if (hasNdk) androidComponents.onVariants { variant ->
+    val capital = variant.name.replaceFirstChar { it.uppercaseChar() }
+    val sdk = githubBuildProperties.getProperty("sdk.dir") ?: System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT")
+    val strip = fileTree("$sdk/ndk/$pinnedNdk/toolchains/llvm/prebuilt") { include("*/bin/llvm-strip", "*/bin/llvm-strip.exe") }.singleFile
+    val prepare = tasks.register<PrepareGpuRuntime>("prepareGpuRuntime$capital") {
+        dependsOn(tasks.matching { it.name == "externalNativeBuild$capital" })
+        nativeDirectory.set(layout.buildDirectory.dir("generated/gpuNative/${if (variant.buildType == "debug") "Debug" else "RelWithDebInfo"}"))
+        providers.gradleProperty("gpuRuntimePackages").orNull?.let { externalPackages.set(file(it)) }
+        stripTool.set(strip)
+        assetDirectory.set(layout.buildDirectory.dir("generated/gpuDelivery/${variant.name}/assets"))
+        packageDirectory.set(layout.buildDirectory.dir("outputs/gpuRuntime/${variant.name}"))
+        featureDirectory.set(layout.buildDirectory.dir("generated/gpuDelivery/${variant.name}/jniLibs"))
+    }
+    // Play authenticates native splits itself; its base APK has no download manifest.
+    if (distributionChannel == "github") variant.sources.assets?.addGeneratedSourceDirectory(prepare, PrepareGpuRuntime::assetDirectory)
 }

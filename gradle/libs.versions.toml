@@ -66,6 +66,7 @@ androidx-test-core = { module = "androidx.test:core", version = "1.6.1" }
 androidx-test-ext-junit = { module = "androidx.test.ext:junit", version = "1.2.1" }
 
 [plugins]
+android-dynamic-feature = { id = "com.android.dynamic-feature", version.ref = "agp" }
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

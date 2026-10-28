@@ -1653,4 +1653,23 @@
     <string name="background_android_description">Kelola semua setelan notifikasi Android.</string>
     <string name="background_run_blocked">Proses latar belakang nonaktif. Buka AndroidHarness untuk memulai atau melanjutkan tugas.</string>
     <string name="background_service_notice">Layanan latar belakang berjalan</string>
+    <string name="local_gpu_download_title">Dukungan GPU</string>
+    <string name="local_gpu_runtime_repository">Sumber: Sanuu7/AH-GPU-Runtime</string>
+    <string name="local_gpu_delivery_play">Dipasang dengan aman melalui Google Play.</string>
+    <string name="local_gpu_delivery_github">Mengunduh paket GPU yang cocok dengan aplikasi dan perangkat ini dari GitHub.</string>
+    <string name="local_gpu_optional_download">Unduhan opsional. Inferensi CPU tetap berfungsi tanpanya; dukungan GPU tetap tersedia secara offline setelah dipasang.</string>
+    <string name="local_gpu_checking">Memeriksa dukungan GPU…</string>
+    <string name="local_gpu_waiting">Menunggu unduhan…</string>
+    <string name="local_gpu_downloading">Mengunduh dukungan GPU…</string>
+    <string name="local_gpu_installing">Memasang dukungan GPU…</string>
+    <string name="local_gpu_confirmation">Google Play memerlukan konfirmasi Anda untuk melanjutkan.</string>
+    <string name="local_gpu_installed">Dukungan GPU terpasang</string>
+    <string name="local_gpu_cancelled">Unduhan dibatalkan. Inferensi CPU masih tersedia.</string>
+    <string name="local_gpu_download_unsupported">Dukungan GPU tidak tersedia untuk arsitektur aplikasi ini.</string>
+    <string name="local_gpu_download_failed">Dukungan GPU tidak dapat dipasang. Inferensi CPU masih tersedia.</string>
+    <string name="local_gpu_download_progress">%1$s dari %2$s · %3$d%%</string>
+    <string name="local_gpu_continue">Lanjutkan dengan Google Play</string>
+    <string name="local_gpu_download_action">Unduh dukungan GPU</string>
+    <string name="local_gpu_retry_download">Coba unduh lagi</string>
+    <string name="local_gpu_cancel_download">Batalkan unduhan</string>
 </resources>

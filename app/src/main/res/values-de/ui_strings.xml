@@ -1659,4 +1659,23 @@
     <string name="background_android_description">Alle Android-Benachrichtigungseinstellungen verwalten.</string>
     <string name="background_run_blocked">Hintergrundausführung ist aus. Öffne AndroidHarness, um eine Aufgabe zu starten oder fortzusetzen.</string>
     <string name="background_service_notice">Hintergrunddienst läuft</string>
+    <string name="local_gpu_download_title">GPU-Unterstützung</string>
+    <string name="local_gpu_runtime_repository">Quelle: Sanuu7/AH-GPU-Runtime</string>
+    <string name="local_gpu_delivery_play">Wird sicher über Google Play installiert.</string>
+    <string name="local_gpu_delivery_github">Lädt das zu dieser App und diesem Gerät passende GPU-Paket von GitHub herunter.</string>
+    <string name="local_gpu_optional_download">Optionaler Download. CPU-Inferenz funktioniert auch ohne; die GPU-Unterstützung bleibt nach der Installation offline verfügbar.</string>
+    <string name="local_gpu_checking">GPU-Unterstützung wird geprüft…</string>
+    <string name="local_gpu_waiting">Warten auf Download…</string>
+    <string name="local_gpu_downloading">GPU-Unterstützung wird heruntergeladen…</string>
+    <string name="local_gpu_installing">GPU-Unterstützung wird installiert…</string>
+    <string name="local_gpu_confirmation">Google Play benötigt deine Bestätigung, um fortzufahren.</string>
+    <string name="local_gpu_installed">GPU-Unterstützung installiert</string>
+    <string name="local_gpu_cancelled">Download abgebrochen. CPU-Inferenz ist weiterhin verfügbar.</string>
+    <string name="local_gpu_download_unsupported">GPU-Unterstützung ist für diese App-Architektur nicht verfügbar.</string>
+    <string name="local_gpu_download_failed">GPU-Unterstützung konnte nicht installiert werden. CPU-Inferenz ist weiterhin verfügbar.</string>
+    <string name="local_gpu_download_progress">%1$s von %2$s · %3$d%%</string>
+    <string name="local_gpu_continue">Mit Google Play fortfahren</string>
+    <string name="local_gpu_download_action">GPU-Unterstützung herunterladen</string>
+    <string name="local_gpu_retry_download">Download wiederholen</string>
+    <string name="local_gpu_cancel_download">Download abbrechen</string>
 </resources>

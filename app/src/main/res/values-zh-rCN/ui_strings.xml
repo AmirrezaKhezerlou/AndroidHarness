@@ -1653,4 +1653,23 @@
     <string name="background_android_description">管理所有 Android 通知设置。</string>
     <string name="background_run_blocked">后台运行已关闭。请打开 AndroidHarness 以开始或继续任务。</string>
     <string name="background_service_notice">后台服务正在运行</string>
+    <string name="local_gpu_download_title">GPU 支持</string>
+    <string name="local_gpu_runtime_repository">来源：Sanuu7/AH-GPU-Runtime</string>
+    <string name="local_gpu_delivery_play">通过 Google Play 安全安装。</string>
+    <string name="local_gpu_delivery_github">从 GitHub 下载与此应用和设备匹配的 GPU 软件包。</string>
+    <string name="local_gpu_optional_download">可选下载。没有它 CPU 推理仍可运行；安装后 GPU 支持可离线使用。</string>
+    <string name="local_gpu_checking">正在检查 GPU 支持…</string>
+    <string name="local_gpu_waiting">正在等待下载…</string>
+    <string name="local_gpu_downloading">正在下载 GPU 支持…</string>
+    <string name="local_gpu_installing">正在安装 GPU 支持…</string>
+    <string name="local_gpu_confirmation">需要你在 Google Play 中确认才能继续。</string>
+    <string name="local_gpu_installed">GPU 支持已安装</string>
+    <string name="local_gpu_cancelled">下载已取消。CPU 推理仍然可用。</string>
+    <string name="local_gpu_download_unsupported">此应用架构无法使用 GPU 支持。</string>
+    <string name="local_gpu_download_failed">无法安装 GPU 支持。CPU 推理仍然可用。</string>
+    <string name="local_gpu_download_progress">%1$s / %2$s · %3$d%%</string>
+    <string name="local_gpu_continue">继续前往 Google Play</string>
+    <string name="local_gpu_download_action">下载 GPU 支持</string>
+    <string name="local_gpu_retry_download">重试下载</string>
+    <string name="local_gpu_cancel_download">取消下载</string>
 </resources>

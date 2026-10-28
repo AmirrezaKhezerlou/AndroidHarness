@@ -30,6 +30,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 class HarnessApp : Application() {
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(base)
+        com.androidharness.app.local.GpuDeliveryFactory.attach(this)
+    }
     lateinit var container: AppContainer
         private set
 

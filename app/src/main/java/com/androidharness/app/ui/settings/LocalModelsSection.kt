@@ -149,6 +149,7 @@ private fun LocalModelsContent(container: AppContainer) {
         }
     }
     LocalExperimentalSwitch(container)
+    if (experimental) LocalGpuSupportCard(manager)
     PrimaryTabRow(selectedTabIndex = panel.coerceIn(0, 1), divider = {}) {
         listOf(R.string.local_library, R.string.local_browse).forEachIndexed { index, title ->
             Tab(selected = panel == index, onClick = { panel = index }, text = { Text(stringResource(title)) })
@@ -168,7 +169,7 @@ private fun LocalModelsContent(container: AppContainer) {
             TextButton(onClick = { options = false; deviceDialog = true }) {
                 Icon(Icons.Default.Info, null); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.settings_local_models_about))
             }
-            if (experimental) LocalGpuInformation()
+            if (experimental) LocalGpuInformation(manager)
         }
     }
     message?.let { text ->
@@ -490,7 +491,7 @@ internal fun LocalLimitsDialog(model: LocalModelSpec, manager: LocalModelManager
     AlertDialog(onDismissRequest = { if (!saving) onDismiss() }, title = { Text(stringResource(R.string.settings_local_models_model_settings)) }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(model.title, style = MaterialTheme.typography.titleSmall)
-            if (experimental.localModelExperimental) LocalBackendPicker(backend, !saving) { backend = it }
+            if (experimental.localModelExperimental) LocalBackendPicker(manager, backend, !saving) { backend = it }
             LocalNumberField(
                 stringResource(R.string.settings_local_models_conversation_size),
                 context,

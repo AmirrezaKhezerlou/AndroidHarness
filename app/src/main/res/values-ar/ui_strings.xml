@@ -1667,4 +1667,23 @@
     <string name="background_android_description">إدارة كل إعدادات إشعارات Android.</string>
     <string name="background_run_blocked">التشغيل في الخلفية متوقف. افتح AndroidHarness لبدء مهمة أو متابعتها.</string>
     <string name="background_service_notice">خدمة في الخلفية قيد التشغيل</string>
+    <string name="local_gpu_download_title">دعم GPU</string>
+    <string name="local_gpu_runtime_repository">المصدر: Sanuu7/AH-GPU-Runtime</string>
+    <string name="local_gpu_delivery_play">يُثبَّت بأمان عبر Google Play.</string>
+    <string name="local_gpu_delivery_github">ينزّل حزمة GPU المطابقة لهذا التطبيق والجهاز من GitHub.</string>
+    <string name="local_gpu_optional_download">تنزيل اختياري. يعمل الاستدلال على المعالج بدونها؛ ويظل دعم GPU متاحًا دون اتصال بعد التثبيت.</string>
+    <string name="local_gpu_checking">جارٍ التحقق من دعم GPU…</string>
+    <string name="local_gpu_waiting">بانتظار التنزيل…</string>
+    <string name="local_gpu_downloading">جارٍ تنزيل دعم GPU…</string>
+    <string name="local_gpu_installing">جارٍ تثبيت دعم GPU…</string>
+    <string name="local_gpu_confirmation">يحتاج Google Play إلى تأكيدك للمتابعة.</string>
+    <string name="local_gpu_installed">تم تثبيت دعم GPU</string>
+    <string name="local_gpu_cancelled">أُلغي التنزيل. لا يزال الاستدلال على المعالج متاحًا.</string>
+    <string name="local_gpu_download_unsupported">دعم GPU غير متاح لبنية هذا التطبيق.</string>
+    <string name="local_gpu_download_failed">تعذّر تثبيت دعم GPU. لا يزال الاستدلال على المعالج متاحًا.</string>
+    <string name="local_gpu_download_progress">%1$s من %2$s · %3$d%%</string>
+    <string name="local_gpu_continue">المتابعة مع Google Play</string>
+    <string name="local_gpu_download_action">تنزيل دعم GPU</string>
+    <string name="local_gpu_retry_download">إعادة التنزيل</string>
+    <string name="local_gpu_cancel_download">إلغاء التنزيل</string>
 </resources>

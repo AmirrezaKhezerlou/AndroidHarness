@@ -1659,4 +1659,23 @@
     <string name="background_android_description">"සියලු Android දැනුම් දත්ත සැකසුම් කළමනාකරණය කරන්න."</string>
     <string name="background_run_blocked">"පසුබිම ක්‍රියාත්මක වන අතර, විවෘත AndroidHarness වැඩ ආරම්භ කිරීම හෝ දිගටම කිරීම."</string>
     <string name="background_service_notice">"Background සේවා ක්‍රියාත්මක වේ"</string>
+    <string name="local_gpu_download_title">GPU සහාය</string>
+    <string name="local_gpu_runtime_repository">මූලාශ්‍ර: Sanuu7/AH-GPU-Runtime</string>
+    <string name="local_gpu_delivery_play">Google Play හරහා ආරක්ෂිතව ස්ථාපනය කෙරේ.</string>
+    <string name="local_gpu_delivery_github">මෙම යෙදුමට සහ උපාංගයට ගැළපෙන GPU පැකේජය GitHub වෙතින් බාගනී.</string>
+    <string name="local_gpu_optional_download">විකල්ප බාගැනීමකි. මෙය නොමැතිව CPU මත ධාවනය කළ හැක. ස්ථාපනයෙන් පසු අන්තර්ජාලය නොමැතිව GPU සහාය භාවිත කළ හැක.</string>
+    <string name="local_gpu_checking">GPU සහාය පරීක්ෂා කරමින්…</string>
+    <string name="local_gpu_waiting">බාගැනීම සඳහා රැඳී සිටිමින්…</string>
+    <string name="local_gpu_downloading">GPU සහාය බාගනිමින්…</string>
+    <string name="local_gpu_installing">GPU සහාය ස්ථාපනය කරමින්…</string>
+    <string name="local_gpu_confirmation">ඉදිරියට යාමට Google Play හට ඔබේ තහවුරු කිරීම අවශ්‍යයි.</string>
+    <string name="local_gpu_installed">GPU සහාය ස්ථාපනය කර ඇත</string>
+    <string name="local_gpu_cancelled">බාගැනීම අවලංගු කරන ලදී. CPU මත තවමත් ධාවනය කළ හැක.</string>
+    <string name="local_gpu_download_unsupported">මෙම යෙදුම් ගෘහ නිර්මාණය සඳහා GPU සහාය නොමැත.</string>
+    <string name="local_gpu_download_failed">GPU සහාය ස්ථාපනය කළ නොහැකි විය. CPU මත තවමත් ධාවනය කළ හැක.</string>
+    <string name="local_gpu_download_progress">%2$s න් %1$s · %3$d%%</string>
+    <string name="local_gpu_continue">Google Play සමඟ ඉදිරියට යන්න</string>
+    <string name="local_gpu_download_action">GPU සහාය බාගන්න</string>
+    <string name="local_gpu_retry_download">නැවත බාගන්න</string>
+    <string name="local_gpu_cancel_download">බාගැනීම අවලංගු කරන්න</string>
 </resources>

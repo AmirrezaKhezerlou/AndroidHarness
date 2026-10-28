@@ -1659,4 +1659,23 @@
     <string name="background_android_description">Gestiona todas las notificaciones de Android.</string>
     <string name="background_run_blocked">La ejecución en segundo plano está desactivada. Abre AndroidHarness para iniciar o continuar una tarea.</string>
     <string name="background_service_notice">Servicio en segundo plano activo</string>
+    <string name="local_gpu_download_title">Compatibilidad con GPU</string>
+    <string name="local_gpu_runtime_repository">Fuente: Sanuu7/AH-GPU-Runtime</string>
+    <string name="local_gpu_delivery_play">Se instala de forma segura a través de Google Play.</string>
+    <string name="local_gpu_delivery_github">Descarga desde GitHub el paquete de GPU correspondiente a esta aplicación y dispositivo.</string>
+    <string name="local_gpu_optional_download">Descarga opcional. La inferencia en CPU funciona sin ella; la compatibilidad con GPU sigue disponible sin conexión tras la instalación.</string>
+    <string name="local_gpu_checking">Comprobando compatibilidad con GPU…</string>
+    <string name="local_gpu_waiting">Esperando la descarga…</string>
+    <string name="local_gpu_downloading">Descargando compatibilidad con GPU…</string>
+    <string name="local_gpu_installing">Instalando compatibilidad con GPU…</string>
+    <string name="local_gpu_confirmation">Google Play necesita tu confirmación para continuar.</string>
+    <string name="local_gpu_installed">Compatibilidad con GPU instalada</string>
+    <string name="local_gpu_cancelled">Descarga cancelada. La inferencia en CPU sigue disponible.</string>
+    <string name="local_gpu_download_unsupported">La compatibilidad con GPU no está disponible para esta arquitectura de la aplicación.</string>
+    <string name="local_gpu_download_failed">No se pudo instalar la compatibilidad con GPU. La inferencia en CPU sigue disponible.</string>
+    <string name="local_gpu_download_progress">%1$s de %2$s · %3$d%%</string>
+    <string name="local_gpu_continue">Continuar con Google Play</string>
+    <string name="local_gpu_download_action">Descargar compatibilidad con GPU</string>
+    <string name="local_gpu_retry_download">Reintentar descarga</string>
+    <string name="local_gpu_cancel_download">Cancelar descarga</string>
 </resources>

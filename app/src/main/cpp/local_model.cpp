@@ -1,5 +1,6 @@
 #include <jni.h>
 #include "llama.h"
+#include "ggml-backend.h"
 #include "local_request.h"
 #include <algorithm>
 #include <atomic>
@@ -28,6 +29,14 @@ void fail(JNIEnv * env, const char * message) {
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_androidharness_app_local_LocalNative_create(JNIEnv *, jobject) {
     return reinterpret_cast<jlong>(new Request());
+}
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_androidharness_app_local_LocalNative_loadBackend(JNIEnv * env, jobject, jstring path) {
+    const char * value = env->GetStringUTFChars(path, nullptr);
+    if (!value) return false;
+    auto backend = ggml_backend_load(value);
+    env->ReleaseStringUTFChars(path, value);
+    return backend != nullptr;
 }
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_androidharness_app_local_LocalNative_isCancelled(JNIEnv *, jobject, jlong handle) {

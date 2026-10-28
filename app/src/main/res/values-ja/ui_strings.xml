@@ -1657,4 +1657,23 @@
     <string name="background_android_description">Android のすべての通知設定を管理します。</string>
     <string name="background_run_blocked">バックグラウンド実行はオフです。タスクを開始または続行するには AndroidHarness を開いてください。</string>
     <string name="background_service_notice">バックグラウンドサービスを実行中</string>
+    <string name="local_gpu_download_title">GPU サポート</string>
+    <string name="local_gpu_runtime_repository">ソース: Sanuu7/AH-GPU-Runtime</string>
+    <string name="local_gpu_delivery_play">Google Play から安全にインストールされます。</string>
+    <string name="local_gpu_delivery_github">このアプリとデバイスに一致する GPU パッケージを GitHub からダウンロードします。</string>
+    <string name="local_gpu_optional_download">任意のダウンロードです。CPU 推論はこれがなくても動作し、インストール後は GPU サポートをオフラインで利用できます。</string>
+    <string name="local_gpu_checking">GPU サポートを確認しています…</string>
+    <string name="local_gpu_waiting">ダウンロードを待っています…</string>
+    <string name="local_gpu_downloading">GPU サポートをダウンロードしています…</string>
+    <string name="local_gpu_installing">GPU サポートをインストールしています…</string>
+    <string name="local_gpu_confirmation">続行するには Google Play での確認が必要です。</string>
+    <string name="local_gpu_installed">GPU サポートをインストールしました</string>
+    <string name="local_gpu_cancelled">ダウンロードをキャンセルしました。CPU 推論は引き続き利用できます。</string>
+    <string name="local_gpu_download_unsupported">このアプリのアーキテクチャでは GPU サポートを利用できません。</string>
+    <string name="local_gpu_download_failed">GPU サポートをインストールできませんでした。CPU 推論は引き続き利用できます。</string>
+    <string name="local_gpu_download_progress">%1$s / %2$s · %3$d%%</string>
+    <string name="local_gpu_continue">Google Play で続行</string>
+    <string name="local_gpu_download_action">GPU サポートをダウンロード</string>
+    <string name="local_gpu_retry_download">ダウンロードを再試行</string>
+    <string name="local_gpu_cancel_download">ダウンロードをキャンセル</string>
 </resources>

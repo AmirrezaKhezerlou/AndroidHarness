@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 3 ]]; then
-    echo "Usage: $0 ADB_SERIAL RELEASE_APK GGUF_FIXTURE" >&2
+if [[ $# -lt 3 || $# -gt 4 ]]; then
+    echo "Usage: $0 ADB_SERIAL RELEASE_APK GGUF_FIXTURE [GPU_PACKAGE.gz]" >&2
     exit 2
 fi
 release_serial=$1
@@ -27,9 +27,16 @@ adb -s "$release_serial" shell mkdir -p "$release_stage"
 adb -s "$release_serial" push "$release_work/probe-dex.jar" "$release_stage/probe.jar" >/dev/null
 adb -s "$release_serial" push "$release_apk" "$release_stage/app.apk" >/dev/null
 adb -s "$release_serial" push "$release_model" "$release_stage/model.gguf" >/dev/null
+release_gpu_path=""
+if [[ $# -eq 4 ]]; then
+    gzip -dc "$4" > "$release_work/libggml-vulkan.so"
+    release_gpu_path="$release_stage/libggml-vulkan.so"
+    adb -s "$release_serial" push "$release_work/libggml-vulkan.so" "$release_gpu_path" >/dev/null
+    adb -s "$release_serial" shell chmod 444 "$release_gpu_path"
+fi
 set +e
 adb -s "$release_serial" shell \
-    "CLASSPATH='$release_stage/probe.jar:$release_stage/app.apk' app_process -Djava.library.path='$release_stage/app.apk!/lib/$release_abi' /system/bin ReleaseProbe '$release_stage/model.gguf'" \
+    "CLASSPATH='$release_stage/probe.jar:$release_stage/app.apk' app_process -Djava.library.path='$release_stage/app.apk!/lib/$release_abi' /system/bin ReleaseProbe '$release_stage/model.gguf' '$release_gpu_path'" \
     >"$release_work/result.log" 2>&1
 release_status=$?
 set -e
@@ -42,4 +49,5 @@ if [[ $release_status -ne 137 ]] || ! grep -qx RELEASE_PROBE_OK "$release_work/r
 fi
 
 adb -s "$release_serial" shell rm "$release_stage/probe.jar" "$release_stage/app.apk" "$release_stage/model.gguf"
+if [[ -n "$release_gpu_path" ]]; then adb -s "$release_serial" shell rm "$release_gpu_path"; fi
 adb -s "$release_serial" shell rmdir "$release_stage"

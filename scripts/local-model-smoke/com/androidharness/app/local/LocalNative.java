@@ -5,7 +5,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 public final class LocalNative {
-    static { System.loadLibrary("harness_local"); }
+    static { System.loadLibrary("harness_local"); if (!new LocalNative().loadBackend("libggml-cpu.so")) throw new IllegalStateException("CPU backend unavailable"); }
+    native boolean loadBackend(String path);
     native long create();
     native void cancel(long handle);
     native void destroy(long handle);

@@ -1659,4 +1659,23 @@
     <string name="background_android_description">مدیریت همه تنظیمات اعلان Android.</string>
     <string name="background_run_blocked">اجرا در پس‌زمینه خاموش است. برای شروع یا ادامه کار AndroidHarness را باز کنید.</string>
     <string name="background_service_notice">سرویس پس‌زمینه در حال اجراست</string>
+    <string name="local_gpu_download_title">پشتیبانی از GPU</string>
+    <string name="local_gpu_runtime_repository">منبع: Sanuu7/AH-GPU-Runtime</string>
+    <string name="local_gpu_delivery_play">به‌طور ایمن از طریق Google Play نصب می‌شود.</string>
+    <string name="local_gpu_delivery_github">بسته GPU سازگار با این برنامه و دستگاه را از GitHub دانلود می‌کند.</string>
+    <string name="local_gpu_optional_download">دانلود اختیاری. استنتاج روی CPU بدون آن کار می‌کند؛ پشتیبانی از GPU پس از نصب به‌صورت آفلاین در دسترس می‌ماند.</string>
+    <string name="local_gpu_checking">در حال بررسی پشتیبانی از GPU…</string>
+    <string name="local_gpu_waiting">در انتظار دانلود…</string>
+    <string name="local_gpu_downloading">در حال دانلود پشتیبانی از GPU…</string>
+    <string name="local_gpu_installing">در حال نصب پشتیبانی از GPU…</string>
+    <string name="local_gpu_confirmation">Google Play برای ادامه به تأیید شما نیاز دارد.</string>
+    <string name="local_gpu_installed">پشتیبانی از GPU نصب شد</string>
+    <string name="local_gpu_cancelled">دانلود لغو شد. استنتاج روی CPU همچنان در دسترس است.</string>
+    <string name="local_gpu_download_unsupported">پشتیبانی از GPU برای معماری این برنامه در دسترس نیست.</string>
+    <string name="local_gpu_download_failed">نصب پشتیبانی از GPU ممکن نشد. استنتاج روی CPU همچنان در دسترس است.</string>
+    <string name="local_gpu_download_progress">%1$s از %2$s · %3$d%%</string>
+    <string name="local_gpu_continue">ادامه با Google Play</string>
+    <string name="local_gpu_download_action">دانلود پشتیبانی از GPU</string>
+    <string name="local_gpu_retry_download">تلاش دوباره برای دانلود</string>
+    <string name="local_gpu_cancel_download">لغو دانلود</string>
 </resources>

@@ -14,3 +14,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "AndroidHarness"
 include(":app")
+if (providers.gradleProperty("distribution").orNull == "play") include(":local_gpu")
