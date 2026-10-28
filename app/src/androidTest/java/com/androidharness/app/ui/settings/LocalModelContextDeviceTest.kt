@@ -67,6 +67,20 @@ class LocalModelContextDeviceTest {
                 scenario.onActivity { activity -> activity.setContent { MaterialTheme {
                     Column(Modifier.verticalScroll(rememberScrollState())) { LocalModelsSection(container) }
                 } } }
+                val optionsDeadline = SystemClock.uptimeMillis() + 10_000
+                fun findOptions(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+                    if (node.contentDescription?.toString() == "Local model options") return node
+                    for (i in 0 until node.childCount) node.getChild(i)?.let { findOptions(it)?.let { result -> return result } }
+                    return null
+                }
+                var options: AccessibilityNodeInfo? = null
+                while (options == null && SystemClock.uptimeMillis() < optionsDeadline) {
+                    options = instrumentation.uiAutomation.rootInActiveWindow?.let(::findOptions)
+                    if (options == null) SystemClock.sleep(50)
+                }
+                var button = requireNotNull(options)
+                while (!button.isClickable && button.parent != null) button = button.parent
+                assertTrue(button.performAction(AccessibilityNodeInfo.ACTION_CLICK))
                 clickSwitch(false)
                 runBlocking { withTimeout(5000) { settings.settings.first { it.localModelAgentContext } } }
                 clickSwitch(true)
@@ -80,6 +94,8 @@ class LocalModelContextDeviceTest {
     @Test(timeout = 120_000) fun installedModelRepliesWithoutAgentContext() = runBlocking {
         val id = InstrumentationRegistry.getArguments().getString("localModelId")
         assumeTrue("Pass localModelId to test an installed model", id != null)
+        val foreground = ActivityScenario.launch(MainActivity::class.java)
+        foreground.onActivity { it.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
         val config = container.localModels.configs().first { it.id == LocalModelCatalog.PROVIDER_PREFIX + id }
         val original = container.settings.settings.first().localModelAgentContext
         try {
@@ -92,7 +108,8 @@ class LocalModelContextDeviceTest {
                     config = config, apiKey = "", history = listOf(ChatMessage(Role.USER, "Hi")),
                     permissionMode = { PermissionMode.CONFIRM_ALL }, sessionAllowedTools = mutableSetOf(),
                     workspace = workspace, options = RequestOptions(thinking = ThinkingLevel.OFF, maxOutputTokens = 32),
-                    maxContextTokens = container.localModels.limits(id!!).context, mode = AgentMode.ACT,
+                    maxContextTokens = 64, mode = AgentMode.ACT,
+                    conversation = com.androidharness.app.data.ConversationConfig(com.androidharness.app.data.ConversationKind.CHAT),
                     pinnedInstructions = "These project instructions should never reach plain chat. ".repeat(1000)
                 ).collect { events += it }
             }
@@ -106,7 +123,7 @@ class LocalModelContextDeviceTest {
             val usage = events.filterIsInstance<AgentEvent.Usage>().single()
             assertTrue("Unexpectedly large input: ${usage.inputTokens}", usage.inputTokens in 1..128)
             println("LOCAL_PLAIN_CHAT_OK: input=${usage.inputTokens}, output=${usage.outputTokens}, firstTokenMs=${reply.firstTokenMs}, totalMs=${SystemClock.elapsedRealtime() - started}, reply=${reply.text}")
-        } finally { container.settings.setLocalModelAgentContext(original) }
+        } finally { container.settings.setLocalModelAgentContext(original); foreground.close() }
     }
 
     private fun clickSwitch(checked: Boolean) {

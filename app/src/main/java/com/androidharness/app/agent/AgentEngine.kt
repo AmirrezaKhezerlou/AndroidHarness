@@ -303,9 +303,9 @@ class AgentEngine(
         var suppliedMemories = emptyList<com.androidharness.app.core.SuppliedMemory>()
         var memoryQuery = recentMemoryQuery(history)
         suspend fun runSystemPrompt(fullAccess: Boolean): String =
-            if (conversation.isChat) chatSystemPrompt(sessionId, searchDepth, conversation, chatImageFrequency, chatInstructions, memoryQuery) { memories ->
+            if (!agentContextEnabled) "" else if (conversation.isChat) chatSystemPrompt(sessionId, searchDepth, conversation, chatImageFrequency, chatInstructions, memoryQuery) { memories ->
                 suppliedMemories = memories.map { com.androidharness.app.core.SuppliedMemory(it.id, it.text) }
-            } else if (!agentContextEnabled) "" else systemPrompt(workspace, mode, fullAccess = fullAccess, repoMapEnabled = repoMapEnabled, sessionId = sessionId, memoryQuery = memoryQuery, memoryAllowed = conversation.personalizationEnabled) +
+            } else systemPrompt(workspace, mode, fullAccess = fullAccess, repoMapEnabled = repoMapEnabled, sessionId = sessionId, memoryQuery = memoryQuery, memoryAllowed = conversation.personalizationEnabled) +
                 if (pinnedInstructions.isBlank()) "" else "\n\nPinned user instructions:\n$pinnedInstructions"
         var systemPrompt = runSystemPrompt(false)
         var promptSandboxOff = false
@@ -327,7 +327,7 @@ class AgentEngine(
         } else null
         val imageCapable = (if (conversation.isChat) options.modelCatalogs[config.id]?.firstOrNull { it.id == config.model }?.imageInput else null)
             ?: com.androidharness.app.llm.visionCapable(config.model)
-        val chatHistory = if (agentContextEnabled || conversation.isChat) history else com.androidharness.app.local.LocalChatCodec.plainChatMessages(history)
+        val chatHistory = if (agentContextEnabled) history else com.androidharness.app.local.LocalChatCodec.plainChatMessages(history)
         val resolvedHistory = (if (localChat) chatHistory else ContextHygiene.shrinkToolResults(chatHistory))
             .map { it.withImagesResolved() }
         val working = (if (conversation.isChat && imageCapable)
@@ -418,16 +418,16 @@ class AgentEngine(
             var roundRegistry = if (conversation.isChat && !visionAvailable)
                 runRegistry.without(setOf("view_chat_image", "zoom_chat_image")) else runRegistry
             val searchConfiguration = (roundRegistry.get("web_search") as? com.androidharness.app.tools.WebSearchTool)?.configurationNote()
-            var tools = if (!agentContextEnabled && !conversation.isChat) emptyList() else roundRegistry.schemas(
+            var tools = if (!agentContextEnabled) emptyList() else roundRegistry.schemas(
                 readOnlyOnly = mode == AgentMode.PLAN,
                 context = ToolContext(execWorkspace, sandboxOff, sessionId),
             )
-            val environment = if (agentContextEnabled || conversation.isChat)
+            val environment = if (agentContextEnabled)
                 runtimeEnvironment(workspace, sessionId, mode, effectiveMode, tools, conversation.isChat) +
                     searchConfiguration?.let { "\n## Current web research configuration\n$it\n" }.orEmpty() else ""
             val imageInventory = if (conversation.isChat && visionAvailable)
                 com.androidharness.app.tools.ChatImageInventory.prompt(working) else ""
-            var requestSystemPrompt = if (conversation.isChat) systemPrompt + environment + imageInventory else if (!agentContextEnabled) "" else com.androidharness.app.caveman.CavemanPolicy.apply(
+            var requestSystemPrompt = if (!agentContextEnabled) "" else if (conversation.isChat) systemPrompt + environment + imageInventory else com.androidharness.app.caveman.CavemanPolicy.apply(
                 systemPrompt + environment + TodoPrompt.format(
                     todoStore?.takeIf { !conversation.isChat && it.owner.value == sessionId }?.todos?.value.orEmpty(),
                     roundsWithoutTodoUpdate,
@@ -442,7 +442,7 @@ class AgentEngine(
             val compactThreshold = if (conversation.isChat) ChatContextPolicy.compactAt(contextLimit, requestOptions.maxOutputTokens)
                 else (contextLimit * 0.8).toInt()
             val needsCompaction = if (conversation.isChat) estimate.total >= compactThreshold else estimate.total > compactThreshold
-            if ((!localChat || conversation.isChat) && needsCompaction && (conversation.isChat || working.size > 6)) {
+            if ((!localChat || agentContextEnabled) && needsCompaction && (conversation.isChat || working.size > 6)) {
                 val compacted = compact(provider, config, apiKey, working, contextLimit, sessionId, conversation.isChat) {
                     if (it is AgentEvent.ProviderChanged) config = it.config
                     emit(it)
