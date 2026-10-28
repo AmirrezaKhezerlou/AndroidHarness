@@ -380,4 +380,22 @@
     <string name="provider_show_key">نمایش کلید API %1$d</string>
     <string name="provider_hide_key">پنهان کردن کلید API %1$d</string>
     <string name="provider_keys_load_failed">کلیدهای ذخیره‌شده بارگیری نشدند. ببندید و دوباره تلاش کنید.</string>
+    <string name="local_experimental_title">قابلیت‌های آزمایشی</string>
+    <string name="local_experimental_subtitle">پیش‌نمایش GPU برای GGUF</string>
+    <string name="local_experimental_warning_title">قابلیت‌های آزمایشی فعال شوند؟</string>
+    <string name="local_experimental_warning_acceleration">اجرای GGUF روی GPU سازگار با Vulkan. اگر GPU در دسترس نباشد، CPU به‌طور خودکار استفاده می‌شود.</string>
+    <string name="local_experimental_warning_limits">اجرای GPU ممکن است شکست بخورد، گوشی را گرم کند یا باتری را تخلیه کند. سرعت به مدل و درایور بستگی دارد. روشن کردن این گزینه چیزی دانلود نمی‌کند. برای استفاده از CPU آن را خاموش کنید.</string>
+    <string name="local_experimental_enable">فعال کردن</string>
+    <string name="local_library">مدل‌های من</string>
+    <string name="local_browse">کاوش</string>
+    <string name="local_options">گزینه‌های مدل محلی</string>
+    <string name="local_gpu_scope">GGUF مستقیماً روی GPU سازگار با Vulkan اجرا می‌شود.</string>
+    <string name="local_gpu_detected">GPU با Vulkan: %1$s</string>
+    <string name="local_gpu_unavailable">GPU برای این دستگاه یا نسخه در دسترس نیست. CPU در دسترس است.</string>
+    <string name="local_gpu_request">گزارش مشکل GPU در GitHub</string>
+    <string name="local_gpu_processor">پردازنده</string>
+    <string name="local_gpu_auto">خودکار</string>
+    <string name="local_gpu_auto_note">در صورت پشتیبانی GPU را ترجیح می‌دهد. اگر GPU در دسترس نباشد یا پاسخ را شروع نکند، از CPU استفاده می‌کند.</string>
+    <string name="local_gpu_fallback">GPU شروع نشد. تلاش دوباره با CPU…</string>
+    <string name="local_gpu_ready_fallback">آماده · CPU (جایگزین GPU)</string>
 </resources>

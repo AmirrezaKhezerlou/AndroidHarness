@@ -3,6 +3,16 @@ package com.androidharness.app.ui.settings
 import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import com.androidharness.app.ui.theme.expressiveSpatialSpec
+import com.androidharness.app.ui.theme.expressiveEffectsSpec
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.rememberScrollState
@@ -36,10 +46,20 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun LocalModelsSection(container: AppContainer) {
+    MaterialTheme(motionScheme = MotionScheme.expressive()) {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { LocalModelsContent(container) }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun LocalModelsContent(container: AppContainer) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     val manager = container.localModels
     val catalog by manager.models.collectAsStateWithLifecycle()
     val installed by manager.installed.collectAsStateWithLifecycle()
@@ -53,6 +73,10 @@ internal fun LocalModelsSection(container: AppContainer) {
     var contexts by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
     var format by rememberSaveable { mutableStateOf(LocalModelFormat.GGUF) }
     var customDialog by remember { mutableStateOf(false) }
+    var panel by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(panel) { if (panel !in 0..1) panel = 0 }
+    var options by remember { mutableStateOf(false) }
+
     var deviceDialog by remember { mutableStateOf(false) }
     var details by remember { mutableStateOf<LocalModelSpec?>(null) }
     var projectorModel by remember { mutableStateOf<LocalModelSpec?>(null) }
@@ -80,6 +104,7 @@ internal fun LocalModelsSection(container: AppContainer) {
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { importFiles(it, LocalModelFormat.GGUF) }
     }
+
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         uri?.let { importFiles(it, LocalModelFormat.SAFETENSORS) }
     }
@@ -106,37 +131,41 @@ internal fun LocalModelsSection(container: AppContainer) {
     }
     val transfers = catalog.filter { it.id !in installed && activeWork(it) != null }
 
-    SettingsPanel(Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(start = 14.dp, top = 8.dp, bottom = 8.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Memory, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(stringResource(R.string.settings_local_models_on_device), style = MaterialTheme.typography.titleSmall)
-                Text(
-                    stringResource(
-                        R.string.settings_local_models_device_memory,
-                        size(device.availableRam),
-                        size(device.freeStorage),
-                    ),
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Surface(shape = RoundedCornerShape(32.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+        Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.primary) {
+                Icon(Icons.Default.Memory, null, Modifier.padding(14.dp).size(30.dp), tint = MaterialTheme.colorScheme.onPrimary)
             }
-            IconButton(onClick = { deviceDialog = true }) { Icon(Icons.Default.Info, uiContext.getString(R.string.ui_device_and_local_model_information)) }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(stringResource(R.string.settings_local_models_on_device), style = MaterialTheme.typography.titleLarge)
+                Text(stringResource(R.string.settings_local_models_device_memory, size(device.availableRam), size(device.freeStorage)),
+                    style = MaterialTheme.typography.bodySmall)
+            }
+            FilledTonalIconButton(onClick = { options = true }) {
+                Icon(Icons.Default.Tune, stringResource(R.string.local_options))
+            }
+        }
+    }
+    PrimaryTabRow(selectedTabIndex = panel.coerceIn(0, 1), divider = {}) {
+        listOf(R.string.local_library, R.string.local_browse).forEachIndexed { index, title ->
+            Tab(selected = panel == index, onClick = { panel = index }, text = { Text(stringResource(title)) })
         }
     }
     manager.catalogError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-    SettingsPanel(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    if (options) ModalBottomSheet(onDismissRequest = { options = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(stringResource(R.string.local_options), style = MaterialTheme.typography.headlineSmall)
             Row(Modifier.fillMaxWidth().toggleable(value = settings.localModelAgentContext, role = Role.Switch,
                 onValueChange = { enabled -> scope.launch { container.settings.setLocalModelAgentContext(enabled) } }),
                 verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.settings_local_models_system_tools), modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.width(12.dp))
+                Text(stringResource(R.string.settings_local_models_system_tools), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                 Switch(checked = settings.localModelAgentContext, onCheckedChange = null)
             }
-            Text(stringResource(R.string.settings_local_models_system_tools_desc),
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(stringResource(R.string.settings_local_models_system_tools_warning),
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.settings_local_models_system_tools_desc), style = MaterialTheme.typography.bodySmall)
+            TextButton(onClick = { options = false; deviceDialog = true }) {
+                Icon(Icons.Default.Info, null); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.settings_local_models_about))
+            }
         }
     }
     message?.let { text ->
@@ -145,13 +174,16 @@ internal fun LocalModelsSection(container: AppContainer) {
             IconButton(onClick = { message = null }) { Icon(Icons.Default.Close, uiContext.getString(R.string.ui_dismiss_message)) }
         }
     }
-    Text(stringResource(R.string.settings_local_models_yours), style = MaterialTheme.typography.titleMedium)
+    AnimatedVisibility(panel == 0, enter = fadeIn(expressiveEffectsSpec()) + expandVertically(expressiveSpatialSpec()),
+        exit = fadeOut(expressiveEffectsSpec()) + shrinkVertically(expressiveSpatialSpec())) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
     if (savedModels.isEmpty()) {
         SettingsPanel(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(stringResource(R.string.settings_local_models_empty_title), style = MaterialTheme.typography.titleSmall)
                 Text(stringResource(R.string.settings_local_models_empty_hint),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                FilledTonalButton(onClick = { panel = 1 }) { Text(stringResource(R.string.local_browse)) }
             }
         }
     }
@@ -184,6 +216,8 @@ internal fun LocalModelsSection(container: AppContainer) {
                 onPrimary = { removeNow(model) }, onDetails = { details = model })
         }
     }
+    }
+    }
     importProgress?.let { text ->
         SettingsPanel(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -193,25 +227,27 @@ internal fun LocalModelsSection(container: AppContainer) {
             }
         }
     }
-    Text(stringResource(R.string.settings_local_models_add), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
-    TabRow(selectedTabIndex = format.ordinal) {
+    AnimatedVisibility(panel == 1, enter = fadeIn(expressiveEffectsSpec()) + expandVertically(expressiveSpatialSpec()),
+        exit = fadeOut(expressiveEffectsSpec()) + shrinkVertically(expressiveSpatialSpec())) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    SecondaryTabRow(selectedTabIndex = format.ordinal, divider = {}) {
         LocalModelFormat.entries.forEach { option ->
             Tab(selected = format == option, onClick = { format = option }, text = {
-                Text(if (option == LocalModelFormat.GGUF) "GGUF" else "Safetensors")
+                Text(when (option) { LocalModelFormat.GGUF -> "GGUF"; LocalModelFormat.SAFETENSORS -> "Safetensors" })
             })
         }
     }
-    Text(if (format == LocalModelFormat.GGUF) uiContext.getString(R.string.ui_choose_a_download_paste_a_link_or)
-        else uiContext.getString(R.string.ui_import_from_a_link_or_choose_a),
-        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(onClick = { customDialog = true }, enabled = importJob == null, modifier = Modifier.weight(1f)) {
             Icon(Icons.Default.Link, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.settings_local_models_from_link))
         }
-        OutlinedButton(onClick = { if (format == LocalModelFormat.GGUF) filePicker.launch(arrayOf("*/*")) else folderPicker.launch(null) },
+        OutlinedButton(onClick = { when (format) {
+            LocalModelFormat.GGUF -> filePicker.launch(arrayOf("*/*"))
+            LocalModelFormat.SAFETENSORS -> folderPicker.launch(null)
+        } },
             enabled = importJob == null, modifier = Modifier.weight(1f)) {
             Icon(Icons.Default.FolderOpen, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp))
-            Text(if (format == LocalModelFormat.GGUF) uiContext.getString(R.string.ui_import_file) else uiContext.getString(R.string.ui_import_folder))
+            Text(if (format != LocalModelFormat.SAFETENSORS) uiContext.getString(R.string.ui_import_file) else uiContext.getString(R.string.ui_import_folder))
         }
     }
     Text(stringResource(R.string.settings_local_models_recommendations), style = MaterialTheme.typography.titleSmall)
@@ -245,6 +281,8 @@ internal fun LocalModelsSection(container: AppContainer) {
         Text(stringResource(R.string.settings_local_models_safetensors_note),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
+    }
+    }
     if (deviceDialog) LocalDeviceDialog(device) { deviceDialog = false }
     details?.let { model -> LocalModelDetailsDialog(model, contexts[model.id] ?: model.defaultContext) { details = null } }
     projectorModel?.let { model -> ProjectorDialog(model, manager) { projectorModel = null } }
@@ -254,7 +292,7 @@ internal fun LocalModelsSection(container: AppContainer) {
         val warnings = localModelWarnings(model, device, downloadLimits, downloading = true)
         AlertDialog(onDismissRequest = { if (busy == null) download = null }, title = { Text(stringResource(R.string.settings_local_models_download)) },
             text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(model.title, style = MaterialTheme.typography.titleSmall)
+                Text(model.title, style = MaterialTheme.typography.titleMedium)
                 Text(
                     stringResource(
                         R.string.settings_local_models_download_meta,
@@ -290,7 +328,7 @@ internal fun LocalModelsSection(container: AppContainer) {
     editing?.let { model -> LocalLimitsDialog(model, manager, onDismiss = { editing = null }) }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun LocalModelCard(model: LocalModelSpec, context: Int, device: LocalDeviceProfile,
     selected: Boolean = false, installed: Boolean = false, working: Boolean = false,
@@ -299,8 +337,9 @@ private fun LocalModelCard(model: LocalModelSpec, context: Int, device: LocalDev
     onImageSupport: (() -> Unit)? = null, onRemove: (() -> Unit)? = null, onStop: (() -> Unit)? = null) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     var menu by remember { mutableStateOf(false) }
-    SettingsPanel(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Surface(Modifier.fillMaxWidth().animateContentSize(), shape = RoundedCornerShape(28.dp),
+        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(model.title, style = MaterialTheme.typography.titleSmall)
@@ -309,8 +348,10 @@ private fun LocalModelCard(model: LocalModelSpec, context: Int, device: LocalDev
                             R.string.settings_local_models_meta_format,
                             size(if (installed) model.bytes else model.downloadBytes),
                             stringResource(
-                                if (model.format == LocalModelFormat.GGUF) R.string.settings_local_models_format_gguf
-                                else R.string.settings_local_models_format_safetensors,
+                                when (model.format) {
+                                    LocalModelFormat.GGUF -> R.string.settings_local_models_format_gguf
+                                    LocalModelFormat.SAFETENSORS -> R.string.settings_local_models_format_safetensors
+                                },
                             ),
                         ),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -329,14 +370,12 @@ private fun LocalModelCard(model: LocalModelSpec, context: Int, device: LocalDev
                 }
             }
             if (!installed && transfer == null && !model.localFile) {
-                Text(model.description, style = MaterialTheme.typography.bodySmall)
+                Text(model.description, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (selected) LocalModelBadge(uiContext.getString(R.string.settings_selected), positive = true)
                 if (model.abliterated) LocalModelBadge(stringResource(R.string.settings_local_models_badge_abliterated))
                 if (installed && model.projector != null) LocalModelBadge(stringResource(R.string.settings_local_models_badge_vision), positive = true)
-                Text(stringResource(R.string.settings_local_models_estimated_ram, size(model.estimatedMemory(context))), style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 4.dp))
                 if (!device.canLoad(model, context)) LocalModelBadge(stringResource(R.string.settings_local_models_badge_may_exceed))
             }
             status?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -350,7 +389,7 @@ private fun LocalModelCard(model: LocalModelSpec, context: Int, device: LocalDev
                 } else AppLinearProgressIndicator(Modifier.fillMaxWidth())
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (!selected || !installed) Button(onClick = onPrimary, enabled = enabled) {
+                if (!selected || !installed) Button(onClick = onPrimary, enabled = enabled, shapes = ButtonDefaults.shapes()) {
                     Text(if (transfer != null) uiContext.getString(R.string.ui_cancel_download) else if (installed) uiContext.getString(R.string.ui_use_in_chat) else uiContext.getString(R.string.ui_download))
                 }
                 onSettings?.let { action -> OutlinedButton(onClick = action, enabled = enabled) {
@@ -428,7 +467,7 @@ private fun LocalModelDetailsDialog(model: LocalModelSpec, context: Int, onDismi
 }
 
 @Composable
-private fun LocalLimitsDialog(model: LocalModelSpec, manager: LocalModelManager, onDismiss: () -> Unit) {
+internal fun LocalLimitsDialog(model: LocalModelSpec, manager: LocalModelManager, onDismiss: () -> Unit) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     var saved by remember { mutableStateOf<LocalModelLimits?>(null) }
     LaunchedEffect(model.id) { saved = withContext(Dispatchers.IO) { manager.limits(model.id) } }
@@ -444,7 +483,6 @@ private fun LocalLimitsDialog(model: LocalModelSpec, manager: LocalModelManager,
     AlertDialog(onDismissRequest = { if (!saving) onDismiss() }, title = { Text(stringResource(R.string.settings_local_models_model_settings)) }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(model.title, style = MaterialTheme.typography.titleSmall)
-            Text(stringResource(R.string.settings_local_models_tokens_note), style = MaterialTheme.typography.bodySmall)
             LocalNumberField(
                 stringResource(R.string.settings_local_models_conversation_size),
                 context,
@@ -473,9 +511,10 @@ private fun LocalLimitsDialog(model: LocalModelSpec, manager: LocalModelManager,
                 )
                 Spacer(Modifier.width(6.dp)); Icon(if (advanced) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null)
             }
-            if (advanced) {
+            AnimatedVisibility(visible = advanced) { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 LocalNumberField(uiContext.getString(R.string.ui_input_budget), input, "tokens", uiContext.getString(R.string.ui_includes_instructions_and_chat_history_you_can), !saving) { input = it }
                 LocalNumberField(uiContext.getString(R.string.ui_processing_threads), threads, "threads", uiContext.getString(R.string.ui_more_threads_can_increase_heat_and_may), !saving) { threads = it }
+            }
             }
             TextButton(enabled = !saving, onClick = {
                 context = model.defaultContext.toString()

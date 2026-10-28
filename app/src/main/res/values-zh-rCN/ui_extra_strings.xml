@@ -376,4 +376,22 @@
     <string name="provider_show_key">显示 API 密钥 %1$d</string>
     <string name="provider_hide_key">隐藏 API 密钥 %1$d</string>
     <string name="provider_keys_load_failed">无法加载已保存的密钥。请关闭后重试。</string>
+    <string name="local_experimental_title">实验性功能</string>
+    <string name="local_experimental_subtitle">GGUF GPU 预览</string>
+    <string name="local_experimental_warning_title">启用实验性功能？</string>
+    <string name="local_experimental_warning_acceleration">在兼容 Vulkan 的 GPU 上运行 GGUF。GPU 不可用时自动使用 CPU。</string>
+    <string name="local_experimental_warning_limits">GPU 运行可能失败、使手机发热或消耗电池。速度取决于模型和驱动。开启此开关不会下载任何内容。关闭后使用 CPU。</string>
+    <string name="local_experimental_enable">启用</string>
+    <string name="local_library">我的模型</string>
+    <string name="local_browse">探索</string>
+    <string name="local_options">本地模型选项</string>
+    <string name="local_gpu_scope">GGUF 可直接在兼容 Vulkan 的 GPU 上运行。</string>
+    <string name="local_gpu_detected">Vulkan GPU：%1$s</string>
+    <string name="local_gpu_unavailable">此设备或版本无法使用 GPU。CPU 可用。</string>
+    <string name="local_gpu_request">在 GitHub 报告 GPU 问题</string>
+    <string name="local_gpu_processor">处理器</string>
+    <string name="local_gpu_auto">自动</string>
+    <string name="local_gpu_auto_note">支持时优先使用 GPU。GPU 不可用或无法开始回复时自动使用 CPU。</string>
+    <string name="local_gpu_fallback">GPU 无法启动，正在使用 CPU 重试…</string>
+    <string name="local_gpu_ready_fallback">就绪 · CPU（GPU 回退）</string>
 </resources>

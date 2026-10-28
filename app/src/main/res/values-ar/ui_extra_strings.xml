@@ -388,4 +388,22 @@
     <string name="provider_show_key">إظهار مفتاح API %1$d</string>
     <string name="provider_hide_key">إخفاء مفتاح API %1$d</string>
     <string name="provider_keys_load_failed">تعذر تحميل المفاتيح المحفوظة. أغلق وأعد المحاولة.</string>
+    <string name="local_experimental_title">ميزات تجريبية</string>
+    <string name="local_experimental_subtitle">معاينة GPU لنماذج GGUF</string>
+    <string name="local_experimental_warning_title">هل تريد تفعيل الميزات التجريبية؟</string>
+    <string name="local_experimental_warning_acceleration">شغّل GGUF على وحدات GPU المتوافقة مع Vulkan. يُستخدم CPU تلقائيًا إذا لم تتوفر GPU.</string>
+    <string name="local_experimental_warning_limits">قد يفشل تشغيل GPU أو يسخّن الهاتف أو يستنزف البطارية. تعتمد السرعة على النموذج وبرنامج التشغيل. تفعيل هذا المفتاح لا ينزّل شيئًا. عطّله لاستخدام CPU.</string>
+    <string name="local_experimental_enable">تفعيل</string>
+    <string name="local_library">نماذجي</string>
+    <string name="local_browse">استكشاف</string>
+    <string name="local_options">خيارات النماذج المحلية</string>
+    <string name="local_gpu_scope">تعمل نماذج GGUF مباشرة على وحدات GPU المتوافقة مع Vulkan.</string>
+    <string name="local_gpu_detected">وحدة Vulkan GPU: %1$s</string>
+    <string name="local_gpu_unavailable">GPU غير متاح لهذا الجهاز أو الإصدار. CPU متاح.</string>
+    <string name="local_gpu_request">الإبلاغ عن مشكلة GPU على GitHub</string>
+    <string name="local_gpu_processor">المعالج</string>
+    <string name="local_gpu_auto">تلقائي</string>
+    <string name="local_gpu_auto_note">يفضّل GPU عند دعمها. يعود إلى CPU إذا لم تتوفر GPU أو تعذّر بدء الرد.</string>
+    <string name="local_gpu_fallback">تعذّر بدء GPU. إعادة المحاولة على CPU…</string>
+    <string name="local_gpu_ready_fallback">جاهز · CPU (بديل GPU)</string>
 </resources>

@@ -380,4 +380,22 @@
     <string name="provider_show_key">Mostrar chave API %1$d</string>
     <string name="provider_hide_key">Ocultar chave API %1$d</string>
     <string name="provider_keys_load_failed">Não foi possível carregar as chaves. Feche e tente novamente.</string>
+    <string name="local_experimental_title">Recursos experimentais</string>
+    <string name="local_experimental_subtitle">Prévia de GPU para GGUF</string>
+    <string name="local_experimental_warning_title">Ativar recursos experimentais?</string>
+    <string name="local_experimental_warning_acceleration">Execute GGUF em GPUs compatíveis com Vulkan. Se a GPU estiver indisponível, a CPU será usada automaticamente.</string>
+    <string name="local_experimental_warning_limits">A execução na GPU pode falhar, aquecer o celular ou consumir bateria. A velocidade depende do modelo e do driver. Ativar esta opção não baixa nada. Desative para usar a CPU.</string>
+    <string name="local_experimental_enable">Ativar</string>
+    <string name="local_library">Meus modelos</string>
+    <string name="local_browse">Explorar</string>
+    <string name="local_options">Opções dos modelos locais</string>
+    <string name="local_gpu_scope">GGUF roda diretamente em GPUs compatíveis com Vulkan.</string>
+    <string name="local_gpu_detected">GPU Vulkan: %1$s</string>
+    <string name="local_gpu_unavailable">GPU indisponível para este dispositivo ou versão. CPU disponível.</string>
+    <string name="local_gpu_request">Relatar problema de GPU no GitHub</string>
+    <string name="local_gpu_processor">Processador</string>
+    <string name="local_gpu_auto">Automático</string>
+    <string name="local_gpu_auto_note">Prefere GPU quando compatível. Usa CPU se a GPU estiver indisponível ou não conseguir iniciar a resposta.</string>
+    <string name="local_gpu_fallback">A GPU não iniciou. Tentando novamente na CPU…</string>
+    <string name="local_gpu_ready_fallback">Pronto · CPU (alternativa à GPU)</string>
 </resources>

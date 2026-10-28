@@ -376,4 +376,22 @@
     <string name="provider_show_key">Show API key %1$d</string>
     <string name="provider_hide_key">Hide API key %1$d</string>
     <string name="provider_keys_load_failed">Could not load saved keys. Close and retry.</string>
+    <string name="local_experimental_title">Experimental features</string>
+    <string name="local_experimental_subtitle">GGUF GPU preview</string>
+    <string name="local_experimental_warning_title">Enable experimental features?</string>
+    <string name="local_experimental_warning_acceleration">Run GGUF on compatible Vulkan GPUs. If GPU is unavailable, CPU is used automatically.</string>
+    <string name="local_experimental_warning_limits">GPU execution may fail, heat the phone or drain the battery. Speed depends on the model and driver. Enabling this switch downloads nothing. Turn it off to use CPU.</string>
+    <string name="local_experimental_enable">Enable</string>
+    <string name="local_library">My models</string>
+    <string name="local_browse">Explore</string>
+    <string name="local_options">Local model options</string>
+    <string name="local_gpu_scope">GGUF runs directly on compatible Vulkan GPUs.</string>
+    <string name="local_gpu_detected">Vulkan GPU: %1$s</string>
+    <string name="local_gpu_unavailable">GPU unavailable for this device or build. CPU is available.</string>
+    <string name="local_gpu_request">Report a GPU problem on GitHub</string>
+    <string name="local_gpu_processor">Processor</string>
+    <string name="local_gpu_auto">Auto</string>
+    <string name="local_gpu_auto_note">Prefers GPU when supported. Falls back to CPU if GPU is unavailable or cannot start a reply.</string>
+    <string name="local_gpu_fallback">GPU could not start. Retrying on CPU…</string>
+    <string name="local_gpu_ready_fallback">Ready · CPU (GPU fallback)</string>
 </resources>

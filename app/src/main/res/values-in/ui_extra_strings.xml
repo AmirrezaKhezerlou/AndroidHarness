@@ -378,4 +378,22 @@
     <string name="provider_show_key">Tampilkan kunci API %1$d</string>
     <string name="provider_hide_key">Sembunyikan kunci API %1$d</string>
     <string name="provider_keys_load_failed">Kunci tersimpan tidak dapat dimuat. Tutup dan coba lagi.</string>
+    <string name="local_experimental_title">Fitur eksperimental</string>
+    <string name="local_experimental_subtitle">Pratinjau GPU GGUF</string>
+    <string name="local_experimental_warning_title">Aktifkan fitur eksperimental?</string>
+    <string name="local_experimental_warning_acceleration">Jalankan GGUF di GPU yang kompatibel dengan Vulkan. Jika GPU tidak tersedia, CPU digunakan otomatis.</string>
+    <string name="local_experimental_warning_limits">Eksekusi GPU bisa gagal, memanaskan ponsel, atau menguras baterai. Kecepatan bergantung pada model dan driver. Mengaktifkan sakelar ini tidak mengunduh apa pun. Matikan untuk memakai CPU.</string>
+    <string name="local_experimental_enable">Aktifkan</string>
+    <string name="local_library">Model saya</string>
+    <string name="local_browse">Jelajahi</string>
+    <string name="local_options">Opsi model lokal</string>
+    <string name="local_gpu_scope">GGUF berjalan langsung di GPU yang kompatibel dengan Vulkan.</string>
+    <string name="local_gpu_detected">GPU Vulkan: %1$s</string>
+    <string name="local_gpu_unavailable">GPU tidak tersedia untuk perangkat atau versi ini. CPU tersedia.</string>
+    <string name="local_gpu_request">Laporkan masalah GPU di GitHub</string>
+    <string name="local_gpu_processor">Prosesor</string>
+    <string name="local_gpu_auto">Otomatis</string>
+    <string name="local_gpu_auto_note">Memilih GPU jika didukung. Beralih ke CPU jika GPU tidak tersedia atau tidak bisa memulai jawaban.</string>
+    <string name="local_gpu_fallback">GPU tidak bisa memulai. Mencoba ulang di CPU…</string>
+    <string name="local_gpu_ready_fallback">Siap · CPU (pengganti GPU)</string>
 </resources>

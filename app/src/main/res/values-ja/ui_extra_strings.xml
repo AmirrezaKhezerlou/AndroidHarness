@@ -378,4 +378,22 @@
     <string name="provider_show_key">API キー %1$d を表示</string>
     <string name="provider_hide_key">API キー %1$d を隠す</string>
     <string name="provider_keys_load_failed">保存済みキーを読み込めませんでした。閉じて再試行してください。</string>
+    <string name="local_experimental_title">試験的な機能</string>
+    <string name="local_experimental_subtitle">GGUF GPU プレビュー</string>
+    <string name="local_experimental_warning_title">試験的な機能を有効にしますか？</string>
+    <string name="local_experimental_warning_acceleration">Vulkan 対応 GPU で GGUF を実行します。GPU を利用できない場合は自動的に CPU を使います。</string>
+    <string name="local_experimental_warning_limits">GPU 実行は失敗したり、端末の発熱や電池消耗を招く場合があります。速度はモデルとドライバーに依存します。このスイッチを有効にしてもダウンロードは行いません。無効にすると CPU を使用します。</string>
+    <string name="local_experimental_enable">有効にする</string>
+    <string name="local_library">マイモデル</string>
+    <string name="local_browse">探す</string>
+    <string name="local_options">ローカルモデルの設定</string>
+    <string name="local_gpu_scope">GGUF は Vulkan 対応 GPU で直接実行できます。</string>
+    <string name="local_gpu_detected">Vulkan GPU：%1$s</string>
+    <string name="local_gpu_unavailable">この端末またはビルドでは GPU を利用できません。CPU は利用可能です。</string>
+    <string name="local_gpu_request">GitHub で GPU の問題を報告</string>
+    <string name="local_gpu_processor">プロセッサー</string>
+    <string name="local_gpu_auto">自動</string>
+    <string name="local_gpu_auto_note">対応している場合は GPU を優先します。GPU が使えない場合や応答を開始できない場合は CPU に切り替えます。</string>
+    <string name="local_gpu_fallback">GPU を開始できませんでした。CPU で再試行中…</string>
+    <string name="local_gpu_ready_fallback">準備完了 · CPU（GPU から切り替え）</string>
 </resources>

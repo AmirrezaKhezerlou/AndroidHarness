@@ -384,4 +384,22 @@
     <string name="provider_show_key">Показать API-ключ %1$d</string>
     <string name="provider_hide_key">Скрыть API-ключ %1$d</string>
     <string name="provider_keys_load_failed">Не удалось загрузить ключи. Закройте и повторите.</string>
+    <string name="local_experimental_title">Экспериментальные функции</string>
+    <string name="local_experimental_subtitle">Предварительная поддержка GPU для GGUF</string>
+    <string name="local_experimental_warning_title">Включить экспериментальные функции?</string>
+    <string name="local_experimental_warning_acceleration">Запускайте GGUF на совместимых с Vulkan GPU. Если GPU недоступен, автоматически используется CPU.</string>
+    <string name="local_experimental_warning_limits">Выполнение на GPU может завершиться ошибкой, нагреть телефон или разрядить батарею. Скорость зависит от модели и драйвера. Включение ничего не загружает. Выключите для использования CPU.</string>
+    <string name="local_experimental_enable">Включить</string>
+    <string name="local_library">Мои модели</string>
+    <string name="local_browse">Обзор</string>
+    <string name="local_options">Параметры локальных моделей</string>
+    <string name="local_gpu_scope">GGUF работает напрямую на совместимых с Vulkan GPU.</string>
+    <string name="local_gpu_detected">Vulkan GPU: %1$s</string>
+    <string name="local_gpu_unavailable">GPU недоступен для этого устройства или сборки. CPU доступен.</string>
+    <string name="local_gpu_request">Сообщить о проблеме GPU на GitHub</string>
+    <string name="local_gpu_processor">Процессор</string>
+    <string name="local_gpu_auto">Авто</string>
+    <string name="local_gpu_auto_note">Предпочитает поддерживаемый GPU. Использует CPU, если GPU недоступен или не может начать ответ.</string>
+    <string name="local_gpu_fallback">GPU не удалось запустить. Повтор на CPU…</string>
+    <string name="local_gpu_ready_fallback">Готово · CPU (вместо GPU)</string>
 </resources>

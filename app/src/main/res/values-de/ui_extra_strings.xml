@@ -380,4 +380,22 @@
     <string name="provider_show_key">API-Schlüssel %1$d anzeigen</string>
     <string name="provider_hide_key">API-Schlüssel %1$d verbergen</string>
     <string name="provider_keys_load_failed">Gespeicherte Schlüssel konnten nicht geladen werden. Schließen und erneut versuchen.</string>
+    <string name="local_experimental_title">Experimentelle Funktionen</string>
+    <string name="local_experimental_subtitle">GGUF-GPU-Vorschau</string>
+    <string name="local_experimental_warning_title">Experimentelle Funktionen aktivieren?</string>
+    <string name="local_experimental_warning_acceleration">GGUF auf kompatiblen Vulkan-GPUs ausführen. Ist keine GPU verfügbar, wird automatisch die CPU verwendet.</string>
+    <string name="local_experimental_warning_limits">GPU-Ausführung kann fehlschlagen, das Telefon erhitzen oder den Akku belasten. Die Geschwindigkeit hängt von Modell und Treiber ab. Das Einschalten lädt nichts herunter. Ausschalten aktiviert die CPU.</string>
+    <string name="local_experimental_enable">Aktivieren</string>
+    <string name="local_library">Meine Modelle</string>
+    <string name="local_browse">Entdecken</string>
+    <string name="local_options">Optionen für lokale Modelle</string>
+    <string name="local_gpu_scope">GGUF läuft direkt auf kompatiblen Vulkan-GPUs.</string>
+    <string name="local_gpu_detected">Vulkan-GPU: %1$s</string>
+    <string name="local_gpu_unavailable">GPU für dieses Gerät oder diesen Build nicht verfügbar. CPU ist verfügbar.</string>
+    <string name="local_gpu_request">GPU-Problem auf GitHub melden</string>
+    <string name="local_gpu_processor">Prozessor</string>
+    <string name="local_gpu_auto">Automatisch</string>
+    <string name="local_gpu_auto_note">Bevorzugt eine unterstützte GPU. Nutzt die CPU, wenn keine GPU verfügbar ist oder die Antwort nicht starten kann.</string>
+    <string name="local_gpu_fallback">GPU konnte nicht starten. Neuer Versuch auf CPU…</string>
+    <string name="local_gpu_ready_fallback">Bereit · CPU (GPU-Ersatz)</string>
 </resources>
