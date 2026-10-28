@@ -70,6 +70,7 @@ data class LocalModelLimits(
     val input: Int = 1536,
     val output: Int = 512,
     val threads: Int = 4,
+    val backend: LocalBackend = LocalBackend.AUTO,
 ) {
     fun validate() {
         require(context > 0) { "Context must be a positive number." }

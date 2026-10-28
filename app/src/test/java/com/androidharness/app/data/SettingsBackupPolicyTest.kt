@@ -10,6 +10,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SettingsBackupPolicyTest {
+    @Test fun experimentalModelConsentCannotBeEnabledByImportingSettings() {
+        assertFalse(Json.decodeFromString(AppSettings.serializer(), "{}").localModelExperimental)
+        val optedIn = AppSettings(localModelExperimental = true)
+        assertFalse(SettingsBackupPolicy.exportSettings(optedIn, emptySet()).localModelExperimental)
+        assertFalse(SettingsBackupPolicy.withoutLocalModels(SettingsBackupFile(settings = optedIn)).settings.localModelExperimental)
+    }
     @Test fun globalChatInstructionsArePortableAndOlderSettingsDefaultToEmpty() {
         val original = AppSettings(chatInstructions = "Answer clearly in German.")
         val exported = SettingsBackupPolicy.exportSettings(original, emptySet())

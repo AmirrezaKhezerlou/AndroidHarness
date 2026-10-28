@@ -23,8 +23,10 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -42,7 +44,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class LocalModelManager(private val context: Context) {
     val consent = LocalModelConsent()
     private fun resourceKey(model: LocalModelSpec, value: LocalModelLimits, downloading: Boolean, profile: LocalDeviceProfile) =
-        "${model.id}:${value.context}:${value.input}:${value.output}:${value.threads}:$downloading:${profile.lowMemory}:${model.projector?.url}"
+        "${model.id}:${value.context}:${value.input}:${value.output}:${value.threads}:${value.backend}:$downloading:${profile.lowMemory}:${model.projector?.url}"
     suspend fun acknowledgeResources(model: LocalModelSpec, value: LocalModelLimits, downloading: Boolean) {
         consent.acknowledge(resourceKey(model, value, downloading, device()))
     }
@@ -73,7 +75,7 @@ class LocalModelManager(private val context: Context) {
             download(model.id)
         }
     }
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
     private val lifecycle = Mutex()
     private val inference = Mutex()
     private val gate = Any()
@@ -477,6 +479,11 @@ class LocalModelManager(private val context: Context) {
         val limits = withContext(Dispatchers.IO) { limits(id) }
         limits.validate()
         confirmResources(model, limits)
+        val experimental = com.androidharness.app.data.SettingsRepository(context).settings.first().localModelExperimental
+        val gpu = withContext(Dispatchers.IO) {
+            LocalAccelerationPolicy.useGpu(experimental, limits.backend,
+                experimental && limits.backend != LocalBackend.CPU && runCatching { LocalNative.gpuDevice().isNotBlank() }.getOrDefault(false))
+        }
         synchronized(gate) {
             check(id !in blocked && store.installed(model)) { "Local model is not installed. Download it in Settings > Local models." }
             handle = LocalNative.create()
@@ -486,17 +493,22 @@ class LocalModelManager(private val context: Context) {
             coroutineScope {
                 val bytes = Channel<ByteArray>(32)
                 var result: ByteArray? = null
+                var actualGpu = gpu
+                var fellBack = false
                 val worker = launch(Dispatchers.IO) {
                     val workerContext = coroutineContext
                     try {
-                        result = LocalNative.generateChat(handle, store.file(id).absolutePath.toByteArray(Charsets.UTF_8),
+                        var outputStarted = false
+                        fun generate(useGpu: Boolean) = LocalNative.generateChat(handle, store.file(id).absolutePath.toByteArray(Charsets.UTF_8),
                             (if (model.projector != null) store.projectorFile(id).absolutePath else "").toByteArray(Charsets.UTF_8),
                             request, images, limits.context, limits.input, minOf(limits.output, outputCap.coerceAtLeast(1)),
-                            limits.threads, object : LocalNative.ChatCallback {
+                            limits.threads, useGpu, object : LocalNative.ChatCallback {
                                 override fun onEvent(data: ByteArray): Boolean = kotlinx.coroutines.runBlocking {
                                     try {
                                         val event = kotlinx.serialization.json.Json.parseToJsonElement(data.toString(Charsets.UTF_8)) as kotlinx.serialization.json.JsonObject
                                         (event["status"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.let { setStatus(id, it) }
+                                        if ((event["text"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.isNotEmpty() == true ||
+                                            (event["thinking"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.isNotEmpty() == true) outputStarted = true
                                         bytes.send(data); true
                                     } catch (_: CancellationException) { false }
                                 }
@@ -508,13 +520,21 @@ class LocalModelManager(private val context: Context) {
                                     } catch (_: CancellationException) { false }
                                 }
                             })
+                        result = try { generate(gpu) } catch (e: Exception) {
+                            if (!LocalAccelerationPolicy.retryOnCpu(gpu, outputStarted,
+                                    e is CancellationException || e.message.orEmpty().contains("stopped", true) || !workerContext.isActive || LocalNative.isCancelled(handle))) throw e
+                            actualGpu = false
+                            fellBack = true
+                            setStatus(id, context.getString(com.androidharness.app.R.string.local_gpu_fallback))
+                            generate(false)
+                        }
                     } finally { bytes.close() }
                 }
                 try {
                     for (data in bytes) emitBytes(data)
                     worker.join()
                     val response = kotlinx.serialization.json.Json.parseToJsonElement(checkNotNull(result).toString(Charsets.UTF_8)) as kotlinx.serialization.json.JsonObject
-                    setStatus(id, "Ready")
+                    setStatus(id, if (actualGpu) "Ready · GPU (Vulkan)" else if (fellBack) context.getString(com.androidharness.app.R.string.local_gpu_ready_fallback) else "Ready · CPU")
                     response
                 } finally {
                     stop(id)

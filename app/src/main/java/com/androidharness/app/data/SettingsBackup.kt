@@ -74,13 +74,15 @@ object SettingsBackupPolicy {
             lastConversationKind = ConversationKind.CODE,
             permissionMode = com.androidharness.app.agent.PermissionMode.CONFIRM_RISKY,
             biometricLockEnabled = false, biometricLockTimeoutMinutes = 0, allowScreenshots = false,
+            localModelExperimental = false,
         )
 
     /** Older v1 files can contain local references; ignore them before preview and restore. */
     fun withoutLocalModels(file: SettingsBackupFile): SettingsBackupFile {
         val removedIds = file.providers.filter { isLocal(it.config) }.map { it.config.id }.toSet()
         return file.copy(
-            settings = filterSelections(file.settings) { !LocalModelCatalog.isLocal(it) && it !in removedIds },
+            settings = filterSelections(file.settings) { !LocalModelCatalog.isLocal(it) && it !in removedIds }
+                .copy(localModelExperimental = false),
             providers = file.providers.filterNot { isLocal(it.config) },
         )
     }

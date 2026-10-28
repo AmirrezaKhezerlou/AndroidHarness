@@ -1,6 +1,7 @@
 #include <jni.h>
 #include "local_request.h"
 #include "llama.h"
+#include "ggml-backend.h"
 #include "chat.h"
 #include "sampling.h"
 #include "mtmd.h"
@@ -8,6 +9,11 @@
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <climits>
+#include <cstdio>
+#include <cstring>
+#ifdef __ANDROID__
+#include <android/log.h>
+#endif
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -34,11 +40,20 @@ extern "C" JNIEXPORT jbyteArray JNICALL
 Java_com_androidharness_app_local_LocalNative_generateChat(
     JNIEnv * env, jobject, jlong handle, jbyteArray path, jbyteArray projector,
     jbyteArray requestBytes, jobjectArray imageBytes, jint requestedContext, jint inputLimit,
-    jint outputLimit, jint threads, jobject callback) {
+    jint outputLimit, jint threads, jboolean useGpu, jobject callback) {
     try {
         auto * request = reinterpret_cast<LocalRequest *>(handle);
         static std::once_flag initialized;
-        std::call_once(initialized, [] { llama_backend_init(); });
+        std::call_once(initialized, [] {
+#ifdef __ANDROID__
+            llama_log_set([](ggml_log_level level, const char * text, void *) {
+                if (level == GGML_LOG_LEVEL_ERROR || level == GGML_LOG_LEVEL_WARN || std::strstr(text, "offload") || std::strstr(text, "Vulkan"))
+                    __android_log_write(ANDROID_LOG_INFO, "HarnessGGUF", text);
+                else std::fputs(text, stderr);
+            }, nullptr);
+#endif
+            llama_backend_init();
+        });
         auto cbClass = env->GetObjectClass(callback);
         auto eventMethod = env->GetMethodID(cbClass, "onEvent", "([B)Z");
         auto warningMethod = env->GetMethodID(cbClass, "onWarning", "([B)Z");
@@ -56,7 +71,18 @@ Java_com_androidharness_app_local_LocalNative_generateChat(
             throw std::runtime_error("Context, token budgets and threads must be positive.");
         stage("Loading model");
         auto mp = llama_model_default_params();
-        mp.n_gpu_layers = 0;
+        ggml_backend_dev_t devices[2] = {nullptr, nullptr};
+        if (useGpu) {
+            for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+                auto dev = ggml_backend_dev_get(i);
+                if ((ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_GPU || ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_IGPU)) { devices[0] = dev; break; }
+            }
+            if (!devices[0]) throw std::runtime_error("No compatible Vulkan GPU is available. Choose CPU in Local models.");
+        }
+        mp.devices = devices;
+        mp.n_gpu_layers = useGpu ? 999 : 0;
+        // Never auto-fit a GPU request back to CPU without telling the user.
+        stage(useGpu ? "Loading model on GPU (Vulkan)" : "Loading model on CPU");
         mp.load_mode = LLAMA_LOAD_MODE_MMAP;
         mp.progress_callback = progress;
         mp.progress_callback_user_data = request;
@@ -73,9 +99,10 @@ Java_com_androidharness_app_local_LocalNative_generateChat(
         auto tmpls = common_chat_templates_init(model.get(), "");
         auto chat = common_chat_templates_apply(tmpls.get(), inputs);
         common_chat_parser_params parser(chat);
-        parser.reasoning_format = COMMON_REASONING_FORMAT_AUTO;
-        if (!chat.parser.empty()) parser.parser.load(chat.parser);
+        parser.parser = chat.parser;
         const auto * vocab = llama_model_get_vocab(model.get());
+        parser.generation_prompt = common_chat_input_tokenize(vocab, chat.generation_prompt);
+        const auto prompt = chat.prompt.str();
         std::unique_ptr<mtmd_context, decltype(&mtmd_free)> vision(nullptr, mtmd_free);
         std::unique_ptr<mtmd_input_chunks, decltype(&mtmd_input_chunks_free)> chunks(nullptr, mtmd_input_chunks_free);
         std::vector<std::unique_ptr<mtmd_bitmap, decltype(&mtmd_bitmap_free)>> bitmaps;
@@ -105,16 +132,16 @@ Java_com_androidharness_app_local_LocalNative_generateChat(
                 bitmapPtrs.push_back(wrapper.bitmap);
             }
             chunks.reset(mtmd_input_chunks_init());
-            mtmd_input_text text{chat.prompt.data(), chat.prompt.size(), true, true};
+            mtmd_input_text text{prompt.data(), prompt.size(), true, true};
             if (mtmd_tokenize(vision.get(), chunks.get(), &text, bitmapPtrs.data(), bitmapPtrs.size()) != 0)
                 throw std::runtime_error("Could not process images with this model's chat template.");
             promptCount = mtmd_helper_get_n_tokens(chunks.get());
             promptPositions = mtmd_helper_get_n_pos(chunks.get());
         } else {
-            int count = -llama_tokenize(vocab, chat.prompt.data(), chat.prompt.size(), nullptr, 0, true, true);
+            int count = -llama_tokenize(vocab, prompt.data(), prompt.size(), nullptr, 0, true, true);
             if (count <= 0) throw std::runtime_error("Could not tokenize chat.");
             tokens.resize(count);
-            if (llama_tokenize(vocab, chat.prompt.data(), chat.prompt.size(), tokens.data(), count, true, true) != count)
+            if (llama_tokenize(vocab, prompt.data(), prompt.size(), tokens.data(), count, true, true) != count)
                 throw std::runtime_error("Could not tokenize chat.");
             promptCount = promptPositions = count;
         }
@@ -131,6 +158,8 @@ Java_com_androidharness_app_local_LocalNative_generateChat(
         }
         auto cp = llama_context_default_params();
         cp.n_ctx = contextSize;
+        cp.offload_kqv = useGpu;
+        cp.op_offload = useGpu;
         cp.n_batch = 256; cp.n_ubatch = 128;
         if (vision) {
             // Non-causal image chunks must fit in a single microbatch.
@@ -170,7 +199,7 @@ Java_com_androidharness_app_local_LocalNative_generateChat(
         }
         std::unique_ptr<common_sampler, decltype(&common_sampler_free)> sampler(common_sampler_init(model.get(), sp), common_sampler_free);
         if (!sampler) throw std::runtime_error("Could not initialize tool-call sampling.");
-        std::string output;
+        common_chat_input output;
         common_chat_msg previous;
         auto publish = [&](bool partial) {
             auto parsed = common_chat_parse(output, partial, parser);
@@ -196,12 +225,12 @@ Java_com_androidharness_app_local_LocalNative_generateChat(
             int size = llama_token_to_piece(vocab, token, piece.data(), piece.size(), 0, true);
             if (size < 0) { piece.resize(-size); size = llama_token_to_piece(vocab, token, piece.data(), piece.size(), 0, true); }
             if (size < 0) throw std::runtime_error("Could not decode output token.");
-            output.append(piece.data(), size);
+            output.append(std::string(piece.data(), size), token);
             ++generated;
-            if (complete_utf8(output)) publish(true);
+            if (complete_utf8(output.text)) publish(true);
             bool stop = false;
-            for (const auto & marker : chat.additional_stops) if (!marker.empty() && output.size() >= marker.size() &&
-                output.compare(output.size() - marker.size(), marker.size(), marker) == 0) stop = true;
+            for (const auto & marker : chat.additional_stops) if (!marker.empty() && output.text.size() >= marker.size() &&
+                output.text.compare(output.text.size() - marker.size(), marker.size(), marker) == 0) stop = true;
             if (stop) { ended = true; break; }
             if (generated < outputLimit) {
                 // Explicit positions also work for image models using M-RoPE.
@@ -224,7 +253,7 @@ Java_com_androidharness_app_local_LocalNative_generateChat(
             if (!known) throw std::runtime_error("The local model requested an unknown tool.");
             calls.push_back({{"name", call.name}, {"arguments", arguments}, {"id", call.id}});
         }
-        auto result = json({{"input", promptCount}, {"output", generated}, {"ended", ended}, {"calls", calls}}).dump();
+        auto result = json({{"input", promptCount}, {"output", generated}, {"ended", ended}, {"calls", calls}, {"backend", useGpu ? "GPU" : "CPU"}}).dump();
         auto data = env->NewByteArray(result.size());
         env->SetByteArrayRegion(data, 0, result.size(), reinterpret_cast<const jbyte *>(result.data()));
         return data;
@@ -232,4 +261,17 @@ Java_com_androidharness_app_local_LocalNative_generateChat(
         if (!env->ExceptionCheck()) env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), e.what());
         return nullptr;
     }
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_androidharness_app_local_LocalNative_gpuDevice(JNIEnv * env, jobject) {
+    try {
+        llama_backend_init();
+        for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+            auto dev = ggml_backend_dev_get(i);
+            if ((ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_GPU || ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_IGPU))
+                return env->NewStringUTF(ggml_backend_dev_description(dev));
+        }
+    } catch (const std::exception &) { }
+    return env->NewStringUTF("");
 }

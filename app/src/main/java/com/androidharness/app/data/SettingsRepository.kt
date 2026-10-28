@@ -142,6 +142,8 @@ data class AppSettings(
     val repoMapEnabled: Boolean = true,
     /** Local models start in plain chat until the user enables agent context. */
     val localModelAgentContext: Boolean = false,
+    /** Explicit, device-local consent for experimental local model features. */
+    val localModelExperimental: Boolean = false,
     val cavemanInstalled: Boolean = false,
     val cavemanIntensity: com.androidharness.app.caveman.CavemanIntensity = com.androidharness.app.caveman.CavemanIntensity.OFF,
     val cavemanWenyan: Boolean = false,
@@ -265,6 +267,7 @@ class SettingsRepository(private val context: Context) {
         val LAST_ACTIVE_SESSION = stringPreferencesKey("last_active_session_id")
         val REPO_MAP_ENABLED = booleanPreferencesKey("repo_map_enabled")
         val LOCAL_MODEL_AGENT_CONTEXT = booleanPreferencesKey("local_model_agent_context")
+        val LOCAL_MODEL_EXPERIMENTAL = booleanPreferencesKey("local_model_experimental")
         val CAVEMAN_INSTALLED = booleanPreferencesKey("caveman_installed")
         val CAVEMAN_INTENSITY = stringPreferencesKey("caveman_intensity")
         val CAVEMAN_WENYAN = booleanPreferencesKey("caveman_wenyan")
@@ -368,6 +371,7 @@ class SettingsRepository(private val context: Context) {
             lastActiveSessionId = prefs[Keys.LAST_ACTIVE_SESSION],
             repoMapEnabled = prefs[Keys.REPO_MAP_ENABLED] ?: true,
             localModelAgentContext = prefs[Keys.LOCAL_MODEL_AGENT_CONTEXT] ?: false,
+            localModelExperimental = prefs[Keys.LOCAL_MODEL_EXPERIMENTAL] ?: false,
             cavemanInstalled = prefs[Keys.CAVEMAN_INSTALLED] ?: false,
             cavemanIntensity = prefs[Keys.CAVEMAN_INTENSITY]?.let {
                 runCatching { com.androidharness.app.caveman.CavemanIntensity.valueOf(it) }.getOrNull()
@@ -427,6 +431,7 @@ class SettingsRepository(private val context: Context) {
             p[Keys.SHOW_LIVE_CODE] = s.showLiveCode
             p[Keys.REPO_MAP_ENABLED] = s.repoMapEnabled
             p[Keys.LOCAL_MODEL_AGENT_CONTEXT] = s.localModelAgentContext
+            p[Keys.LOCAL_MODEL_EXPERIMENTAL] = s.localModelExperimental
             p[Keys.CAVEMAN_INSTALLED] = s.cavemanInstalled
             p[Keys.CAVEMAN_INTENSITY] = s.cavemanIntensity.name
             p[Keys.CAVEMAN_WENYAN] = s.cavemanWenyan
@@ -745,6 +750,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setLocalModelAgentContext(enabled: Boolean) {
         context.settingsStore.edit { it[Keys.LOCAL_MODEL_AGENT_CONTEXT] = enabled }
+    }
+
+    suspend fun setLocalModelExperimental(enabled: Boolean) {
+        context.settingsStore.edit { it[Keys.LOCAL_MODEL_EXPERIMENTAL] = enabled }
     }
 
     suspend fun setCavemanIntensity(intensity: com.androidharness.app.caveman.CavemanIntensity) {

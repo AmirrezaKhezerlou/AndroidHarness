@@ -13,7 +13,7 @@ public final class LocalNative {
                          int context, int input, int output, int threads, Callback callback);
     public interface Callback { boolean onToken(byte[] bytes); }
     native byte[] generateChat(long handle, byte[] path, byte[] projector, byte[] request,
-                              byte[][] images, int context, int input, int output, int threads, ChatCallback callback);
+                              byte[][] images, int context, int input, int output, int threads, boolean gpu, ChatCallback callback);
     native void convertSafetensors(long handle, byte[] directory, byte[] output, int threads);
     public interface ChatCallback { boolean onEvent(byte[] bytes); boolean onWarning(byte[] bytes); }
     static byte[] utf8(String value) { return value.getBytes(StandardCharsets.UTF_8); }
@@ -25,7 +25,7 @@ public final class LocalNative {
         long handle = runtime.create();
         try {
             String request = "{\"messages\":[{\"role\":\"system\",\"content\":\"You are a helpful assistant. Use the tools to fulfill user requests.\"},{\"role\":\"user\",\"content\":\"Read the file README.md using read_file.\"}],\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"read_file\",\"description\":\"Read the contents of a file\",\"parameters\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"]}}}]}";
-            String result = new String(runtime.generateChat(handle, path, utf8(""), utf8(request), new byte[0][], 1024, 768, 128, 2, callback), StandardCharsets.UTF_8);
+            String result = new String(runtime.generateChat(handle, path, utf8(""), utf8(request), new byte[0][], 1024, 768, 128, 2, false, callback), StandardCharsets.UTF_8);
             if (!result.contains("\"name\":\"read_file\"") || !result.contains("README.md")) throw new AssertionError("Tool call not parsed: " + result);
             System.out.println("PASS native tool calling " + result);
         } finally { runtime.destroy(handle); }
@@ -33,7 +33,7 @@ public final class LocalNative {
         try {
             String request = "{\"messages\":[{\"role\":\"user\",\"content\":\"What is 2+2?\"}],\"tools\":[]}";
             int[] warnings = {0};
-            runtime.generateChat(expanded, path, utf8(""), utf8(request), new byte[0][], 16, 1, 16, 2, new ChatCallback() {
+            runtime.generateChat(expanded, path, utf8(""), utf8(request), new byte[0][], 16, 1, 16, 2, false, new ChatCallback() {
                 public boolean onEvent(byte[] data) { return true; }
                 public boolean onWarning(byte[] data) { warnings[0]++; return true; }
             });
@@ -43,7 +43,7 @@ public final class LocalNative {
         long cancelled = runtime.create();
         try {
             String request = "{\"messages\":[{\"role\":\"user\",\"content\":\"What is 2+2?\"}],\"tools\":[]}";
-            expectFailure(() -> runtime.generateChat(cancelled, path, utf8(""), utf8(request), new byte[0][], 16, 1, 16, 2, new ChatCallback() {
+            expectFailure(() -> runtime.generateChat(cancelled, path, utf8(""), utf8(request), new byte[0][], 16, 1, 16, 2, false, new ChatCallback() {
                 public boolean onEvent(byte[] data) { return true; }
                 public boolean onWarning(byte[] data) { return false; }
             }), "stopped");
@@ -90,7 +90,7 @@ public final class LocalNative {
                 long inference = runtime.create();
                 try {
                     String request = "{\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"tools\":[]}";
-                    String result = new String(runtime.generateChat(inference, utf8(args[1] + "/converted.gguf"), utf8(""), utf8(request), new byte[0][], 512, 384, 8, 2, callback), StandardCharsets.UTF_8);
+                    String result = new String(runtime.generateChat(inference, utf8(args[1] + "/converted.gguf"), utf8(""), utf8(request), new byte[0][], 512, 384, 8, 2, false, callback), StandardCharsets.UTF_8);
                     if (!result.contains("\"input\":")) throw new AssertionError(result);
                     System.out.println("PASS safetensors conversion and inference " + result);
                 } finally { runtime.destroy(inference); }
@@ -102,7 +102,7 @@ public final class LocalNative {
                 String request = "{\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"media_marker\",\"text\":\"<__media__>\"},{\"type\":\"text\",\"text\":\"What color is this square? Answer briefly.\"}]}],\"tools\":[]}";
                 ByteArrayOutputStream events = new ByteArrayOutputStream();
                 byte[] image = java.nio.file.Files.readAllBytes(java.nio.file.Path.of(args[4]));
-                String result = new String(runtime.generateChat(vision, utf8(args[2]), utf8(args[3]), utf8(request), new byte[][]{image}, 2048, 1536, 64, 2, new ChatCallback() {
+                String result = new String(runtime.generateChat(vision, utf8(args[2]), utf8(args[3]), utf8(request), new byte[][]{image}, 2048, 1536, 64, 2, false, new ChatCallback() {
                     public boolean onEvent(byte[] data) { events.write(data, 0, data.length); return true; }
                     public boolean onWarning(byte[] data) { return true; }
                 }), StandardCharsets.UTF_8);

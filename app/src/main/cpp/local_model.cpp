@@ -29,6 +29,10 @@ extern "C" JNIEXPORT jlong JNICALL
 Java_com_androidharness_app_local_LocalNative_create(JNIEnv *, jobject) {
     return reinterpret_cast<jlong>(new Request());
 }
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_androidharness_app_local_LocalNative_isCancelled(JNIEnv *, jobject, jlong handle) {
+    return reinterpret_cast<Request *>(handle)->cancelled.load();
+}
 extern "C" JNIEXPORT void JNICALL
 Java_com_androidharness_app_local_LocalNative_cancel(JNIEnv *, jobject, jlong handle) {
     reinterpret_cast<Request *>(handle)->cancelled.store(true);
@@ -50,6 +54,8 @@ Java_com_androidharness_app_local_LocalNative_generate(
             int64_t(inputLimit) + outputLimit > contextSize || threads < 1)
             throw std::runtime_error("Invalid local model limits.");
         auto params = llama_model_default_params();
+        ggml_backend_dev_t devices[] = {nullptr};
+        params.devices = devices;
         params.n_gpu_layers = 0;
         params.load_mode = LLAMA_LOAD_MODE_MMAP;
         params.progress_callback = progress;
@@ -93,6 +99,8 @@ Java_com_androidharness_app_local_LocalNative_generate(
             throw std::runtime_error("Could not tokenize chat.");
         auto contextParams = llama_context_default_params();
         contextParams.n_ctx = contextSize;
+        contextParams.offload_kqv = false;
+        contextParams.op_offload = false;
         contextParams.n_batch = 256;
         contextParams.n_ubatch = 128;
         contextParams.n_threads = threads;

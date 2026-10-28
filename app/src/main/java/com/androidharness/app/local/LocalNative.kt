@@ -5,11 +5,13 @@ import androidx.annotation.Keep
 @Keep
 object LocalNative {
     init { System.loadLibrary("harness_local") }
+    external fun gpuDevice(): String
     external fun create(): Long
+    external fun isCancelled(handle: Long): Boolean
     external fun cancel(handle: Long)
     external fun destroy(handle: Long)
     external fun generateChat(handle: Long, path: ByteArray, projector: ByteArray, request: ByteArray,
-        images: Array<ByteArray>, context: Int, input: Int, output: Int, threads: Int, callback: ChatCallback): ByteArray
+        images: Array<ByteArray>, context: Int, input: Int, output: Int, threads: Int, gpu: Boolean, callback: ChatCallback): ByteArray
     external fun convertSafetensors(handle: Long, directory: ByteArray, output: ByteArray, threads: Int)
     external fun generate(
         handle: Long,

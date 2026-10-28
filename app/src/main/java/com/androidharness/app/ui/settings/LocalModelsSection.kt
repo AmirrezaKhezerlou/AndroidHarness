@@ -76,6 +76,7 @@ private fun LocalModelsContent(container: AppContainer) {
     var panel by rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(panel) { if (panel !in 0..1) panel = 0 }
     var options by remember { mutableStateOf(false) }
+    val experimental = settings.localModelExperimental
 
     var deviceDialog by remember { mutableStateOf(false) }
     var details by remember { mutableStateOf<LocalModelSpec?>(null) }
@@ -147,6 +148,7 @@ private fun LocalModelsContent(container: AppContainer) {
             }
         }
     }
+    LocalExperimentalSwitch(container)
     PrimaryTabRow(selectedTabIndex = panel.coerceIn(0, 1), divider = {}) {
         listOf(R.string.local_library, R.string.local_browse).forEachIndexed { index, title ->
             Tab(selected = panel == index, onClick = { panel = index }, text = { Text(stringResource(title)) })
@@ -166,6 +168,7 @@ private fun LocalModelsContent(container: AppContainer) {
             TextButton(onClick = { options = false; deviceDialog = true }) {
                 Icon(Icons.Default.Info, null); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.settings_local_models_about))
             }
+            if (experimental) LocalGpuInformation()
         }
     }
     message?.let { text ->
@@ -476,13 +479,18 @@ internal fun LocalLimitsDialog(model: LocalModelSpec, manager: LocalModelManager
     var input by remember { mutableStateOf(limits.input.toString()) }
     var output by remember { mutableStateOf(limits.output.toString()) }
     var threads by remember { mutableStateOf(limits.threads.toString()) }
+    var backend by remember { mutableStateOf(limits.backend) }
     var advanced by rememberSaveable { mutableStateOf(false) }
+    val experimentalSettings = remember(uiContext) { com.androidharness.app.data.SettingsRepository(uiContext) }
+    val experimental by experimentalSettings.settings
+        .collectAsStateWithLifecycle(initialValue = AppSettings())
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     AlertDialog(onDismissRequest = { if (!saving) onDismiss() }, title = { Text(stringResource(R.string.settings_local_models_model_settings)) }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(model.title, style = MaterialTheme.typography.titleSmall)
+            if (experimental.localModelExperimental) LocalBackendPicker(backend, !saving) { backend = it }
             LocalNumberField(
                 stringResource(R.string.settings_local_models_conversation_size),
                 context,
@@ -521,6 +529,7 @@ internal fun LocalLimitsDialog(model: LocalModelSpec, manager: LocalModelManager
                 input = (model.defaultContext * 3 / 4).coerceAtLeast(1).toString()
                 output = (model.defaultContext / 4).coerceAtLeast(1).toString()
                 threads = manager.device().cores.coerceIn(1, 4).toString()
+                backend = LocalBackend.AUTO
                 error = null
             }) { Text(stringResource(R.string.settings_action_reset_defaults)) }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -530,7 +539,7 @@ internal fun LocalLimitsDialog(model: LocalModelSpec, manager: LocalModelManager
             saving = true
             try {
                 manager.saveLimits(model.id, LocalModelLimits(context.toIntOrNull() ?: 0, input.toIntOrNull() ?: 0,
-                    output.toIntOrNull() ?: 0, threads.toIntOrNull() ?: 0))
+                    output.toIntOrNull() ?: 0, threads.toIntOrNull() ?: 0, backend))
                 onDismiss()
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { error = e.message }
