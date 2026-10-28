@@ -28,11 +28,44 @@ set(GGML_AVX OFF CACHE BOOL "" FORCE)
 set(GGML_AVX2 OFF CACHE BOOL "" FORCE)
 set(GGML_FMA OFF CACHE BOOL "" FORCE)
 set(GGML_F16C OFF CACHE BOOL "" FORCE)
+# Vulkan uses Android's system driver; build-time headers/shader tools stay off-device.
+if(ANDROID AND (ANDROID_ABI STREQUAL "arm64-v8a" OR ANDROID_ABI STREQUAL "x86_64"))
+    FetchContent_Declare(vulkan_headers
+        URL https://codeload.github.com/KhronosGroup/Vulkan-Headers/tar.gz/v1.4.363
+        URL_HASH SHA256=cbaf687d3c59b9666fe080e7f8396b6b4f4d344a768ee6b337c59852f4526b68)
+    FetchContent_Declare(spirv_headers
+        URL https://codeload.github.com/KhronosGroup/SPIRV-Headers/tar.gz/vulkan-sdk-1.4.341.0
+        URL_HASH SHA256=cab0a654c4917e16367483296b44cdb1d614e3120c721beafcd37e3a8580486c)
+    FetchContent_MakeAvailable(vulkan_headers spirv_headers)
+    set(Vulkan_INCLUDE_DIR "${vulkan_headers_SOURCE_DIR}/include" CACHE PATH "" FORCE)
+    find_library(ANDROID_VULKAN_LIBRARY vulkan REQUIRED)
+    set(Vulkan_LIBRARY "${ANDROID_VULKAN_LIBRARY}" CACHE FILEPATH "" FORCE)
+    find_program(HOST_GLSLC glslc NO_CMAKE_FIND_ROOT_PATH REQUIRED)
+    set(Vulkan_GLSLC_EXECUTABLE "${HOST_GLSLC}" CACHE FILEPATH "" FORCE)
+    # Upstream expects the package config, while FetchContent already defines its target.
+    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/spirv-config")
+    file(WRITE "${CMAKE_BINARY_DIR}/spirv-config/SPIRV-HeadersConfig.cmake" "set(SPIRV-Headers_FOUND TRUE)\n")
+    set(SPIRV-Headers_DIR "${CMAKE_BINARY_DIR}/spirv-config")
+    include_directories("${spirv_headers_SOURCE_DIR}/include")
+    set(GGML_VULKAN ON CACHE BOOL "" FORCE)
+endif()
+set(LLAMA_REVISION 19cce6919992fdffd92e0ac152caaf1e2b8f254e)
 FetchContent_Declare(llama
-    URL https://codeload.github.com/ggml-org/llama.cpp/tar.gz/d280808f5d82fcc3142b53f94ea5f594250cd765
-    URL_HASH SHA256=104e0f65cb9d8556fc5801e347db8d5d37a43a9e29cabee2bcf89f6049d20387
+    BINARY_DIR "${CMAKE_BINARY_DIR}/llama-${LLAMA_REVISION}"
+    URL https://codeload.github.com/ggml-org/llama.cpp/tar.gz/19cce6919992fdffd92e0ac152caaf1e2b8f254e
+    URL_HASH SHA256=e16c6d1076af7a2bdb351e22176dd4b302f244ac4c3822604e2ec64a8a783d44
 )
 FetchContent_MakeAvailable(llama)
+if(TARGET ggml-vulkan)
+    # The pinned backend has three direct Vulkan 1.1 calls. Resolve them through
+    # its existing instance dispatcher so the CPU library still loads on API 26.
+    set(vulkan_source "${llama_SOURCE_DIR}/ggml/src/ggml-vulkan/ggml-vulkan.cpp")
+    file(READ "${vulkan_source}" vulkan_original)
+    string(REPLACE "    vkGetPhysicalDeviceFeatures2(" "    VULKAN_HPP_DEFAULT_DISPATCHER.vkGetPhysicalDeviceFeatures2(" vulkan_patched "${vulkan_original}")
+    if(NOT vulkan_original STREQUAL vulkan_patched)
+        file(WRITE "${vulkan_source}" "${vulkan_patched}")
+    endif()
+endif()
 add_library(harness_local SHARED local_model.cpp local_chat.cpp safetensors_import.cpp)
 target_link_libraries(harness_local PRIVATE llama llama-common mtmd)
 if(ANDROID)

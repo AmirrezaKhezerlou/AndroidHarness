@@ -1,6 +1,6 @@
 llama.cpp / ggml
 https://github.com/ggml-org/llama.cpp
-Pinned revision: d280808f5d82fcc3142b53f94ea5f594250cd765
+Pinned revision: 19cce6919992fdffd92e0ac152caaf1e2b8f254e
 
 MIT License
 
