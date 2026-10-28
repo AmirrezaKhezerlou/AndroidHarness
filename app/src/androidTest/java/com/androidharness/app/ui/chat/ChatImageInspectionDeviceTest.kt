@@ -186,7 +186,9 @@ class ChatImageInspectionDeviceTest {
                         emit(com.androidharness.app.llm.StreamEvent.ToolCallBatch(listOf(ToolCallData("view-later", "view_chat_image", "{\"image_number\":1}"))))
                         emit(com.androidharness.app.llm.StreamEvent.Done("tool_calls"))
                     } else {
-                        emit(com.androidharness.app.llm.StreamEvent.TextDelta("The same image kept its number across requests."))
+                        val full = Json.parseToJsonElement(current.single().text).jsonObject.getValue("display_url").jsonPrimitive.content
+                        val crop = messages.last { it.toolName == "zoom_chat_image" }.text.let { Json.parseToJsonElement(it).jsonObject.getValue("display_url").jsonPrimitive.content }
+                        emit(com.androidharness.app.llm.StreamEvent.TextDelta("The same image kept its number across requests.\n\n![Full frame]($full)\n\n![Close-up]($crop)"))
                         emit(com.androidharness.app.llm.StreamEvent.Done("stop"))
                     }
                 }
@@ -198,7 +200,10 @@ class ChatImageInspectionDeviceTest {
                 "https://example.invalid", "gpt-4o"), "", history, { com.androidharness.app.agent.PermissionMode.FULL_AUTO }, mutableSetOf(),
                 FileFs(root), com.androidharness.app.llm.RequestOptions(), 100_000, com.androidharness.app.agent.AgentMode.ACT,
                 conversation = com.androidharness.app.data.ConversationConfig(com.androidharness.app.data.ConversationKind.CHAT))
-            events.toList()
+            val committed = events.toList().filterIsInstance<com.androidharness.app.agent.AgentEvent.AssistantCommitted>().last().message
+            assertEquals(2, committed.images.size)
+            assertTrue(committed.images.any { it.name == ref.name })
+            assertTrue(committed.images.any { it.name != ref.name })
             assertEquals(3, round)
         } finally { c.sessions.session(sid)?.let { c.sessions.deleteSession(it) }; c.images.delete(ref.name); root.deleteRecursively() }
     }
@@ -248,6 +253,61 @@ class ChatImageInspectionDeviceTest {
                 }
             assertEquals(2, round)
         } finally { created.forEach(c.images::delete); c.images.delete(ref.name); c.sessions.session(sid)?.let { c.sessions.deleteSession(it) }; root.deleteRecursively() }
+    }
+
+    @Test fun finalAnswerShowsTheSavedImageBelowItsTextAndSurvivesReload(): Unit = runBlocking {
+        val data = picture()
+        val bitmap = BitmapFactory.decodeByteArray(data, 0, data.size)
+        val ref = try { c.images.saveCloseUp(bitmap).copy(origin = "user_upload") } finally { bitmap.recycle() }
+        val root = File(c.appContext.cacheDir, "final-image-${System.nanoTime()}").apply { mkdirs() }
+        val sid = c.sessions.createSession("Final image fixture", conversation = com.androidharness.app.data.ConversationConfig(com.androidharness.app.data.ConversationKind.CHAT))
+        val user = ChatMessage(Role.USER, "Show this picture after explaining it", images = listOf(ref))
+        val url = ChatResponseImages.url(ChatResponseImages.id(ref))
+        val answer = "The picture has a red left half and a blue right half.\n\n![The inspected picture]($url)"
+        val store = androidx.lifecycle.ViewModelStore()
+        val provider = object : com.androidharness.app.llm.LlmProvider {
+            override fun streamChat(config: com.androidharness.app.llm.ProviderConfig, apiKey: String, systemPrompt: String, messages: List<ChatMessage>,
+                tools: List<com.androidharness.app.llm.ToolSchema>, options: com.androidharness.app.llm.RequestOptions) = kotlinx.coroutines.flow.flow {
+                assertTrue(systemPrompt.contains("Zoom is optional")); assertTrue(systemPrompt.contains(url))
+                emit(com.androidharness.app.llm.StreamEvent.TextDelta(answer)); emit(com.androidharness.app.llm.StreamEvent.Done("stop"))
+            }
+        }
+        try {
+            c.sessions.addMessage(sid, user, "final-image")
+            val engine = com.androidharness.app.agent.AgentEngine({ provider }, c.registry, c.checkpoints, c.images, c.linuxEnv, c.shizuku, c.skills)
+            engine.run(sid, "final-image", com.androidharness.app.llm.ProviderConfig("fixture", "Fixture", com.androidharness.app.llm.ProviderType.OPENAI_COMPAT,
+                "https://example.invalid", "gpt-4o"), "", listOf(user), { com.androidharness.app.agent.PermissionMode.FULL_AUTO }, mutableSetOf(), FileFs(root),
+                com.androidharness.app.llm.RequestOptions(), 100_000, com.androidharness.app.agent.AgentMode.ACT,
+                conversation = com.androidharness.app.data.ConversationConfig(com.androidharness.app.data.ConversationKind.CHAT)).collect { event ->
+                    if (event is com.androidharness.app.agent.AgentEvent.AssistantCommitted) c.sessions.addMessage(sid, event.message, "final-image")
+                }
+            val saved = c.sessions.messages(sid).last { it.role == Role.ASSISTANT }
+            assertEquals(answer, saved.text); assertEquals(listOf(ref), saved.images)
+            assertTrue(ChatResponseImages.available(listOf(saved)).containsKey(ChatResponseImages.id(ref)))
+            ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+                scenario.onActivity { host ->
+                    val vm = ChatViewModel(c, sid); store.put("chat", vm)
+                    host.setContent { HarnessTheme { ChatScreen(vm, {}, { _, _ -> }, {}, {}, onOpenSubagent = {}) } }
+                }
+                await("The picture has a red left half and a blue right half.")
+                awaitDescription("The inspected picture")
+                val pictureBounds = android.graphics.Rect().also { requireNotNull(findDescription("The inspected picture")).getBoundsInScreen(it) }
+                val textBounds = android.graphics.Rect().also { requireNotNull(find("The picture has a red left half and a blue right half.")).getBoundsInScreen(it) }
+                assertTrue("Image follows the answer text", pictureBounds.top >= textBounds.bottom)
+                assertTrue("The final image uses a readable size", pictureBounds.height() > 100 * c.appContext.resources.displayMetrics.density)
+                screenshot("saved-image-below-final-answer")
+                clickNode(requireNotNull(findDescription("The inspected picture"))); awaitDescription("Close image")
+                clickNode(requireNotNull(findDescription("Close image")))
+                scenario.onActivity { host -> host.setContent { HarnessTheme {
+                    CompositionLocalProvider(LocalChatImagesEnabled provides false) {
+                        com.androidharness.app.ui.chat.components.AssistantText(answer, chatImages = ChatResponseImages.available(listOf(saved)))
+                    }
+                } } }
+                SystemClock.sleep(400)
+                assertNull(findDescription("The inspected picture"))
+                assertNull(find(url)); assertNull(find(answer))
+            }
+        } finally { instrumentation.runOnMainSync { store.clear() }; c.sessions.session(sid)?.let { c.sessions.deleteSession(it) }; c.images.delete(ref.name); root.deleteRecursively() }
     }
 
     @Test fun expandedImageDetailsKeepBothCollapseControlsReachable() {

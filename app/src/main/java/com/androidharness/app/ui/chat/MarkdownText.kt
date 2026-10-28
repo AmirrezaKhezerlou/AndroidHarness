@@ -224,14 +224,14 @@ private val bulletRegex = Regex("^\\s*([-*+])\\s+(.*)$")
 private val numberedRegex = Regex("^\\s*(\\d+)[.)]\\s+(.*)$")
 private val headingRegex = Regex("^(#{1,6})\\s+(.*)$")
 private val ruleRegex = Regex("^\\s*([-*_])\\s*(?:\\1\\s*){2,}$")
-private val standaloneImageRegex = Regex("^!\\[([^\\]]*)]\\((https?://[^)\\s]+)\\)\\s*$")
+private val standaloneImageRegex = Regex("^!\\[([^\\]]*)]\\(((?:https?://|harness-image:)[^)\\s]+)\\)\\s*$")
 private val standaloneLinkRegex = Regex("^\\[([^\\]]+)]\\((https?://[^)\\s]+)\\)\\s*$")
 private val bareUrlRegex = Regex("^https?://\\S+$")
 private val bareImageUrlRegex = Regex(
     "^https?://\\S+\\.(?:png|jpe?g|webp|gif)(?:\\?\\S*)?$",
     RegexOption.IGNORE_CASE,
 )
-private val inlineImageRegex = Regex("!\\[([^\\]]*)]\\((https?://[^)\\s]+)\\)")
+private val inlineImageRegex = Regex("!\\[([^\\]]*)]\\(((?:https?://|harness-image:)[^)\\s]+)\\)")
 
 private fun parseBlocks(text: String): List<Block> {
     val out = mutableListOf<Block>()
@@ -441,6 +441,11 @@ private fun MarkdownBlocks(
         val plain = live && block is Block.Paragraph && block.text.length > STREAM_INLINE_CAP
         when (block) {
             is Block.Image -> when {
+                com.androidharness.app.core.ChatResponseImages.imageId(block.url) != null -> {
+                    if (media && imagesEnabled) Box(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                        com.androidharness.app.ui.chat.components.ChatResponseImage(block.url, block.alt)
+                    } else if (block.alt.isNotBlank()) Text(block.alt, style = MaterialTheme.typography.bodySmall)
+                }
                 !media || live -> Text(
                     if (block.alt.isNotBlank()) "${block.alt}: ${block.url}" else block.url,
                     style = MaterialTheme.typography.bodyLarge,

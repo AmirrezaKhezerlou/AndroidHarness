@@ -681,6 +681,7 @@ class AgentEngine(
                     role = Role.ASSISTANT,
                     text = followUps.text,
                     toolCalls = calls.toList(),
+                    images = if (conversation.isChat) com.androidharness.app.core.ChatResponseImages.referenced(followUps.text, working) else emptyList(),
                     thinking = thinking.toString(),
                     thinkingMs = thinkingTiming.durationMs(ThinkingTiming.now()),
                     outputTokens = outputTokens,

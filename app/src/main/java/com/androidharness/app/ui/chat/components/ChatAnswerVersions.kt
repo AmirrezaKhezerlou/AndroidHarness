@@ -73,7 +73,7 @@ internal fun ChatAnswerVersions(sessionId: String, messages: List<ChatMessage>, 
                 else {
                     ChatActivity(content, autoExpand = false, showThinkingMetrics = true)
                     val answer = content.lastOrNull { it.role == Role.ASSISTANT && it.toolCalls.isEmpty() && it.text.isNotBlank() }?.text.orEmpty()
-                    AssistantText(answer, onOpenUrl = onOpenUrl?.let { open -> { url -> previewPosition = null; open(url) } })
+                    AssistantText(answer, chatImages = com.androidharness.app.core.ChatResponseImages.available(content), onOpenUrl = onOpenUrl?.let { open -> { url -> previewPosition = null; open(url) } })
                     if (onOpenUrl != null) ChatSources(content) { url -> previewPosition = null; onOpenUrl(url) }
                     CopyIconButton(answer)
                 }

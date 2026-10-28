@@ -577,7 +577,7 @@ internal fun TurnActivityCard(
  * pixel work. Provider payloads never include them.
  */
 @Composable
-internal fun ToolResultImage(ref: ImageRef, previewHeight: androidx.compose.ui.unit.Dp? = null) {
+internal fun ToolResultImage(ref: ImageRef, previewHeight: androidx.compose.ui.unit.Dp? = null, fillPreviewWidth: Boolean = false) {
     val context = LocalContext.current
     val scheme = MaterialTheme.colorScheme
     var fullScreen by rememberSaveable(ref.name) { mutableStateOf(false) }
@@ -603,17 +603,20 @@ internal fun ToolResultImage(ref: ImageRef, previewHeight: androidx.compose.ui.u
         }
     }
     bitmap?.let { bmp ->
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
         Image(
             bitmap = bmp.asImageBitmap(),
             contentDescription = ref.caption ?: ref.name,
             contentScale = if (previewHeight == null) ContentScale.FillWidth else ContentScale.Fit,
             modifier = Modifier
                 .fillMaxWidth()
-                .then(if (previewHeight != null) Modifier.heightIn(max = previewHeight) else Modifier)
+                .then(if (fillPreviewWidth) Modifier.height((maxWidth * bmp.height.toFloat() / bmp.width.coerceAtLeast(1)).coerceIn(120.dp, previewHeight ?: 420.dp))
+                    else if (previewHeight != null) Modifier.heightIn(max = previewHeight) else Modifier)
                 .clip(RoundedCornerShape(10.dp))
                 .then(if (previewHeight != null) Modifier.clickable(onClickLabel = context.getString(R.string.ui_open_image)) { fullScreen = true } else Modifier)
                 .border(1.dp, scheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(10.dp)),
         )
+        }
     }
 }
 

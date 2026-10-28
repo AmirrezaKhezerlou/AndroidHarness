@@ -38,6 +38,7 @@ internal fun imageInspectionSuccess(
     put("image_id", source.id); put("source_image_id", source.id)
     put("image_number", number?.let(::JsonPrimitive) ?: JsonNull)
     put("image_number_scope", "assistant_turn")
+    put("display_url", com.androidharness.app.core.ChatResponseImages.url(image.imageId ?: source.id))
     put("source_url", ((source as? ChatImageSource.Remote)?.url ?: image.sourceUrl)?.let(::JsonPrimitive) ?: JsonNull)
     put("resolved_url", image.sourceUrl?.let(::JsonPrimitive) ?: JsonNull)
     put("caption", source.label); put("origin", source.origin); put("display_role", source.displayRole)

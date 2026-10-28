@@ -28,8 +28,7 @@ internal sealed interface ChatImageSource {
 
 internal object ChatImageInventory {
     private val markdownImage = Regex("!\\[([^\\]]*)]\\((https?://[^)\\s]+)\\)")
-    fun id(value: String): String = "img_" + java.security.MessageDigest.getInstance("SHA-256")
-        .digest(value.toByteArray()).take(12).joinToString("") { "%02x".format(it) }
+    fun id(value: String): String = com.androidharness.app.core.ChatResponseImages.stableId(value)
     fun remoteId(url: String): String = id("url:" + (httpImageUrl(url) ?: url))
     fun from(messages: List<ChatMessage>): List<ChatImageSource> = messages.asReversed().asSequence()
         .filter { it.role == Role.USER || it.role == Role.ASSISTANT && it.toolCallId == null ||
@@ -93,6 +92,8 @@ internal object ChatImageInventory {
                     put("origin", JsonPrimitive(source.origin))
                     put("display_role", source.displayRole)
                     put("caption", JsonPrimitive(source.label.take(200)))
+                    put("display_url", if (source is ChatImageSource.Stored) com.androidharness.app.core.ChatResponseImages.url(source.id)
+                        else (source as ChatImageSource.Remote).url)
                     put("url", ((source as? ChatImageSource.Remote)?.url ?: ref?.sourceUrl)?.let { JsonPrimitive(it) } ?: JsonNull)
                     put("width", ref?.width?.let { JsonPrimitive(it) } ?: JsonNull)
                     put("height", ref?.height?.let { JsonPrimitive(it) } ?: JsonNull)

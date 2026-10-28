@@ -273,6 +273,9 @@ private fun ChatScreenContent(
     val imageSources = remember(state.messages) {
         com.androidharness.app.core.ChatActivityPresentation.imageSources(state.messages)
     }
+    val responseImages = remember(state.messages, state.conversation.isChat) {
+        if (state.conversation.isChat) com.androidharness.app.core.ChatResponseImages.available(state.messages) else null
+    }
     var viewerImageUrl by remember { mutableStateOf<String?>(null) }
     viewerImageUrl?.let { imageUrl ->
         com.androidharness.app.ui.chat.components.ImageViewerDialog(
@@ -1750,7 +1753,7 @@ private fun ChatScreenContent(
                                                     com.androidharness.app.ui.chat.components.LocalChatImageOpen provides { url -> viewerImageUrl = url },
                                                     LocalChatImagesEnabled provides (effectiveImageFrequency != com.androidharness.app.data.ImageFrequency.NONE),
                                                 ) {
-                                                    AssistantText(replyText, showPreviewChip = false,
+                                                    AssistantText(replyText, showPreviewChip = false, chatImages = responseImages,
                                                         onFollowUp = { action ->
                                                             attachedConceptJson = null
                                                             attachedResponseJson = ResponseAttachment(action.title, action.context).encode()
@@ -2101,7 +2104,8 @@ private fun ChatScreenContent(
                                 val answerKey = if (state.conversation.isChat) "chat-$streamKey-answer" else "message-$streamKey-text"
                                 indexedItem(key = answerKey, contentType = ChatListContentType.AssistantText) {
                                     AssistantText(
-                                        if (state.conversation.isChat) com.androidharness.app.core.response.ChatRichResponse.normalize(streaming, !state.streamingCommitted) else streaming,
+                                        chatImages = responseImages,
+                                        text = if (state.conversation.isChat) com.androidharness.app.core.response.ChatRichResponse.normalize(streaming, !state.streamingCommitted) else streaming,
                                         streaming = !state.streamingCommitted,
                                         onOpenUrl = { url ->
                                             webPreviewUrl = url

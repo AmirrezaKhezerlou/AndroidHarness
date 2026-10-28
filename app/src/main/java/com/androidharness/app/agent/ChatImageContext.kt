@@ -15,7 +15,7 @@ internal object ChatImageContext {
         if (available == 0) return history
         val inventory = com.androidharness.app.tools.ChatImageInventory.from(history)
         val candidates = com.androidharness.app.tools.ChatImageInventory.from(history.take(userIndex))
-            .filter { it.origin != "user_upload" }.take(available)
+            .filter { it.displayRole != "user" }.take(available)
         if (candidates.isEmpty()) return history
         val found = candidates.mapNotNull { source ->
             val data = when (source) {

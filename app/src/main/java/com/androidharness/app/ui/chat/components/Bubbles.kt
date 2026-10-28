@@ -1,5 +1,7 @@
 package com.androidharness.app.ui.chat.components
 
+import androidx.compose.runtime.CompositionLocalProvider
+
 import com.androidharness.app.R
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -179,6 +181,7 @@ internal fun AssistantText(
     onOpenUrl: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier,
     onFollowUp: ((com.androidharness.app.core.response.RichResponse.FollowUp) -> Unit)? = null,
+    chatImages: Map<String, com.androidharness.app.core.ImageRef>? = null,
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val primaryTarget = remember(text, streaming) {
@@ -207,7 +210,9 @@ internal fun AssistantText(
             // while streaming changes every paragraph's width at completion, which
             // can shrink a long answer enough to clamp a reader back to the bottom.
             Box(Modifier.fillMaxWidth()) {
-                com.androidharness.app.ui.chat.rich.RichResponseContent(text, streaming, onOpenUrl, onFollowUp)
+                CompositionLocalProvider(LocalChatResponseImages provides (chatImages ?: LocalChatResponseImages.current)) {
+                    com.androidharness.app.ui.chat.rich.RichResponseContent(text, streaming, onOpenUrl, onFollowUp)
+                }
                 if (streaming) BlinkingCursor(Modifier.align(Alignment.TopEnd).offset(x = 12.dp))
             }
 
