@@ -18,6 +18,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +42,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.BatteryFull
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -281,7 +284,7 @@ fun SettingsScreen(
                             .fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
-                        if (page != SettingsPage.LOCAL_MODELS && page != SettingsPage.AGENT && page != SettingsPage.TELEGRAM && page != SettingsPage.STORAGE) SettingsPageIntro(page)
+                        if (page != SettingsPage.LOCAL_MODELS && page != SettingsPage.AGENT && page != SettingsPage.TELEGRAM && page != SettingsPage.STORAGE && page != SettingsPage.ENVIRONMENT) SettingsPageIntro(page)
                     when (page) {
                         SettingsPage.LANGUAGE -> LanguageSection()
                         SettingsPage.CHAT_OPTIONS -> ChatOptionsSection(
@@ -541,15 +544,13 @@ private fun TerminalSection(
     val allFiles = storageAccess.granted
     val connectionFailure by container.shizuku.connectionFailure.collectAsStateWithLifecycle()
     val shellProvider by container.shizuku.provider.collectAsStateWithLifecycle()
+    val wirelessState by container.wirelessAdb.state.collectAsStateWithLifecycle()
 
-    SettingsHeader(uiContext.getString(R.string.ui_terminal_environment))
-
-    LinuxEnvironmentCard(container = container, envState = envState)
 
     // What the shell can reach right now.
     val appShellOk = envState is com.androidharness.app.data.env.EnvState.Ready
     val storageText = if (allFiles) uiContext.getString(R.string.ui_granted) else uiContext.getString(R.string.ui_needs_grant)
-    val systemText = if (container.shizuku.wirelessTransportActive) uiContext.getString(R.string.wireless_adb_section_title) else when (shizukuState) {
+    val systemText = if (wirelessState is WirelessAdbManager.State.Connected && container.shizuku.wirelessTransportActive) uiContext.getString(R.string.wireless_adb_section_title) else when (shizukuState) {
         ShizukuState.GRANTED -> when (serviceState) {
             UserServiceState.BOUND_READY -> container.shizuku.transportLabel
             UserServiceState.COMPAT_READY -> uiContext.getString(R.string.ui_compatibility)
@@ -563,45 +564,30 @@ private fun TerminalSection(
     }
 
     SettingsPanel(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(vertical = 4.dp)) {
-            SettingsAnchor(R.string.settings_anchor_app_shell) {
-                SettingRow(
-                    icon = Icons.Outlined.Terminal,
-                    title = stringResource(R.string.settings_anchor_app_shell),
-                    subtitle = stringResource(R.string.settings_env_app_shell_subtitle),
-                    divider = true,
-                    trailing = { StatusText(if (appShellOk) uiContext.getString(R.string.ui_ready) else "toybox", ok = appShellOk) },
-                )
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(Icons.Outlined.Terminal, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.settings_terminal_access), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                StatusText(if (container.shizuku.isServiceReady()) container.shizuku.transportLabel else stringResource(R.string.ui_ready), ok = true)
             }
-            SettingsAnchor(R.string.settings_anchor_shared_storage) {
-                SettingRow(
-                    icon = Icons.Outlined.SdStorage,
-                    title = stringResource(R.string.settings_anchor_shared_storage),
-                    subtitle = stringResource(R.string.settings_env_shared_storage_subtitle),
-                    onClick = storageAccess.request,
-                    divider = true,
-                    trailing = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            StatusText(storageText, ok = allFiles)
-                            if (!allFiles) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.settings_env_open_storage_settings), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    },
-                )
-            }
-            SettingsAnchor(R.string.settings_anchor_system_paths) {
-                SettingRow(
-                    icon = Icons.Outlined.Shield,
-                    title = stringResource(R.string.settings_anchor_system_paths),
-                    subtitle = stringResource(R.string.settings_env_shizuku_subtitle),
-                    divider = false,
-                    trailing = { StatusText(systemText, ok = container.shizuku.isServiceReady()) },
-                )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                    Text(stringResource(R.string.settings_anchor_shared_storage) + " · " + storageText,
+                        Modifier.padding(horizontal = 10.dp, vertical = 6.dp), style = MaterialTheme.typography.labelSmall)
+                }
+                Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                    Text(stringResource(R.string.settings_search_linux_title) + " · " + stringResource(if (appShellOk) R.string.ui_installed else R.string.ui_not_installed),
+                        Modifier.padding(horizontal = 10.dp, vertical = 6.dp), style = MaterialTheme.typography.labelSmall)
+                }
             }
         }
     }
 
-    StorageAccessCard(allFiles = allFiles, onGrant = storageAccess.request)
+    SettingsGroupHeading(R.string.settings_device_connections)
     WirelessAdbSection(container)
+    SettingsAnchor(R.string.settings_anchor_system_paths) {
+    SettingsDisclosure(Icons.Outlined.Shield, "Shizuku / Shery", systemText,
+        anchors = setOf(R.string.settings_anchor_system_paths)) {
     ShizukuCard(
         state = shizukuState,
         serviceState = serviceState,
@@ -612,9 +598,31 @@ private fun TerminalSection(
         onGrant = { container.shizuku.requestPermission() },
         providerLabel = shellProvider?.label ?: stringResource(R.string.shell_access_providers),
     )
-    DhizukuCard(container.dhizuku)
-    RootAccessSection(container)
-    BatteryCard(container = container)
+    }
+    }
+    SettingsAnchor(R.string.settings_anchor_shared_storage) {
+    SettingsDisclosure(Icons.Outlined.SdStorage, stringResource(R.string.settings_anchor_shared_storage), storageText,
+        anchors = setOf(R.string.settings_anchor_shared_storage)) {
+        StorageAccessCard(allFiles = allFiles, onGrant = storageAccess.request)
+    }
+    }
+    SettingsGroupHeading(R.string.settings_device_tools)
+    SettingsAnchor(R.string.settings_anchor_app_shell) {
+    SettingsDisclosure(Icons.Outlined.Terminal, stringResource(R.string.settings_search_linux_title),
+        stringResource(if (appShellOk) R.string.ui_installed else R.string.settings_linux_optional),
+        anchors = setOf(R.string.settings_anchor_app_shell),
+        forceExpanded = envState is com.androidharness.app.data.env.EnvState.Downloading || envState is com.androidharness.app.data.env.EnvState.Installing || envState is com.androidharness.app.data.env.EnvState.Preparing) {
+        LinuxEnvironmentCard(container = container, envState = envState)
+    }
+    }
+    SettingsDisclosure(Icons.Outlined.Shield, stringResource(R.string.settings_device_advanced), stringResource(R.string.settings_device_advanced_summary),
+        anchors = setOf(R.string.settings_root_title)) {
+        RootAccessSection(container)
+        DhizukuCard(container.dhizuku)
+    }
+    SettingsDisclosure(Icons.Outlined.BatteryFull, stringResource(R.string.settings_device_background), stringResource(R.string.settings_device_background_summary)) {
+        BatteryCard(container = container)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2181,6 +2189,8 @@ private fun WirelessAdbSection(container: AppContainer) {
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var test by remember { mutableStateOf<String?>(null) }
+    var instructions by rememberSaveable { mutableStateOf(false) }
+    var options by rememberSaveable { mutableStateOf(false) }
     val supported = manager.isSupported()
     val notifications = remember(state, manual) { wirelessNotificationsEnabled(context) }
     val localNetwork = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -2207,7 +2217,9 @@ private fun WirelessAdbSection(container: AppContainer) {
         scope.launch {
             busy = true
             message = null
+            manager.setAutoReconnect(true)
             manager.connect().onFailure { message = it.message ?: it.javaClass.simpleName }
+            com.androidharness.app.data.env.adb.WirelessAdbService.resume(context)
             busy = false
         }
     }
@@ -2219,13 +2231,15 @@ private fun WirelessAdbSection(container: AppContainer) {
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(R.string.wireless_adb_section_title), style = MaterialTheme.typography.titleSmall)
-                    Text(stringResource(R.string.wireless_adb_subtitle), style = MaterialTheme.typography.bodySmall,
+                    Text(stringResource(R.string.wireless_adb_compact_summary), style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Text(wirelessAdbStatus(state), style = MaterialTheme.typography.labelMedium,
                     color = if (state is WirelessAdbManager.State.Connected) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            AnimatedVisibility(instructions) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(R.string.wireless_adb_explain), style = MaterialTheme.typography.bodySmall)
             Text(stringResource(R.string.wireless_adb_explain_steps), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -2238,6 +2252,9 @@ private fun WirelessAdbSection(container: AppContainer) {
             Text(stringResource(R.string.wireless_adb_explain_security), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(stringResource(R.string.wireless_adb_privileged_note), style = MaterialTheme.typography.bodySmall)
+
+                }
+            }
 
             if (!supported) {
                 Text(stringResource(R.string.wireless_adb_unsupported), style = MaterialTheme.typography.bodySmall,
@@ -2262,6 +2279,20 @@ private fun WirelessAdbSection(container: AppContainer) {
                         }
                     }
                     if (state is WirelessAdbManager.State.Connected) {
+                        FilledTonalButton(onClick = { com.androidharness.app.data.env.adb.WirelessAdbService.disconnect(context) }) {
+                            Text(stringResource(R.string.wireless_adb_disconnect))
+                        }
+                    }
+                    TextButton(onClick = { instructions = !instructions }) { Text(stringResource(R.string.settings_connection_help)) }
+                }
+                if (busy) ThinLinearProgress(Modifier.fillMaxWidth())
+                TextButton(onClick = { options = !options }) {
+                    Text(stringResource(R.string.settings_connection_options))
+                    Icon(Icons.Outlined.ExpandMore, null, Modifier.size(18.dp))
+                }
+                AnimatedVisibility(options) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (state is WirelessAdbManager.State.Connected) {
                         OutlinedButton(onClick = {
                             scope.launch {
                                 test = runCatching { manager.testUid() }
@@ -2270,7 +2301,7 @@ private fun WirelessAdbSection(container: AppContainer) {
                         }, enabled = !busy) { Text(stringResource(R.string.wireless_adb_test)) }
                     }
                     if (manager.isPaired) {
-                        OutlinedButton(onClick = { manager.forget(); message = null; test = null }, enabled = !busy) {
+                        OutlinedButton(onClick = { com.androidharness.app.data.env.adb.WirelessAdbService.disconnect(context); AdbPairingService.stop(context); manager.forget(); message = null; test = null }, enabled = !busy) {
                             Text(stringResource(R.string.wireless_adb_forget))
                         }
                     }
@@ -2280,6 +2311,7 @@ private fun WirelessAdbSection(container: AppContainer) {
                     TextButton(onClick = { openDeveloperOptions(context) }) {
                         Text(stringResource(R.string.wireless_adb_developer_options))
                     }
+                }
                 }
             }
             message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
@@ -2329,7 +2361,10 @@ private fun WirelessAdbSection(container: AppContainer) {
                             runCatching { manager.pair(code, port.toInt()) }
                                 .onFailure { dialogError = it.message }
                                 .onSuccess {
-                                    manager.connect().onFailure { dialogError = it.message }.onSuccess { manual = false }
+                                    manager.connect().onFailure { dialogError = it.message }.onSuccess {
+                                        com.androidharness.app.data.env.adb.WirelessAdbService.enable(context)
+                                        manual = false
+                                    }
                                 }
                             busy = false
                         }
@@ -2351,7 +2386,7 @@ private fun wirelessAdbStatus(state: WirelessAdbManager.State): String = when (s
     WirelessAdbManager.State.Paired -> stringResource(R.string.wireless_adb_status_paired)
     WirelessAdbManager.State.Connecting -> stringResource(R.string.wireless_adb_status_connecting)
     is WirelessAdbManager.State.Connected -> stringResource(R.string.wireless_adb_status_connected, state.uid)
-    is WirelessAdbManager.State.Failed -> stringResource(R.string.wireless_adb_status_failed, state.message)
+    is WirelessAdbManager.State.Failed -> stringResource(R.string.ui_connection_failed)
 }
 
 private fun wirelessNotificationsEnabled(context: Context): Boolean {
@@ -2591,24 +2626,18 @@ private fun SetupLine(label: String, value: String) {
 
 
 @Composable
-private fun CodingSection(onOpen: (SettingsPage) -> Unit) {
-    SettingsPanel(Modifier.fillMaxWidth()) {
-        settingsCodingPages.forEachIndexed { index, destination ->
-            SettingRow(
-                icon = settingsIcon(destination),
-                title = stringResource(destination.title),
-                subtitle = stringResource(destination.description),
-                onClick = { onOpen(destination) },
-                divider = index != settingsCodingPages.lastIndex,
-                trailing = {
-                    Icon(
-                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp),
-                    )
-                },
-            )
+internal fun CodingSection(onOpen: (SettingsPage) -> Unit) {
+    val groups = listOf(
+        R.string.settings_coding_workflow to listOf(SettingsPage.AGENT, SettingsPage.SUBAGENT, SettingsPage.CHAT),
+        R.string.settings_coding_intelligence to listOf(SettingsPage.SKILLS, SettingsPage.CODE_INTELLIGENCE, SettingsPage.CAVEMAN),
+        R.string.settings_coding_execution to listOf(SettingsPage.WORKSPACE, SettingsPage.ENVIRONMENT),
+    )
+    groups.forEach { (title, pages) ->
+        SettingsGroupHeading(title)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            pages.forEach { destination ->
+                SettingsFeatureRow(settingsIcon(destination), stringResource(destination.title), stringResource(destination.description), { onOpen(destination) })
+            }
         }
     }
 }

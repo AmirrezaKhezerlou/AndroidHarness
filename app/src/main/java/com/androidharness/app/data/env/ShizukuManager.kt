@@ -440,7 +440,7 @@ class ShizukuManager(
         (isGranted() && (service != null || compatibility?.isAlive == true)) || wireless?.isConnected == true
 
     /** Shizuku or a paired wireless ADB transport can run privileged commands (connecting on demand). */
-    fun hasPrivilegedAccess(): Boolean = isServiceReady() || wireless?.isPaired == true
+    fun hasPrivilegedAccess(): Boolean = isServiceReady() || wireless?.autoReconnectEnabled == true
 
     /** The built-in wireless ADB transport, when one was wired into this manager. */
     val wirelessTransport: com.androidharness.app.data.env.adb.WirelessAdbManager? get() = wireless

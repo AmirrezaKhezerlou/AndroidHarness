@@ -1,6 +1,8 @@
 package com.androidharness.app.ui.settings
 
 import androidx.annotation.StringRes
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -161,30 +163,32 @@ internal fun ChatOptionsSection(
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-internal fun CodeStartOptionsSection(
-    settings: AppSettings,
-    onCodeStart: (CodeStartMode) -> Unit,
-) {
+internal fun CodeStartOptionsSection(settings: AppSettings, onCodeStart: (CodeStartMode) -> Unit) {
+    var choosing by rememberSaveable { mutableStateOf(false) }
+    fun label(mode: CodeStartMode) = if (mode == CodeStartMode.NEW_CODE) R.string.settings_start_code_new else R.string.settings_start_code_last
+    fun description(mode: CodeStartMode) = if (mode == CodeStartMode.NEW_CODE) R.string.settings_start_code_new_desc else R.string.settings_start_code_last_desc
     SettingsAnchor(R.string.settings_start_code) {
-        ChoicePanel(
-            title = R.string.settings_start_code,
-            options = CodeStartMode.entries,
-            selected = settings.codeStart,
-            onSelect = onCodeStart,
-            label = {
-                when (it) {
-                    CodeStartMode.NEW_CODE -> R.string.settings_start_code_new
-                    CodeStartMode.LAST_CODE -> R.string.settings_start_code_last
+        SettingsFeatureRow(androidx.compose.material.icons.Icons.Outlined.Code, stringResource(R.string.settings_start_code),
+            stringResource(label(settings.codeStart)), { choosing = true })
+    }
+    if (choosing) androidx.compose.material3.ModalBottomSheet(onDismissRequest = { choosing = false }) {
+        Column(Modifier.fillMaxWidth().padding(20.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(stringResource(R.string.settings_start_code), style = MaterialTheme.typography.titleLarge)
+            CodeStartMode.entries.forEach { mode ->
+                Surface(onClick = { onCodeStart(mode); choosing = false }, shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+                    color = if (mode == settings.codeStart) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow) {
+                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        RadioButton(mode == settings.codeStart, null)
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(stringResource(label(mode)), style = MaterialTheme.typography.titleSmall)
+                            Text(stringResource(description(mode)), style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
                 }
-            },
-            description = {
-                when (it) {
-                    CodeStartMode.NEW_CODE -> R.string.settings_start_code_new_desc
-                    CodeStartMode.LAST_CODE -> R.string.settings_start_code_last_desc
-                }
-            },
-        )
+            }
+        }
     }
 }
 

@@ -67,7 +67,9 @@ class ResponseProfileDeviceTest {
                     }
                 } }
                 await("Example scientist")
+                assertNull(find { it.text?.toString() == "Making astronomy accessible" })
                 screenshot("profile-photo-top")
+                tap("Details"); tap("Sources")
                 scrollTo("Source biography"); await("Making astronomy accessible"); await("Source biography")
                 assertNull(find { it.text?.toString()?.contains("harness-ui") == true })
                 screenshot("profile-light")
@@ -98,6 +100,7 @@ class ResponseProfileDeviceTest {
                     }
                 } } }
                 await("Example scientist"); screenshot("profile-large-text")
+                tap("Details"); tap("Sources")
                 scrollTo("Source biography"); screenshot("profile-large-text-facts")
             }
         } finally { shell("settings put system font_scale $old"); cache.delete() }

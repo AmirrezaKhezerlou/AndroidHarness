@@ -80,13 +80,11 @@ class AdbPairingService : Service() {
                 val port = intent.getIntExtra(EXTRA_PORT, -1)
                 Log.i(TAG, "Pairing reply received (code length ${code.length}, port $port)")
                 notifications.cancel(PROMPT_ID)
-                startForeground(NOTIFICATION_ID, working())
+                showForeground(working())
                 finishPairing(code, port)
             }
             ACTION_STOP -> {
-                notifications.cancel(PROMPT_ID)
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
+                finishService()
                 return START_NOT_STICKY
             }
             else -> return START_NOT_STICKY
@@ -96,7 +94,7 @@ class AdbPairingService : Service() {
 
     private fun beginSearch() {
         Log.i(TAG, "Searching for the wireless debugging pairing service")
-        startForeground(NOTIFICATION_ID, searching())
+        showForeground(searching())
         if (search?.isActive == true) return
         search = scope.launch {
             val discovery = AdbMdns(this@AdbPairingService, AdbMdns.TLS_PAIRING).also { mdns = it }
@@ -118,6 +116,7 @@ class AdbPairingService : Service() {
             val pairing = runCatching {
                 if (port in 1..65535) manager.pair(code, port) else manager.pair(code)
             }
+            pairing.exceptionOrNull()?.let { if (it is kotlinx.coroutines.CancellationException) throw it }
             if (pairing.isFailure) {
                 Log.w(TAG, "Pairing failed", pairing.exceptionOrNull())
                 postResult(R.string.wireless_adb_pairing_failed, pairing.exceptionOrNull()?.message)
@@ -129,6 +128,7 @@ class AdbPairingService : Service() {
             val connection = manager.connect()
             if (connection.isSuccess) {
                 Log.i(TAG, "Wireless ADB connected")
+                WirelessAdbService.enable(this@AdbPairingService)
                 postResult(R.string.wireless_adb_paired, null)
             } else {
                 Log.w(TAG, "Paired but connect failed", connection.exceptionOrNull())
@@ -149,7 +149,18 @@ class AdbPairingService : Service() {
         notifications.notify(RESULT_ID, notification)
     }
 
+    private fun showForeground(notification: Notification) {
+        if (Build.VERSION.SDK_INT >= 34) startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        else startForeground(NOTIFICATION_ID, notification)
+    }
+
+    override fun onTimeout(startId: Int) { finishService() }
+    override fun onTimeout(startId: Int, fgsType: Int) { finishService() }
+
     private fun finishService() {
+        search?.cancel()
+        mdns?.stop()
+        notifications.cancel(PROMPT_ID)
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }

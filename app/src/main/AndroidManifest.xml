@@ -81,7 +81,17 @@
         <service
             android:name=".data.env.adb.AdbPairingService"
             android:exported="false"
-            android:foregroundServiceType="shortService" />
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-initiated on-device wireless debugging pairing while entering the Android Settings pairing code" />
+        </service>
+        <service android:name=".data.env.adb.WirelessAdbService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Maintain the user-enabled on-device ADB shell connection with an explicit disconnect action" />
+        </service>
+        <receiver android:name=".data.env.adb.WirelessAdbReconnectReceiver" android:exported="false">
+            <intent-filter><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /></intent-filter>
+        </receiver>
 
         <!-- Persist language overrides on Android 12 and earlier; Android 13+
              shares the same preference with the system's per-app language UI. -->

@@ -208,6 +208,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        com.androidharness.app.data.env.adb.WirelessAdbService.resume(this)
         container.shizuku.refresh()
         container.dhizuku.refresh()
         promptShownThisResume = false

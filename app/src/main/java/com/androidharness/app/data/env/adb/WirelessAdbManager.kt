@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import com.androidharness.app.data.env.ShizukuCompatClient
 import com.androidharness.app.data.env.ShizukuCompatProtocol
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,6 +54,14 @@ class WirelessAdbManager(private val context: Context) {
     @Volatile private var autoConnectAfter = 0L
 
     val isPaired: Boolean get() = preferences.contains(KEY_STORAGE)
+    val autoReconnectEnabled: Boolean get() = isPaired && preferences.getBoolean("auto_reconnect", true)
+    fun setAutoReconnect(enabled: Boolean) { preferences.edit().putBoolean("auto_reconnect", enabled).apply() }
+    fun disconnect() {
+        setAutoReconnect(false)
+        closeTransport()
+        _state.value = if (isPaired) State.Paired else State.Unpaired
+    }
+
     val isConnected: Boolean get() = compat?.isAlive == true
     val uid: Int? get() = compat?.takeIf { it.isAlive }?.uid
 
@@ -69,6 +78,7 @@ class WirelessAdbManager(private val context: Context) {
         val pairingPort = port?.takeIf { it in 1..65535 }
             ?: AdbMdns(context, AdbMdns.TLS_PAIRING).findPort(12_000)
             ?: throw AdbException("The pairing service was not found. Keep the pairing dialog open and try again.")
+        if (!isPaired) setAutoReconnect(false)
         Log.i(TAG, "Pairing with the service on port $pairingPort")
         try {
             withTimeout(PAIRING_BACKSTOP_MS) {
@@ -82,6 +92,7 @@ class WirelessAdbManager(private val context: Context) {
             throw AdbException(PAIRING_TIMEOUT_MESSAGE)
         }
         Log.i(TAG, "Paired with adbd")
+        setAutoReconnect(true)
         _state.value = State.Paired
         pairingPort
     }
@@ -100,7 +111,7 @@ class WirelessAdbManager(private val context: Context) {
     /** Returns a live client, reconnecting on demand with a cooldown after failures. */
     internal suspend fun client(): ShizukuCompatClient? = withContext(Dispatchers.IO) {
         compat?.takeIf { it.isAlive } ?: run {
-            if (System.currentTimeMillis() < autoConnectAfter) return@withContext null
+            if (!autoReconnectEnabled || System.currentTimeMillis() < autoConnectAfter) return@withContext null
             runCatching { withTimeout(CONNECT_BACKSTOP_MS) { connectInternal() } }.onFailure {
                 // A failed discovery can block a terminal command for seconds; do not retry every call.
                 autoConnectAfter = System.currentTimeMillis() + AUTO_CONNECT_COOLDOWN_MS
@@ -161,16 +172,20 @@ class WirelessAdbManager(private val context: Context) {
                 adb.connect()
                 val opened = adb.openShell(runnerCommand())
                 val started = ShizukuCompatClient.startWithAdb(opened) {
-                    if (compat?.isAlive != true) {
+                    if (compat?.isAlive != true && autoReconnectEnabled) {
                         _state.value = State.Failed("The shell runner disconnected. Reconnect to continue.")
                     }
                 }
+                kotlin.coroutines.coroutineContext.ensureActive()
                 adbClient = adb
                 shell = opened
                 compat = started
                 autoConnectAfter = 0
                 Log.i(TAG, "Wireless ADB runner started as UID ${started.uid} on port $port")
                 _state.value = State.Connected(started.uid, port)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                runCatching { adb.close() }
+                throw e
             } catch (e: Exception) {
                 runCatching { adb.close() }
                 Log.w(TAG, "Wireless ADB connect failed", e)
