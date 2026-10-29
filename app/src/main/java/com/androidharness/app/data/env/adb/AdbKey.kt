@@ -22,6 +22,7 @@ import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.Principal
 import java.security.PrivateKey
+import java.security.Provider
 import java.security.SecureRandom
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
@@ -195,6 +196,11 @@ internal class AdbKey(private val adbKeyStore: AdbKeyStore, private val name: St
             init(arrayOf(keyManager), arrayOf(trustManager), SecureRandom())
         }
     }
+
+    fun pairingSslContext(provider: Provider): SSLContext =
+        SSLContext.getInstance("TLSv1.3", provider).apply {
+            init(arrayOf(keyManager), arrayOf(trustManager), SecureRandom())
+        }
 }
 
 internal interface AdbKeyStore {
