@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.gestures.scrollBy
@@ -24,6 +25,7 @@ import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.OpenInFull
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -37,6 +39,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.androidharness.app.R
@@ -91,7 +94,7 @@ internal fun ChatActivity(
         seconds > 0 && !showThinkingMetrics -> stringResource(R.string.chat_thought_seconds, seconds)
         else -> stringResource(R.string.chat_thought)
     }
-    ChatActivityRow(title, if (live && showToolPhase) (active ?: lastTool?.call?.takeIf { completedPhase })?.name else null, live, entries.isNotEmpty(), followLatest = true, autoExpand = autoExpand,
+    ChatActivityRow(title, if (live && showToolPhase) (active ?: lastTool?.call?.takeIf { completedPhase })?.name else null, live, entries.isNotEmpty(), followLatest = live, autoExpand = autoExpand,
         progress = research,
         trailing = if (showThinkingMetrics) ({ ChatThinkingMetrics(messages, streamingThinking, thinkingTiming, reasoningTokens, live,
             turnStartedAt = turnStartedAt, streamId = streamId) }) else null) {
@@ -147,12 +150,21 @@ internal fun ChatToolActivity(call: ToolCallData, result: ChatMessage?, running:
     }
     val recall = remember(call, result) {
         if (call.name == "search_chats" || call.name == "recent_chats" || call.name == "read_chat_snippet")
-            result?.text?.take(1_800)
+            result?.text?.take(6_000)
         else null
     }
     val imagePreview = result?.images?.isNotEmpty() == true && call.name in setOf("view_chat_image", "zoom_chat_image", "browser_read")
-    ChatActivityRow(title, call.name, running, result != null || sources.isNotEmpty(), compactPreview = imagePreview) {
-        item {
+    var readerOpen by rememberSaveable(call.id) { mutableStateOf(false) }
+    val body: @Composable () -> Unit = {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(if ((result?.text?.length ?: 0) > 6_000) R.string.chat_activity_output_preview else R.string.chat_activity_output), Modifier.weight(1f), style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            TextButton(onClick = { readerOpen = true }) {
+                Icon(Icons.Outlined.OpenInFull, stringResource(R.string.chat_activity_tool_details), Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.chat_activity_full_view), style = MaterialTheme.typography.labelMedium)
+            }
+        }
         if (result?.images?.isNotEmpty() == true && call.name in setOf("view_chat_image", "zoom_chat_image", "browser_read")) {
             result.images.forEach { image -> ToolResultImage(image, previewHeight = 120.dp) }
         } else if (recall != null) {
@@ -179,6 +191,9 @@ internal fun ChatToolActivity(call: ToolCallData, result: ChatMessage?, running:
                     }
                 }
                 ChatSources(listOfNotNull(ChatMessage(Role.ASSISTANT, toolCalls = listOf(call)), result), onOpenUrl)
+            } else if (images.isEmpty() && !result?.text.isNullOrBlank()) {
+                Text(result!!.text.take(6_000), style = MaterialTheme.typography.bodySmall,
+                    fontFamily = com.androidharness.app.ui.theme.HarnessMono, color = MaterialTheme.colorScheme.onSurface)
             } else if (images.isEmpty()) Text(stringResource(when {
                 result?.isError == true -> R.string.chat_tool_result_failed
                 result != null -> R.string.chat_tool_result_empty
@@ -187,6 +202,9 @@ internal fun ChatToolActivity(call: ToolCallData, result: ChatMessage?, running:
         }
         }
     }
+    ChatActivityRow(title, call.name, running, result != null || sources.isNotEmpty() || call.argumentsJson.isNotBlank(),
+        compactPreview = imagePreview, inlineDetails = body) { item { body() } }
+    if (readerOpen) ToolActivityReader(call, result) { readerOpen = false }
 }
 
 private val LocalActivityInteraction = staticCompositionLocalOf<() -> Unit> { {} }
@@ -202,10 +220,14 @@ private fun ChatActivityRow(
     progress: ChatActivityPresentation.ResearchProgress? = null,
     trailing: (@Composable () -> Unit)? = null,
     compactPreview: Boolean = false,
+    inlineDetails: (@Composable () -> Unit)? = null,
     details: LazyListScope.() -> Unit,
 ) {
     val detailScroll = com.androidharness.app.ui.chat.LocalChatDetailScroll.current
     val pauseParent = LocalActivityInteraction.current
+    val depth = LocalActivityDepth.current
+    val inline = depth > 0 && inlineDetails != null
+    var readerOpen by rememberSaveable { mutableStateOf(false) }
     var expanded by rememberSaveable { mutableStateOf(false) }
     var autoOpened by remember { mutableStateOf(false) }
     // A live turn opens its working log so streamed commentary never disappears
@@ -280,6 +302,7 @@ private fun ChatActivityRow(
         }
     }
     val scheme = MaterialTheme.colorScheme
+    val detailHeight = (LocalConfiguration.current.screenHeightDp * .5f).dp.coerceIn(220.dp, 420.dp)
     val context = androidx.compose.ui.platform.LocalContext.current
     val motion = remember(context) { android.provider.Settings.Global.getFloat(context.contentResolver,
         android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f }
@@ -293,26 +316,44 @@ private fun ChatActivityRow(
                             fadeOut(tween(if (motion) 100 else 0))
                     }, label = "Chat activity phase", modifier = Modifier.weight(1f, fill = false)) { label -> ChatShimmerText(label, live && motion) }
                     if (expandable) Icon(if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
-                        null, Modifier.size(16.dp), tint = scheme.onSurfaceVariant)
+                        stringResource(if (expanded) R.string.ui_collapse else R.string.ui_expand), Modifier.size(16.dp), tint = scheme.onSurfaceVariant)
                 }
                 trailing?.invoke()
             }
         }
         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
-            if (expandable) TextButton(onClick = { pauseParent(); detailScroll?.pause(); expanded = !expanded }, modifier = Modifier.fillMaxWidth(),
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            if (expandable) TextButton(onClick = { pauseParent(); detailScroll?.pause(); expanded = !expanded }, modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(12.dp), contentPadding = PaddingValues(horizontal = 4.dp)) { header() }
-            else Box(Modifier.fillMaxWidth().heightIn(min = 36.dp).padding(horizontal = 4.dp), contentAlignment = Alignment.CenterStart) { header() }
-        }
-        AnimatedVisibility(expanded && expandable,
-            enter = fadeIn(tween(120)) + expandVertically(tween(160)),
-            exit = fadeOut(tween(100)) + shrinkVertically(tween(160))) {
-            CompositionLocalProvider(LocalActivityInteraction provides { following = false; userDragged = true }) {
-                LazyColumn(Modifier.fillMaxWidth().heightIn(max = if (compactPreview) 140.dp else 240.dp)
-                    .containChatDetailScroll().nestedScroll(userScroll), state = scroll, userScrollEnabled = !compactPreview,
-                    contentPadding = PaddingValues(top = 4.dp, bottom = 6.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp), content = details)
+            else Box(Modifier.weight(1f).heightIn(min = 36.dp).padding(horizontal = 4.dp), contentAlignment = Alignment.CenterStart) { header() }
+            if (expanded && inlineDetails == null) IconButton(onClick = { pauseParent(); detailScroll?.pause(); following = false; readerOpen = true }) {
+                Icon(Icons.Outlined.OpenInFull, stringResource(R.string.chat_activity_full_view), Modifier.size(18.dp))
+            }
             }
         }
+        AnimatedVisibility(expanded && expandable,
+            enter = fadeIn(tween(120)) + expandVertically(com.androidharness.app.ui.theme.expressiveSpatialSpec()),
+            exit = fadeOut(tween(100)) + shrinkVertically(com.androidharness.app.ui.theme.expressiveSpatialSpec())) {
+            CompositionLocalProvider(LocalActivityInteraction provides { following = false; userDragged = true }, LocalActivityDepth provides depth + 1) {
+                Surface(shape = RoundedCornerShape(if (inline) 16.dp else 20.dp), color = scheme.surfaceContainerLow,
+                    border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = .45f))) {
+                    if (inline) Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) { inlineDetails!!() }
+                    else Column {
+                        ActivityScrollFrame(scroll, Modifier.fillMaxWidth().heightIn(max = if (compactPreview) 180.dp else detailHeight)) {
+                            LazyColumn(Modifier.fillMaxWidth().containChatDetailScroll().nestedScroll(userScroll), state = scroll,
+                                contentPadding = PaddingValues(start = 12.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp), content = details)
+                        }
+                        if (scroll.canScrollForward || live && !following && followLatest) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (scroll.canScrollForward) Text(stringResource(R.string.chat_activity_more), Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
+                            else Spacer(Modifier.weight(1f))
+                            if (live && followLatest && !following) TextButton(onClick = { following = true; userDragged = false }) { Text(stringResource(R.string.chat_activity_latest)) }
+                        }
+                    }
+                }
+            }
+        }
+        if (readerOpen) ActivityReader(title, onDismiss = { readerOpen = false }, content = details)
         progress?.let { counters ->
             val style = MaterialTheme.typography.labelSmall
             val color = scheme.onSurfaceVariant
