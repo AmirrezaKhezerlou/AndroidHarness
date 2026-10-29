@@ -804,10 +804,26 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun setArchived(sessionId: String, archived: Boolean) {
+    suspend fun setArchived(sessionId: String, archived: Boolean) = setArchived(setOf(sessionId), archived)
+
+    suspend fun setArchived(sessionIds: Set<String>, archived: Boolean) {
         context.settingsStore.edit { prefs ->
             val current = prefs[Keys.ARCHIVED] ?: emptySet()
-            prefs[Keys.ARCHIVED] = if (archived) current + sessionId else current - sessionId
+            prefs[Keys.ARCHIVED] = if (archived) current + sessionIds else current - sessionIds
+        }
+    }
+
+    suspend fun restoreArchived(sessionIds: Set<String>, previouslyArchived: Set<String>) {
+        context.settingsStore.edit { prefs ->
+            prefs[Keys.ARCHIVED] = ((prefs[Keys.ARCHIVED] ?: emptySet()) - sessionIds) + (previouslyArchived intersect sessionIds)
+        }
+    }
+
+    suspend fun forgetSidebarSessions(sessionIds: Set<String>) {
+        context.settingsStore.edit { prefs ->
+            prefs[Keys.PINNED] = (prefs[Keys.PINNED] ?: emptySet()) - sessionIds
+            prefs[Keys.ARCHIVED] = (prefs[Keys.ARCHIVED] ?: emptySet()) - sessionIds
+            if (prefs[Keys.LAST_ACTIVE_SESSION] in sessionIds) prefs.remove(Keys.LAST_ACTIVE_SESSION)
         }
     }
 

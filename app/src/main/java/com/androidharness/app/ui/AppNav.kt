@@ -94,6 +94,8 @@ import com.androidharness.app.ui.setup.SetupScreen
 import com.androidharness.app.ui.terminal.TerminalScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -260,6 +262,15 @@ fun AppNav(container: AppContainer) {
     var projectName by remember { mutableStateOf("") }
     var detailsSession by remember { mutableStateOf<SessionEntity?>(null) }
     var deletingSession by remember { mutableStateOf<SessionEntity?>(null) }
+    var selectedChatIds by androidx.compose.runtime.saveable.rememberSaveable(activeKind) { mutableStateOf(emptyList<String>()) }
+    var batchDetails by remember { mutableStateOf(emptySet<String>()) }
+    var batchDelete by remember { mutableStateOf(emptySet<String>()) }
+    var batchBusy by remember { mutableStateOf(false) }
+    val chatSelectionMutex = remember { kotlinx.coroutines.sync.Mutex() }
+    androidx.compose.runtime.LaunchedEffect(activeKind) { batchDetails = emptySet(); batchDelete = emptySet() }
+    androidx.compose.runtime.LaunchedEffect(drawerState.currentValue, desktopNavigation) {
+        if (!desktopNavigation && drawerState.currentValue == DrawerValue.Closed) selectedChatIds = emptyList()
+    }
     val sidebarSnackbar = remember { androidx.compose.material3.SnackbarHostState() }
     var showWorkspaceSheet by remember { mutableStateOf(false) }
     var showAddWorkspace by remember { mutableStateOf(false) }
@@ -320,11 +331,14 @@ fun AppNav(container: AppContainer) {
     }
 
     fun navigateFromSidebar(action: () -> Unit) {
+        if (batchBusy) return
+        selectedChatIds = emptyList()
         val navigate = { scope.launch { drawerState.close() }; action() }
         if (desktopNavigation) desktopGuard.navigate(navigate) else navigate()
     }
     fun sidebarAction(session: SessionEntity, action: SidebarChatAction) {
         when (action) {
+            SidebarChatAction.SELECT -> selectedChatIds = listOf(session.id)
             SidebarChatAction.RENAME -> renamingSession = session
             SidebarChatAction.DETAILS -> detailsSession = session
             SidebarChatAction.DELETE -> deletingSession = session
@@ -337,7 +351,50 @@ fun AppNav(container: AppContainer) {
             }
         }
     }
+    fun selectedChatAction(ids: Set<String>, action: SidebarChatAction) {
+        if (batchBusy) return
+        val targets = sessions.filter { it.id in ids && com.androidharness.app.data.ConversationConfig.decode(it.conversationJson).kind == activeKind }
+        if (targets.isEmpty()) { selectedChatIds = emptyList(); return }
+        val selectedIds = targets.mapTo(mutableSetOf()) { it.id }
+        when (action) {
+            SidebarChatAction.DETAILS -> batchDetails = selectedIds
+            SidebarChatAction.DELETE -> batchDelete = selectedIds
+            SidebarChatAction.ARCHIVE -> scope.launch {
+                batchBusy = true
+                val change = try {
+                    chatSelectionMutex.withLock {
+                        val previous = container.settings.settings.first().archivedSessions.toSet()
+                        val archive = !selectedIds.all { it in previous }
+                        container.settings.setArchived(selectedIds, archive)
+                        previous to archive
+                    }
+                } catch (e: Exception) {
+                    batchBusy = false
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    sidebarSnackbar.showSnackbar(uiContext.getString(R.string.sidebar_selection_error))
+                    return@launch
+                }
+                selectedChatIds = emptyList()
+                batchBusy = false
+                val (previous, archive) = change
+                try {
+                    val message = uiContext.resources.getQuantityString(if (archive) R.plurals.sidebar_archived_count else R.plurals.sidebar_restored_count, selectedIds.size, selectedIds.size)
+                    if (sidebarSnackbar.showSnackbar(message, actionLabel = uiContext.getString(R.string.ui_undo)) == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                        chatSelectionMutex.withLock {
+                            val existing = container.sessions.sessions.first().mapTo(mutableSetOf()) { it.id }
+                            container.settings.restoreArchived(selectedIds intersect existing, previous)
+                        }
+                    }
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    sidebarSnackbar.showSnackbar(uiContext.getString(R.string.sidebar_selection_error))
+                }
+            }
+            else -> Unit
+        }
+    }
     fun selectSection(kind: com.androidharness.app.data.ConversationKind, source: ChatViewModel? = null) {
+        if (batchBusy) return
         val origin = source?.state?.value
         if (origin != null) {
             if (kind == origin.conversation.kind) return
@@ -408,13 +465,16 @@ fun AppNav(container: AppContainer) {
             } },
             onProjects = { navigateFromSidebar { nav.navigate("projects") { launchSingleTop = true } } },
             onChatActions = { actionsSession = it }, onAction = ::sidebarAction,
+            selectedChats = selectedChatIds.toSet(), onSelectedChatsChange = { selectedChatIds = it.toList() },
+            onSelectedChatsAction = ::selectedChatAction, selectionBusy = batchBusy,
             onBuild = { navigateFromSidebar { nav.navigate("build-test?session=${encode(workspaceSessionId.orEmpty())}&project=${encode(workspaceProjectId.orEmpty())}") } },
             onTerminal = { navigateFromSidebar { nav.navigate("terminal?session=${encode(workspaceSessionId.orEmpty())}&project=${encode(workspaceProjectId.orEmpty())}") } },
             onAutomation = { navigateFromSidebar { nav.navigate("automation") { launchSingleTop = true } } },
             onProviders = { navigateFromSidebar { nav.navigate("providers") { launchSingleTop = true } } },
             onSettings = { navigateFromSidebar { nav.navigate("settings") { launchSingleTop = true } } },
             workspaceLabel = if (chatWorkspaceContext) uiContext.getString(R.string.ui_workspaces_for_this_chat) else uiContext.getString(R.string.ui_workspace), workspaceSummary = workspaceSummary,
-            onWorkspaces = { scope.launch { drawerState.close() }; showWorkspaceSheet = true }, onCollapse = onCollapse,
+            onWorkspaces = { selectedChatIds = emptyList(); scope.launch { drawerState.close() }; showWorkspaceSheet = true },
+            onCollapse = { if (!batchBusy) { selectedChatIds = emptyList(); onCollapse() } },
             currentRoute = currentRoute, projectCreationEnabled = !creatingProjectChat,
             changesSummary = changes.takeIf { it.isNotEmpty() }?.let { uiContext.getString(R.string.ui_files_changed_758, (it.size).toString()) },
             onChanges = { currentSessionId?.let { sid -> navigateFromSidebar { nav.navigate("changes/${encode(sid)}") } } },
@@ -956,6 +1016,10 @@ fun AppNav(container: AppContainer) {
             title = { Text(session.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    SessionAction(uiContext.getString(R.string.sidebar_select)) {
+                        sidebarAction(session, SidebarChatAction.SELECT)
+                        actionsSession = null
+                    }
                     SessionAction(uiContext.getString(R.string.ui_rename)) {
                         renamingSession = session
                         actionsSession = null
@@ -981,6 +1045,40 @@ fun AppNav(container: AppContainer) {
         )
     }
 
+    val detailTargets = sessions.filter { it.id in batchDetails }
+    if (detailTargets.isNotEmpty()) ChatBatchDetailsDialog(detailTargets,
+        workspace = { session -> allWorkspaces.firstOrNull { it.id == session.projectId }?.name ?: uiContext.getString(R.string.sidebar_other_chats) },
+        model = { session ->
+            val choice = if (settings.sameModelAcrossChats) com.androidharness.app.data.ChatModelSelection.from(settings, providers).active
+                else runCatching { com.androidharness.app.data.ChatModelSelection.decode(session.modelSelectionJson)?.active
+                    ?: com.androidharness.app.data.ChatModelSelection.from(settings, providers).active }.getOrNull()
+            choice?.model ?: uiContext.getString(R.string.sidebar_model_unavailable)
+        }, onDismiss = { batchDetails = emptySet() })
+    val deleteTargets = sessions.filter { it.id in batchDelete }
+    if (deleteTargets.isNotEmpty()) ChatBatchDeleteDialog(deleteTargets, deleteTargets.any { it.id in runningSessionIds },
+        onDismiss = { batchDelete = emptySet() }, onConfirm = {
+            val ids = deleteTargets.mapTo(mutableSetOf()) { it.id }
+            val remove = { scope.launch {
+                batchBusy = true
+                try {
+                    chatSelectionMutex.withLock {
+                    deleteTargets.forEach { container.runManager.stopAndJoin(it.id) }
+                    container.sessions.deleteSessions(deleteTargets)
+                    container.settings.forgetSidebarSessions(ids)
+                    }
+                    selectedChatIds = emptyList()
+                    if (codeRoute?.takeIf { it.startsWith("chat/") }?.substringAfter("chat/")?.substringBefore('?') in ids) codeRoute = null
+                    if (plainRoute?.takeIf { it.startsWith("chat/") }?.substringAfter("chat/")?.substringBefore('?') in ids) plainRoute = null
+                    if (currentSessionId in ids) openChat(null)
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    batchBusy = false
+                    sidebarSnackbar.showSnackbar(uiContext.getString(R.string.sidebar_selection_error))
+                } finally { batchBusy = false }
+            }; Unit }
+            batchDelete = emptySet()
+            if (desktopNavigation && currentSessionId in ids) desktopGuard.navigate(remove) else remove()
+        })
     deletingSession?.let { session ->
         AlertDialog(onDismissRequest = { deletingSession = null }, title = { Text(uiContext.getString(R.string.ui_delete_chat)) },
             text = { Text(uiContext.getString(R.string.ui_delete_and_its_conversation_history, (session.title).toString())) },
@@ -1063,6 +1161,7 @@ internal fun MessageHitRow(
     hit: MessageHit,
     query: String,
     fuzzy: Boolean,
+    selectionChecked: Boolean? = null,
     onClick: () -> Unit,
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
@@ -1089,6 +1188,7 @@ internal fun MessageHitRow(
             .padding(horizontal = 12.dp, vertical = 9.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            if (selectionChecked != null) androidx.compose.material3.Checkbox(selectionChecked, onCheckedChange = null, modifier = Modifier.padding(end = 8.dp).size(24.dp))
             Text(
                 hit.sessionTitle.ifBlank { uiContext.getString(R.string.ui_chat) },
                 style = MaterialTheme.typography.labelSmall,

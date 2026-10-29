@@ -59,7 +59,7 @@ import com.androidharness.app.ui.theme.expressiveEffectsSpec
 import com.androidharness.app.ui.theme.expressiveSpatialSpec
 
 internal enum class SidebarProjectAction { OPEN, RENAME, PIN, ARCHIVE, DELETE }
-internal enum class SidebarChatAction { RENAME, PIN, ARCHIVE, DETAILS, DELETE }
+internal enum class SidebarChatAction { SELECT, RENAME, PIN, ARCHIVE, DETAILS, DELETE }
 internal enum class SidebarActivity { WORKING, NEEDS_YOU }
 
 internal fun sidebarActivity(running: Boolean, pendingPlan: String?, live: RunManager.LiveRunState? = null): SidebarActivity? = when {
@@ -107,6 +107,10 @@ internal fun ProjectNavigationSidebar(
     chatOnly: Boolean = false,
     sectionSwitchEnabled: Boolean = true,
     onSelectSection: (com.androidharness.app.data.ConversationKind) -> Unit = {},
+    selectedChats: Set<String> = emptySet(),
+    onSelectedChatsChange: (Set<String>) -> Unit = {},
+    onSelectedChatsAction: (Set<String>, SidebarChatAction) -> Unit = { _, _ -> },
+    selectionBusy: Boolean = false,
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
@@ -124,11 +128,23 @@ internal fun ProjectNavigationSidebar(
         sessions.filter { it.title.contains(query.trim(), true) || names[it.projectId]?.contains(query.trim(), true) == true }
     }
     val keyboard = LocalSoftwareKeyboardController.current
+    val selection = selectedChats intersect sessions.mapTo(mutableSetOf()) { it.id }
+    val selecting = selection.isNotEmpty() || selectionBusy
+    val selectableIds = when {
+        query.isNotBlank() -> (matching.map { it.id } + messageHits.map { it.sessionId }).toSet() intersect sessions.mapTo(mutableSetOf()) { it.id }
+        projectsView -> sessions.filter { it.id !in archived && it.projectId in expandedProjects && projects.any { p -> p.id == it.projectId && (p.id in projectArchives) == showArchived } }.mapTo(mutableSetOf()) { it.id }
+        showArchived -> grouped.archived.mapTo(mutableSetOf()) { it.id }
+        else -> sessions.filter { it.id !in archived }.mapTo(mutableSetOf()) { it.id }
+    }
+    fun toggle(id: String) { if (!selectionBusy) onSelectedChatsChange(if (id in selection) selection - id else selection + id) }
+    androidx.activity.compose.BackHandler(selecting && !selectionBusy) { onSelectedChatsChange(emptySet()) }
     @Composable fun Chat(chat: SessionEntity, indented: Boolean = false, showProject: Boolean = false) {
         SidebarChatRow(chat, chat.id == selectedSession, chat.id in pinned, chat.id in archived, activity(chat),
             projectName = if (showProject) projects.firstOrNull { it.id == chat.projectId }?.name else null,
-            indented = indented, onClick = { keyboard?.hide(); onChat(chat.id) }, onActions = { onChatActions(chat) },
-            onAction = { onAction(chat, it) })
+            indented = indented, onClick = { keyboard?.hide(); if (selecting) toggle(chat.id) else onChat(chat.id) },
+            onActions = { if (selecting) toggle(chat.id) else onChatActions(chat) },
+            onAction = { if (it == SidebarChatAction.SELECT) onSelectedChatsChange(selection + chat.id) else onAction(chat, it) },
+            selecting = selecting, checked = chat.id in selection)
     }
     @Composable fun Footer() {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
@@ -155,6 +171,12 @@ internal fun ProjectNavigationSidebar(
             @Composable fun Header() {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
                 Column {
+                    if (selecting) ChatSelectionToolbar(if (selectionBusy) selectedChats.size else selection.size, selectableIds.isNotEmpty() && selection.containsAll(selectableIds),
+                        selection.all { it in archived }, selectionBusy,
+                        onClose = { onSelectedChatsChange(emptySet()) },
+                        onSelectAll = { onSelectedChatsChange(if (selection.containsAll(selectableIds)) emptySet() else selection + selectableIds) },
+                        onAction = { onSelectedChatsAction(selection, it) })
+                    if (!selecting) {
                     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(start = 18.dp, end = 8.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                         HarnessMark(26.dp, Modifier.semantics { contentDescription = uiContext.getString(R.string.ui_androidharness_icon) })
@@ -171,6 +193,8 @@ internal fun ProjectNavigationSidebar(
                         Icon(Icons.Outlined.EditNote, null, Modifier.size(19.dp)); Spacer(Modifier.width(8.dp))
                         Text(uiContext.getString(if (chatOnly) R.string.settings_telegram_new_chat else R.string.conversation_new_code_chat), style = MaterialTheme.typography.labelLarge)
                     }
+                    }
+                    if (!selecting || !short) {
                     BasicTextField(query, onQueryChange, singleLine = true, textStyle = MaterialTheme.typography.bodyMedium.copy(color = scheme.onSurface),
                         cursorBrush = SolidColor(scheme.primary), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
@@ -239,12 +263,13 @@ internal fun ProjectNavigationSidebar(
                         Icon(Icons.Outlined.Tune, null, Modifier.size(15.dp)); Spacer(Modifier.width(6.dp))
                         Text(if (fuzzy) uiContext.getString(R.string.ui_contains_text) else uiContext.getString(R.string.ui_match_words), style = MaterialTheme.typography.labelSmall)
                     }
+                    }
                 }
             }
             Column(Modifier.fillMaxSize()) {
-                if (!short) Header()
+                if (!short || selecting) Header()
                 LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(top = 2.dp, bottom = 10.dp)) {
-                    if (short) item(key = "sidebar-header") { Header() }
+                    if (short && !selecting) item(key = "sidebar-header") { Header() }
                     if (query.isNotBlank()) {
                         if (matching.isNotEmpty()) {
                             item { SidebarSectionHeader(uiContext.getString(R.string.ui_chats), true, null) }
@@ -253,7 +278,9 @@ internal fun ProjectNavigationSidebar(
                         if (messageHits.isNotEmpty()) {
                             item { SidebarSectionHeader(uiContext.getString(R.string.ui_messages), true, null) }
                             items(messageHits, key = { "message:${it.messageId}" }) { hit ->
-                                MessageHitRow(hit, query, fuzzy) { keyboard?.hide(); onMessage(hit) }
+                                MessageHitRow(hit, query, fuzzy, selectionChecked = if (selecting) hit.sessionId in selection else null) {
+                                    keyboard?.hide(); if (selecting) toggle(hit.sessionId) else onMessage(hit)
+                                }
                             }
                         }
                         if (matching.isEmpty() && messageHits.isEmpty()) item {
@@ -421,7 +448,7 @@ private fun SidebarNavRow(label: String, icon: ImageVector, selected: Boolean = 
 @Composable
 private fun SidebarChatRow(chat: SessionEntity, selected: Boolean, pinned: Boolean, archived: Boolean,
     activity: SidebarActivity?, projectName: String?, indented: Boolean, onClick: () -> Unit,
-    onActions: () -> Unit, onAction: (SidebarChatAction) -> Unit) {
+    onActions: () -> Unit, onAction: (SidebarChatAction) -> Unit, selecting: Boolean = false, checked: Boolean = false) {
     val press = remember { MutableInteractionSource() }
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
@@ -431,10 +458,12 @@ private fun SidebarChatRow(chat: SessionEntity, selected: Boolean, pinned: Boole
     val hasDraft = remember(chat.conversationJson) {
         com.androidharness.app.data.ConversationConfig.decode(chat.conversationJson).draftText.isNotBlank()
     }
+    val rowColor by animateColorAsState(if (selecting && checked) scheme.secondaryContainer else if (selected) scheme.primary.copy(alpha = .07f)
+        else if (focused) scheme.surfaceContainerHigh else scheme.surface, expressiveEffectsSpec(), label = "Chat selection")
     Row(Modifier.fillMaxWidth().padding(start = if (indented) 30.dp else 10.dp, end = 10.dp, top = 2.dp, bottom = 2.dp)) {
         if (indented) Box(Modifier.width(1.dp).height(56.dp).background(scheme.outlineVariant))
         Row(Modifier.weight(1f).padding(start = if (indented) 5.dp else 0.dp)
-            .background(if (selected) scheme.primary.copy(alpha = .07f) else if (focused) scheme.surfaceContainerHigh else scheme.surface, RoundedCornerShape(10.dp)),
+            .background(rowColor, RoundedCornerShape(10.dp)),
             verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f).expressivePressFeedback(press).clip(RoundedCornerShape(10.dp)).secondaryClick(onActions).pointerHoverIcon(PointerIcon.Hand)
                 .onFocusChanged { focused = it.isFocused }.onPreviewKeyEvent { event ->
@@ -442,8 +471,13 @@ private fun SidebarChatRow(chat: SessionEntity, selected: Boolean, pinned: Boole
                         if (event.type == KeyEventType.KeyUp) onActions(); true
                     } else false
                 }.combinedClickable(interactionSource = press, indication = ripple(color = scheme.primary), onClick = onClick, onLongClick = onActions, onLongClickLabel = uiContext.getString(R.string.ui_chat_actions))
-                .semantics { this.selected = selected; contentDescription = uiContext.getString(R.string.ui_open_1656, (chat.title).toString()) }
+                .semantics {
+                    this.selected = if (selecting) checked else selected
+                    if (selecting) { role = Role.Checkbox; toggleableState = if (checked) androidx.compose.ui.state.ToggleableState.On else androidx.compose.ui.state.ToggleableState.Off }
+                    contentDescription = uiContext.getString(if (selecting) R.string.sidebar_select_chat else R.string.ui_open_1656, chat.title)
+                }
                 .heightIn(min = 56.dp).padding(start = 10.dp, end = 2.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (selecting) Checkbox(checked, onCheckedChange = null, modifier = Modifier.padding(end = 8.dp).size(24.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(chat.title, style = MaterialTheme.typography.bodyMedium, fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
@@ -462,14 +496,15 @@ private fun SidebarChatRow(chat: SessionEntity, selected: Boolean, pinned: Boole
                     }
                 }
                 if (pinned) Icon(Icons.Outlined.PushPin, uiContext.getString(R.string.ui_pinned), Modifier.size(13.dp), tint = scheme.onSurfaceVariant)
-                if (selected) Icon(Icons.Outlined.Check, uiContext.getString(R.string.ui_current_chat), Modifier.size(15.dp), tint = scheme.primary)
+                if (selected && !selecting) Icon(Icons.Outlined.Check, uiContext.getString(R.string.ui_current_chat), Modifier.size(15.dp), tint = scheme.primary)
             }
-            Box {
+            if (!selecting) Box {
                 ExpressiveIconButton(onClick = { menu = true }, modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)) {
                     Icon(Icons.Outlined.MoreHoriz, uiContext.getString(R.string.settings_provider_actions_cd, (chat.title).toString()), Modifier.size(18.dp), tint = scheme.onSurfaceVariant)
                 }
                 DropdownMenu(menu, { menu = false }) {
-                    listOf(Triple(SidebarChatAction.RENAME, uiContext.getString(R.string.ui_rename), Icons.Outlined.Edit),
+                    listOf(Triple(SidebarChatAction.SELECT, uiContext.getString(R.string.sidebar_select), Icons.Outlined.Checklist),
+                        Triple(SidebarChatAction.RENAME, uiContext.getString(R.string.ui_rename), Icons.Outlined.Edit),
                         Triple(SidebarChatAction.PIN, if (pinned) uiContext.getString(R.string.ui_unpin) else uiContext.getString(R.string.ui_pin), Icons.Outlined.PushPin),
                         Triple(SidebarChatAction.DETAILS, uiContext.getString(R.string.ui_chat_details), Icons.Outlined.Info),
                         Triple(SidebarChatAction.ARCHIVE, if (archived) uiContext.getString(R.string.ui_unarchive) else uiContext.getString(R.string.ui_archive), Icons.Outlined.Archive),

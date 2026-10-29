@@ -828,15 +828,25 @@ class SessionRepository(
         db.dao().setCompaction(sessionId, "", 0)
     }
 
-    suspend fun deleteSession(session: SessionEntity) {
-        val originals = originalNames(session.id)
-        db.dao().deleteChatAnswerVersions(session.id)
-        db.dao().deleteMessages(session.id)
-        db.dao().deleteCheckpoints(session.id)
-        db.dao().deleteUsageEvents(session.id)
-        db.dao().deleteFileEdits(session.id)
-        db.dao().deleteSessionFileChanges(session.id)
-        db.dao().deleteSession(session)
+    suspend fun deleteSession(session: SessionEntity) = deleteSessions(listOf(session))
+
+    /** Delete the selected histories together, then collect images no remaining chat uses. */
+    suspend fun deleteSessions(sessions: List<SessionEntity>) {
+        val targets = sessions.distinctBy { it.id }
+        if (targets.isEmpty()) return
+        val names = targets.map { originalNames(it.id) }
+        val originals = if (names.any { it == null }) null else names.filterNotNull().flatten().toSet()
+        db.withTransaction {
+            targets.forEach { session ->
+                db.dao().deleteChatAnswerVersions(session.id)
+                db.dao().deleteMessages(session.id)
+                db.dao().deleteCheckpoints(session.id)
+                db.dao().deleteUsageEvents(session.id)
+                db.dao().deleteFileEdits(session.id)
+                db.dao().deleteSessionFileChanges(session.id)
+                db.dao().deleteSession(session)
+            }
+        }
         removeUnreferencedOriginals(originals)
     }
 
