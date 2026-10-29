@@ -29,16 +29,16 @@ class LocalizationResourcesTest {
     @Test fun translatedTemplatesKeepValidArgumentTypesAndFormatSuccessfully() {
         val english = strings("values")
         val chinese = strings("values-zh-rCN")
-        val argument = Regex("%(\\d+)\\$([sdf])")
+        val argument = Regex("%(\\d+)\\$([-+ #0,(]*\\d*(?:\\.\\d+)?[sdf])")
         english.forEach { (name, format) ->
-            val expected = argument.findAll(format).associate { it.groupValues[1].toInt() to it.groupValues[2] }
+            val expected = argument.findAll(format).associate { it.groupValues[1].toInt() to it.groupValues[2].last() }
             val translated = chinese.getValue(name)
             argument.findAll(translated).forEach {
-                assertEquals("Unexpected format argument in $name", expected[it.groupValues[1].toInt()], it.groupValues[2])
+                assertEquals("Unexpected format argument in $name", expected[it.groupValues[1].toInt()], it.groupValues[2].last())
             }
             if (expected.isNotEmpty()) {
                 val args = Array<Any>(expected.keys.max()) { index ->
-                    when (expected[index + 1]) { "d" -> 2; "f" -> 2.5; else -> "sample" }
+                    when (expected[index + 1]) { 'd' -> 2; 'f' -> 2.5; else -> "sample" }
                 }
                 String.format(Locale.ENGLISH, format, *args)
                 String.format(Locale.SIMPLIFIED_CHINESE, translated, *args)
@@ -57,15 +57,15 @@ class LocalizationResourcesTest {
         val grammarOnly = mapOf("ui_in" to setOf(2, 4), "ui_use_workspace" to setOf(2),
             "ui_updated" to setOf(2), "ui_replace_in" to setOf(2),
             "ui_renamed_in_review_the_open_drafts_and" to setOf(2), "ui_rename_in" to setOf(2))
-        val argument = Regex("%(\\d+)\\$([sdf])")
+        val argument = Regex("%(\\d+)\\$([-+ #0,(]*\\d*(?:\\.\\d+)?[sdf])")
         english.forEach { (name, format) ->
-            val expected = argument.findAll(format).associate { it.groupValues[1].toInt() to it.groupValues[2] }
+            val expected = argument.findAll(format).associate { it.groupValues[1].toInt() to it.groupValues[2].last() }
             val translated = russian.getValue(name)
-            val actual = argument.findAll(translated).associate { it.groupValues[1].toInt() to it.groupValues[2] }
+            val actual = argument.findAll(translated).associate { it.groupValues[1].toInt() to it.groupValues[2].last() }
             assertEquals("Format arguments in $name", expected.filterKeys { it !in grammarOnly[name].orEmpty() }, actual)
             if (expected.isNotEmpty()) {
                 val args = Array<Any>(expected.keys.max()) { index ->
-                    when (expected[index + 1]) { "d" -> 21; "f" -> 2.5; else -> "sample" }
+                    when (expected[index + 1]) { 'd' -> 21; 'f' -> 2.5; else -> "sample" }
                 }
                 String.format(Locale.forLanguageTag("ru"), translated, *args)
             }
@@ -110,15 +110,15 @@ class LocalizationResourcesTest {
         val grammarOnly = mapOf("ui_in" to setOf(2, 4), "ui_use_workspace" to setOf(2),
             "ui_updated" to setOf(2), "ui_replace_in" to setOf(2),
             "ui_renamed_in_review_the_open_drafts_and" to setOf(2), "ui_rename_in" to setOf(2))
-        val argument = Regex("%(\\d+)\\$([sdf])")
+        val argument = Regex("%(\\d+)\\$([-+ #0,(]*\\d*(?:\\.\\d+)?[sdf])")
         english.forEach { (name, format) ->
-            val expected = argument.findAll(format).associate { it.groupValues[1].toInt() to it.groupValues[2] }
+            val expected = argument.findAll(format).associate { it.groupValues[1].toInt() to it.groupValues[2].last() }
             val translated = indonesian.getValue(name)
-            val actual = argument.findAll(translated).associate { it.groupValues[1].toInt() to it.groupValues[2] }
+            val actual = argument.findAll(translated).associate { it.groupValues[1].toInt() to it.groupValues[2].last() }
             assertEquals("Format arguments in $name", expected.filterKeys { it !in grammarOnly[name].orEmpty() }, actual)
             if (expected.isNotEmpty()) {
                 val args = Array<Any>(expected.keys.max()) { index ->
-                    when (expected[index + 1]) { "d" -> 21; "f" -> 2.5; else -> "sample" }
+                    when (expected[index + 1]) { 'd' -> 21; 'f' -> 2.5; else -> "sample" }
                 }
                 String.format(Locale.forLanguageTag("id"), translated, *args)
             }
@@ -163,15 +163,15 @@ class LocalizationResourcesTest {
         val grammarOnly = mapOf("ui_in" to setOf(2, 4), "ui_use_workspace" to setOf(2),
             "ui_updated" to setOf(2), "ui_replace_in" to setOf(2),
             "ui_renamed_in_review_the_open_drafts_and" to setOf(2), "ui_rename_in" to setOf(2))
-        val argument = Regex("%(\\d+)\\$([sdf])")
+        val argument = Regex("%(\\d+)\\$([-+ #0,(]*\\d*(?:\\.\\d+)?[sdf])")
         english.forEach { (name, format) ->
-            val expected = argument.findAll(format).associate { it.groupValues[1].toInt() to it.groupValues[2] }
+            val expected = argument.findAll(format).associate { it.groupValues[1].toInt() to it.groupValues[2].last() }
             val translated = arabic.getValue(name)
-            val actual = argument.findAll(translated).associate { it.groupValues[1].toInt() to it.groupValues[2] }
+            val actual = argument.findAll(translated).associate { it.groupValues[1].toInt() to it.groupValues[2].last() }
             assertEquals("Format arguments in $name", expected.filterKeys { it !in grammarOnly[name].orEmpty() }, actual)
             if (expected.isNotEmpty()) {
                 val args = Array<Any>(expected.keys.max()) { index ->
-                    when (expected[index + 1]) { "d" -> 21; "f" -> 2.5; else -> "sample" }
+                    when (expected[index + 1]) { 'd' -> 21; 'f' -> 2.5; else -> "sample" }
                 }
                 String.format(Locale.forLanguageTag("ar"), translated, *args)
             }
@@ -216,15 +216,15 @@ class LocalizationResourcesTest {
         val grammarOnly = mapOf("ui_in" to setOf(2, 4), "ui_use_workspace" to setOf(2),
             "ui_updated" to setOf(2), "ui_replace_in" to setOf(2),
             "ui_renamed_in_review_the_open_drafts_and" to setOf(2), "ui_rename_in" to setOf(2))
-        val argument = Regex("%(\\d+)\\$([sdf])")
+        val argument = Regex("%(\\d+)\\$([-+ #0,(]*\\d*(?:\\.\\d+)?[sdf])")
         english.forEach { (name, format) ->
-            val expected = argument.findAll(format).associate { it.groupValues[1].toInt() to it.groupValues[2] }
+            val expected = argument.findAll(format).associate { it.groupValues[1].toInt() to it.groupValues[2].last() }
             val translated = persian.getValue(name)
-            val actual = argument.findAll(translated).associate { it.groupValues[1].toInt() to it.groupValues[2] }
+            val actual = argument.findAll(translated).associate { it.groupValues[1].toInt() to it.groupValues[2].last() }
             assertEquals("Format arguments in $name", expected.filterKeys { it !in grammarOnly[name].orEmpty() }, actual)
             if (expected.isNotEmpty()) {
                 val args = Array<Any>(expected.keys.max()) { index ->
-                    when (expected[index + 1]) { "d" -> 21; "f" -> 2.5; else -> "sample" }
+                    when (expected[index + 1]) { 'd' -> 21; 'f' -> 2.5; else -> "sample" }
                 }
                 String.format(Locale.forLanguageTag("fa"), translated, *args)
             }
