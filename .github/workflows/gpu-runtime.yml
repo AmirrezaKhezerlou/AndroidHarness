@@ -29,7 +29,6 @@ jobs:
           path: |
             app/build/outputs/apk/release/*.apk
             app/build/outputs/gpuRuntime/release/*.gz
-            app/build/outputs/mapping/release/mapping.txt
       - name: Publish content-addressed GPU assets
         env:
           GH_TOKEN: ${{ secrets.GPU_RUNTIME_PUBLISH_TOKEN }}

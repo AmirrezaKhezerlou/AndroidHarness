@@ -98,8 +98,8 @@ android {
             // APK installs without a release keystore. Swap to a dedicated
             // signing config before any public/Play distribution.
             signingConfig = signingConfigs.getByName("debug")
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         debug {
@@ -230,6 +230,7 @@ dependencies {
     implementation("com.github.mwiede:jsch:2.28.7")
     // Ed25519 SSH keys on Android versions without a matching platform provider.
     implementation("org.bouncycastle:bcprov-jdk18on:1.85")
+    implementation("org.conscrypt:conscrypt-android:2.8.0")
     // Self-signed certificates for the local ADB key used by wireless pairing.
     implementation("org.bouncycastle:bcpkix-jdk18on:1.85")
     // SPAKE2 for Android 11+ wireless debugging pairing, compiled into libadb.so.
