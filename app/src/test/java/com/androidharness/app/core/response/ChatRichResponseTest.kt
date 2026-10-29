@@ -43,4 +43,48 @@ class ChatRichResponseTest {
         assertTrue((parts[1] as RichResponse.Part.Markdown).text.contains("Useful trailing prose"))
         assertEquals(RichResponse.Part.Unavailable, RichResponse.parse(ChatRichResponse.normalize(card.dropLast(1))).single())
     }
+
+    @Test fun validBareComponentDoesNotRequireTypeToBeFirst() {
+        val response = "Before\n{\"title\":\"Summary\",\"text\":\"Details\",\"type\":\"callout\"}\nAfter"
+        val parts = RichResponse.parse(ChatRichResponse.normalize(response))
+        assertEquals("Summary", ((parts[1] as RichResponse.Part.Content).node as RichResponse.Node.Callout).title)
+        assertTrue((parts[2] as RichResponse.Part.Markdown).text.contains("After"))
+        val ordinary = "{\"name\":\"Ada\",\"type\":\"person\"}"
+        assertEquals(ordinary, ChatRichResponse.normalize(ordinary))
+    }
+
+    @Test fun screenshotStyleDirectivesRenderAndKeepSurroundingText() {
+        val reply = """Intro
+::card
+title: Mobile Harness
+text: A description, with punctuation.
+::
+::callout
+tone: info
+title: The verdict
+text: A useful summary.
+::
+::profile
+name: AndroidHarness
+subtitle: Android app
+description: An app for coding.
+facts: [{label:License,value:MIT,source:https://example.com/license}]
+sources: [{title:Repository,url:https://example.com/repo}]
+::
+After"""
+        val parts = RichResponse.parse(ChatRichResponse.normalize(reply))
+        val nodes = parts.filterIsInstance<RichResponse.Part.Content>().map { it.node }
+        assertEquals("Mobile Harness", (nodes[0] as RichResponse.Node.Card).title)
+        assertEquals("The verdict", (nodes[1] as RichResponse.Node.Callout).title)
+        val profile = nodes[2] as RichResponse.Node.Profile
+        assertEquals("MIT", profile.facts.single().value)
+        assertEquals("https://example.com/repo", profile.sources.single().url)
+        assertTrue((parts.last() as RichResponse.Part.Markdown).text.contains("After"))
+        val fenced = "```text\n::card\ntitle: Example\ntext: source\n::\n```"
+        assertEquals(fenced, ChatRichResponse.normalize(fenced))
+        assertTrue(RichResponse.parse(ChatRichResponse.normalize("::card\ntitle: Partial", true), true).single() is RichResponse.Part.Pending)
+        val preview = "::preview\ntitle: Demo\nhtml: <p>Hello</p>\n::"
+        val previewNode = (RichResponse.parse(ChatRichResponse.normalize(preview)).single() as RichResponse.Part.Content).node as RichResponse.Node.Preview
+        assertEquals("<p>Hello</p>", previewNode.html)
+    }
 }

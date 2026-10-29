@@ -1,5 +1,7 @@
 package com.androidharness.app.core.response
 
+import kotlinx.serialization.json.*
+
 /** Chat-only recovery for providers that omit the native-component fence. Code keeps strict parsing. */
 internal object ChatRichResponse {
     private val header = Regex("""^\{\s*"type"\s*:\s*"(callout|card|metrics|chart|choices|steps|details|link|preview|table|tabs|gallery|profile|calculator|evidence|diff|writing|column|columns|text|divider)"""")
@@ -11,6 +13,8 @@ internal object ChatRichResponse {
     }
 
     fun normalize(text: String, streaming: Boolean = false): String {
+        val directives = normalizeDirectives(text, streaming)
+        if (directives != text) return normalize(directives, streaming)
         if ('{' !in text) return text
         val output = StringBuilder()
         var position = 0
@@ -26,6 +30,16 @@ internal object ChatRichResponse {
             }
             val start = position + line.length - trimmed.length
             val candidateHead = text.substring(start, minOf(text.length, start + 160))
+            // A model may put `type` after other fields. Only recover a complete,
+            // valid component in that case, so ordinary JSON stays literal.
+            val reorderedEnd = if (fence == null && trimmed.startsWith('{') && !header.containsMatchIn(candidateHead))
+                objectEnd(text, start) else null
+            val reorderedBody = reorderedEnd?.let { text.substring(start, it) }
+            if (reorderedBody != null && RichResponse.decode(reorderedBody) != null) {
+                output.append("```harness-ui\n").append(reorderedBody).append("\n```\n")
+                position = if (reorderedEnd < text.length && text[reorderedEnd] == '\n') reorderedEnd + 1 else reorderedEnd
+                continue
+            }
             if (fence == null && trimmed.startsWith('{') &&
                 (header.containsMatchIn(candidateHead) || (streaming && partialHeader(candidateHead)))) {
                 val end = objectEnd(text, start)
@@ -47,6 +61,96 @@ internal object ChatRichResponse {
             position = lineEnd + 1
         }
         return output.toString()
+    }
+
+    /** Recover the line-oriented form some models emit instead of the requested JSON fence. */
+    private fun normalizeDirectives(text: String, streaming: Boolean): String {
+        if (!text.contains("::")) return text
+        val lines = text.split('\n')
+        val out = StringBuilder()
+        var fence: String? = null
+        var i = 0
+        while (i < lines.size) {
+            val line = lines[i]
+            val trimmed = line.trim()
+            val marker = trimmed.takeWhile { it == '`' || it == '~' }
+            if (marker.length >= 3) {
+                if (fence == null) fence = marker
+                else if (trimmed.all { it == fence.first() } && marker.length >= fence.length) fence = null
+            }
+            val type = trimmed.removePrefix("::")
+            if (fence == null && trimmed == "::$type" && type in setOf("card", "callout", "profile", "preview")) {
+                val end = (i + 1 until lines.size).firstOrNull { lines[it].trim() == "::" }
+                if (end == null) {
+                    if (streaming) out.append("```harness-ui\n") else out.append(lines.drop(i).joinToString("\n"))
+                    break
+                }
+                val body = lines.subList(i + 1, end).joinToString("\n")
+                val json = directiveJson(type, body)
+                if (json != null && RichResponse.decode(json) != null) out.append("```harness-ui\n").append(json).append("\n```")
+                else out.append("```harness-ui\n{}\n```")
+                i = end + 1
+                if (i < lines.size) out.append('\n')
+                continue
+            }
+            out.append(line)
+            if (++i < lines.size) out.append('\n')
+        }
+        return out.toString()
+    }
+
+    private fun directiveJson(type: String, body: String): String? {
+        if (body.length > RichResponse.MAX_JSON_CHARS) return null
+        val allowed = when (type) {
+            "profile" -> setOf("name", "subtitle", "description", "image", "image_source", "facts", "sources")
+            "callout" -> setOf("title", "text", "tone")
+            "preview" -> setOf("title", "html")
+            else -> setOf("title", "text")
+        }
+        val fields = linkedMapOf<String, StringBuilder>()
+        var current: StringBuilder? = null
+        for (line in body.lines()) {
+            val match = Regex("^\\s*([a-z_]+):\\s*(.*)$").matchEntire(line)
+            if (match != null && match.groupValues[1] in allowed) {
+                val key = match.groupValues[1]
+                if (key in fields) return null
+                current = StringBuilder(match.groupValues[2]); fields[key] = current
+            } else if (current != null) current.append('\n').append(line) else if (line.isNotBlank()) return null
+        }
+        val obj = buildJsonObject {
+            put("type", type)
+            for ((key, value) in fields) {
+                val raw = value.toString().trim()
+                if (key == "facts" || key == "sources") {
+                    val array = directiveArray(raw, if (key == "facts") setOf("label", "value", "source") else setOf("title", "url")) ?: return null
+                    put(key, array)
+                } else put(key, raw)
+            }
+        }
+        return obj.toString()
+    }
+
+    private fun directiveArray(raw: String, keys: Set<String>): JsonArray? {
+        (runCatching { Json.parseToJsonElement(raw) }.getOrNull() as? JsonArray)?.let { return it }
+        if (!raw.startsWith("[") || !raw.endsWith("]")) return null
+        val inner = raw.substring(1, raw.length - 1).trim()
+        if (inner.isEmpty()) return JsonArray(emptyList())
+        val entries = inner.split(Regex("}\\s*,\\s*\\{"))
+        if (entries.size > 12) return null
+        val result = mutableListOf<JsonElement>()
+        for ((index, entry) in entries.withIndex()) {
+            val item = entry.removePrefix(if (index == 0) "{" else "").removeSuffix(if (index == entries.lastIndex) "}" else "")
+            val matches = Regex("(?:^|,)\\s*(${keys.joinToString("|")}):").findAll(item).toList()
+            if (matches.isEmpty()) return null
+            val map = linkedMapOf<String, String>()
+            for ((n, match) in matches.withIndex()) {
+                val key = match.groupValues[1]
+                if (key in map) return null
+                map[key] = item.substring(match.range.last + 1, matches.getOrNull(n + 1)?.range?.first ?: item.length).trim()
+            }
+            result += buildJsonObject { map.forEach { (key, value) -> put(key, value) } }
+        }
+        return JsonArray(result)
     }
 
     private fun objectEnd(text: String, start: Int): Int? {
