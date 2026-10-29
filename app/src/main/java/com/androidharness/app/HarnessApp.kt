@@ -30,6 +30,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 class HarnessApp : Application() {
+    private val memoryScope = kotlinx.coroutines.CoroutineScope(SupervisorJob() + Dispatchers.IO)
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(base)
         com.androidharness.app.local.GpuDeliveryFactory.attach(this)
@@ -44,6 +45,16 @@ class HarnessApp : Application() {
         ComposeFoundationFlags.isPausableCompositionInPrefetchEnabled = false
         WebView.enableSlowWholeDocumentDraw()
         container = AppContainer(this)
+    }
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (::container.isInitialized && level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+            memoryScope.launch { container.localModels.releaseCachedModel() }
+        }
+    }
+    override fun onLowMemory() {
+        super.onLowMemory()
+        if (::container.isInitialized) memoryScope.launch { container.localModels.releaseCachedModel() }
     }
 }
 

@@ -37,7 +37,7 @@ class LocalGgufGpuDeviceTest {
             val started = SystemClock.elapsedRealtime()
             try {
                 val result = LocalNative.generateChat(handle, path, byteArrayOf(), request, emptyArray(),
-                    512, 384, 32, 4, useGpu, object : LocalNative.ChatCallback {
+                    512, 384, 32, 4, 4, useGpu, byteArrayOf(), object : LocalNative.ChatCallback {
                         override fun onEvent(bytes: ByteArray): Boolean {
                             val event = Json.parseToJsonElement(bytes.toString(Charsets.UTF_8)).jsonObject
                             text += event["text"]?.jsonPrimitive?.content.orEmpty()

@@ -5,6 +5,7 @@ import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
@@ -63,9 +64,16 @@ class LocalGgufUiDeviceTest {
                     activity.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                     activity.setContent { HarnessTheme {
                         CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density,1.5f)) {
-                            Surface { Column(Modifier.verticalScroll(rememberScrollState())) { LocalModelsSection(c) } }
+                            Surface(Modifier.fillMaxSize()) { LocalModelsSection(c, scrollContent = true) }
                         }
                     } }
+                }
+                click(waitFor("Performance"))
+                for (i in 0 until 20) {
+                    val root = instrumentation.uiAutomation.rootInActiveWindow
+                    if (root != null && nodes(root).any { it.text?.toString() == "Experimental features" }) break
+                    root?.let { nodes(it).firstOrNull { n -> n.isScrollable }?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) }
+                    SystemClock.sleep(100)
                 }
                 waitFor("Experimental features")
                 screenshot("gguf-default")

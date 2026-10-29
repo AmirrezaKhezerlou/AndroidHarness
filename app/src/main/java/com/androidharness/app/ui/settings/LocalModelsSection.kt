@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
@@ -48,15 +49,15 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-internal fun LocalModelsSection(container: AppContainer) {
+internal fun LocalModelsSection(container: AppContainer, scrollContent: Boolean = false) {
     MaterialTheme(motionScheme = MotionScheme.expressive()) {
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { LocalModelsContent(container) }
+        Column(Modifier.then(if (scrollContent) Modifier.fillMaxSize() else Modifier), verticalArrangement = Arrangement.spacedBy(16.dp)) { LocalModelsContent(container, scrollContent) }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun LocalModelsContent(container: AppContainer) {
+private fun ColumnScope.LocalModelsContent(container: AppContainer, scrollContent: Boolean) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -65,6 +66,7 @@ private fun LocalModelsContent(container: AppContainer) {
     val installed by manager.installed.collectAsStateWithLifecycle()
     val statuses by manager.status.collectAsStateWithLifecycle()
     val running by manager.running.collectAsStateWithLifecycle()
+    val loaded by manager.loaded.collectAsStateWithLifecycle()
     val settings by container.settings.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
     val work by remember { WorkManager.getInstance(container.appContext).getWorkInfosByTagFlow("local-model-download") }
         .collectAsStateWithLifecycle(initialValue = emptyList())
@@ -74,8 +76,10 @@ private fun LocalModelsContent(container: AppContainer) {
     var format by rememberSaveable { mutableStateOf(LocalModelFormat.GGUF) }
     var customDialog by remember { mutableStateOf(false) }
     var panel by rememberSaveable { mutableIntStateOf(0) }
-    LaunchedEffect(panel) { if (panel !in 0..1) panel = 0 }
+    LaunchedEffect(panel) { if (panel !in 0..2) panel = 0 }
     var options by remember { mutableStateOf(false) }
+    var performance by remember { mutableStateOf(false) }
+    val dashboard = remember { PerformanceDashboardState() }
     val experimental = settings.localModelExperimental
 
     var deviceDialog by remember { mutableStateOf(false) }
@@ -86,6 +90,7 @@ private fun LocalModelsContent(container: AppContainer) {
     var editing by remember { mutableStateOf<LocalModelSpec?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf<String?>(null) }
+    var unloading by remember { mutableStateOf<String?>(null) }
     var importJob by remember { mutableStateOf<Job?>(null) }
     var importProgress by remember { mutableStateOf<String?>(null) }
     var search by rememberSaveable { mutableStateOf("") }
@@ -132,6 +137,15 @@ private fun LocalModelsContent(container: AppContainer) {
     }
     val transfers = catalog.filter { it.id !in installed && activeWork(it) != null }
 
+    PrimaryTabRow(selectedTabIndex = panel.coerceIn(0, 2), divider = {}) {
+        listOf(R.string.local_library, R.string.local_browse, R.string.device_performance).forEachIndexed { index, title ->
+            Tab(selected = panel == index, onClick = { panel = index }, text = { Text(stringResource(title), maxLines = 1) })
+        }
+    }
+    val tabScroll = rememberScrollState()
+    LaunchedEffect(panel) { tabScroll.scrollTo(0) }
+    Column(Modifier.then(if (scrollContent) Modifier.weight(1f).verticalScroll(tabScroll) else Modifier), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    if (panel != 2) {
     Surface(shape = RoundedCornerShape(32.dp), color = MaterialTheme.colorScheme.primaryContainer) {
         Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -148,11 +162,14 @@ private fun LocalModelsContent(container: AppContainer) {
             }
         }
     }
-    LocalExperimentalSwitch(container)
-    if (experimental) LocalGpuSupportCard(manager)
-    PrimaryTabRow(selectedTabIndex = panel.coerceIn(0, 1), divider = {}) {
-        listOf(R.string.local_library, R.string.local_browse).forEachIndexed { index, title ->
-            Tab(selected = panel == index, onClick = { panel = index }, text = { Text(stringResource(title)) })
+    }
+    if (performance && savedModels.isNotEmpty()) LocalBenchmarkScreen(savedModels.first(), manager,
+        onDismiss = { performance = false }, onApplied = {}, models = savedModels)
+    AnimatedVisibility(panel == 2, enter = fadeIn(expressiveEffectsSpec()) + expandVertically(expressiveSpatialSpec()),
+        exit = fadeOut(expressiveEffectsSpec()) + shrinkVertically(expressiveSpatialSpec())) {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            LocalPerformanceSection(manager, canBenchmark = savedModels.isNotEmpty() && busy == null,
+                onBenchmark = { performance = true }, onOptions = { options = true }, cache = dashboard)
         }
     }
     manager.catalogError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -195,22 +212,36 @@ private fun LocalModelsContent(container: AppContainer) {
         val selected = settings.activeProviderId == LocalModelCatalog.PROVIDER_PREFIX + model.id
         LocalModelCard(model, contexts[model.id] ?: model.defaultContext, device, selected = selected, installed = true,
             status = statuses[model.id]?.takeUnless { it == "Ready" || it == "Installed" },
-            working = running == model.id, enabled = busy == null,
+            working = running == model.id || loaded == model.id || unloading == model.id,
+            loaded = loaded == model.id, unloading = unloading == model.id, enabled = busy == null && unloading == null,
+            stopEnabled = unloading == null && (busy == null || running == model.id),
             onPrimary = {
                 scope.launch {
                     busy = model.id
                     try {
                         manager.confirmResources(model)
-                        container.settings.setActiveModel(null)
-                        container.settings.setActiveProvider(LocalModelCatalog.PROVIDER_PREFIX + model.id)
+                        if (!selected) {
+                            container.settings.setActiveModel(null)
+                            container.settings.setActiveProvider(LocalModelCatalog.PROVIDER_PREFIX + model.id)
+                        }
+                        manager.load(model.id)
                         message = context.getString(R.string.settings_local_models_selected_for_chat, model.title)
                     } catch (e: CancellationException) { throw e }
-                    catch (e: Exception) { message = e.message }
+                    catch (e: Exception) { if (!e.message.orEmpty().contains("stopped", ignoreCase = true)) message = e.message }
                     finally { busy = null }
                 }
             }, onSettings = { editing = model }, onDetails = { details = model },
             onImageSupport = if (model.custom) ({ projectorModel = model }) else null,
-            onRemove = { removing = model }, onStop = { manager.stop(model.id) })
+            onRemove = { removing = model }, onStop = {
+                scope.launch {
+                    busy = model.id
+                    unloading = model.id
+                    try { manager.stopAndUnload(model.id) }
+                    catch (e: CancellationException) { throw e }
+                    catch (e: Exception) { message = e.message ?: context.getString(R.string.local_unload_failed) }
+                    finally { busy = null; unloading = null }
+                }
+            })
     }
     if (transfers.isNotEmpty()) {
         Text(stringResource(R.string.settings_local_models_downloads), style = MaterialTheme.typography.titleMedium)
@@ -220,6 +251,8 @@ private fun LocalModelsContent(container: AppContainer) {
                 onPrimary = { removeNow(model) }, onDetails = { details = model })
         }
     }
+    LocalExperimentalSwitch(container)
+    if (experimental) LocalGpuSupportCard(manager)
     }
     }
     importProgress?.let { text ->
@@ -330,12 +363,14 @@ private fun LocalModelsContent(container: AppContainer) {
             dismissButton = { TextButton(onClick = { removing = null }) { Text(stringResource(R.string.settings_local_models_keep)) } })
     }
     editing?.let { model -> LocalLimitsDialog(model, manager, onDismiss = { editing = null }) }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun LocalModelCard(model: LocalModelSpec, context: Int, device: LocalDeviceProfile,
+internal fun LocalModelCard(model: LocalModelSpec, context: Int, device: LocalDeviceProfile,
     selected: Boolean = false, installed: Boolean = false, working: Boolean = false,
+    loaded: Boolean = false, unloading: Boolean = false, stopEnabled: Boolean = true,
     transfer: WorkInfo? = null, status: String? = null, enabled: Boolean,
     onPrimary: () -> Unit, onDetails: () -> Unit, onSettings: (() -> Unit)? = null,
     onImageSupport: (() -> Unit)? = null, onRemove: (() -> Unit)? = null, onStop: (() -> Unit)? = null) {
@@ -378,6 +413,9 @@ private fun LocalModelCard(model: LocalModelSpec, context: Int, device: LocalDev
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (selected) LocalModelBadge(uiContext.getString(R.string.settings_selected), positive = true)
+                if (installed && (selected || working)) {
+                    LocalModelBadge(stringResource(if (unloading) R.string.local_unloading else if (loaded) R.string.local_loaded else if (working) R.string.local_loading else R.string.local_not_loaded), positive = loaded && !unloading)
+                }
                 if (model.abliterated) LocalModelBadge(stringResource(R.string.settings_local_models_badge_abliterated))
                 if (installed && model.projector != null) LocalModelBadge(stringResource(R.string.settings_local_models_badge_vision), positive = true)
                 if (!device.canLoad(model, context)) LocalModelBadge(stringResource(R.string.settings_local_models_badge_may_exceed))
@@ -393,14 +431,14 @@ private fun LocalModelCard(model: LocalModelSpec, context: Int, device: LocalDev
                 } else AppLinearProgressIndicator(Modifier.fillMaxWidth())
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (!selected || !installed) Button(onClick = onPrimary, enabled = enabled, shapes = ButtonDefaults.shapes()) {
-                    Text(if (transfer != null) uiContext.getString(R.string.ui_cancel_download) else if (installed) uiContext.getString(R.string.ui_use_in_chat) else uiContext.getString(R.string.ui_download))
+                if (!selected || !installed || !working) Button(onClick = onPrimary, enabled = enabled, shapes = ButtonDefaults.shapes()) {
+                    Text(if (transfer != null) uiContext.getString(R.string.ui_cancel_download) else if (installed && selected) uiContext.getString(R.string.local_load_model) else if (installed) uiContext.getString(R.string.ui_use_in_chat) else uiContext.getString(R.string.ui_download))
                 }
                 onSettings?.let { action -> OutlinedButton(onClick = action, enabled = enabled) {
                     Icon(Icons.Default.Tune, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.settings_local_models_settings))
                 } }
-                if (working) onStop?.let { action -> OutlinedButton(onClick = action) { Text(stringResource(R.string.settings_action_stop)) } }
+                if (working) onStop?.let { action -> OutlinedButton(onClick = action, enabled = stopEnabled) { Text(stringResource(R.string.local_stop_unload)) } }
             }
         }
     }
@@ -480,7 +518,9 @@ internal fun LocalLimitsDialog(model: LocalModelSpec, manager: LocalModelManager
     var input by remember { mutableStateOf(limits.input.toString()) }
     var output by remember { mutableStateOf(limits.output.toString()) }
     var threads by remember { mutableStateOf(limits.threads.toString()) }
+    var promptThreads by remember { mutableStateOf((limits.promptThreads ?: limits.threads).toString()) }
     var backend by remember { mutableStateOf(limits.backend) }
+    var thinkingMode by remember { mutableStateOf(limits.thinkingMode) }
     var advanced by rememberSaveable { mutableStateOf(false) }
     val experimentalSettings = remember(uiContext) { com.androidharness.app.data.SettingsRepository(uiContext) }
     val experimental by experimentalSettings.settings
@@ -492,6 +532,18 @@ internal fun LocalLimitsDialog(model: LocalModelSpec, manager: LocalModelManager
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(model.title, style = MaterialTheme.typography.titleSmall)
             if (experimental.localModelExperimental) LocalBackendPicker(manager, backend, !saving) { backend = it }
+            Text(stringResource(R.string.local_thinking_behavior), style = MaterialTheme.typography.titleSmall)
+            Column {
+                LocalThinkingMode.entries.forEach { option ->
+                    Row(Modifier.fillMaxWidth().selectable(selected = thinkingMode == option, enabled = !saving,
+                        role = Role.RadioButton, onClick = { thinkingMode = option }), verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = thinkingMode == option, onClick = null, enabled = !saving)
+                        Text(stringResource(when (option) { LocalThinkingMode.AUTO -> R.string.local_thinking_auto; LocalThinkingMode.THINKING -> R.string.local_thinking_on; LocalThinkingMode.DIRECT -> R.string.local_thinking_direct }))
+                    }
+                }
+            }
+            Text(stringResource(R.string.local_thinking_help), style = MaterialTheme.typography.bodySmall)
+
             LocalNumberField(
                 stringResource(R.string.settings_local_models_conversation_size),
                 context,
@@ -522,7 +574,8 @@ internal fun LocalLimitsDialog(model: LocalModelSpec, manager: LocalModelManager
             }
             AnimatedVisibility(visible = advanced) { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 LocalNumberField(uiContext.getString(R.string.ui_input_budget), input, "tokens", uiContext.getString(R.string.ui_includes_instructions_and_chat_history_you_can), !saving) { input = it }
-                LocalNumberField(uiContext.getString(R.string.ui_processing_threads), threads, "threads", uiContext.getString(R.string.ui_more_threads_can_increase_heat_and_may), !saving) { threads = it }
+                LocalNumberField(uiContext.getString(R.string.local_generation_threads), threads, "threads", uiContext.getString(R.string.ui_more_threads_can_increase_heat_and_may), !saving) { threads = it }
+                LocalNumberField(uiContext.getString(R.string.local_prompt_threads), promptThreads, "threads", uiContext.getString(R.string.local_prompt_threads_help), !saving) { promptThreads = it }
             }
             }
             TextButton(enabled = !saving, onClick = {
@@ -530,7 +583,9 @@ internal fun LocalLimitsDialog(model: LocalModelSpec, manager: LocalModelManager
                 input = (model.defaultContext * 3 / 4).coerceAtLeast(1).toString()
                 output = (model.defaultContext / 4).coerceAtLeast(1).toString()
                 threads = manager.device().cores.coerceIn(1, 4).toString()
+                promptThreads = threads
                 backend = LocalBackend.AUTO
+                thinkingMode = LocalThinkingMode.AUTO
                 error = null
             }) { Text(stringResource(R.string.settings_action_reset_defaults)) }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -540,13 +595,14 @@ internal fun LocalLimitsDialog(model: LocalModelSpec, manager: LocalModelManager
             saving = true
             try {
                 manager.saveLimits(model.id, LocalModelLimits(context.toIntOrNull() ?: 0, input.toIntOrNull() ?: 0,
-                    output.toIntOrNull() ?: 0, threads.toIntOrNull() ?: 0, backend))
+                    output.toIntOrNull() ?: 0, threads.toIntOrNull() ?: 0, backend, promptThreads.toIntOrNull() ?: 0, thinkingMode))
                 onDismiss()
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { error = e.message }
             finally { saving = false }
         }
     }) { Text(stringResource(R.string.settings_action_save)) } }, dismissButton = { TextButton(enabled = !saving, onClick = onDismiss) { Text(stringResource(R.string.settings_action_cancel)) } })
+
 }
 
 @Composable

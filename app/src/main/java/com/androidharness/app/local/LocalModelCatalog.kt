@@ -65,18 +65,27 @@ object LocalModelCatalog {
 }
 
 @Serializable
+enum class LocalThinkingMode {
+    AUTO, THINKING, DIRECT;
+    fun enabled(requested: Boolean): Boolean = when (this) { AUTO -> requested; THINKING -> true; DIRECT -> false }
+}
+
+@Serializable
 data class LocalModelLimits(
     val context: Int = 2048,
     val input: Int = 1536,
     val output: Int = 512,
     val threads: Int = 4,
     val backend: LocalBackend = LocalBackend.AUTO,
+    val promptThreads: Int? = null,
+    val thinkingMode: LocalThinkingMode = LocalThinkingMode.AUTO,
 ) {
     fun validate() {
         require(context > 0) { "Context must be a positive number." }
         require(input > 0 && output > 0) { "Input and output must be positive numbers." }
         require(input.toLong() + output < Int.MAX_VALUE) { "The combined token budget exceeds the engine's addressable range." }
         require(threads > 0) { "CPU threads must be a positive number." }
+        require(promptThreads == null || promptThreads > 0) { "Prompt threads must be a positive number." }
     }
 }
 

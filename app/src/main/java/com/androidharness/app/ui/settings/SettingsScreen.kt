@@ -281,7 +281,7 @@ fun SettingsScreen(
                 SettingsHighlightScope(highlight) {
                     Column(
                         modifier = Modifier.then(if (desktop) Modifier.widthIn(max = 880.dp) else Modifier)
-                            .fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
+                            .fillMaxSize().then(if (page == SettingsPage.LOCAL_MODELS) Modifier else Modifier.verticalScroll(rememberScrollState())).padding(horizontal = 16.dp, vertical = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
                         if (page != SettingsPage.LOCAL_MODELS && page != SettingsPage.AGENT && page != SettingsPage.TELEGRAM && page != SettingsPage.STORAGE && page != SettingsPage.ENVIRONMENT) SettingsPageIntro(page)
@@ -343,7 +343,7 @@ fun SettingsScreen(
                                 onOpenBackgroundSettings = { openPage(SettingsPage.BACKGROUND) },
                             )
                         }
-                        SettingsPage.LOCAL_MODELS -> LocalModelsSection(container)
+                        SettingsPage.LOCAL_MODELS -> LocalModelsSection(container, scrollContent = true)
                         SettingsPage.AGENT -> AgentSection(container, settings, scope)
                         SettingsPage.CHAT -> {
                             ChatBehaviorSection(container, settings, scope)
@@ -381,7 +381,7 @@ fun SettingsScreen(
                         SettingsPage.ABOUT -> AboutSection(container)
                         SettingsPage.SKILLS, SettingsPage.USAGE, SettingsPage.SETUP -> Unit
                     }
-                        Spacer(Modifier.height(16.dp))
+                        if (page != SettingsPage.LOCAL_MODELS) Spacer(Modifier.height(16.dp))
                     }
                 }
             }

@@ -32,6 +32,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Call
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -46,9 +48,28 @@ class LocalModelManager(private val context: Context) {
     suspend fun gpuDevice(): String = withContext(Dispatchers.IO) {
         inference.withLock { runCatching { gpuSupport.device() }.getOrDefault("") }
     }
+    suspend fun releaseCachedModel() = withContext(Dispatchers.IO) {
+        inference.withLock {
+            if (Process.is64Bit()) LocalNative.releaseCachedModel()
+            _loaded.value?.let { id -> _status.update { it - id } }
+            _loaded.value = null
+        }
+    }
+    private val _loaded = MutableStateFlow<String?>(null)
+    val loaded = _loaded.asStateFlow()
+    suspend fun stopAndUnload(id: String) = withContext(Dispatchers.IO + NonCancellable) {
+        stop(id)
+        inference.withLock {
+            if (Process.is64Bit() && LocalNative.isModelCached(store.file(id).absolutePath.toByteArray(Charsets.UTF_8))) {
+                LocalNative.releaseCachedModel()
+                _loaded.value = null
+            }
+            _status.update { it - id }
+        }
+    }
     val consent = LocalModelConsent()
     private fun resourceKey(model: LocalModelSpec, value: LocalModelLimits, downloading: Boolean, profile: LocalDeviceProfile) =
-        "${model.id}:${value.context}:${value.input}:${value.output}:${value.threads}:${value.backend}:$downloading:${profile.lowMemory}:${model.projector?.url}"
+        "${model.id}:${value.context}:${value.input}:${value.output}:${value.threads}:${value.promptThreads}:${value.backend}:$downloading:${profile.lowMemory}:${model.projector?.url}"
     suspend fun acknowledgeResources(model: LocalModelSpec, value: LocalModelLimits, downloading: Boolean) {
         consent.acknowledge(resourceKey(model, value, downloading, device()))
     }
@@ -406,6 +427,8 @@ class LocalModelManager(private val context: Context) {
         lifecycle.withLock {
             inference.withLock {
                 try {
+                    LocalNative.releaseCachedModel()
+                    _loaded.value = null
                     store.remove(id)
                     if (find(id)?.custom == true) {
                         custom.remove(id)
@@ -425,6 +448,147 @@ class LocalModelManager(private val context: Context) {
     fun stop(id: String? = null) {
         synchronized(gate) {
             if (handle != 0L && (id == null || running.value == id)) LocalNative.cancel(handle)
+        }
+    }
+
+    suspend fun load(id: String) = withContext(Dispatchers.IO) {
+        inference.withLock {
+            val model = requireNotNull(find(id)) { "Unknown local model." }
+            val limits = limits(id)
+            limits.validate()
+            confirmResources(model, limits)
+            val experimental = com.androidharness.app.data.SettingsRepository(context).settings.first().localModelExperimental
+            val useGpu = LocalAccelerationPolicy.useGpu(experimental, limits.backend,
+                experimental && limits.backend != LocalBackend.CPU && runCatching { gpuSupport.device().isNotBlank() }.getOrDefault(false))
+            val request = synchronized(gate) {
+                check(id !in blocked && store.installed(model)) { "Local model is not installed." }
+                LocalNative.create().also { handle = it; _running.value = id }
+            }
+            try {
+                setStatus(id, if (useGpu) "Loading model on GPU (Vulkan)" else "Loading model on CPU")
+                var actualGpu = useGpu
+                try {
+                    LocalNative.loadModel(request, store.file(id).absolutePath.toByteArray(Charsets.UTF_8), useGpu)
+                } catch (e: Exception) {
+                    if (!LocalAccelerationPolicy.retryOnCpu(useGpu, false,
+                            e is CancellationException || LocalNative.isCancelled(request))) throw e
+                    actualGpu = false
+                    LocalNative.loadModel(request, store.file(id).absolutePath.toByteArray(Charsets.UTF_8), false)
+                }
+                _loaded.value = id
+                setStatus(id, if (actualGpu) "Ready · GPU (Vulkan)" else if (useGpu) context.getString(com.androidharness.app.R.string.local_gpu_ready_fallback) else "Ready · CPU")
+            } catch (e: Exception) {
+                _status.update { it - id }
+                throw e
+            } finally {
+                synchronized(gate) {
+                    LocalNative.destroy(request)
+                    handle = 0
+                    _running.value = null
+                }
+                val cachedPath = LocalNative.cachedModelPath()
+                _loaded.value = models.value.firstOrNull { store.file(it.id).absolutePath == cachedPath }?.id
+            }
+        }
+    }
+
+    suspend fun benchmark(id: String, mode: LocalBenchmarkMode, onUpdate: (LocalBenchmarkProgress) -> Unit) = withContext(Dispatchers.IO) {
+        inference.withLock {
+            val model = requireNotNull(find(id)) { "Unknown local model." }
+            val limits = limits(id)
+            limits.validate()
+            confirmResources(model, limits)
+            val counts = localBenchmarkThreadCounts(device().cores, limits.threads, limits.promptThreads ?: limits.threads)
+            val backends = when (mode) {
+                LocalBenchmarkMode.CPU -> listOf(LocalBackend.CPU)
+                LocalBenchmarkMode.GPU -> listOf(LocalBackend.GPU)
+                LocalBenchmarkMode.BOTH -> listOf(LocalBackend.CPU, LocalBackend.GPU)
+            }
+            val request = synchronized(gate) {
+                check(id !in blocked && store.installed(model)) { "Local model is not installed." }
+                LocalNative.create().also { handle = it; _running.value = id }
+            }
+            var state = LocalBenchmarkProgress(total = backends.size * (4 + counts.size * 6))
+            fun publish(next: LocalBenchmarkProgress) { state = next; onUpdate(next) }
+            val references = mutableMapOf<Int, String>()
+            val requestPath = store.file(id).absolutePath.toByteArray(Charsets.UTF_8)
+            try {
+                coroutineScope {
+                    val watcher = launch(Dispatchers.Default, start = CoroutineStart.UNDISPATCHED) {
+                        try { awaitCancellation() } finally { stop(id) }
+                    }
+                    val job = coroutineContext
+                    try {
+                        val experimental = com.androidharness.app.data.SettingsRepository(context).settings.first().localModelExperimental
+                        for (backend in backends) {
+                            if (LocalNative.isCancelled(request)) break
+                            try {
+                                if (backend == LocalBackend.GPU) {
+                                    check(experimental) { "Enable experimental GPU support in Local models first." }
+                                    check(gpuSupport.device().isNotBlank()) { "Install GPU support before testing the GPU." }
+                                }
+                                fun run(phase: LocalBenchmarkPhase, generation: Int, prompt: Int, repeat: Int): Pair<Double, Double> {
+                                    if (LocalNative.isCancelled(request) || !job.isActive) throw CancellationException("Benchmark stopped")
+                                    publish(state.copy(backend = backend, phase = phase, generationThreads = generation,
+                                        promptThreads = prompt, repeat = repeat, currentPrompt = (repeat - 1).coerceIn(0, 2), liveAnswer = "", livePhase = "loading", liveTokens = 0, liveTps = 0.0, livePromptTps = 0.0, liveGenerationTps = 0.0))
+                                    val raw = LocalNative.benchmark(request, requestPath, backend == LocalBackend.GPU, generation, prompt,
+                                        object : LocalNative.BenchmarkCallback {
+                                            override fun onOutput(bytes: ByteArray): Boolean {
+                                                publish(state.copy(liveAnswer = bytes.toString(Charsets.UTF_8)))
+                                                return job.isActive && !LocalNative.isCancelled(request)
+                                            }
+                                            override fun onProgress(phase: String, tokens: Int, seconds: Double): Boolean {
+                                                publish(state.copy(livePhase = phase, liveTokens = tokens,
+                                                    liveTps = if (seconds > 0) tokens / seconds else 0.0,
+                                                    livePromptTps = if (phase == "prompt" && seconds > 0) tokens / seconds else state.livePromptTps,
+                                                    liveGenerationTps = if (phase == "generation" && seconds > 0) tokens / seconds else state.liveGenerationTps))
+                                                return job.isActive && !LocalNative.isCancelled(request)
+                                            }
+                                        }, LOCAL_BENCHMARK_PROMPTS[(repeat - 1).coerceIn(0, 2)].toByteArray(Charsets.UTF_8))
+                                    val values = Json.parseToJsonElement(raw.toString(Charsets.UTF_8)).jsonObject
+                                    val answer = values.getValue("text").jsonPrimitive.content
+                                    val promptIndex = (repeat - 1).coerceIn(0, 2)
+                                    val baselineAnswer = references[promptIndex]
+                                    if (phase != LocalBenchmarkPhase.WARMUP && baselineAnswer == null) references[promptIndex] = answer
+                                    publish(state.copy(answers = state.answers + LocalBenchmarkAnswer(backend, generation, prompt, promptIndex,
+                                        answer, if (phase == LocalBenchmarkPhase.WARMUP) null else baselineAnswer?.let { it == answer }, phase,
+                                        values.getValue("input_tokens").jsonPrimitive.content.toInt(), values.getValue("output_tokens").jsonPrimitive.content.toInt())))
+                                    publish(state.copy(completed = state.completed + 1))
+                                    return values.getValue("generation_tps").jsonPrimitive.content.toDouble() to values.getValue("prompt_tps").jsonPrimitive.content.toDouble()
+                                }
+                                val baseline = counts.minBy { kotlin.math.abs(it - 4) }
+                                run(LocalBenchmarkPhase.WARMUP, baseline, baseline, 1)
+                                fun compare(phase: LocalBenchmarkPhase, generation: Int, prompt: Int): LocalBenchmarkSample {
+                                    val first = run(phase, generation, prompt, 1)
+                                    val second = run(phase, generation, prompt, 2)
+                                    val third = run(phase, generation, prompt, 3)
+                                    return LocalBenchmarkSample(backend, phase, generation, prompt,
+                                        (first.first + second.first + third.first) / 3,
+                                        (first.second + second.second + third.second) / 3).also {
+                                        publish(state.copy(samples = state.samples + it))
+                                    }
+                                }
+                                val generationSamples = counts.map { compare(LocalBenchmarkPhase.GENERATION, it, baseline) }
+                                val bestGeneration = generationSamples.maxBy { it.generationTps }
+                                val promptSamples = counts.map { compare(LocalBenchmarkPhase.PROMPT, bestGeneration.generationThreads, it) }
+                                val bestPrompt = promptSamples.maxBy { it.promptTps }
+                                val verified = compare(LocalBenchmarkPhase.FINAL, bestGeneration.generationThreads, bestPrompt.promptThreads)
+                                publish(state.copy(recommendations = state.recommendations + LocalBenchmarkRecommendation(backend,
+                                    bestGeneration.generationThreads, bestPrompt.promptThreads, verified.generationTps, verified.promptTps)))
+                            } catch (e: Exception) {
+                                if (e is CancellationException || LocalNative.isCancelled(request) || !job.isActive) break
+                                publish(state.copy(errors = state.errors + "${backend.name}: ${e.message ?: "Benchmark failed"}"))
+                            }
+                        }
+                        publish(state.copy(finished = true, stopped = LocalNative.isCancelled(request)))
+                    } finally { watcher.cancel() }
+                }
+            } finally {
+                LocalNative.releaseCachedModel()
+                _loaded.value = null
+                _status.update { it - id }
+                synchronized(gate) { LocalNative.destroy(request); handle = 0; _running.value = null }
+            }
         }
     }
 
@@ -476,7 +640,7 @@ class LocalModelManager(private val context: Context) {
     }
 
     suspend fun generateChat(
-        id: String, request: ByteArray, images: Array<ByteArray>, outputCap: Int,
+        id: String, request: ByteArray, images: Array<ByteArray>, outputCap: Int, cacheKey: String? = null,
         emitBytes: suspend (ByteArray) -> Unit,
     ): kotlinx.serialization.json.JsonObject = inference.withLock {
         val model = requireNotNull(find(id)) { "Unknown local model." }
@@ -506,7 +670,7 @@ class LocalModelManager(private val context: Context) {
                         fun generate(useGpu: Boolean) = LocalNative.generateChat(handle, store.file(id).absolutePath.toByteArray(Charsets.UTF_8),
                             (if (model.projector != null) store.projectorFile(id).absolutePath else "").toByteArray(Charsets.UTF_8),
                             request, images, limits.context, limits.input, minOf(limits.output, outputCap.coerceAtLeast(1)),
-                            limits.threads, useGpu, object : LocalNative.ChatCallback {
+                            limits.threads, limits.promptThreads ?: limits.threads, useGpu, cacheKey.orEmpty().toByteArray(Charsets.UTF_8), object : LocalNative.ChatCallback {
                                 override fun onEvent(data: ByteArray): Boolean = kotlinx.coroutines.runBlocking {
                                     try {
                                         val event = kotlinx.serialization.json.Json.parseToJsonElement(data.toString(Charsets.UTF_8)) as kotlinx.serialization.json.JsonObject
@@ -555,6 +719,8 @@ class LocalModelManager(private val context: Context) {
                 handle = 0
                 _running.value = null
             }
+            val cachedPath = LocalNative.cachedModelPath()
+            _loaded.value = models.value.firstOrNull { store.file(it.id).absolutePath == cachedPath }?.id
         }
     }
 
