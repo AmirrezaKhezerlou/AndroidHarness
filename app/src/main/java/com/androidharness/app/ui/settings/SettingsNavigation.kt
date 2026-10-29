@@ -61,6 +61,12 @@ internal enum class SettingsPage(
         R.string.settings_group_connections,
         "chatgpt codex subscription sign in login account plan oauth",
     ),
+    NINE_ROUTER(
+        R.string.nine_router_title,
+        R.string.nine_router_description,
+        R.string.settings_group_special_providers,
+        "9router nine router local proxy linux install start stop dashboard",
+    ),
     MODELS(
         R.string.settings_page_models_title,
         R.string.settings_page_models_desc,
@@ -239,7 +245,7 @@ internal data class SettingsSearchEntry(
 )
 
 internal val settingsHomePages = listOf(
-    SettingsPage.CONNECTED_ACCOUNTS, SettingsPage.LANGUAGE, SettingsPage.CHAT_OPTIONS, SettingsPage.MEMORY, SettingsPage.CODING,
+    SettingsPage.CONNECTED_ACCOUNTS, SettingsPage.NINE_ROUTER, SettingsPage.LANGUAGE, SettingsPage.CHAT_OPTIONS, SettingsPage.MEMORY, SettingsPage.CODING,
     SettingsPage.MODELS, SettingsPage.LOCAL_MODELS, SettingsPage.VOICE,
     SettingsPage.APPEARANCE, SettingsPage.PRIVACY,
     SettingsPage.GITHUB, SettingsPage.SEARCH, SettingsPage.MCP,
@@ -251,7 +257,7 @@ internal val settingsHomePages = listOf(
 
 /** Keep the account shortcut at the top without pulling every connection above the other sections. */
 internal fun settingsDisplayGroups(entries: List<SettingsSearchEntry>, query: String) = entries.groupBy {
-    if (query.isBlank() && it.page == SettingsPage.CONNECTED_ACCOUNTS) R.string.settings_group_special_providers else it.page.group
+    if (query.isBlank() && it.page in setOf(SettingsPage.CONNECTED_ACCOUNTS, SettingsPage.NINE_ROUTER)) R.string.settings_group_special_providers else it.page.group
 }
 
 internal val settingsCodingPages = listOf(
@@ -473,6 +479,13 @@ private val subSettingsEntries = listOfNotNull(
         SettingsPage.APPEARANCE,
         "landscape tablet split panes wide desktop",
         anchor = R.string.settings_anchor_layout,
+    ),
+    SettingsSearchEntry(
+        R.string.theme_color_palette,
+        R.string.theme_color_hint,
+        SettingsPage.APPEARANCE,
+        "theme material you colors palette blue ocean indigo lavender orchid rose coral amber lime forest teal slate",
+        anchor = R.string.settings_anchor_dynamic_color,
     ),
     SettingsSearchEntry(
         R.string.settings_search_dynamic_color_title,

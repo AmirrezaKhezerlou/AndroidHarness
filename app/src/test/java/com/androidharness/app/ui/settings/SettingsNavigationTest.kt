@@ -66,10 +66,11 @@ class SettingsNavigationTest {
     @Test
     fun `connected accounts is first and GitHub integration still supports a direct link`() {
         assertEquals(SettingsPage.CONNECTED_ACCOUNTS, matchingSettingsPages("", settingsTestStrings()).first())
-        assertEquals(SettingsPage.LANGUAGE, matchingSettingsPages("", settingsTestStrings())[1])
-        assertEquals(SettingsPage.CHAT_OPTIONS, matchingSettingsPages("", settingsTestStrings())[2])
+        assertEquals(SettingsPage.NINE_ROUTER, matchingSettingsPages("", settingsTestStrings())[1])
+        assertEquals(SettingsPage.LANGUAGE, matchingSettingsPages("", settingsTestStrings())[2])
+        assertEquals(SettingsPage.CHAT_OPTIONS, matchingSettingsPages("", settingsTestStrings())[3])
         val groups = settingsDisplayGroups(matchingSettingsEntries("", settingsTestStrings()), "").values.toList()
-        assertEquals(listOf(SettingsPage.CONNECTED_ACCOUNTS), groups.first().map { it.page })
+        assertEquals(listOf(SettingsPage.CONNECTED_ACCOUNTS, SettingsPage.NINE_ROUTER), groups.first().map { it.page })
         assertTrue(groups.drop(1).any { group -> group.any { it.page == SettingsPage.GITHUB } })
         assertEquals(SettingsPage.LANGUAGE, settingsDeepLink("language"))
         assertEquals(SettingsPage.GITHUB, settingsDeepLink("github"))

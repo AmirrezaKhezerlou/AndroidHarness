@@ -34,10 +34,11 @@ import kotlinx.coroutines.launch
 
 /** Pushes the agent's live status for the notification to display. */
 object RuntimeNotifier {
-    private val _status = MutableStateFlow("Running in background")
+    const val IDLE_STATUS = "Running in background"
+    private val _status = MutableStateFlow(IDLE_STATUS)
     val status: StateFlow<String> = _status
 
-    /** True while a run or terminal holds the keepalive; idle services are not promoted. */
+    /** True while active task work holds keepalive; passive services are not promoted. */
     private val _active = MutableStateFlow(false)
     val active: StateFlow<Boolean> = _active
 
@@ -357,7 +358,9 @@ class AgentService : Service() {
                 PendingPrompt.Kind.QUESTION -> Unit
             }
         }
-        if (alertsEnabled && liveUpdatesEnabled && RuntimeNotifier.active.value && Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+        if (alertsEnabled && liveUpdatesEnabled && RuntimeNotifier.active.value &&
+            text.isNotBlank() && text != RuntimeNotifier.IDLE_STATUS &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
             // Android 16 promotes this ongoing notification to a Live Update, which
             // the OEM surfaces in its status bar, lock screen and live activity area
             // (Now Bar on One UI, Live updates on Pixel and near-stock builds).

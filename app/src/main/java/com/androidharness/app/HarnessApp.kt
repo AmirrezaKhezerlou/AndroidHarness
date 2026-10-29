@@ -323,6 +323,9 @@ class AppContainer(val appContext: Context) {
      * copies (token file + gitconfig rewrite), then redeploy the shell-tier
      * toolchain so the new auth is live without an app restart.
      */
+    val nineRouter by lazy { com.androidharness.app.router.NineRouterManager(appContext, linuxEnv,
+        runManager::acquireBackgroundKeepalive, runManager::releaseBackgroundKeepalive, providers, settings) }
+
     suspend fun refreshGitHubAuth() = linuxEnv.refreshGitHub(shizuku, strict = true)
 
     init {

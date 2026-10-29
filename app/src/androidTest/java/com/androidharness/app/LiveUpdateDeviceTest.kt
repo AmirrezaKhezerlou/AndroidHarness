@@ -14,7 +14,7 @@ import org.junit.runner.RunWith
 
 /**
  * The persistent foreground service must stay a plain notification while idle;
- * only an active run or terminal may request Live Update promotion.
+ * only active task work may request Live Update promotion.
  */
 @RunWith(AndroidJUnit4::class)
 @SdkSuppress(minSdkVersion = 36)
@@ -34,12 +34,14 @@ class LiveUpdateDeviceTest {
     fun returnToIdle() {
         RuntimeNotifier.setSessionPrompts("live-test", emptyList())
         RuntimeNotifier.setActive(false)
+        RuntimeNotifier.update(RuntimeNotifier.IDLE_STATUS)
         AgentService.startPersistent(target)
     }
 
     @Test
     fun idleServiceIsNotPromoted() {
         RuntimeNotifier.setActive(false)
+        RuntimeNotifier.update(RuntimeNotifier.IDLE_STATUS)
         AgentService.startPersistent(target)
         assertTrue(!awaitNotification(promoted = false).hasPromotionRequest())
     }
@@ -50,6 +52,7 @@ class LiveUpdateDeviceTest {
         // and NotificationManager rate-limits bursts.
         Thread.sleep(1_500)
         RuntimeNotifier.setActive(true)
+        RuntimeNotifier.update("Working…")
         AgentService.startPersistent(target)
         assertTrue(awaitNotification(promoted = true).hasPromotionRequest())
     }
@@ -57,6 +60,7 @@ class LiveUpdateDeviceTest {
     @Test
     fun pendingApprovalExposesAllowAndDenyActions() {
         RuntimeNotifier.setActive(true)
+        RuntimeNotifier.update("Waiting for your approval")
         RuntimeNotifier.setSessionPrompts(
             "live-test",
             listOf(PendingPrompt("live-test", PendingPrompt.Kind.APPROVAL, "Chat", "Run a command")),
@@ -67,8 +71,39 @@ class LiveUpdateDeviceTest {
         assertTrue(titles.contains(target.getString(R.string.ui_deny)))
     }
 
+    @Test
+    fun genericBackgroundStatusIsNeverPromoted() {
+        RuntimeNotifier.setActive(true)
+        RuntimeNotifier.update(RuntimeNotifier.IDLE_STATUS)
+        AgentService.startPersistent(target)
+        assertTrue(!awaitNotification(promoted = false).hasPromotionRequest())
+    }
+
+    @Test
+    fun backgroundServiceDoesNotPromoteOrRetainFinishedTask() {
+        val runs = (target.applicationContext as HarnessApp).container.runManager
+        runs.acquireBackgroundKeepalive()
+        try {
+            AgentService.startPersistent(target)
+            assertTrue(!RuntimeNotifier.active.value)
+            awaitNotification(promoted = false)
+            Thread.sleep(1_500)
+            runs.acquireKeepalive()
+            try {
+                RuntimeNotifier.update("Working…")
+                awaitNotification(promoted = true)
+            } finally { runs.releaseKeepalive() }
+            // 9Router is still holding its background lease, but the task is done.
+            assertTrue(!RuntimeNotifier.active.value)
+            assertTrue(RuntimeNotifier.status.value == RuntimeNotifier.IDLE_STATUS)
+            awaitNotification(promoted = false)
+        } finally { runs.releaseBackgroundKeepalive() }
+    }
+
     private fun Notification.hasPromotionRequest(): Boolean =
-        flags and Notification.FLAG_PROMOTED_ONGOING != 0
+        // The system controls FLAG_PROMOTED_ONGOING and OEMs may decline
+        // promotion. Verify what our app requests, regardless of that decision.
+        extras.getBoolean("android.requestPromotedOngoing", false)
 
     private fun awaitNotification(promoted: Boolean): Notification {
         val until = System.currentTimeMillis() + 10_000
@@ -76,7 +111,10 @@ class LiveUpdateDeviceTest {
             val notification = manager.activeNotifications
                 .firstOrNull { it.id == AgentService.NOTIFICATION_ID }
                 ?.notification
-            if (notification != null && notification.hasPromotionRequest() == promoted) return notification
+            if (notification != null && notification.hasPromotionRequest() == promoted) {
+                if (!promoted) assertTrue(notification.flags and Notification.FLAG_PROMOTED_ONGOING == 0)
+                return notification
+            }
             Thread.sleep(100)
         }
         error("Agent notification did not reach promoted=$promoted")

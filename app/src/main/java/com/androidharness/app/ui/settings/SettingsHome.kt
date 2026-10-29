@@ -214,6 +214,7 @@ internal fun settingsIcon(page: SettingsPage): ImageVector = when (page) {
     SettingsPage.CHAT_OPTIONS -> Icons.Outlined.ChatBubbleOutline
     SettingsPage.MEMORY -> Icons.Outlined.Memory
     SettingsPage.CODING -> Icons.Outlined.Code
+    SettingsPage.NINE_ROUTER -> Icons.Outlined.AccountTree
     SettingsPage.CONNECTED_ACCOUNTS -> Icons.Outlined.AccountCircle
     SettingsPage.MODELS -> ProviderGlyph
     SettingsPage.SUBAGENT -> Icons.Outlined.AccountTree

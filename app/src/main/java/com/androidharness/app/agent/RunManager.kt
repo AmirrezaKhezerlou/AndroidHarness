@@ -41,7 +41,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Owns agent runs in an application-wide scope, so a run survives minimizing
@@ -189,7 +188,14 @@ class RunManager(
     private val lingerJobs = mutableMapOf<String, Job>()
     private val deltaBuffers = mutableMapOf<String, DeltaBuffers>()
 
-    private val keepaliveCount = AtomicInteger(0)
+    private val keepalive = KeepaliveTracker(
+        onAcquire = { runCatching { AgentService.acquireKeepalive(context) } },
+        onRelease = { runCatching { AgentService.releaseKeepalive(context) } },
+        onActiveChanged = { active ->
+            RuntimeNotifier.setActive(active)
+            if (!active) RuntimeNotifier.update(RuntimeNotifier.IDLE_STATUS)
+        },
+    )
 
     val subagents = SubagentRuns(
         java.io.File(context.noBackupFilesDir, "subagent-runs.json"), appScope,
@@ -1360,22 +1366,11 @@ class RunManager(
     // Keep-alive plumbing
     // ------------------------------------------------------------------
 
-    /** Foreground service + wakelock while anything important is running. */
-    fun acquireKeepalive() {
-        if (keepaliveCount.getAndIncrement() == 0) {
-            RuntimeNotifier.setActive(true)
-            runCatching { AgentService.acquireKeepalive(context) }
-        }
-    }
-
-    fun releaseKeepalive() {
-        if (keepaliveCount.decrementAndGet() <= 0) {
-            keepaliveCount.set(0)
-            RuntimeNotifier.setActive(false)
-            RuntimeNotifier.update("Running in background")
-            runCatching { AgentService.releaseKeepalive(context) }
-        }
-    }
+    /** Active work may appear in Live Activities; passive services may not. */
+    fun acquireKeepalive() = keepalive.acquire()
+    fun releaseKeepalive() = keepalive.release()
+    fun acquireBackgroundKeepalive() = keepalive.acquire(activeTask = false)
+    fun releaseBackgroundKeepalive() = keepalive.release(activeTask = false)
 
     private suspend fun notifyFinished(sessionId: String, error: String?): RunResultNotification {
         val title = runCatching { sessions.session(sessionId)?.title }.getOrNull() ?: "Chat"

@@ -85,6 +85,7 @@ class MainActivity : AppCompatActivity() {
                 themeMode = currentSettings.themeMode,
                 dynamicColor = currentSettings.dynamicColor,
                 progressBarStyle = currentSettings.progressBarStyle,
+                colorPalette = currentSettings.colorPalette,
             ) {
                 // Auto update check shortly after launch, once per process.
                 LaunchedEffect(Unit) {
@@ -199,6 +200,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private var lastPausedTimestamp: Long = 0L
+
+    override fun onStart() {
+        super.onStart()
+        container.nineRouter.onAppOpen()
+    }
 
     override fun onPause() {
         container.browser.unbindReadCaptureHost(window.decorView as android.view.ViewGroup)

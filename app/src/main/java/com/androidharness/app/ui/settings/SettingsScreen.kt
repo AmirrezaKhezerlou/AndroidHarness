@@ -314,6 +314,7 @@ fun SettingsScreen(
                             )
                             CodingSection { page -> openPage(page) }
                         }
+                        SettingsPage.NINE_ROUTER -> NineRouterSection(container)
                         SettingsPage.CONNECTED_ACCOUNTS -> ConnectedAccountsSection(container)
                         SettingsPage.MODELS -> {
                             SettingsPanel(Modifier.fillMaxWidth()) {
@@ -2788,20 +2789,11 @@ private fun AppearanceSection(container: AppContainer, settings: AppSettings, sc
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
             SettingsAnchor(R.string.settings_anchor_dynamic_color) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.weight(1f)) {
-                        Text(stringResource(R.string.settings_anchor_dynamic_color), style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            uiContext.getString(R.string.ui_match_your_wallpaper_android_12),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = settings.dynamicColor,
-                        onCheckedChange = { scope.launch { container.settings.setDynamicColor(it) } },
-                    )
-                }
+                ThemeColorSection(
+                    palette = settings.colorPalette, useWallpaper = settings.dynamicColor, themeMode = settings.themeMode,
+                    onWallpaperChange = { scope.launch { container.settings.setDynamicColor(it) } },
+                    onPaletteChange = { scope.launch { container.settings.setColorPalette(it) } },
+                )
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
             SettingsAnchor(R.string.settings_anchor_progress_bar_style) {

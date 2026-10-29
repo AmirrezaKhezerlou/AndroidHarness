@@ -32,6 +32,7 @@ data class AppSettings(
     val subagentModel: String? = null,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val dynamicColor: Boolean = true,
+    val colorPalette: ThemePalette = ThemePalette.BLUE,
     val progressBarStyle: ProgressBarStyle = ProgressBarStyle.FLAT,
     val workspaceLayout: WorkspaceLayoutMode = WorkspaceLayoutMode.AUTO,
     val editorWordWrap: Boolean = false,
@@ -201,6 +202,7 @@ class SettingsRepository(private val context: Context) {
         val SUBAGENT_MODEL = stringPreferencesKey("subagent_model")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
+        val COLOR_PALETTE = stringPreferencesKey("color_palette")
         val PROGRESS_BAR_STYLE = stringPreferencesKey("progress_bar_style")
         val WORKSPACE_LAYOUT = stringPreferencesKey("workspace_layout")
         val EDITOR_WORD_WRAP = booleanPreferencesKey("editor_word_wrap")
@@ -296,6 +298,7 @@ class SettingsRepository(private val context: Context) {
                 ?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
                 ?: ThemeMode.SYSTEM,
             dynamicColor = prefs[Keys.DYNAMIC_COLOR] ?: true,
+            colorPalette = ThemePalette.fromStored(prefs[Keys.COLOR_PALETTE]),
             progressBarStyle = ProgressBarStyle.entries.firstOrNull { it.name == prefs[Keys.PROGRESS_BAR_STYLE] }
                 ?: ProgressBarStyle.FLAT,
             workspaceLayout = WorkspaceLayoutMode.fromStored(prefs[Keys.WORKSPACE_LAYOUT])
@@ -387,6 +390,7 @@ class SettingsRepository(private val context: Context) {
         context.settingsStore.edit { p ->
             p[Keys.THEME_MODE] = s.themeMode.name
             p[Keys.DYNAMIC_COLOR] = s.dynamicColor
+            p[Keys.COLOR_PALETTE] = s.colorPalette.name
             p[Keys.PROGRESS_BAR_STYLE] = s.progressBarStyle.name
             p[Keys.WORKSPACE_LAYOUT] = s.workspaceLayout.name
             p[Keys.EDITOR_WORD_WRAP] = s.editorWordWrap
@@ -492,6 +496,13 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setDynamicColor(enabled: Boolean) {
         context.settingsStore.edit { it[Keys.DYNAMIC_COLOR] = enabled }
+    }
+
+    suspend fun setColorPalette(palette: ThemePalette) {
+        context.settingsStore.edit {
+            it[Keys.COLOR_PALETTE] = palette.name
+            it[Keys.DYNAMIC_COLOR] = false
+        }
     }
 
     suspend fun setProgressBarStyle(style: ProgressBarStyle) {

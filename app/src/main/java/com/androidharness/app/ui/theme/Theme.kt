@@ -13,12 +13,13 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
 import com.androidharness.app.data.ThemeMode
 import com.androidharness.app.data.ProgressBarStyle
+import com.androidharness.app.data.ThemePalette
 
 val LocalProgressBarStyle = staticCompositionLocalOf { ProgressBarStyle.FLAT }
 
 /**
  * App theme: Material You dynamic color on Android 12+, with a Google-blue–seeded
- * palette as the fallback and Google Sans Flex typography.
+ * palette as the fallback, selectable tonal palettes and Google Sans Flex typography.
  *
  * Motion uses the standard (non-expressive) scheme: the app ships its own subtle
  * spring/tween specs via [defaultSpatialSpec] & friends, and the standard scheme
@@ -31,6 +32,7 @@ fun HarnessTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     dynamicColor: Boolean = true,
     progressBarStyle: ProgressBarStyle = ProgressBarStyle.FLAT,
+    colorPalette: ThemePalette = ThemePalette.BLUE,
     content: @Composable () -> Unit,
 ) {
     val dark = when (themeMode) {
@@ -42,8 +44,7 @@ fun HarnessTheme(
     val base = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
             if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        dark -> DarkColors
-        else -> LightColors
+        else -> colorPalette.colorScheme(dark)
     }
     // AMOLED blacks out the surface roles but keeps the accent roles, so a
     // wallpaper-derived primary survives the switch to true black.
