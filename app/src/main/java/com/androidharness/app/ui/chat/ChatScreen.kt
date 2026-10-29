@@ -188,8 +188,12 @@ fun ChatScreen(
     onSelectSection: (com.androidharness.app.data.ConversationKind) -> Unit = {},
 ) {
     ChatAppearance {
+        val appearance by viewModel.container.settings.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
+        val conversation by viewModel.state.collectAsStateWithLifecycle()
+        com.androidharness.app.ui.theme.HarnessCanvasBackdrop(appearance.harnessCanvas, conversation.conversation.isChat, Modifier.fillMaxSize()) {
         ChatScreenContent(viewModel, onOpenDrawer, onOpenFile, onNewChat, onOpenTerminal,
             onOpenFiles, onOpenSubagent, onOpenSettings, onNavigateToSession, searchMessageId, onSelectSection)
+        }
     }
 }
 
@@ -1276,7 +1280,8 @@ private fun ChatScreenContent(
         },
     ) {
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = if (com.androidharness.app.ui.theme.LocalHarnessCanvasVisible.current) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
         topBar = {
             val currentProvider = state.activeProvider
             val currentModel = state.effectiveModel ?: currentProvider?.model
@@ -1436,7 +1441,7 @@ private fun ChatScreenContent(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(MaterialTheme.colorScheme.surface),
+                .background(if (com.androidharness.app.ui.theme.LocalHarnessCanvasVisible.current) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.surface),
             contentAlignment = Alignment.TopCenter,
         ) {
             Column(

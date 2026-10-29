@@ -68,8 +68,12 @@ class SettingsNavigationTest {
         assertEquals(SettingsPage.CONNECTED_ACCOUNTS, matchingSettingsPages("", settingsTestStrings()).first())
         assertEquals(SettingsPage.NINE_ROUTER, matchingSettingsPages("", settingsTestStrings())[1])
         assertEquals(SettingsPage.LANGUAGE, matchingSettingsPages("", settingsTestStrings())[2])
-        assertEquals(SettingsPage.CHAT_OPTIONS, matchingSettingsPages("", settingsTestStrings())[3])
-        val groups = settingsDisplayGroups(matchingSettingsEntries("", settingsTestStrings()), "").values.toList()
+        assertEquals(SettingsPage.APPEARANCE, matchingSettingsPages("", settingsTestStrings())[3])
+        val displayGroups = settingsDisplayGroups(matchingSettingsEntries("", settingsTestStrings()), "")
+        assertEquals(listOf(R.string.settings_group_special_providers, R.string.settings_group_personalize), displayGroups.keys.take(2))
+        assertEquals(listOf(SettingsPage.LANGUAGE, SettingsPage.APPEARANCE, SettingsPage.CHAT_OPTIONS,
+            SettingsPage.MEMORY, SettingsPage.CODING, SettingsPage.PRIVACY), displayGroups.getValue(R.string.settings_group_personalize).map { it.page })
+        val groups = displayGroups.values.toList()
         assertEquals(listOf(SettingsPage.CONNECTED_ACCOUNTS, SettingsPage.NINE_ROUTER), groups.first().map { it.page })
         assertTrue(groups.drop(1).any { group -> group.any { it.page == SettingsPage.GITHUB } })
         assertEquals(SettingsPage.LANGUAGE, settingsDeepLink("language"))
@@ -78,7 +82,7 @@ class SettingsNavigationTest {
     }
 
     @Test
-    fun `coding hub owns agent and device pages while memory stands alone`() {
+    fun `coding hub owns agent and device pages and memory belongs to Personalize`() {
         assertTrue(SettingsPage.CODING.onHome)
         for (page in listOf(SettingsPage.SUBAGENT, SettingsPage.AGENT, SettingsPage.CHAT,
             SettingsPage.SKILLS, SettingsPage.CODE_INTELLIGENCE, SettingsPage.CAVEMAN,
@@ -94,7 +98,7 @@ class SettingsNavigationTest {
         }
         assertTrue(SettingsPage.TROUBLESHOOTING.onHome)
         assertEquals(R.string.settings_group_app_data, SettingsPage.TROUBLESHOOTING.group)
-        assertEquals(R.string.settings_group_memory, SettingsPage.MEMORY.group)
+        assertEquals(R.string.settings_group_personalize, SettingsPage.MEMORY.group)
         assertEquals(SettingsPage.CODING, settingsDeepLink("coding"))
         assertTrue(SettingsPage.AGENT in matchingSettingsPages("max context", settingsTestStrings()))
         assertTrue(SettingsPage.CHAT in matchingSettingsPages("repo map", settingsTestStrings()))

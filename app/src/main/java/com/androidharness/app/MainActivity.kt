@@ -86,6 +86,9 @@ class MainActivity : AppCompatActivity() {
                 dynamicColor = currentSettings.dynamicColor,
                 progressBarStyle = currentSettings.progressBarStyle,
                 colorPalette = currentSettings.colorPalette,
+                customPalette = currentSettings.customPalettes.firstOrNull { it.id == currentSettings.activeCustomPaletteId }
+                    .takeUnless { currentSettings.dynamicColor || currentSettings.harnessCanvas.adaptColors },
+                canvasSeed = currentSettings.harnessCanvas.takeIf { it.adaptColors && com.androidharness.app.data.HarnessCanvasStore.image(this, it.imageId) != null }?.seed,
             ) {
                 // Auto update check shortly after launch, once per process.
                 LaunchedEffect(Unit) {

@@ -33,6 +33,9 @@ data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val dynamicColor: Boolean = true,
     val colorPalette: ThemePalette = ThemePalette.BLUE,
+    val customPalettes: List<CustomThemePalette> = emptyList(),
+    val activeCustomPaletteId: String? = null,
+    val harnessCanvas: HarnessCanvasSettings = HarnessCanvasSettings(),
     val progressBarStyle: ProgressBarStyle = ProgressBarStyle.FLAT,
     val workspaceLayout: WorkspaceLayoutMode = WorkspaceLayoutMode.AUTO,
     val editorWordWrap: Boolean = false,
@@ -203,6 +206,9 @@ class SettingsRepository(private val context: Context) {
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val COLOR_PALETTE = stringPreferencesKey("color_palette")
+        val CUSTOM_PALETTES = stringPreferencesKey("custom_palettes")
+        val ACTIVE_CUSTOM_PALETTE = stringPreferencesKey("active_custom_palette")
+        val HARNESS_CANVAS = stringPreferencesKey("harness_canvas")
         val PROGRESS_BAR_STYLE = stringPreferencesKey("progress_bar_style")
         val WORKSPACE_LAYOUT = stringPreferencesKey("workspace_layout")
         val EDITOR_WORD_WRAP = booleanPreferencesKey("editor_word_wrap")
@@ -299,6 +305,9 @@ class SettingsRepository(private val context: Context) {
                 ?: ThemeMode.SYSTEM,
             dynamicColor = prefs[Keys.DYNAMIC_COLOR] ?: true,
             colorPalette = ThemePalette.fromStored(prefs[Keys.COLOR_PALETTE]),
+            customPalettes = runCatching { kotlinx.serialization.json.Json.decodeFromString<List<CustomThemePalette>>(prefs[Keys.CUSTOM_PALETTES] ?: "[]") }.getOrDefault(emptyList()),
+            activeCustomPaletteId = prefs[Keys.ACTIVE_CUSTOM_PALETTE],
+            harnessCanvas = runCatching { kotlinx.serialization.json.Json.decodeFromString<HarnessCanvasSettings>(prefs[Keys.HARNESS_CANVAS] ?: "{}") }.getOrDefault(HarnessCanvasSettings()),
             progressBarStyle = ProgressBarStyle.entries.firstOrNull { it.name == prefs[Keys.PROGRESS_BAR_STYLE] }
                 ?: ProgressBarStyle.FLAT,
             workspaceLayout = WorkspaceLayoutMode.fromStored(prefs[Keys.WORKSPACE_LAYOUT])
@@ -391,6 +400,9 @@ class SettingsRepository(private val context: Context) {
             p[Keys.THEME_MODE] = s.themeMode.name
             p[Keys.DYNAMIC_COLOR] = s.dynamicColor
             p[Keys.COLOR_PALETTE] = s.colorPalette.name
+            p[Keys.CUSTOM_PALETTES] = kotlinx.serialization.json.Json.encodeToString(s.customPalettes)
+            s.activeCustomPaletteId?.let { p[Keys.ACTIVE_CUSTOM_PALETTE] = it } ?: p.remove(Keys.ACTIVE_CUSTOM_PALETTE)
+            p[Keys.HARNESS_CANVAS] = kotlinx.serialization.json.Json.encodeToString(s.harnessCanvas)
             p[Keys.PROGRESS_BAR_STYLE] = s.progressBarStyle.name
             p[Keys.WORKSPACE_LAYOUT] = s.workspaceLayout.name
             p[Keys.EDITOR_WORD_WRAP] = s.editorWordWrap
@@ -495,13 +507,68 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setDynamicColor(enabled: Boolean) {
-        context.settingsStore.edit { it[Keys.DYNAMIC_COLOR] = enabled }
+        context.settingsStore.edit {
+            it[Keys.DYNAMIC_COLOR] = enabled
+            if (enabled) {
+                val canvas = canvasFrom(it[Keys.HARNESS_CANVAS])
+                it[Keys.HARNESS_CANVAS] = kotlinx.serialization.json.Json.encodeToString(canvas.copy(adaptColors = false))
+            }
+        }
     }
 
     suspend fun setColorPalette(palette: ThemePalette) {
         context.settingsStore.edit {
             it[Keys.COLOR_PALETTE] = palette.name
             it[Keys.DYNAMIC_COLOR] = false
+            it.remove(Keys.ACTIVE_CUSTOM_PALETTE)
+            it[Keys.HARNESS_CANVAS] = kotlinx.serialization.json.Json.encodeToString(canvasFrom(it[Keys.HARNESS_CANVAS]).copy(adaptColors = false))
+        }
+    }
+
+    private fun canvasFrom(raw: String?) = runCatching {
+        kotlinx.serialization.json.Json.decodeFromString<HarnessCanvasSettings>(raw ?: "{}")
+    }.getOrDefault(HarnessCanvasSettings())
+
+    suspend fun saveCustomPalette(palette: CustomThemePalette) {
+        require(palette.valid())
+        context.settingsStore.edit { prefs ->
+            val existing = runCatching { kotlinx.serialization.json.Json.decodeFromString<List<CustomThemePalette>>(prefs[Keys.CUSTOM_PALETTES] ?: "[]") }.getOrDefault(emptyList())
+            require(existing.size < 24 || existing.any { it.id == palette.id })
+            val saved = palette.copy(name = palette.name.trim())
+            prefs[Keys.CUSTOM_PALETTES] = kotlinx.serialization.json.Json.encodeToString(existing.filterNot { it.id == saved.id } + saved)
+            prefs[Keys.ACTIVE_CUSTOM_PALETTE] = saved.id
+            prefs[Keys.DYNAMIC_COLOR] = false
+            prefs[Keys.HARNESS_CANVAS] = kotlinx.serialization.json.Json.encodeToString(canvasFrom(prefs[Keys.HARNESS_CANVAS]).copy(adaptColors = false))
+        }
+    }
+
+    suspend fun selectCustomPalette(id: String) {
+        context.settingsStore.edit { prefs ->
+            val saved = runCatching { kotlinx.serialization.json.Json.decodeFromString<List<CustomThemePalette>>(prefs[Keys.CUSTOM_PALETTES] ?: "[]") }.getOrDefault(emptyList())
+            require(saved.any { it.id == id })
+            prefs[Keys.ACTIVE_CUSTOM_PALETTE] = id
+            prefs[Keys.DYNAMIC_COLOR] = false
+            prefs[Keys.HARNESS_CANVAS] = kotlinx.serialization.json.Json.encodeToString(canvasFrom(prefs[Keys.HARNESS_CANVAS]).copy(adaptColors = false))
+        }
+    }
+
+    suspend fun removeCustomPalette(id: String) {
+        context.settingsStore.edit { prefs ->
+            val saved = runCatching { kotlinx.serialization.json.Json.decodeFromString<List<CustomThemePalette>>(prefs[Keys.CUSTOM_PALETTES] ?: "[]") }.getOrDefault(emptyList())
+            prefs[Keys.CUSTOM_PALETTES] = kotlinx.serialization.json.Json.encodeToString(saved.filterNot { it.id == id })
+            if (prefs[Keys.ACTIVE_CUSTOM_PALETTE] == id) prefs.remove(Keys.ACTIVE_CUSTOM_PALETTE)
+        }
+    }
+
+    suspend fun updateHarnessCanvas(transform: (HarnessCanvasSettings) -> HarnessCanvasSettings) {
+        context.settingsStore.edit { prefs ->
+            val canvas = transform(canvasFrom(prefs[Keys.HARNESS_CANVAS])).let {
+                it.copy(dim = if (it.dim.isFinite()) it.dim.coerceIn(0f, 1f) else .65f)
+            }
+            prefs[Keys.HARNESS_CANVAS] = kotlinx.serialization.json.Json.encodeToString(canvas)
+            if (canvas.adaptColors) {
+                prefs[Keys.DYNAMIC_COLOR] = false
+            }
         }
     }
 

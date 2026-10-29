@@ -42,6 +42,7 @@ internal fun ThemeColorSection(
     themeMode: ThemeMode,
     onWallpaperChange: (Boolean) -> Unit,
     onPaletteChange: (ThemePalette) -> Unit,
+    presetActive: Boolean = true,
 ) {
     val colors = MaterialTheme.colorScheme
     val dark = colors.surface.luminance() < .5f
@@ -75,7 +76,7 @@ internal fun ThemeColorSection(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         row.forEach { option ->
                             val scheme = option.colorScheme(dark).let { if (themeMode == ThemeMode.AMOLED) it.amoledSurfaces() else it }
-                            PaletteChoice(option, scheme, palette == option && (!useWallpaper || !wallpaperAvailable),
+                            PaletteChoice(option, scheme, presetActive && palette == option && (!useWallpaper || !wallpaperAvailable),
                                 onClick = { onPaletteChange(option) }, modifier = Modifier.weight(1f))
                         }
                         repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
@@ -113,7 +114,7 @@ private fun PaletteChoice(palette: ThemePalette, scheme: ColorScheme, selected: 
 }
 
 @Composable
-private fun PaletteSwatch(scheme: ColorScheme, modifier: Modifier = Modifier) {
+internal fun PaletteSwatch(scheme: ColorScheme, modifier: Modifier = Modifier) {
     Canvas(modifier) {
         drawArc(scheme.primary, 180f, 180f, useCenter = true)
         drawArc(scheme.secondaryContainer, 0f, 90f, useCenter = true)

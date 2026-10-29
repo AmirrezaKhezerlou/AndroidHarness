@@ -117,6 +117,7 @@ enum class SettingsBackupProblem(val hint: String) {
     MCP("An MCP server name or transport is invalid, or names are duplicated. Review MCP servers settings."),
     CHAT_AGENTS("A saved Chat agent is invalid. Review Chat agents in Settings."),
     MEMORY("A saved memory is invalid or duplicated. Review Memory settings."),
+    APPEARANCE("A saved palette or Harness Canvas setting is invalid. Review Appearance settings."),
 }
 
 class SettingsBackupValidationException(val problem: SettingsBackupProblem) : IllegalArgumentException(problem.hint)
@@ -139,6 +140,11 @@ object SettingsBackupValidation {
             (file.settings.providerOrder + file.settings.disabledProviderIds).all { it.length <= 500 }, SettingsBackupProblem.PROVIDERS)
         check(file.searchKeys.keys.all { it in setOf("brave", "tavily") }, SettingsBackupProblem.SEARCH)
         val s = file.settings
+        check(s.customPalettes.size <= 24 && s.customPalettes.all { it.valid() } && s.customPalettes.map { it.id }.distinct().size == s.customPalettes.size &&
+            (s.activeCustomPaletteId == null || s.customPalettes.any { it.id == s.activeCustomPaletteId }), SettingsBackupProblem.APPEARANCE)
+        check(s.harnessCanvas.dim.isFinite() && s.harnessCanvas.dim in 0f..1f &&
+            (s.harnessCanvas.imageId == null || canvasImageIdPattern.matches(s.harnessCanvas.imageId)) &&
+            (s.harnessCanvas.seed == null || s.harnessCanvas.seed in 0xFF000000..0xFFFFFFFF), SettingsBackupProblem.APPEARANCE)
         check(runCatching { ChatAgentProfile.encodeList(s.chatAgents) }.isSuccess, SettingsBackupProblem.CHAT_AGENTS)
         check(s.maxContextTokens in 8192..2_000_000 && s.maxOutputTokens in 1..1_000_000 && s.maxIterations in 0..10_000, SettingsBackupProblem.MODEL_LIMITS)
         check(s.webSearchProvider in setOf("keyless", "brave", "tavily"), SettingsBackupProblem.SEARCH)

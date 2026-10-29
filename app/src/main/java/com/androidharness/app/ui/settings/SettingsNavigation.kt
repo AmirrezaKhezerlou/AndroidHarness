@@ -28,25 +28,25 @@ internal enum class SettingsPage(
     LANGUAGE(
         R.string.settings_page_language_title,
         R.string.settings_page_language_desc,
-        R.string.settings_group_language,
+        R.string.settings_group_personalize,
         "language locale translation translate system default english chinese russian русский язык arabic العربية عربي اللغة persian farsi فارسی زبان portuguese português brasil brazil pt-br idioma língua german deutsch sprache übersetzung spanish español espanol idioma traducción japanese nihongo 日本語 にほんご 言語 翻訳 indonesian indonesia bahasa 中文 简体 语言 poeditor contribute",
     ),
     CHAT_OPTIONS(
         R.string.settings_page_chat_options_title,
         R.string.settings_page_chat_options_desc,
-        R.string.settings_group_chat_options,
+        R.string.settings_group_personalize,
         "chat option start screen default ui selection code chat last selected launch startup chat start new last resume",
     ),
     MEMORY(
         R.string.settings_page_memory_title,
         R.string.settings_page_memory_desc,
-        R.string.settings_group_memory,
+        R.string.settings_group_personalize,
         "memory remember saved facts preferences projects decisions forget delete clear recall",
     ),
     CODING(
         R.string.settings_page_coding_title,
         R.string.settings_page_coding_desc,
-        R.string.settings_group_coding,
+        R.string.settings_group_personalize,
         "coding code agent subagent behavior chat commands skills codegraph caveman connected tools mcp telegram workspaces terminal device troubleshooting",
     ),
     GITHUB(
@@ -245,9 +245,10 @@ internal data class SettingsSearchEntry(
 )
 
 internal val settingsHomePages = listOf(
-    SettingsPage.CONNECTED_ACCOUNTS, SettingsPage.NINE_ROUTER, SettingsPage.LANGUAGE, SettingsPage.CHAT_OPTIONS, SettingsPage.MEMORY, SettingsPage.CODING,
+    SettingsPage.CONNECTED_ACCOUNTS, SettingsPage.NINE_ROUTER,
+    SettingsPage.LANGUAGE, SettingsPage.APPEARANCE, SettingsPage.CHAT_OPTIONS,
+    SettingsPage.MEMORY, SettingsPage.CODING, SettingsPage.PRIVACY,
     SettingsPage.MODELS, SettingsPage.LOCAL_MODELS, SettingsPage.VOICE,
-    SettingsPage.APPEARANCE, SettingsPage.PRIVACY,
     SettingsPage.GITHUB, SettingsPage.SEARCH, SettingsPage.MCP,
     SettingsPage.TELEGRAM, SettingsPage.SYNC, SettingsPage.FTP_SERVER,
     SettingsPage.BACKGROUND, SettingsPage.STORAGE,
@@ -486,6 +487,16 @@ private val subSettingsEntries = listOfNotNull(
         SettingsPage.APPEARANCE,
         "theme material you colors palette blue ocean indigo lavender orchid rose coral amber lime forest teal slate",
         anchor = R.string.settings_anchor_dynamic_color,
+    ),
+    SettingsSearchEntry(
+        R.string.theme_custom_title, R.string.theme_custom_hint, SettingsPage.APPEARANCE,
+        "custom color picker palette hex hue saturation brightness create edit accent highlight",
+        anchor = R.string.theme_custom_title,
+    ),
+    SettingsSearchEntry(
+        R.string.theme_canvas_title, R.string.theme_canvas_description, SettingsPage.APPEARANCE,
+        "harness canvas background wallpaper photo image dimming dim chat code adapt colors",
+        anchor = R.string.theme_canvas_title,
     ),
     SettingsSearchEntry(
         R.string.settings_search_dynamic_color_title,

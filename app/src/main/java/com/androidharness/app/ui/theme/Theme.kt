@@ -10,6 +10,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import com.androidharness.app.data.ThemeMode
 import com.androidharness.app.data.ProgressBarStyle
@@ -33,6 +34,8 @@ fun HarnessTheme(
     dynamicColor: Boolean = true,
     progressBarStyle: ProgressBarStyle = ProgressBarStyle.FLAT,
     colorPalette: ThemePalette = ThemePalette.BLUE,
+    customPalette: com.androidharness.app.data.CustomThemePalette? = null,
+    canvasSeed: Long? = null,
     content: @Composable () -> Unit,
 ) {
     val dark = when (themeMode) {
@@ -41,7 +44,15 @@ fun HarnessTheme(
         ThemeMode.DARK, ThemeMode.AMOLED -> true
     }
     val context = LocalContext.current
+    val personal = remember(customPalette, canvasSeed, dark) {
+        when {
+            canvasSeed != null -> canvasColorScheme(canvasSeed, dark)
+            customPalette != null -> customPalette.colorScheme(dark)
+            else -> null
+        }
+    }
     val base = when {
+        personal != null -> personal
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
             if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         else -> colorPalette.colorScheme(dark)

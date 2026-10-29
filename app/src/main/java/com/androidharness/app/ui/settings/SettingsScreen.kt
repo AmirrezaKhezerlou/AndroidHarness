@@ -2793,7 +2793,15 @@ private fun AppearanceSection(container: AppContainer, settings: AppSettings, sc
                     palette = settings.colorPalette, useWallpaper = settings.dynamicColor, themeMode = settings.themeMode,
                     onWallpaperChange = { scope.launch { container.settings.setDynamicColor(it) } },
                     onPaletteChange = { scope.launch { container.settings.setColorPalette(it) } },
+                    presetActive = settings.activeCustomPaletteId == null && !settings.harnessCanvas.adaptColors,
                 )
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+            SettingsAnchor(R.string.theme_custom_title) {
+                CustomPaletteSection(settings.customPalettes, settings.activeCustomPaletteId.takeUnless { settings.dynamicColor || settings.harnessCanvas.adaptColors },
+                    onSave = { scope.launch { container.settings.saveCustomPalette(it) } },
+                    onSelect = { scope.launch { container.settings.selectCustomPalette(it) } },
+                    onRemove = { scope.launch { container.settings.removeCustomPalette(it) } })
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
             SettingsAnchor(R.string.settings_anchor_progress_bar_style) {
@@ -2802,6 +2810,9 @@ private fun AppearanceSection(container: AppContainer, settings: AppSettings, sc
                 }
             }
         }
+    }
+    SettingsAnchor(R.string.theme_canvas_title) {
+        HarnessCanvasSection(settings.harnessCanvas, container.settings)
     }
 }
 
