@@ -14,7 +14,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -97,7 +96,7 @@ class AnswerReadabilityDeviceTest {
                 CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, scale.value)) {
                     HarnessTheme(themeMode = theme.value, dynamicColor = false) {
                         val colors = MaterialTheme.colorScheme
-                        headerColor.set(colors.secondaryContainer.copy(alpha = .55f).compositeOver(colors.surfaceContainerLow).toArgb())
+                        headerColor.set(colors.surface.toArgb())
                         Surface(Modifier.fillMaxSize().systemBarsPadding()) {
                             Box(Modifier.fillMaxSize()) {
                             Column(Modifier.width(320.dp).verticalScroll(rememberScrollState()).padding(12.dp)) {
@@ -134,6 +133,18 @@ class AnswerReadabilityDeviceTest {
                 val clip = context.getSystemService(android.content.ClipboardManager::class.java).primaryClip!!.getItemAt(0).text.toString()
                 assertEquals("Plan\tMonthly\tStorage\tReference\nBasic\t12\t128 GB\tDocs\nPlus\t24\t256 GB\ta|b", clip)
             }
+            clickDescription(context.getString(R.string.answer_table_expand))
+            awaitText(context.getString(R.string.answer_table_done))
+            clickDescription(context.getString(R.string.rich_table_options))
+            val sort = awaitText(context.getString(R.string.rich_sort_rows))
+            var sortAction = sort
+            while (!sortAction.isClickable && sortAction.parent != null) sortAction = sortAction.parent
+            assertTrue(sortAction.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            awaitText("Monthly")
+            val done = awaitText(context.getString(R.string.answer_table_done))
+            var close = done
+            while (!close.isClickable && close.parent != null) close = close.parent
+            assertTrue(close.performAction(AccessibilityNodeInfo.ACTION_CLICK))
             val docs = bounds(awaitText("Docs"))
             tap(docs.left + 20 * context.resources.displayMetrics.density, docs.exactCenterY())
             await { opened.get() == "http://localhost:8080/docs" }

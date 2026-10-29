@@ -199,9 +199,9 @@ class RichReplyFeaturesDeviceTest {
                             calls++
                             types.forEach { assertTrue("$kind knows $it", systemPrompt.contains("\"type\":\"$it\"")) }
                             assertTrue("$kind receives answer layout guidance", systemPrompt.contains("Answer readability:"))
-                            assertTrue("$kind does not default to tables", systemPrompt.contains("tables are not the default answer format"))
+                            assertTrue("$kind chooses an appropriate format", systemPrompt.contains("simplest presentation that helps"))
                             assertTrue("$kind keeps non-tabular rich responses", systemPrompt.contains("Prefer cards or choices"))
-                            assertTrue("$kind requires useful tabular data", systemPrompt.contains("genuinely tabular data"))
+                            assertTrue("$kind allows useful comparisons", systemPrompt.contains("qualitative attributes as well as measurements"))
                             assertTrue("$kind rejects invented chart scores", systemPrompt.contains("never invent scores"))
                             assertFalse("$kind has no component percentage target", systemPrompt.contains("70–80%"))
                             ui(table).chunked(31).forEach { emit(StreamEvent.TextDelta(it)) }

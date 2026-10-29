@@ -1682,4 +1682,7 @@
     <string name="local_gpu_download_action">Загрузить поддержку GPU</string>
     <string name="local_gpu_retry_download">Повторить загрузку</string>
     <string name="local_gpu_cancel_download">Отменить загрузку</string>
+    <string name="answer_table_title">Таблица</string>
+    <string name="answer_table_expand">Развернуть таблицу</string>
+    <string name="answer_table_done">Готово</string>
 </resources>

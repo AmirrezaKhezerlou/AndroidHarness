@@ -1678,4 +1678,7 @@
     <string name="local_gpu_download_action">Baixar suporte a GPU</string>
     <string name="local_gpu_retry_download">Tentar baixar novamente</string>
     <string name="local_gpu_cancel_download">Cancelar download</string>
+    <string name="answer_table_title">Tabela</string>
+    <string name="answer_table_expand">Expandir tabela</string>
+    <string name="answer_table_done">Concluído</string>
 </resources>

@@ -1676,4 +1676,7 @@
     <string name="local_gpu_download_action">GPU サポートをダウンロード</string>
     <string name="local_gpu_retry_download">ダウンロードを再試行</string>
     <string name="local_gpu_cancel_download">ダウンロードをキャンセル</string>
+    <string name="answer_table_title">表</string>
+    <string name="answer_table_expand">表を拡大</string>
+    <string name="answer_table_done">完了</string>
 </resources>

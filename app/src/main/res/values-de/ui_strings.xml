@@ -1678,4 +1678,7 @@
     <string name="local_gpu_download_action">GPU-Unterstützung herunterladen</string>
     <string name="local_gpu_retry_download">Download wiederholen</string>
     <string name="local_gpu_cancel_download">Download abbrechen</string>
+    <string name="answer_table_title">Tabelle</string>
+    <string name="answer_table_expand">Tabelle vergrößern</string>
+    <string name="answer_table_done">Fertig</string>
 </resources>

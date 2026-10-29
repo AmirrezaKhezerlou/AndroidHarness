@@ -1672,4 +1672,7 @@
     <string name="local_gpu_download_action">下载 GPU 支持</string>
     <string name="local_gpu_retry_download">重试下载</string>
     <string name="local_gpu_cancel_download">取消下载</string>
+    <string name="answer_table_title">表格</string>
+    <string name="answer_table_expand">展开表格</string>
+    <string name="answer_table_done">完成</string>
 </resources>

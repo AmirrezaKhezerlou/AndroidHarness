@@ -1,12 +1,12 @@
 package com.androidharness.app.ui.chat.rich
 
-import androidx.compose.material.icons.outlined.TableChart
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
@@ -32,7 +32,7 @@ internal val LocalResponseContext = compositionLocalOf<((String, String) -> Unit
 internal val LocalResponseFileOpen = compositionLocalOf<((String, Int?) -> Unit)?> { null }
 
 @Composable
-internal fun ResponseTable(table: RichResponse.Node.Table, onFollowUp: ((RichResponse.FollowUp) -> Unit)?) {
+internal fun ResponseTable(table: RichResponse.Node.Table, onFollowUp: ((RichResponse.FollowUp) -> Unit)?, allowExpand: Boolean = true) {
     var query by rememberSaveable(table) { mutableStateOf("") }
     var sort by rememberSaveable(table) { mutableIntStateOf(-1) }
     var ascending by rememberSaveable(table) { mutableStateOf(true) }
@@ -42,6 +42,8 @@ internal fun ResponseTable(table: RichResponse.Node.Table, onFollowUp: ((RichRes
     var showSort by rememberSaveable(table) { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     var page by rememberSaveable(table) { mutableIntStateOf(0) }
+    var expanded by rememberSaveable(table) { mutableStateOf(false) }
+    if (expanded) ExpandedResponseTable(table, onDismiss = { expanded = false }, onFollowUp = onFollowUp)
     val contextChange = LocalResponseContext.current
     val ui = LocalContext.current
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
@@ -64,9 +66,6 @@ internal fun ResponseTable(table: RichResponse.Node.Table, onFollowUp: ((RichRes
     AnswerTableSurface {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp), color = colors.primary.copy(alpha = .08f)) {
-                Icon(androidx.compose.material.icons.Icons.Outlined.TableChart, null, Modifier.padding(8.dp).size(18.dp), tint = colors.primary)
-            }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(table.title, style = MaterialTheme.typography.titleSmall)
                 Text(table.columns.joinToString(" · "), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
@@ -75,6 +74,7 @@ internal fun ResponseTable(table: RichResponse.Node.Table, onFollowUp: ((RichRes
                 IconButton(onClick = { menu = true }) { Icon(androidx.compose.material.icons.Icons.Outlined.MoreHoriz,
                     stringResource(R.string.rich_table_options)) }
                 DropdownMenu(menu, onDismissRequest = { menu = false }) {
+                    if (allowExpand) DropdownMenuItem(text = { Text(stringResource(R.string.answer_table_expand)) }, onClick = { expanded = true; menu = false })
                     DropdownMenuItem(text = { Text(stringResource(R.string.rich_filter_rows)) }, onClick = { showFilter = !showFilter; menu = false })
                     DropdownMenuItem(text = { Text(stringResource(R.string.rich_sort_rows)) }, onClick = { showSort = !showSort; menu = false })
                     DropdownMenuItem(text = { Text(stringResource(if (selecting) R.string.rich_stop_selecting_rows else R.string.rich_select_rows)) }, onClick = {
@@ -140,7 +140,7 @@ internal fun ResponseTable(table: RichResponse.Node.Table, onFollowUp: ((RichRes
                 val selectionWidth = if (selecting) 48.dp else 0.dp
                 val cellWidth = maxOf((128 * fontScale).dp, (maxWidth - selectionWidth) / table.columns.size)
                 Column(Modifier.horizontalScroll(tableScroll).width(selectionWidth + cellWidth * table.columns.size)) {
-                    Row(Modifier.fillMaxWidth().background(colors.surfaceContainerHigh.copy(alpha = .6f))) {
+                    Row(Modifier.fillMaxWidth()) {
                         if (selecting) Spacer(Modifier.width(selectionWidth))
                         table.columns.forEach { label -> Text(label, Modifier.width(cellWidth).padding(horizontal = 14.dp, vertical = 12.dp),
                             style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant) }
@@ -172,6 +172,25 @@ internal fun ResponseTable(table: RichResponse.Node.Table, onFollowUp: ((RichRes
         if (selected.any { it }) onFollowUp?.let { follow -> TextButton(onClick = {
             follow(RichResponse.followUp(ui.getString(R.string.rich_discuss_rows_prompt), table.title, context()))
         }, modifier = Modifier.padding(horizontal = 6.dp)) { Text(stringResource(R.string.rich_discuss_rows)) } }
+    }
+}
+
+/** Expanded view reuses the same filtering, sorting, selection and copy actions. */
+@Composable
+internal fun ExpandedResponseTable(table: RichResponse.Node.Table, onDismiss: () -> Unit, onFollowUp: ((RichResponse.FollowUp) -> Unit)? = null) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+            Column(Modifier.fillMaxSize().systemBarsPadding()) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(table.title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.answer_table_done)) }
+                }
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
+                    ResponseTable(table, onFollowUp = onFollowUp?.let { follow -> { request -> onDismiss(); follow(request) } }, allowExpand = false)
+                }
+            }
+        }
     }
 }
 

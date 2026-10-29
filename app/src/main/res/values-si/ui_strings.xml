@@ -1678,4 +1678,7 @@
     <string name="local_gpu_download_action">GPU සහාය බාගන්න</string>
     <string name="local_gpu_retry_download">නැවත බාගන්න</string>
     <string name="local_gpu_cancel_download">බාගැනීම අවලංගු කරන්න</string>
+    <string name="answer_table_title">වගුව</string>
+    <string name="answer_table_expand">වගුව විශාල කරන්න</string>
+    <string name="answer_table_done">අවසන්</string>
 </resources>

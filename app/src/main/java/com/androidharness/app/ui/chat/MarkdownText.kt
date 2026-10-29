@@ -36,6 +36,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.OpenInFull
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -598,6 +599,7 @@ private fun TableBlock(
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     var copied by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(false) }
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
     val bodyStyle = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp)
@@ -605,6 +607,14 @@ private fun TableBlock(
     val rows = listOf(table.headers) + table.rows
     val styledRows = rows.map { row ->
         table.headers.indices.map { styledText(row.getOrElse(it) { "" }) }
+    }
+    if (expanded) {
+        com.androidharness.app.ui.chat.rich.ExpandedResponseTable(
+            com.androidharness.app.core.response.RichResponse.Node.Table(
+                uiContext.getString(R.string.answer_table_title), styledRows.first().map { it.text },
+                styledRows.drop(1).map { row -> row.map { it.text } }, ""),
+            onDismiss = { expanded = false },
+        )
     }
 
     AnswerTableSurface(Modifier.padding(vertical = 2.dp).testTag("answer-table")) {
@@ -617,6 +627,10 @@ private fun TableBlock(
                 val count = pluralStringResource(R.plurals.answer_table_rows, table.rows.size, table.rows.size)
                 Text("$columns · $count", style = MaterialTheme.typography.labelMedium,
                     color = scheme.onSurfaceVariant, modifier = Modifier.weight(1f).padding(vertical = 10.dp))
+                ExpressiveIconButton(onClick = { expanded = true }, modifier = Modifier.size(44.dp),
+                    colors = IconButtonDefaults.iconButtonColors(contentColor = scheme.onSurfaceVariant)) {
+                    Icon(Icons.Outlined.OpenInFull, uiContext.getString(R.string.answer_table_expand), modifier = Modifier.size(18.dp))
+                }
                 ExpressiveIconButton(onClick = {
                     clipboard.setText(AnnotatedString(tableAsTsv(styledRows.map { row -> row.map { it.text } })))
                     copied = true
@@ -650,13 +664,7 @@ private fun TableBlock(
                     Column(Modifier.width(tableWidth).semantics { collectionInfo = CollectionInfo(styledRows.size, table.headers.size) }) {
                         styledRows.forEachIndexed { rowIndex, row ->
                             Row(
-                                modifier = Modifier.fillMaxWidth().background(
-                                    when {
-                                        rowIndex == 0 -> scheme.secondaryContainer.copy(alpha = .55f)
-                                        rowIndex % 2 == 0 -> scheme.surfaceContainerHigh.copy(alpha = .4f)
-                                        else -> Color.Transparent
-                                    }
-                                ),
+                                modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.Top,
                             ) {
                                 row.forEachIndexed { column, cell ->

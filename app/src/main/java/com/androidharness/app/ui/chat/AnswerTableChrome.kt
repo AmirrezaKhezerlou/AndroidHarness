@@ -1,12 +1,9 @@
 package com.androidharness.app.ui.chat
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -21,11 +18,7 @@ import com.androidharness.app.R
 
 @Composable
 internal fun AnswerTableSurface(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = colors.surfaceContainerLow,
-        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .55f))) {
-        Column(content = content)
-    }
+    Column(modifier.fillMaxWidth(), content = content)
 }
 
 /** A scroll cue and position indicator are shared by Markdown and interactive tables. */

@@ -1686,4 +1686,7 @@
     <string name="local_gpu_download_action">تنزيل دعم GPU</string>
     <string name="local_gpu_retry_download">إعادة التنزيل</string>
     <string name="local_gpu_cancel_download">إلغاء التنزيل</string>
+    <string name="answer_table_title">جدول</string>
+    <string name="answer_table_expand">توسيع الجدول</string>
+    <string name="answer_table_done">تم</string>
 </resources>

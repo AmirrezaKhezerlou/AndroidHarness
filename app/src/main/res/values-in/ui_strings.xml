@@ -1672,4 +1672,7 @@
     <string name="local_gpu_download_action">Unduh dukungan GPU</string>
     <string name="local_gpu_retry_download">Coba unduh lagi</string>
     <string name="local_gpu_cancel_download">Batalkan unduhan</string>
+    <string name="answer_table_title">Tabel</string>
+    <string name="answer_table_expand">Perbesar tabel</string>
+    <string name="answer_table_done">Selesai</string>
 </resources>

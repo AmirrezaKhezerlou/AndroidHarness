@@ -1678,4 +1678,7 @@
     <string name="local_gpu_download_action">دانلود پشتیبانی از GPU</string>
     <string name="local_gpu_retry_download">تلاش دوباره برای دانلود</string>
     <string name="local_gpu_cancel_download">لغو دانلود</string>
+    <string name="answer_table_title">جدول</string>
+    <string name="answer_table_expand">بزرگ کردن جدول</string>
+    <string name="answer_table_done">انجام شد</string>
 </resources>
