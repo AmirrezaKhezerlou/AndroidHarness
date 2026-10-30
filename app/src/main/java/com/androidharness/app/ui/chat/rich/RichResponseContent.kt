@@ -7,6 +7,7 @@ import com.androidharness.app.core.response.RichResponse
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -31,7 +32,9 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -64,6 +67,7 @@ internal fun RichResponseContent(text: String, streaming: Boolean, onOpenUrl: ((
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(10.dp)); Text(uiContext.getString(R.string.ui_preparing_visual), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                is RichResponse.Part.PendingVisual -> PendingVisualCard(part.title, part.loading)
                 RichResponse.Part.Unavailable -> ResponsePanel {
                     Text(uiContext.getString(R.string.ui_this_content_couldn_t_be_displayed), style = MaterialTheme.typography.titleSmall)
                     Text(uiContext.getString(R.string.ui_you_can_ask_for_a_simpler_version), style = MaterialTheme.typography.bodySmall)
@@ -71,6 +75,25 @@ internal fun RichResponseContent(text: String, streaming: Boolean, onOpenUrl: ((
                 }
             }
         } }
+    }
+}
+
+/** Holds the visual's place while its markup streams, so the reply doesn't jump when it renders. */
+@Composable
+private fun PendingVisualCard(title: String, loading: String) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
+    val scheme = MaterialTheme.colorScheme
+    Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), color = scheme.surface,
+        border = BorderStroke(1.dp, scheme.outlineVariant)) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(title.ifBlank { uiContext.getString(R.string.ui_preparing_visual) }, style = MaterialTheme.typography.labelLarge)
+            Box(Modifier.fillMaxWidth().height(140.dp).background(scheme.surfaceContainerLow, RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center) {
+                com.androidharness.app.ui.common.CatalogLoadingIndicator(Modifier.size(36.dp))
+            }
+            Text(loading.ifBlank { uiContext.getString(R.string.ui_preparing_visual) }, style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        }
     }
 }
 

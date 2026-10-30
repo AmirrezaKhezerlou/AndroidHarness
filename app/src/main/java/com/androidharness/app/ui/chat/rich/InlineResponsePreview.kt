@@ -34,6 +34,7 @@ internal fun InlineResponsePreview(node: RichResponse.Node.Preview, onFollowUp: 
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val context = LocalContext.current
     val dark = MaterialTheme.colorScheme.surface.luminance() < .5f
+    val theme = rememberArtifactTheme()
     val artifact = remember(node) { ChatArtifact.create(node.title, node.html) }
     var height by remember(node) { mutableIntStateOf(220) }
     var summary by remember(node) { mutableStateOf("") }
@@ -42,12 +43,12 @@ internal fun InlineResponsePreview(node: RichResponse.Node.Preview, onFollowUp: 
     var unavailable by remember(node) { mutableStateOf(false) }
     var reload by remember { mutableIntStateOf(0) }
     var expanded by rememberSaveable(node) { mutableStateOf(false) }
-    val web = remember(artifact.revision, dark, reload) {
+    val web = remember(artifact.revision, theme, reload) {
         ArtifactWebView(context, onLoading = { loading = it }, onError = { error = it }, onUnavailable = { unavailable = true; error = it },
             onResponseLayout = { measured, state -> height = measured; summary = state })
     }
     DisposableEffect(web) { onDispose { web.release() } }
-    LaunchedEffect(web) { error = null; unavailable = false; summary = ""; web.show(artifact, dark, responseLayout = true) }
+    LaunchedEffect(web) { error = null; unavailable = false; summary = ""; web.show(artifact, dark, responseLayout = true, theme = theme) }
     val content: @Composable (Modifier) -> Unit = { modifier -> Box(modifier) {
         if (unavailable) Column(Modifier.fillMaxWidth().padding(20.dp)) {
             Text(uiContext.getString(R.string.ui_preview_unavailable), style = MaterialTheme.typography.bodyMedium)

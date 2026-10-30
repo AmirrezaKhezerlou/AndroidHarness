@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Merge
+import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Terminal
@@ -68,6 +69,7 @@ internal fun toolIcon(name: String): ImageVector = when (name) {
     "bg_list", "bg_kill" -> Icons.Outlined.Terminal
     "pkg_install", "pkg_search", "pkg_list" -> Icons.Outlined.Inventory2
     "skill_view", "skills_list", "skill_manage" -> Icons.Outlined.AutoStories
+    "visual_guide" -> Icons.Outlined.Palette
     else -> Icons.Outlined.Build
 }
 

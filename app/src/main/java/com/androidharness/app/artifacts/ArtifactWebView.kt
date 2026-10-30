@@ -103,13 +103,14 @@ class ArtifactWebView(
         setDownloadListener { _, _, _, _, _ -> onError("Use Save HTML to export this concept.") }
     }
 
-    fun show(artifact: ChatArtifact, dark: Boolean, responseLayout: Boolean = false) {
-        val key = "${artifact.revision}:$dark:$responseLayout"
+    fun show(artifact: ChatArtifact, dark: Boolean, responseLayout: Boolean = false,
+        theme: ArtifactTheme = ArtifactTheme.fallback(dark)) {
+        val key = "${artifact.revision}:$dark:$responseLayout:${theme.hashCode()}"
         if (revisionKey == key) return
         revisionKey = key
         responseLayoutActive = responseLayout
         onLoading(true)
-        loadDataWithBaseURL(ArtifactSandbox.origin(artifact), ArtifactSandbox.frameDocument(artifact, dark, responseLayout), "text/html", "UTF-8", null)
+        loadDataWithBaseURL(ArtifactSandbox.origin(artifact), ArtifactSandbox.frameDocument(artifact, dark, responseLayout, theme), "text/html", "UTF-8", null)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {

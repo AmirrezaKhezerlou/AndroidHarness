@@ -77,12 +77,13 @@ internal fun ArtifactCard(
     val scope = rememberCoroutineScope()
     val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val scheme = MaterialTheme.colorScheme
-    val web = remember(selected.revision, dark, reload) {
+    val theme = com.androidharness.app.ui.chat.rich.rememberArtifactTheme()
+    val web = remember(selected.revision, theme, reload) {
         ArtifactWebView(context, onLoading = { loading = it }, onError = { error = it },
             onUnavailable = { unavailable = true; error = it })
     }
     DisposableEffect(web) { onDispose { web.release() } }
-    LaunchedEffect(web, selected.revision, dark) { error = null; unavailable = false; loading = true; web.show(selected, dark) }
+    LaunchedEffect(web, selected.revision, theme) { error = null; unavailable = false; loading = true; web.show(selected, dark, theme = theme) }
     LaunchedEffect(artifact.revision) {
         if (loadRevisions != null) try {
             savedVersions = withContext(Dispatchers.IO) { loadRevisions().filter { it.id == artifact.id } }
@@ -95,7 +96,7 @@ internal fun ArtifactCard(
         if (uri != null && document != null) scope.launch {
             saveStatus = try {
                 withContext(Dispatchers.IO) {
-                    requireNotNull(context.contentResolver.openOutputStream(uri)).bufferedWriter().use { it.write(ArtifactSandbox.sourceDocument(document, dark)) }
+                    requireNotNull(context.contentResolver.openOutputStream(uri)).bufferedWriter().use { it.write(ArtifactSandbox.sourceDocument(document, dark, theme = theme)) }
                 }
                 uiContext.getString(R.string.ui_html_saved)
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }

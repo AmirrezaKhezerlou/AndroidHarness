@@ -6,14 +6,44 @@ import java.net.URI
 /** A presentation protocol inside assistant text: providers, history, forks and backups need no adapters. */
 object RichResponse {
     const val LANGUAGE = "harness-ui"
+    /** Raw visual fences: the model writes markup directly, so nothing needs JSON escaping. */
+    const val HTML_LANGUAGE = "harness-html"
+    const val SVG_LANGUAGE = "harness-svg"
+    private val languages = listOf(LANGUAGE, HTML_LANGUAGE, SVG_LANGUAGE)
     const val MAX_JSON_CHARS = 96_000
+    const val MAX_VISUAL_CHARS = 64_000
     private val json = Json { ignoreUnknownKeys = true }
 
     sealed interface Part {
         data class Markdown(val text: String) : Part
         data class Content(val node: Node) : Part
         data object Pending : Part
+        /** A raw visual still streaming; its title and loading line come from the opening fence. */
+        data class PendingVisual(val title: String, val loading: String) : Part
         data object Unavailable : Part
+    }
+
+    private fun hasRichFence(text: String, streaming: Boolean) =
+        languages.any { text.contains(it) } || (streaming && text.contains("```harness"))
+
+    /** `harness-html title="Orbit" loading="Placing planets"`: quoted attributes, or a bare title after the language. */
+    internal fun fenceAttributes(info: String): Map<String, String> {
+        val rest = info.substringAfter(' ', "").trim()
+        if (rest.isEmpty()) return emptyMap()
+        val quoted = Regex("""([a-z_]+)\s*=\s*"([^"]*)"""").findAll(rest).associate { it.groupValues[1] to it.groupValues[2].trim() }
+        return quoted.ifEmpty { mapOf("title" to rest) }
+    }
+
+    private fun visualNode(language: String, info: String, body: String): Node? {
+        if (body.isBlank() || body.length > MAX_VISUAL_CHARS) return null
+        val attrs = fenceAttributes(info)
+        val title = attrs["title"].orEmpty().take(80).ifBlank { if (language == SVG_LANGUAGE) "Diagram" else "Interactive visual" }
+        if (language == SVG_LANGUAGE) {
+            val svg = body.trim()
+            if (!svg.startsWith("<svg", ignoreCase = true) || !svg.endsWith("</svg>", ignoreCase = true)) return null
+            return Node.Preview(title, "<div class=\"hx-svg\">$svg</div>")
+        }
+        return Node.Preview(title, body.trim())
     }
     data class Action(val label: String, val prompt: String)
     data class FollowUp(val prompt: String, val title: String, val context: String)
@@ -55,7 +85,7 @@ object RichResponse {
 
     /** Recognized fences are withheld until complete. A normal code fence is never interpreted as UI. */
     fun parse(text: String, streaming: Boolean = false): List<Part> {
-        if (!text.contains(LANGUAGE) && !(streaming && text.contains("```harness"))) return listOf(Part.Markdown(text))
+        if (!hasRichFence(text, streaming)) return listOf(Part.Markdown(text))
         val lines = text.splitToSequence('\n').toList()
         val result = mutableListOf<Part>()
         val markdown = StringBuilder()
@@ -65,22 +95,33 @@ object RichResponse {
             val line = lines[i].trimStart()
             val fence = line.takeWhile { it == '`' }
             if (fence.length < 3) { markdown.append(lines[i++]).append('\n'); continue }
-            val language = line.drop(fence.length).trim()
+            val info = line.drop(fence.length).trim()
+            val language = info.substringBefore(' ')
             var end = i + 1
             while (end < lines.size) {
                 val closing = lines[end].trim()
                 if (closing.length >= fence.length && closing.all { it == '`' }) break
                 end++
             }
-            if (streaming && end == lines.size && LANGUAGE.startsWith(language) && language.startsWith("harness")) { flush(); result += Part.Pending; break }
-            if (language != LANGUAGE) {
+            // A fence whose language is still being typed ("harness-h") is withheld rather than flashed as code.
+            if (streaming && end == lines.size && language.startsWith("harness") && languages.none { it == language } &&
+                languages.any { it.startsWith(language) }) { flush(); result += Part.Pending; break }
+            if (language !in languages) {
                 while (i < minOf(end + 1, lines.size)) markdown.append(lines[i++]).append('\n')
                 continue
             }
             flush()
-            if (end == lines.size) { result += if (streaming) Part.Pending else Part.Unavailable; break }
+            if (end == lines.size) {
+                result += when {
+                    !streaming -> Part.Unavailable
+                    language == LANGUAGE -> Part.Pending
+                    else -> fenceAttributes(info).let { Part.PendingVisual(it["title"].orEmpty().take(80), it["loading"].orEmpty().take(80)) }
+                }
+                break
+            }
             val body = lines.subList(i + 1, end).joinToString("\n")
-            result += decode(body)?.let(Part::Content) ?: Part.Unavailable
+            val node = if (language == LANGUAGE) decode(body) else visualNode(language, info, body)
+            result += node?.let(Part::Content) ?: Part.Unavailable
             i = end + 1
         }
         flush()
@@ -228,11 +269,14 @@ object RichResponse {
         return (value as? JsonArray ?: error("Expected a list")).also { require(it.size <= max && (!required || it.isNotEmpty())) }
     }
 
-    fun plainText(text: String, streaming: Boolean = false): String = if (!text.contains(LANGUAGE) && !(streaming && text.contains("```harness"))) text else parse(text, streaming).joinToString("\n\n") {
-        when (it) { is Part.Markdown -> it.text; is Part.Content -> describe(it.node); Part.Pending -> "Preparing content…"; Part.Unavailable -> "Rich content unavailable" }
+    fun plainText(text: String, streaming: Boolean = false): String = if (!hasRichFence(text, streaming)) text else parse(text, streaming).joinToString("\n\n") {
+        when (it) {
+            is Part.Markdown -> it.text; is Part.Content -> describe(it.node)
+            Part.Pending, is Part.PendingVisual -> "Preparing content…"; Part.Unavailable -> "Rich content unavailable"
+        }
     }
     /** Legacy URL discovery must not probe URLs inside isolated preview code or duplicate native link cards. */
-    fun markdownText(text: String): String = if (!text.contains(LANGUAGE)) text else parse(text).filterIsInstance<Part.Markdown>().joinToString("\n\n") { it.text }
+    fun markdownText(text: String): String = if (!hasRichFence(text, false)) text else parse(text).filterIsInstance<Part.Markdown>().joinToString("\n\n") { it.text }
     /** Image discovery for follow-up inspection includes native cards, not just Markdown. */
     fun images(text: String): List<GalleryImage> = buildList {
         fun visit(node: Node) {
@@ -311,7 +355,14 @@ A table column heading may be empty (for example, the row-label column of a comp
 {"type":"diff","title":"Compare the change","before":"Original text or code","after":"Revised text or code","path":"src/example.kt","line":12,"language":"kotlin"} (line additions/removals, Before/After views, expand, copy/share; path/line/language optional; up to 400 lines per side; comparisons never apply edits; show real observed file changes for completed work, and label proposed changes as proposals)
 {"type":"writing","title":"Ready to copy","text":"The complete reusable text, command, configuration, or code","language":""} (exact copy and user-initiated share, expandable body; optional language for code/config; keep explanations outside this block; up to 24000 characters)
 Use tabs for genuinely separate views, galleries for visual comparisons, calculators for what-if questions, evidence for cited findings or actual checks, diffs for before/after text or code, and writing blocks for reusable deliverables. Keep short answers simple and avoid repeating the same content as both prose and components. These are available in ordinary answers without asking permission or enabling a special mode.
-For a custom calculator, diagram, simulation, image/SVG preview, or other visual beyond these components use {"type":"preview","title":"Descriptive title","html":"COMPLETE SELF-CONTAINED HTML WITH INLINE CSS/JS"} in the same harness-ui fence. Keep HTML concise (under 24 KB when possible), responsive at 320px, offline, accessible, and respect reduced motion. Use --background, --foreground, --muted, --surface, --border, --accent theme variables. This renders directly in the answer, without the artifact editor toolbar. Local controls must work. No CDN, remote APIs/fonts/images, native bridge, or workspace changes. To provide current local selections for a user's follow-up, optionally call parent.postMessage({type:'harness:state', summary:'Concise current values'}, '*') after an input changes. This only supplies context; it cannot run tools or send messages. Follow-up questions stay in the same conversation and can produce an updated visual in a new reply.
+CUSTOM VISUALS (diagrams, custom charts, explorable widgets, simulations, mockups, illustrations) beyond the native components: write the markup DIRECTLY in a raw fence, with no JSON and no escaping.
+```harness-svg title="2-5 word title"
+<svg viewBox="0 0 640 360" role="img" aria-label="The takeaway">…</svg>
+```
+```harness-html title="2-5 word title" loading="Short status while it streams"
+<div class="hx-stack">…</div><script>…</script>
+```
+Use harness-svg for a static diagram (exactly one <svg>), harness-html when you need script, controls or several elements. Before your first custom visual of a kind in a conversation, call visual_guide with the matching modules (diagram, chart, interactive, mockup, art) when that tool is available; it returns the detailed design rules. Every visual gets the user's app theme as CSS variables (--background --foreground --muted --surface --surface-2 --border --accent --accent-fg --accent-soft --success --warning --danger, series colors --c1…--c6) and a ready-made class kit (hx-stack, hx-row, hx-grid, hx-card, hx-title, hx-muted, hx-label, hx-stat, hx-chip data-tone, hx-btn, hx-segment, hx-range, hx-bar, hx-table, and SVG classes hx-node, hx-edge, hx-text). Use the tokens and classes instead of hard-coded colors so visuals match the app in light and dark mode. Script helpers: harness.palette(), harness.color(name), and harness.state('Concise current values') to pass the current selection to the user's next message (context only; it cannot run tools or send messages). Keep it self-contained, offline (no CDN, remote fonts, images, fetch, native bridge or workspace changes), responsive at 360px, accessible, under 24 KB when possible (64 KB maximum), and make every control work. Prefer a native component when one fits (for example the chart component for simple bar or line data). Never show a visual's source unless the user asks. Follow-up questions stay in the same conversation and can produce an updated visual in a new reply. The older {"type":"preview","title":"…","html":"…"} harness-ui component still renders, but prefer the raw fences.
 Where create_artifact/read_artifact tools are available, use them for a separately managed, versioned/exportable concept when the user asks for an artifact or that workflow is useful. Keep existing artifacts available. Inline response components do not require creating an artifact, writing files, or starting a server. Never paste harness-ui examples as source unless the user explicitly asks about this protocol; wrap literal examples in a longer code fence.
 
 PRESENTATION CHOICE FOR THE CURRENT ANSWER:

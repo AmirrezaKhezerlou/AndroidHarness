@@ -587,6 +587,7 @@ private fun activityLabel(name: String, running: Boolean): String = stringResour
     "remember" -> if (running) R.string.chat_saving_memory else R.string.chat_memory_saved
     "recall" -> if (running) R.string.chat_searching_memory else R.string.chat_searched_memory
     "read_tool_output" -> if (running) R.string.chat_reading_results else R.string.chat_read_results
+    "visual_guide" -> if (running) R.string.chat_reading_design_guide else R.string.chat_read_design_guide
     "offer_code_handoff" -> R.string.chat_preparing_code_option
     else -> if (running) R.string.chat_working else R.string.chat_finished_activity
 })

@@ -131,6 +131,7 @@ class ToolRegistry(private val tools: List<Tool>) {
                 WebSearchTool(httpClient, searchApi, refreshApi = searchApiRefresh),
                 HttpRequestTool(httpClient) { linuxEnv.githubToken() },
                 AskUserTool(),
+                VisualGuideTool(),
                 TaskTool(),
                 MemoryWriteTool(),
                 MemoryReadTool(),

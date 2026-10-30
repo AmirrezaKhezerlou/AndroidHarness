@@ -200,6 +200,7 @@ fun toolPresentation(call: ToolCallData, result: ChatMessage? = null): ToolPrese
             ToolPresentation("Loaded $name", "Loading skill $name…", kind = ToolActivityKind.READ)
         }
         "skills_list" -> ToolPresentation("Listed skills", "Listing skills…", kind = ToolActivityKind.READ)
+        "visual_guide" -> ToolPresentation("Read design guide", "Reading design guide…", arg("modules"), ToolActivityKind.READ)
         "pkg_install" -> {
             val packages = arg("packages") ?: arg("package") ?: "package"
             ToolPresentation(
