@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.settings
 
+import com.androidharness.app.ui.theme.HarnessGlassSwitch as Switch
 import com.androidharness.app.ui.common.localizedOption
 import com.androidharness.app.ui.common.localizedThinkingOption
 import android.Manifest
@@ -81,7 +82,6 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -2768,6 +2768,9 @@ private fun AppearanceSection(container: AppContainer, settings: AppSettings, sc
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     SettingsHeader(uiContext.getString(R.string.settings_page_appearance_title))
     WorkspaceLayoutSection(settings.workspaceLayout) { scope.launch { container.settings.setWorkspaceLayout(it) } }
+    SettingsAnchor(R.string.glass_title) {
+        HarnessGlassSection(settings, container.settings)
+    }
     SettingsPanel(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             SettingsAnchor(R.string.settings_anchor_theme) {

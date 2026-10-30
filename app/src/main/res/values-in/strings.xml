@@ -952,4 +952,18 @@
     <string name="dhizuku_denied">Akses ditolak · izinkan akses di Dhizuku</string>
     <string name="dhizuku_error">Koneksi gagal · periksa Dhizuku dan coba lagi</string>
     <string name="settings_language_sinhala">සිංහල</string>
+    <string name="glass_title">AHarness Glass (Eksperimental)</string>
+    <string name="glass_description">Efek kaca untuk navigasi, kontrol, dan kartu.</string>
+    <string name="glass_enable">Kaca buram</string>
+    <string name="glass_enable_hint">Pakai permukaan tembus pandang dengan latar yang diburamkan lembut.</string>
+    <string name="glass_liquid">Liquid Glass</string>
+    <string name="glass_liquid_hint">Kaca bening dengan distorsi lensa, tepi bercahaya, dan dispersi warna halus. Tanpa efek buram atau pemburaman latar. Matikan untuk kembali ke kaca buram.</string>
+    <string name="glass_unsupported">Efek kaca memerlukan Android 12 atau lebih baru.</string>
+    <string name="glass_liquid_unsupported">Liquid Glass memerlukan Android 13 atau lebih baru. Kaca buram tersedia di perangkat ini.</string>
+    <string name="glass_preview_label">Pratinjau kaca</string>
+    <string name="glass_preview_title">AndroidHarness</string>
+    <string name="glass_preview_text">Teks jelas. Latar yang lebih lembut.</string>
+    <string name="glass_transparency">Transparansi</string>
+    <string name="glass_transparency_percent">%1$d%%</string>
+    <string name="glass_transparency_hint">Geser ke kanan untuk kaca yang lebih bening. Pratinjau ikut bergeser dan pilihanmu berlaku saat dilepas. Tombol tindakan dan pop-up tetap memakai warna yang terbaca.</string>
 </resources>

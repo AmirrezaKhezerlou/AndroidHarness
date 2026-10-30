@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.settings
 
+import com.androidharness.app.ui.theme.HarnessGlassSwitch as Switch
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.clickable

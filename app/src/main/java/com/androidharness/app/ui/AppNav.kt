@@ -1,5 +1,6 @@
 package com.androidharness.app.ui
 
+import com.androidharness.app.ui.theme.*
 import com.androidharness.app.R
 import androidx.compose.foundation.layout.fillMaxHeight
 
@@ -97,6 +98,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.launch
+import androidx.compose.ui.layout.onSizeChanged
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -566,12 +568,28 @@ fun AppNav(container: AppContainer) {
         LocalDesktopNavigationGuard provides desktopGuard,
         LocalDesktopKeyboardRouter provides if (desktopNavigation) desktopKeyboard else null,
     ) {
+    val glass = LocalHarnessGlass.current.mode != HarnessGlassMode.OFF
+    var glassDrawerWidth by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val glassDrawerCapture by remember(drawerState) { androidx.compose.runtime.derivedStateOf {
+        drawerState.currentValue != DrawerValue.Closed || drawerState.targetValue != DrawerValue.Closed ||
+            drawerState.isAnimationRunning || (glassDrawerWidth > 0 && drawerState.currentOffset > -glassDrawerWidth + .5f)
+    } }
     ModalNavigationDrawer(
         drawerState = drawerState,
         gesturesEnabled = !desktopNavigation && drawerGesturesEnabled,
         drawerContent = {
-            if (!desktopNavigation) ModalDrawerSheet(drawerContainerColor = MaterialTheme.colorScheme.surface) {
+            if (!desktopNavigation) ModalDrawerSheet(
+                modifier = if (glass) Modifier.onSizeChanged { glassDrawerWidth = it.width }
+                    .padding(horizontal = 10.dp).statusBarsPadding().navigationBarsPadding().padding(vertical = 8.dp) else Modifier,
+                drawerShape = if (glass) androidx.compose.foundation.shape.RoundedCornerShape(32.dp) else androidx.compose.material3.DrawerDefaults.shape,
+                drawerContainerColor = if (glass) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.surface,
+                windowInsets = if (glass) androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0) else androidx.compose.material3.DrawerDefaults.windowInsets,
+            ) {
+                androidx.compose.runtime.CompositionLocalProvider(
+                    LocalHarnessGlassCaptureActive provides glassDrawerCapture,
+                    LocalHarnessGlassBackdrop provides (LocalHarnessGlassOverlayBackdrop.current ?: LocalHarnessGlassBackdrop.current)) {
                 Sidebar { scope.launch { drawerState.close() } }
+                }
             }
         },
     ) {
@@ -596,7 +614,7 @@ fun AppNav(container: AppContainer) {
             com.androidharness.app.ui.common.SshWorkspaceBar(container, activeFs as? com.androidharness.app.workspace.SshFs)
         }
         NavHost(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).recordHarnessGlassScene(LocalHarnessGlassScene.current),
             navController = nav,
             startDestination = startDestination,
             // Section changes share an expressive fade-through and a short directional move.

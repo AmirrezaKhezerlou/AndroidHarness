@@ -957,4 +957,18 @@
     <string name="dhizuku_denied">تم رفض الوصول · امنح الإذن في Dhizuku</string>
     <string name="dhizuku_error">فشل الاتصال · تحقق من Dhizuku وحاول مجدداً</string>
     <string name="settings_language_sinhala">සිංහල</string>
+    <string name="glass_title">AHarness Glass (تجريبي)</string>
+    <string name="glass_description">تأثيرات زجاجية للتنقل وعناصر التحكم والبطاقات.</string>
+    <string name="glass_enable">زجاج مصنفر</string>
+    <string name="glass_enable_hint">استخدم أسطحًا شبه شفافة مع خلفيات ضبابية ناعمة.</string>
+    <string name="glass_liquid">Liquid Glass</string>
+    <string name="glass_liquid_hint">زجاج صافٍ بتشويه عدسي وحواف مضيئة وتشتت لوني خفيف. بلا تصنيف ولا ضبابية في الخلفية. أوقفه للعودة إلى الزجاج المصنفر.</string>
+    <string name="glass_unsupported">تتطلب التأثيرات الزجاجية Android 12 أو أحدث.</string>
+    <string name="glass_liquid_unsupported">يتطلب Liquid Glass نظام Android 13 أو أحدث. الزجاج المصنفر متاح على هذا الجهاز.</string>
+    <string name="glass_preview_label">معاينة الزجاج</string>
+    <string name="glass_preview_title">AndroidHarness</string>
+    <string name="glass_preview_text">نص واضح. خلفية أنعم.</string>
+    <string name="glass_transparency">الشفافية</string>
+    <string name="glass_transparency_percent">%1$d%%</string>
+    <string name="glass_transparency_hint">اسحب لليمين لزجاج أكثر صفاءً. تتحدث المعاينة أثناء السحب ويُطبق اختيارك عند الإفلات. تحتفظ أزرار الإجراءات والنوافذ المنبثقة بلون مقروء.</string>
 </resources>

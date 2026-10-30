@@ -953,4 +953,18 @@
     <string name="dhizuku_denied">Acesso negado · permita o acesso no Dhizuku</string>
     <string name="dhizuku_error">Falha na conexão · verifique o Dhizuku e tente novamente</string>
     <string name="settings_language_sinhala">සිංහල</string>
+    <string name="glass_title">AHarness Glass (experimental)</string>
+    <string name="glass_description">Efeitos de vidro para navegação, controles e cartões.</string>
+    <string name="glass_enable">Vidro fosco</string>
+    <string name="glass_enable_hint">Use superfícies translúcidas com fundos suavemente desfocados.</string>
+    <string name="glass_liquid">Liquid Glass</string>
+    <string name="glass_liquid_hint">Vidro transparente com distorção de lente, bordas luminosas e leve dispersão de cor. Sem fosqueamento nem desfoque do fundo. Desative para voltar ao vidro fosco.</string>
+    <string name="glass_unsupported">Os efeitos de vidro precisam do Android 12 ou mais recente.</string>
+    <string name="glass_liquid_unsupported">O Liquid Glass precisa do Android 13 ou mais recente. O vidro fosco está disponível neste aparelho.</string>
+    <string name="glass_preview_label">Prévia do vidro</string>
+    <string name="glass_preview_title">AndroidHarness</string>
+    <string name="glass_preview_text">Texto nítido. Um fundo mais suave.</string>
+    <string name="glass_transparency">Transparência</string>
+    <string name="glass_transparency_percent">%1$d%%</string>
+    <string name="glass_transparency_hint">Deslize para a direita para um vidro mais nítido. A prévia acompanha o arrasto e sua escolha é aplicada ao soltar. Botões de ação e pop-ups mantêm um tom legível.</string>
 </resources>

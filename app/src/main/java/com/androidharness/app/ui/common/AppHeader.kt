@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.common
 
+import com.androidharness.app.ui.theme.*
 import com.androidharness.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
@@ -9,6 +10,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Menu
@@ -46,10 +52,11 @@ fun AppHeader(
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val desktop = com.androidharness.app.ui.LocalDesktopLayout.current
+    val glass = LocalHarnessGlass.current.mode != HarnessGlassMode.OFF
     Column(
         modifier = modifier
-            .background(if (desktop) scheme.surfaceContainerLow else scheme.surface)
-            .statusBarsPadding(),
+            .then(if (glass) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)).padding(horizontal = 12.dp, vertical = 8.dp)
+                else Modifier.harnessGlassBar(if (desktop) scheme.surfaceContainerLow else scheme.surface).statusBarsPadding()),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -91,6 +98,6 @@ fun AppHeader(
             }
             actions()
         }
-        HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.5f))
+        if (!glass) HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.5f))
     }
 }

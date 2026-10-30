@@ -1,5 +1,8 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.ui.theme.HarnessGlassSurface as Surface
+import com.androidharness.app.ui.theme.*
+
 import androidx.compose.material3.OutlinedButton
 
 import androidx.compose.foundation.layout.Arrangement
@@ -48,7 +51,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -141,7 +143,7 @@ internal fun EmptyState(
                     Spacer(Modifier.height(28.dp))
                     Surface(
                         color = scheme.surface,
-                        shape = MaterialTheme.shapes.large,
+                        shape = if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) RoundedCornerShape(28.dp) else MaterialTheme.shapes.large,
                         border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.5f)),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -170,7 +172,7 @@ internal fun EmptyState(
                                             modifier = Modifier
                                                 .size(30.dp)
                                                 .clip(RoundedCornerShape(9.dp))
-                                                .background(scheme.surfaceContainerHigh),
+                                                .harnessGlass(scheme.surfaceContainerHigh, RoundedCornerShape(9.dp)),
                                         ) {
                                             Icon(
                                                 icon,

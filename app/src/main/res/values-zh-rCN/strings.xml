@@ -983,4 +983,18 @@
     <string name="dhizuku_denied">访问被拒绝 · 请在 Dhizuku 中授权</string>
     <string name="dhizuku_error">连接失败 · 请检查 Dhizuku 后重试</string>
     <string name="settings_language_sinhala">සිංහල</string>
+    <string name="glass_title">AHarness Glass(实验性)</string>
+    <string name="glass_description">为导航、控件和卡片添加玻璃效果。</string>
+    <string name="glass_enable">毛玻璃</string>
+    <string name="glass_enable_hint">使用半透明表面和柔和的模糊背景。</string>
+    <string name="glass_liquid">Liquid Glass</string>
+    <string name="glass_liquid_hint">透明玻璃，带透镜畸变、高光边缘和细微色散。没有磨砂效果，也不模糊背景。关闭后会回到毛玻璃。</string>
+    <string name="glass_unsupported">玻璃效果需要 Android 12 或更高版本。</string>
+    <string name="glass_liquid_unsupported">Liquid Glass 需要 Android 13 或更高版本。此设备可以使用毛玻璃。</string>
+    <string name="glass_preview_label">玻璃预览</string>
+    <string name="glass_preview_title">AndroidHarness</string>
+    <string name="glass_preview_text">清晰的文字。更柔和的背景。</string>
+    <string name="glass_transparency">透明度</string>
+    <string name="glass_transparency_percent">%1$d%%</string>
+    <string name="glass_transparency_hint">向右滑动可让玻璃更透明。拖动时预览会实时更新，松开后应用你的选择。操作按钮和弹窗会保留可读的色调。</string>
 </resources>

@@ -18,6 +18,9 @@ import com.androidharness.app.data.HarnessCanvasSettings
 import com.androidharness.app.data.HarnessCanvasStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 
 internal val LocalHarnessCanvasVisible = staticCompositionLocalOf { false }
 
@@ -36,11 +39,22 @@ internal fun HarnessCanvasBackdrop(
             runCatching { BitmapFactory.decodeFile(file!!.path)?.asImageBitmap() }.getOrNull()
         } else null
     }
+    val parentBackdrop = LocalHarnessGlassBackdrop.current
+    val wallpaperBackdrop = rememberHarnessGlassScene(backgroundOnly = true)
+    val combinedBackdrop = if (parentBackdrop != null && wallpaperBackdrop != null) rememberCombinedBackdrop(parentBackdrop, wallpaperBackdrop) else null
+    val screen = LocalHarnessGlassScene.current
+    DisposableEffect(screen, combinedBackdrop) {
+        screen?.background = combinedBackdrop
+        onDispose { if (screen?.background === combinedBackdrop) screen?.background = null }
+    }
     Box(modifier.background(MaterialTheme.colorScheme.surface)) {
-        Crossfade(bitmap, animationSpec = defaultEffectsSpec(), label = "Harness Canvas") { image ->
+        Box(Modifier.matchParentSize().recordHarnessGlassScene(wallpaperBackdrop)) {
+        Crossfade(bitmap, modifier = Modifier.fillMaxSize(), animationSpec = defaultEffectsSpec(), label = "Harness Canvas") { image ->
             if (image != null) Image(image, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
                 alpha = 1f - settings.dim.takeIf { it.isFinite() }.let { (it ?: .65f).coerceIn(0f, 1f) })
         }
-        CompositionLocalProvider(LocalHarnessCanvasVisible provides (visible && bitmap != null)) { content() }
+        }
+        CompositionLocalProvider(LocalHarnessCanvasVisible provides (visible && bitmap != null),
+            LocalHarnessGlassBackdrop provides (combinedBackdrop ?: parentBackdrop)) { content() }
     }
 }

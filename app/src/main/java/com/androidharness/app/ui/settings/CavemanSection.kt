@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.settings
 
+import com.androidharness.app.ui.theme.HarnessGlassSwitch as Switch
 import com.androidharness.app.ui.common.localizedOption
 import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import androidx.compose.foundation.layout.*

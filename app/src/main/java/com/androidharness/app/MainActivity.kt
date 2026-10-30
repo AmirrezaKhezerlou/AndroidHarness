@@ -89,6 +89,9 @@ class MainActivity : AppCompatActivity() {
                 customPalette = currentSettings.customPalettes.firstOrNull { it.id == currentSettings.activeCustomPaletteId }
                     .takeUnless { currentSettings.dynamicColor || currentSettings.harnessCanvas.adaptColors },
                 canvasSeed = currentSettings.harnessCanvas.takeIf { it.adaptColors && com.androidharness.app.data.HarnessCanvasStore.image(this, it.imageId) != null }?.seed,
+                glassEnabled = currentSettings.harnessGlassEnabled,
+                liquidGlass = currentSettings.harnessLiquidGlass,
+                glassTransparency = currentSettings.harnessGlassTransparency,
             ) {
                 // Auto update check shortly after launch, once per process.
                 LaunchedEffect(Unit) {

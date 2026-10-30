@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.ui.theme.HarnessGlassSurface as Surface
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons

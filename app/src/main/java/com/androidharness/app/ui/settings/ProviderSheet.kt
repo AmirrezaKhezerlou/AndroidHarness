@@ -36,11 +36,11 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.ui.window.SecureFlagPolicy
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
+import com.androidharness.app.ui.theme.HarnessGlassSurface as Surface
+import com.androidharness.app.ui.theme.HarnessGlassModalBottomSheet as ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState

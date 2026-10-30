@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.settings
 
+import com.androidharness.app.ui.theme.HarnessGlassSwitch as Switch
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.layout.*

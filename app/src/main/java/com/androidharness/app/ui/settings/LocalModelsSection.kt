@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.settings
 
+import com.androidharness.app.ui.theme.HarnessGlassSwitch as Switch
 import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts

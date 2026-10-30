@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.chat
 
+import com.androidharness.app.ui.theme.HarnessGlassSwitch as Switch
 import com.androidharness.app.R
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.KeyboardOptions

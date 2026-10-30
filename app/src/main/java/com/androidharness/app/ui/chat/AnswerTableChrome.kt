@@ -18,7 +18,10 @@ import com.androidharness.app.R
 
 @Composable
 internal fun AnswerTableSurface(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier.fillMaxWidth(), content = content)
+    val glass = com.androidharness.app.ui.theme.LocalHarnessGlass.current.mode != com.androidharness.app.ui.theme.HarnessGlassMode.OFF
+    if (glass) com.androidharness.app.ui.theme.HarnessGlassSurface(modifier.fillMaxWidth(),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)) { Column(content = content) }
+    else Column(modifier.fillMaxWidth(), content = content)
 }
 
 /** A scroll cue and position indicator are shared by Markdown and interactive tables. */

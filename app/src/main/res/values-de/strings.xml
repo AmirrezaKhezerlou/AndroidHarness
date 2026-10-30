@@ -953,4 +953,18 @@
     <string name="dhizuku_denied">Zugriff verweigert · Zugriff in Dhizuku erlauben</string>
     <string name="dhizuku_error">Verbindung fehlgeschlagen · Dhizuku prüfen und erneut versuchen</string>
     <string name="settings_language_sinhala">සිංහල</string>
+    <string name="glass_title">AHarness Glass (experimentell)</string>
+    <string name="glass_description">Glas-Effekte für Navigation, Bedienelemente und Karten.</string>
+    <string name="glass_enable">Milchglas</string>
+    <string name="glass_enable_hint">Verwende durchscheinende Flächen mit weich unscharfem Hintergrund.</string>
+    <string name="glass_liquid">Liquid Glass</string>
+    <string name="glass_liquid_hint">Klares Glas mit Linsenverzerrung, hellen Kanten und leichter Farbstreuung. Kein Milchglaseffekt und keine Unschärfe im Hintergrund. Schalte dies aus, um zu Milchglas zurückzukehren.</string>
+    <string name="glass_unsupported">Glas-Effekte benötigen Android 12 oder neuer.</string>
+    <string name="glass_liquid_unsupported">Liquid Glass benötigt Android 13 oder neuer. Milchglas ist auf diesem Gerät verfügbar.</string>
+    <string name="glass_preview_label">Glasvorschau</string>
+    <string name="glass_preview_title">AndroidHarness</string>
+    <string name="glass_preview_text">Klarer Text. Ein weicherer Hintergrund.</string>
+    <string name="glass_transparency">Transparenz</string>
+    <string name="glass_transparency_percent">%1$d%%</string>
+    <string name="glass_transparency_hint">Nach rechts schieben für klareres Glas. Die Vorschau folgt dem Ziehen, deine Auswahl gilt beim Loslassen. Aktionsschaltflächen und Pop-ups behalten eine lesbare Tönung.</string>
 </resources>

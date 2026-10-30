@@ -1,5 +1,8 @@
 package com.androidharness.app.ui.settings
 
+import com.androidharness.app.ui.theme.HarnessGlassSurface as Surface
+
+import com.androidharness.app.ui.theme.HarnessGlassSwitch as Switch
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions

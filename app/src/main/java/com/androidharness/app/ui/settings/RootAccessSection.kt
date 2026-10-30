@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.settings
 
+import com.androidharness.app.ui.theme.HarnessGlassSwitch as Switch
 import com.androidharness.app.ui.common.localizedOption
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState

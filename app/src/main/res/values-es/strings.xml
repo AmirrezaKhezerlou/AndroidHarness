@@ -953,4 +953,18 @@
     <string name="dhizuku_denied">Acceso denegado · permite el acceso en Dhizuku</string>
     <string name="dhizuku_error">Error de conexión · revisa Dhizuku e inténtalo de nuevo</string>
     <string name="settings_language_sinhala">සිංහල</string>
+    <string name="glass_title">AHarness Glass (experimental)</string>
+    <string name="glass_description">Efectos de cristal para la navegación, los controles y las tarjetas.</string>
+    <string name="glass_enable">Cristal esmerilado</string>
+    <string name="glass_enable_hint">Usa superficies translúcidas con fondos suavemente desenfocados.</string>
+    <string name="glass_liquid">Liquid Glass</string>
+    <string name="glass_liquid_hint">Cristal transparente con distorsión de lente, bordes luminosos y una sutil dispersión de color. Sin esmerilado ni desenfoque del fondo. Desactívalo para volver al cristal esmerilado.</string>
+    <string name="glass_unsupported">Los efectos de cristal necesitan Android 12 o posterior.</string>
+    <string name="glass_liquid_unsupported">Liquid Glass necesita Android 13 o posterior. El cristal esmerilado está disponible en este dispositivo.</string>
+    <string name="glass_preview_label">Vista previa del cristal</string>
+    <string name="glass_preview_title">AndroidHarness</string>
+    <string name="glass_preview_text">Texto nítido. Un fondo más suave.</string>
+    <string name="glass_transparency">Transparencia</string>
+    <string name="glass_transparency_percent">%1$d%%</string>
+    <string name="glass_transparency_hint">Desliza a la derecha para un cristal más claro. La vista previa sigue el arrastre y tu elección se aplica al soltar. Los botones de acción y las ventanas emergentes mantienen un tinte legible.</string>
 </resources>

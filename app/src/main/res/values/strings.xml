@@ -985,4 +985,18 @@
     <string name="dhizuku_denied">Access denied · grant access in Dhizuku</string>
     <string name="dhizuku_error">Connection failed · check Dhizuku and try again</string>
     <string name="settings_language_sinhala">සිංහල</string>
+    <string name="glass_title">AHarness Glass (Experimental)</string>
+    <string name="glass_description">Glass effects for navigation, controls, and cards.</string>
+    <string name="glass_enable">Frosted glass</string>
+    <string name="glass_enable_hint">Use translucent surfaces with softly blurred backgrounds.</string>
+    <string name="glass_liquid">Liquid Glass</string>
+    <string name="glass_liquid_hint">Clear glass with lens distortion, light edges, and subtle color dispersion. No frosting or background blur. Turn this off to return to frosted glass.</string>
+    <string name="glass_unsupported">Glass effects need Android 12 or later.</string>
+    <string name="glass_liquid_unsupported">Liquid Glass needs Android 13 or later. Frosted glass is available on this device.</string>
+    <string name="glass_preview_label">Glass preview</string>
+    <string name="glass_preview_title">AndroidHarness</string>
+    <string name="glass_preview_text">Clear text. A softer background.</string>
+    <string name="glass_transparency">Transparency</string>
+    <string name="glass_transparency_percent">%1$d%%</string>
+    <string name="glass_transparency_hint">Slide right for clearer glass. Preview updates as you drag; your choice applies when you release. Action buttons and pop-ups keep a readable tint.</string>
 </resources>

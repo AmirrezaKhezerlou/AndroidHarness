@@ -1,5 +1,11 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.ui.theme.*
+import com.androidharness.app.ui.theme.HarnessGlassSurface as Surface
+import com.androidharness.app.ui.theme.HarnessGlassAlertDialog as AlertDialog
+import com.androidharness.app.ui.theme.HarnessGlassModalBottomSheet as ModalBottomSheet
+import androidx.compose.ui.graphics.Color
+
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -193,8 +199,12 @@ fun ModelPickerSheet(
                 }) { Icon(Icons.Filled.Close, uiContext.getString(R.string.settings_search_clear), Modifier.size(18.dp)) } },
                 shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
     }
+    val glass = LocalHarnessGlass.current.mode != HarnessGlassMode.OFF
+    val sheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        dragHandle = if (compactHeight) null else ({ BottomSheetDefaults.DragHandle() }), containerColor = scheme.surface) {
+        shape = if (glass) sheetShape else BottomSheetDefaults.ExpandedShape,
+        dragHandle = if (compactHeight) null else ({ BottomSheetDefaults.DragHandle() }),
+        containerColor = if (glass) Color.Transparent else scheme.surface, contentColor = scheme.onSurface) {
         Column(Modifier.fillMaxWidth().height((LocalConfiguration.current.screenHeightDp * if (compactHeight) .96f else .86f).dp)
             .navigationBarsPadding().imePadding()) {
             Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -383,6 +393,10 @@ fun ModelPickerSheet(
 @Composable
 private fun ProviderChoiceRow(name: String, detail: String, selected: Boolean, onClick: () -> Unit) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
+    val glass = LocalHarnessGlass.current.mode != HarnessGlassMode.OFF
+    Surface(modifier = Modifier.fillMaxWidth().then(if (glass) Modifier.padding(horizontal = 12.dp, vertical = 3.dp) else Modifier),
+        shape = RoundedCornerShape(if (glass) 20.dp else 0.dp),
+        color = if (glass && selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface) {
     Row(Modifier.fillMaxWidth().heightIn(min = 68.dp).selectable(selected, role = Role.RadioButton, onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         ModelProviderMark(name, 30.dp)
@@ -391,6 +405,7 @@ private fun ProviderChoiceRow(name: String, detail: String, selected: Boolean, o
             Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (selected) Icon(Icons.Filled.Check, uiContext.getString(R.string.ui_selected_provider), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+    }
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 }

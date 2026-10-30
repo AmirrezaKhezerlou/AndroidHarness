@@ -1,5 +1,7 @@
 package com.androidharness.app.ui.chat.rich
 
+import com.androidharness.app.ui.theme.HarnessGlassSurface as Surface
+
 import android.graphics.Bitmap
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke

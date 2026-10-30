@@ -953,4 +953,18 @@
     <string name="dhizuku_denied">"ප් රවේශය ප් රතික්ෂේප කිරීම · ප් රවේශය ලබා දීම Dhizuku"</string>
     <string name="dhizuku_error">"සම්බන්ධතාවය අසාර්ථක වී ඇත · චෙක් කරන්න Dhizuku නැවතත් උත්සාහ කරන්න"</string>
     <string name="settings_language_sinhala">"සිංහල"</string>
+    <string name="glass_title">AHarness Glass (පරීක්ෂණාත්මක)</string>
+    <string name="glass_description">සංචාලනය, පාලක සහ කාඩ්පත් සඳහා වීදුරු ප්‍රභාව.</string>
+    <string name="glass_enable">මීදුම් වීදුරු</string>
+    <string name="glass_enable_hint">මෘදු ලෙස බොඳ කළ පසුබිම් සහිත අර්ධ පාරදෘශ්‍ය මතුපිට භාවිත කරන්න.</string>
+    <string name="glass_liquid">Liquid Glass</string>
+    <string name="glass_liquid_hint">කාච විකෘතිය, ආලෝකවත් දාර සහ සියුම් වර්ණ විසිරුම සහිත පැහැදිලි වීදුරු. බොඳ කිරීමක් හෝ පසුබිම් බොඳ කිරීමක් නැත. මීදුම් වීදුරු වෙත ආපසු යාමට මෙය ක්‍රියා විරහිත කරන්න.</string>
+    <string name="glass_unsupported">වීදුරු ප්‍රභා සඳහා Android 12 හෝ ඊට පසු අවශ්‍ය වේ.</string>
+    <string name="glass_liquid_unsupported">Liquid Glass සඳහා Android 13 හෝ ඊට පසු අවශ්‍ය වේ. මෙම උපාංගයේ මීදුම් වීදුරු ඇත.</string>
+    <string name="glass_preview_label">වීදුරු පෙරදසුන</string>
+    <string name="glass_preview_title">AndroidHarness</string>
+    <string name="glass_preview_text">පැහැදිලි පෙළ. මෘදු පසුබිමක්.</string>
+    <string name="glass_transparency">පාරදෘශ්‍යතාව</string>
+    <string name="glass_transparency_percent">%1$d%%</string>
+    <string name="glass_transparency_hint">වඩා පැහැදිලි වීදුරු සඳහා දකුණට අදින්න. ඇදීමේදී පෙරදසුන යාවත්කාලීන වන අතර ඔබේ තේරීම මුදා හරින විට යෙදේ. ක්‍රියා බොත්තම් සහ උත්පතන කවුළු කියවිය හැකි වර්ණයක් රඳවා ගනී.</string>
 </resources>

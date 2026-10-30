@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.settings
 
+import com.androidharness.app.ui.theme.HarnessGlassSwitch as Switch
 import androidx.annotation.StringRes
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.foundation.layout.navigationBarsPadding

@@ -188,6 +188,7 @@ configurations.configureEach {
 }
 
 dependencies {
+    implementation(libs.backdrop)
     if (distributionChannel == "play") implementation("com.google.android.play:feature-delivery:2.1.0")
     constraints {
         // dev.cel asks for Guava 33.6 and room-compiler for 33.2.1. 33.7.2 is

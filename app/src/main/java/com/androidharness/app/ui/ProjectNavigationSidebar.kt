@@ -1,5 +1,7 @@
 package com.androidharness.app.ui
 
+import com.androidharness.app.ui.theme.*
+import com.androidharness.app.ui.theme.HarnessGlassSurface as Surface
 import com.androidharness.app.ui.common.ExpressiveDropdownMenu as DropdownMenu
 import com.androidharness.app.ui.common.ExpressiveDropdownMenuItem as DropdownMenuItem
 
@@ -114,6 +116,7 @@ internal fun ProjectNavigationSidebar(
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scheme = MaterialTheme.colorScheme
+    val glass = LocalHarnessGlass.current.mode != HarnessGlassMode.OFF
     var expandedProjects by rememberSaveable { mutableStateOf(emptyList<String>()) }
     var showArchived by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(projectsView, chatOnly) { showArchived = false }
@@ -145,6 +148,8 @@ internal fun ProjectNavigationSidebar(
             onActions = { if (selecting) toggle(chat.id) else onChatActions(chat) },
             onAction = { if (it == SidebarChatAction.SELECT) onSelectedChatsChange(selection + chat.id) else onAction(chat, it) },
             selecting = selecting, checked = chat.id in selection)
+        if (glass) HorizontalDivider(Modifier.padding(start = if (indented) 40.dp else 20.dp, end = 20.dp),
+            color = scheme.onSurface.copy(alpha = .16f))
     }
     @Composable fun Footer() {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
@@ -163,7 +168,14 @@ internal fun ProjectNavigationSidebar(
         }
     }
     // The drawer's opening focus request should land here, not in chat search.
-    Surface(color = scheme.surface, modifier = Modifier.fillMaxSize().focusable().semantics { contentDescription = uiContext.getString(R.string.ui_project_and_chat_sidebar) }) {
+    val panelBackdrop = if (glass) com.kyant.backdrop.backdrops.rememberLayerBackdrop() else null
+    Surface(color = scheme.surface,
+        contentColor = scheme.onSurface,
+        centerOpacityFloor = if (glass) .48f else 0f, exportedBackdrop = panelBackdrop,
+        shape = if (glass) RoundedCornerShape(32.dp) else androidx.compose.ui.graphics.RectangleShape,
+        modifier = Modifier.fillMaxSize()
+            .focusable().semantics { contentDescription = uiContext.getString(R.string.ui_project_and_chat_sidebar) }) {
+        CompositionLocalProvider(LocalHarnessGlassBackdrop provides (panelBackdrop ?: LocalHarnessGlassBackdrop.current)) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val short = maxHeight < 440.dp
             val narrow = maxWidth < 280.dp
@@ -188,8 +200,10 @@ internal fun ProjectNavigationSidebar(
                         com.androidharness.app.data.ConversationConfig(
                             if (chatOnly) com.androidharness.app.data.ConversationKind.CHAT else com.androidharness.app.data.ConversationKind.CODE),
                         sectionSwitchEnabled, onSelectSection)
-                    Button(onClick = onNewChat, enabled = projectCreationEnabled, shape = RoundedCornerShape(11.dp),
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp).heightIn(min = 44.dp)) {
+                    Button(onClick = onNewChat, enabled = projectCreationEnabled,
+                        colors = if (glass) ButtonDefaults.buttonColors(containerColor = androidx.compose.ui.graphics.Color.Transparent) else ButtonDefaults.buttonColors(), shape = RoundedCornerShape(if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) 28.dp else 11.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp).heightIn(min = 44.dp)
+                            .then(if (glass) Modifier.harnessGlass(scheme.primary, RoundedCornerShape(28.dp)) else Modifier)) {
                         Icon(Icons.Outlined.EditNote, null, Modifier.size(19.dp)); Spacer(Modifier.width(8.dp))
                         Text(uiContext.getString(if (chatOnly) R.string.settings_telegram_new_chat else R.string.conversation_new_code_chat), style = MaterialTheme.typography.labelLarge)
                     }
@@ -201,7 +215,7 @@ internal fun ProjectNavigationSidebar(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp)
                             .semantics { contentDescription = uiContext.getString(R.string.ui_search_chats_and_messages) },
                         decorationBox = { field ->
-                            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).background(scheme.surfaceContainerHigh, RoundedCornerShape(10.dp))
+                            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).harnessGlass(scheme.surfaceContainerHigh, RoundedCornerShape(if (glass) 24.dp else 10.dp))
                                 .padding(start = 12.dp, end = if (query.isBlank() && !chatOnly) 12.dp else 0.dp, top = 4.dp, bottom = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Outlined.Search, null, Modifier.size(18.dp), tint = scheme.onSurfaceVariant)
@@ -228,7 +242,7 @@ internal fun ProjectNavigationSidebar(
                     }
                     if (!chatOnly) Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, top = 2.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically) {
-                        FlowRow(Modifier.weight(1f).background(scheme.surfaceContainer, RoundedCornerShape(12.dp)).padding(3.dp),
+                        FlowRow(Modifier.weight(1f).harnessGlass(scheme.surfaceContainer, RoundedCornerShape(if (glass) 24.dp else 12.dp)).padding(3.dp),
                             verticalArrangement = Arrangement.spacedBy(2.dp),
                             maxItemsInEachRow = if (stackTabs) 1 else 2) {
                             listOf(false to uiContext.getString(R.string.ui_chats), true to uiContext.getString(R.string.ui_projects)).forEach { (projectTab, label) ->
@@ -238,7 +252,7 @@ internal fun ProjectNavigationSidebar(
                                     animationSpec = expressiveEffectsSpec(), label = "sidebar tab color",
                                 )
                                 val tabCorner by animateDpAsState(
-                                    if (selectedTab) 18.dp else 9.dp,
+                                    if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) 24.dp else if (selectedTab) 18.dp else 9.dp,
                                     animationSpec = expressiveSpatialSpec(), label = "sidebar tab shape",
                                 )
                                 Surface(onClick = { onProjectsViewChange(projectTab) }, shape = RoundedCornerShape(tabCorner),
@@ -349,6 +363,7 @@ internal fun ProjectNavigationSidebar(
             }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = if (short) 8.dp else footerHeight + 8.dp))
         }
+        }
     }
 }
 
@@ -406,6 +421,8 @@ private fun SidebarProjectRow(project: ProjectEntity, expanded: Boolean, pinned:
 @Composable
 private fun SidebarSectionHeader(label: String, expanded: Boolean, onClick: (() -> Unit)?) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
+    if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) HorizontalDivider(
+        Modifier.padding(horizontal = 18.dp, vertical = 6.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = .24f))
     val contents: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth().heightIn(min = if (onClick == null) 32.dp else 44.dp).padding(start = 20.dp, end = 18.dp),
             verticalAlignment = Alignment.CenterVertically) {

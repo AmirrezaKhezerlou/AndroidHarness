@@ -36,6 +36,9 @@ data class AppSettings(
     val customPalettes: List<CustomThemePalette> = emptyList(),
     val activeCustomPaletteId: String? = null,
     val harnessCanvas: HarnessCanvasSettings = HarnessCanvasSettings(),
+    val harnessGlassEnabled: Boolean = false,
+    val harnessLiquidGlass: Boolean = false,
+    val harnessGlassTransparency: Float = 0.5f,
     val progressBarStyle: ProgressBarStyle = ProgressBarStyle.FLAT,
     val workspaceLayout: WorkspaceLayoutMode = WorkspaceLayoutMode.AUTO,
     val editorWordWrap: Boolean = false,
@@ -209,6 +212,9 @@ class SettingsRepository(private val context: Context) {
         val CUSTOM_PALETTES = stringPreferencesKey("custom_palettes")
         val ACTIVE_CUSTOM_PALETTE = stringPreferencesKey("active_custom_palette")
         val HARNESS_CANVAS = stringPreferencesKey("harness_canvas")
+        val HARNESS_GLASS_ENABLED = booleanPreferencesKey("harness_glass_enabled")
+        val HARNESS_LIQUID_GLASS = booleanPreferencesKey("harness_liquid_glass")
+        val HARNESS_GLASS_TRANSPARENCY = floatPreferencesKey("harness_glass_transparency")
         val PROGRESS_BAR_STYLE = stringPreferencesKey("progress_bar_style")
         val WORKSPACE_LAYOUT = stringPreferencesKey("workspace_layout")
         val EDITOR_WORD_WRAP = booleanPreferencesKey("editor_word_wrap")
@@ -308,6 +314,9 @@ class SettingsRepository(private val context: Context) {
             customPalettes = runCatching { kotlinx.serialization.json.Json.decodeFromString<List<CustomThemePalette>>(prefs[Keys.CUSTOM_PALETTES] ?: "[]") }.getOrDefault(emptyList()),
             activeCustomPaletteId = prefs[Keys.ACTIVE_CUSTOM_PALETTE],
             harnessCanvas = runCatching { kotlinx.serialization.json.Json.decodeFromString<HarnessCanvasSettings>(prefs[Keys.HARNESS_CANVAS] ?: "{}") }.getOrDefault(HarnessCanvasSettings()),
+            harnessGlassEnabled = prefs[Keys.HARNESS_GLASS_ENABLED] ?: false,
+            harnessLiquidGlass = prefs[Keys.HARNESS_LIQUID_GLASS] ?: false,
+            harnessGlassTransparency = (prefs[Keys.HARNESS_GLASS_TRANSPARENCY] ?: .5f).let { if (it.isFinite()) it.coerceIn(0f, 1f) else .5f },
             progressBarStyle = ProgressBarStyle.entries.firstOrNull { it.name == prefs[Keys.PROGRESS_BAR_STYLE] }
                 ?: ProgressBarStyle.FLAT,
             workspaceLayout = WorkspaceLayoutMode.fromStored(prefs[Keys.WORKSPACE_LAYOUT])
@@ -403,6 +412,9 @@ class SettingsRepository(private val context: Context) {
             p[Keys.CUSTOM_PALETTES] = kotlinx.serialization.json.Json.encodeToString(s.customPalettes)
             s.activeCustomPaletteId?.let { p[Keys.ACTIVE_CUSTOM_PALETTE] = it } ?: p.remove(Keys.ACTIVE_CUSTOM_PALETTE)
             p[Keys.HARNESS_CANVAS] = kotlinx.serialization.json.Json.encodeToString(s.harnessCanvas)
+            p[Keys.HARNESS_GLASS_ENABLED] = s.harnessGlassEnabled
+            p[Keys.HARNESS_LIQUID_GLASS] = s.harnessLiquidGlass
+            p[Keys.HARNESS_GLASS_TRANSPARENCY] = s.harnessGlassTransparency.let { if (it.isFinite()) it.coerceIn(0f, 1f) else .5f }
             p[Keys.PROGRESS_BAR_STYLE] = s.progressBarStyle.name
             p[Keys.WORKSPACE_LAYOUT] = s.workspaceLayout.name
             p[Keys.EDITOR_WORD_WRAP] = s.editorWordWrap
@@ -558,6 +570,19 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.CUSTOM_PALETTES] = kotlinx.serialization.json.Json.encodeToString(saved.filterNot { it.id == id })
             if (prefs[Keys.ACTIVE_CUSTOM_PALETTE] == id) prefs.remove(Keys.ACTIVE_CUSTOM_PALETTE)
         }
+    }
+
+    suspend fun setHarnessGlassEnabled(enabled: Boolean) {
+        context.settingsStore.edit { it[Keys.HARNESS_GLASS_ENABLED] = enabled }
+    }
+
+    suspend fun setHarnessLiquidGlass(enabled: Boolean) {
+        context.settingsStore.edit { it[Keys.HARNESS_LIQUID_GLASS] = enabled }
+    }
+
+    suspend fun setHarnessGlassTransparency(value: Float) {
+        if (!value.isFinite()) return
+        context.settingsStore.edit { it[Keys.HARNESS_GLASS_TRANSPARENCY] = value.coerceIn(0f, 1f) }
     }
 
     suspend fun updateHarnessCanvas(transform: (HarnessCanvasSettings) -> HarnessCanvasSettings) {

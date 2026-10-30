@@ -1,5 +1,11 @@
 package com.androidharness.app.ui.chat.components
 
+import androidx.compose.runtime.CompositionLocalProvider
+import com.androidharness.app.ui.theme.LocalHarnessGlassBackdrop
+import com.androidharness.app.ui.theme.LocalHarnessGlassChromeBackdrop
+import com.androidharness.app.ui.theme.harnessGlassChrome
+import com.androidharness.app.ui.theme.LocalHarnessGlass
+import com.androidharness.app.ui.theme.HarnessGlassMode
 import com.androidharness.app.ui.common.ExpressiveDropdownMenu as DropdownMenu
 import com.androidharness.app.ui.common.ExpressiveDropdownMenuItem as DropdownMenuItem
 
@@ -74,7 +80,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import com.androidharness.app.ui.theme.HarnessGlassSurface as Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -427,6 +433,7 @@ internal fun MessageComposer(
                 // Inbuilt voice mode: Simple tap toggle without gesture overlays
                 ExpressiveIconButton(
                     onClick = onToggleInbuiltVoice,
+                    glassDecoration = false,
                     modifier = Modifier.size(actionSize)
                         .semantics { contentDescription = if (isInbuiltListening) uiContext.getString(R.string.ui_stop_voice_input) else uiContext.getString(R.string.settings_page_voice_title) },
                     shape = RoundedCornerShape(corner),
@@ -447,7 +454,7 @@ internal fun MessageComposer(
         // and the clickable area steady while the input grows or shrinks.
         when {
             isGroqActive && isGroqLocked -> {
-                ExpressiveIconButton(
+                ExpressiveIconButton(preserveFill = true,
                     onClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.Confirm)
                         onStopAndTranscribeGroq()
@@ -467,7 +474,7 @@ internal fun MessageComposer(
             isGroqActive -> voice()
 
             showQueueSend -> {
-                ExpressiveIconButton(
+                ExpressiveIconButton(preserveFill = true,
                     onClick = { if (sendAllowed) { haptics.performHapticFeedback(HapticFeedbackType.Confirm); onSend() } },
                     enabled = sendAllowed,
                     modifier = Modifier.size(actionSize)
@@ -484,7 +491,7 @@ internal fun MessageComposer(
 
 
             showStopOnly -> {
-                ExpressiveIconButton(
+                ExpressiveIconButton(preserveFill = true,
                     onClick = { haptics.performHapticFeedback(HapticFeedbackType.Confirm); onStop() },
                     modifier = Modifier.size(actionSize)
                         .semantics { contentDescription = uiContext.getString(R.string.settings_action_stop) },
@@ -496,7 +503,7 @@ internal fun MessageComposer(
             }
 
             canSend -> {
-                ExpressiveIconButton(
+                ExpressiveIconButton(preserveFill = true,
                     onClick = { if (sendAllowed) { haptics.performHapticFeedback(HapticFeedbackType.Confirm); onSend() } },
                     enabled = sendAllowed,
                     modifier = Modifier.size(actionSize)
@@ -517,6 +524,7 @@ internal fun MessageComposer(
         transitionSpec = { expressiveSpatialSpec() }, label = "voiceSlotWidth",
     ) { collapsed -> if (collapsed) 0.dp else slotSize }
     val recorderContent: @Composable () -> Unit = {
+        CompositionLocalProvider(LocalHarnessGlassBackdrop provides (LocalHarnessGlassChromeBackdrop.current ?: LocalHarnessGlassBackdrop.current)) {
         // animateContentSize clips drawing outside its bounds, including the hold-to-lock rail.
         Column(if (isGroqActive) Modifier else Modifier.animateContentSize(
             animationSpec = expressiveSpatialSpec(), alignment = Alignment.BottomCenter,
@@ -524,7 +532,7 @@ internal fun MessageComposer(
             if (!isGroqActive) attachments()
             Row(
                 Modifier.fillMaxWidth().heightIn(min = if (isGroqActive) 64.dp else 0.dp).padding(horizontal = 4.dp,
-                    vertical = if (isGroqActive || focused && !desktop) 8.dp else 4.dp),
+                    vertical = if (isGroqActive || focused && !desktop && LocalHarnessGlass.current.mode == HarnessGlassMode.OFF) 8.dp else 4.dp),
                 verticalAlignment = if (isGroqActive) Alignment.CenterVertically else inputAlignment,
             ) {
                 Box(Modifier.width(slotSize), contentAlignment = Alignment.Center) { leading() }
@@ -539,29 +547,32 @@ internal fun MessageComposer(
                         isGroqLocked -> trailing()
                         isGroqActive -> Spacer(Modifier.size(actionSize))
                         canSend || showStopOnly -> trailing()
-                        else -> ExpressiveIconButton(onClick = {}, enabled = false,
+                        else -> ExpressiveIconButton(preserveFill = true, onClick = {}, enabled = false,
                             modifier = Modifier.size(actionSize).semantics { contentDescription = uiContext.getString(R.string.ui_send_message) },
                             shape = CircleShape,
                             colors = IconButtonDefaults.iconButtonColors(
                                 disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = .38f),
-                                disabledContentColor = MaterialTheme.colorScheme.onPrimary)) {
+                                disabledContentColor = if (com.androidharness.app.ui.theme.LocalHarnessGlass.current.mode != com.androidharness.app.ui.theme.HarnessGlassMode.OFF) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onPrimary)) {
                             Icon(painterResource(R.drawable.ic_chat_arrow_up), null, Modifier.size(20.dp))
                         }
                     }
                 }
             }
         }
+        }
     }
     val scheme = MaterialTheme.colorScheme
+    val glass = LocalHarnessGlass.current.mode != HarnessGlassMode.OFF
     if (!desktop) {
         val expanded = focused && !isGroqActive
-        val inset by animateDpAsState(if (expanded) 10.dp else 16.dp,
+        val inset by animateDpAsState(if (glass) 16.dp else if (expanded) 10.dp else 16.dp,
             expressiveSpatialSpec(), label = "composerInset")
-        val pillCorner by animateDpAsState(if (isGroqActive) 32.dp else if (expanded) 30.dp else 28.dp,
+        val pillCorner by animateDpAsState(if (glass || isGroqActive) 32.dp else if (expanded) 30.dp else 28.dp,
             expressiveSpatialSpec(), label = "composerCorner")
-        val elevation by animateDpAsState(if (expanded) 2.dp else 0.dp,
+        val elevation by animateDpAsState(if (expanded && !glass) 2.dp else 0.dp,
             expressiveSpatialSpec(), label = "composerElevation")
         val outline by animateColorAsState(when {
+            glass -> if (expanded) scheme.primary.copy(alpha = .18f) else Color.Transparent
             isGroqActive -> Color.Transparent
             expanded -> scheme.primary.copy(alpha = .55f)
             else -> scheme.outlineVariant.copy(alpha = .55f)
@@ -569,12 +580,14 @@ internal fun MessageComposer(
         Column(modifier.fillMaxWidth().padding(horizontal = inset, vertical = 8.dp)
             .testTag("message-composer")
             .shadow(elevation, RoundedCornerShape(pillCorner), clip = false)
-            .background(if (isGroqActive) scheme.surfaceContainer else scheme.surfaceContainerHigh, RoundedCornerShape(pillCorner))
+            .harnessGlassChrome(if (glass) Color.Transparent else if (isGroqActive) scheme.surfaceContainer else scheme.surfaceContainerHigh,
+                RoundedCornerShape(pillCorner), centerOpacityFloor = if (glass) .32f else 0f)
             .border(1.dp, outline, RoundedCornerShape(pillCorner))) { recorderContent() }
     } else {
         Column(modifier.fillMaxWidth()
             .padding(horizontal = if (desktopInput) 12.dp else 20.dp, vertical = if (desktopInput) 6.dp else 12.dp)
-            .background(scheme.surfaceContainerHigh, RoundedCornerShape(if (isGroqActive) 24.dp else 14.dp))
+            .harnessGlassChrome(if (glass) Color.Transparent else scheme.surfaceContainerHigh, RoundedCornerShape(if (glass || isGroqActive) 24.dp else 14.dp),
+                centerOpacityFloor = if (glass) .32f else 0f)
             .border(1.dp, if (isGroqActive) Color.Transparent else if (focused) scheme.primary else scheme.outlineVariant,
                 RoundedCornerShape(if (isGroqActive) 24.dp else 14.dp))) { recorderContent() }
     }
@@ -699,7 +712,7 @@ private fun HuliaMicButton(
         label = "micGlyphColor",
     )
     val corner by animateDpAsState(
-        targetValue = if (recording) 26.dp else 17.dp,
+        targetValue = if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) size / 2 else if (recording) 26.dp else 17.dp,
         animationSpec = expressiveSpatialSpec(),
         label = "micCorner",
     )
@@ -806,7 +819,8 @@ private fun HuliaMicButton(
                         translationY = dragY.coerceIn(-lockDistancePx, 0f)
                     }
                     .clip(RoundedCornerShape(corner))
-                    .background(background)
+                    .then(if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF && !recording && !cancelArmed) Modifier
+                        else Modifier.harnessGlassChrome(background, RoundedCornerShape(corner)))
                     .indication(interactions, ripple(color = glyphColor)),
                 contentAlignment = Alignment.Center,
             ) {
@@ -837,9 +851,10 @@ private fun ComposerLeadingButton(
     Box {
         ExpressiveIconButton(
             onClick = { haptics.performHapticFeedback(HapticFeedbackType.Confirm); expanded = true },
+            glassDecoration = false,
             modifier = Modifier.size(size)
                 .semantics { contentDescription = uiContext.getString(R.string.ui_message_actions) },
-            shape = RoundedCornerShape(17.dp),
+            shape = if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) CircleShape else RoundedCornerShape(17.dp),
             colors = IconButtonDefaults.iconButtonColors(
                 containerColor = if (expanded) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
                 contentColor = if (expanded) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,

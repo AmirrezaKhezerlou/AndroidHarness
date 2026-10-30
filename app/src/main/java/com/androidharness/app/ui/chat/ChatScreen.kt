@@ -1,5 +1,9 @@
 package com.androidharness.app.ui.chat
 
+import com.androidharness.app.ui.theme.*
+import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
+import androidx.compose.ui.layout.layout
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.verticalScroll
@@ -1271,7 +1275,14 @@ private fun ChatScreenContent(
         }
     }
 
+    val glassScene = rememberHarnessGlassScene()
+    val glassAmbient = LocalHarnessGlassBackdrop.current
+    val glassChrome = rememberGlassContentBackdrop(glassAmbient, glassScene,
+        if (LocalHarnessGlass.current.mode == HarnessGlassMode.LIQUID) .26f else 1f)
+    val floatingGlass = glassScene != null && !desktopLayout
+    var glassComposerHeight by remember { mutableIntStateOf(0) }
     CompositionLocalProvider(
+        LocalHarnessGlassChromeBackdrop provides glassChrome,
         LocalChatDetailScroll provides detailScroll,
         com.androidharness.app.ui.chat.rich.LocalResponseFileOpen provides (if (state.conversation.isChat) null else onOpenFile),
         com.androidharness.app.ui.chat.rich.LocalResponseContext provides { title, context ->
@@ -1440,7 +1451,7 @@ private fun ChatScreenContent(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(if (floatingGlass) PaddingValues(bottom = padding.calculateBottomPadding()) else padding)
                 .background(if (com.androidharness.app.ui.theme.LocalHarnessCanvasVisible.current) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.surface),
             contentAlignment = Alignment.TopCenter,
         ) {
@@ -1574,9 +1585,14 @@ private fun ChatScreenContent(
                     } else {
                         LazyColumn(
                             state = listState,
-                            modifier = Modifier.fillMaxSize().nestedScroll(userScrollObserver),
+                            modifier = Modifier.fillMaxSize().glassViewportExtra(if (floatingGlass) glassComposerHeight else 0)
+                                .recordHarnessGlassScene(glassScene,
+                                    fadeTop = if (floatingGlass) with(density) { padding.calculateTopPadding().toPx() } else 0f,
+                                    fadeBottom = if (floatingGlass) glassComposerHeight.toFloat() else 0f)
+                                .nestedScroll(userScrollObserver),
                             contentPadding = PaddingValues(
-                                start = 18.dp, top = 24.dp, end = 18.dp, bottom = 24.dp,
+                                start = 18.dp, top = 24.dp + (if (floatingGlass) padding.calculateTopPadding() else 0.dp), end = 18.dp,
+                                bottom = 24.dp + (if (floatingGlass) with(density) { glassComposerHeight.toDp() } else 0.dp),
                             ),
                             // Top-anchored: a sent question stays put while the
                             // answer grows below; short chats no longer sit at the bottom.
@@ -2322,6 +2338,7 @@ private fun ChatScreenContent(
                 if (!state.conversation.isChat) com.androidharness.app.ui.chat.components.FloatingSubagentDock(
                     state.sessionId, viewModel.container.runManager, onOpenSubagent)
                 MessageComposer(
+                    modifier = Modifier.onSizeChanged { glassComposerHeight = it.height },
                     chatOnly = state.conversation.isChat,
                     sendAllowed = viewModel.attachmentBlockReason() == null,
                     attachments = {
@@ -2696,11 +2713,12 @@ private fun ScrollToBottomFab(
                 label = "unread pulse scale",
             ).value
         } else 1f
-        Surface(
+        HarnessGlassSurface(
             onClick = onJump,
+            chrome = true,
             shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+            color = if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.surfaceContainerHigh,
+            border = if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
             modifier = Modifier.size(48.dp),
         ) {
             Box(
@@ -2954,4 +2972,11 @@ private fun ChatLoadingSkeleton(modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+/** Draw the conversation underneath the floating composer while keeping its layout/touch bounds. */
+private fun Modifier.glassViewportExtra(extra: Int): Modifier = if (extra <= 0) this else layout { measurable, constraints ->
+    val growth = if (constraints.hasBoundedHeight) extra else 0
+    val child = measurable.measure(constraints.copy(minHeight = constraints.minHeight + growth, maxHeight = constraints.maxHeight + growth))
+    layout(child.width, child.height - growth) { child.placeRelative(0, 0) }
 }

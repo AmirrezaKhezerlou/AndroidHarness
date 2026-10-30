@@ -1,5 +1,8 @@
 package com.androidharness.app.ui.chat.rich
 
+import com.androidharness.app.ui.theme.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+
 import android.content.Intent
 import android.graphics.Bitmap
 import android.widget.Toast
@@ -82,7 +85,7 @@ internal fun ResponseGallery(gallery: RichResponse.Node.Gallery, onOpenUrl: ((St
             val state by produceState<Pair<Boolean, Bitmap?>>(true to null, image.url) {
                 value = false to RemoteContentLoader.loadImage(context, image.url)
             }
-            Box(Modifier.fillMaxWidth().height(240.dp).background(MaterialTheme.colorScheme.surfaceContainerLow)
+            Box(Modifier.fillMaxWidth().height(240.dp).harnessGlass(MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(12.dp))
                 .clickable { expanded = true }, contentAlignment = Alignment.Center) {
                 val bitmap = state.second
                 when {
@@ -177,7 +180,8 @@ internal fun ResponseDiffView(diff: RichResponse.Node.Diff, onFollowUp: ((RichRe
             Text(diff.path, style = MaterialTheme.typography.labelSmall)
             openFile?.let { open -> TextButton(onClick = { open(diff.path, diff.line) }) { Text(stringResource(R.string.rich_open_file)) } }
         }
-        TabRow(mode) {
+        TabRow(mode, modifier = Modifier.harnessGlassControl(),
+            containerColor = if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) androidx.compose.ui.graphics.Color.Transparent else colors.surface) {
             listOf(R.string.rich_changes, R.string.rich_before, R.string.rich_after).forEachIndexed { index, label ->
                 Tab(selected = mode == index, onClick = { mode = index; contextChange?.invoke(diff.title, "View: ${ui.getString(label)}\n" + if (index == 0) RichResponse.describe(diff) else if (index == 1) diff.before else diff.after) }, text = { Text(stringResource(label)) })
             }

@@ -36,6 +36,9 @@ fun HarnessTheme(
     colorPalette: ThemePalette = ThemePalette.BLUE,
     customPalette: com.androidharness.app.data.CustomThemePalette? = null,
     canvasSeed: Long? = null,
+    glassEnabled: Boolean = false,
+    liquidGlass: Boolean = false,
+    glassTransparency: Float = .5f,
     content: @Composable () -> Unit,
 ) {
     val dark = when (themeMode) {
@@ -60,17 +63,21 @@ fun HarnessTheme(
     // AMOLED blacks out the surface roles but keeps the accent roles, so a
     // wallpaper-derived primary survives the switch to true black.
     val colorScheme = if (themeMode == ThemeMode.AMOLED) base.amoledSurfaces() else base
+    val glass = HarnessGlassStyle(HarnessGlassMode.resolve(glassEnabled, liquidGlass, Build.VERSION.SDK_INT), colorScheme.surface, glassTransparency)
 
     CompositionLocalProvider(
         LocalStatusColors provides (if (dark) StatusDark else StatusLight),
         LocalProgressBarStyle provides progressBarStyle,
     ) {
         MaterialTheme(
-            colorScheme = colorScheme,
+            colorScheme = if (glass.mode == HarnessGlassMode.OFF) colorScheme else colorScheme.copy(
+                background = androidx.compose.ui.graphics.Color.Transparent,
+                surface = androidx.compose.ui.graphics.Color.Transparent,
+            ),
             typography = HarnessTypography,
             shapes = HarnessShapes,
             motionScheme = MotionScheme.standard(),
-            content = content,
+            content = { HarnessGlassRoot(glass, content) },
         )
     }
 }

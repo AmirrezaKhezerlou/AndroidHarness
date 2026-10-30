@@ -1,5 +1,8 @@
 package com.androidharness.app.ui.chat.rich
 
+import com.androidharness.app.ui.theme.HarnessGlassSurface as Surface
+import com.androidharness.app.ui.theme.*
+
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -222,7 +225,9 @@ internal fun ResponseTabs(tabs: RichResponse.Node.Tabs, onOpenUrl: ((String) -> 
     val ui = LocalContext.current
     ResponsePanel {
         Text(tabs.title, style = MaterialTheme.typography.titleSmall)
-        ScrollableTabRow(selectedTabIndex = selected, edgePadding = 0.dp) {
+        ScrollableTabRow(selectedTabIndex = selected, edgePadding = 0.dp,
+            modifier = Modifier.harnessGlassControl(),
+            containerColor = if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.surface) {
             tabs.tabs.forEachIndexed { index, item -> Tab(selected == index, onClick = {
                 selected = index
                 contextChange?.invoke(tabs.title, "Selected tab: ${item.title}\n" + contexts[index].ifBlank { item.children.joinToString("\n", transform = RichResponse::describe) })

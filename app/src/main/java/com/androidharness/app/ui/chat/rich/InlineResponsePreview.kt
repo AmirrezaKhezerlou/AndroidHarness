@@ -1,5 +1,7 @@
 package com.androidharness.app.ui.chat.rich
 
+import com.androidharness.app.ui.theme.HarnessGlassSurface as Surface
+
 import com.androidharness.app.R
 import com.androidharness.app.ui.common.AppLinearProgressIndicator
 import com.androidharness.app.core.response.RichResponse

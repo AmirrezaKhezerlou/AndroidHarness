@@ -1,5 +1,6 @@
 package com.androidharness.app.ui.settings
 
+import com.androidharness.app.ui.theme.HarnessGlassSurface as Surface
 import androidx.compose.material.icons.outlined.CloudSync
 
 import androidx.compose.foundation.BorderStroke

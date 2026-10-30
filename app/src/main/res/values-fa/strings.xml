@@ -953,4 +953,18 @@
     <string name="dhizuku_denied">دسترسی رد شد · در Dhizuku مجوز بدهید</string>
     <string name="dhizuku_error">اتصال ناموفق · Dhizuku را بررسی و دوباره تلاش کنید</string>
     <string name="settings_language_sinhala">සිංහල</string>
+    <string name="glass_title">AHarness Glass (آزمایشی)</string>
+    <string name="glass_description">افکت‌های شیشه‌ای برای پیمایش، کنترل‌ها و کارت‌ها.</string>
+    <string name="glass_enable">شیشه مات</string>
+    <string name="glass_enable_hint">از سطوح نیمه‌شفاف با پس‌زمینه‌های نرم و محو استفاده کنید.</string>
+    <string name="glass_liquid">Liquid Glass</string>
+    <string name="glass_liquid_hint">شیشه شفاف با اعوجاج عدسی، لبه‌های روشن و پاشش رنگی ملایم. بدون مات‌شدگی یا محو شدن پس‌زمینه. برای بازگشت به شیشه مات، آن را خاموش کنید.</string>
+    <string name="glass_unsupported">افکت‌های شیشه‌ای به Android 12 یا جدیدتر نیاز دارند.</string>
+    <string name="glass_liquid_unsupported">Liquid Glass به Android 13 یا جدیدتر نیاز دارد. شیشه مات روی این دستگاه در دسترس است.</string>
+    <string name="glass_preview_label">پیش‌نمایش شیشه</string>
+    <string name="glass_preview_title">AndroidHarness</string>
+    <string name="glass_preview_text">متن واضح. پس‌زمینه نرم‌تر.</string>
+    <string name="glass_transparency">شفافیت</string>
+    <string name="glass_transparency_percent">%1$d%%</string>
+    <string name="glass_transparency_hint">برای شیشه شفاف‌تر به راست بکشید. پیش‌نمایش هنگام کشیدن به‌روز می‌شود و انتخاب شما با رها کردن اعمال می‌شود. دکمه‌های عملیات و پنجره‌های بازشو رنگ خوانا را حفظ می‌کنند.</string>
 </resources>

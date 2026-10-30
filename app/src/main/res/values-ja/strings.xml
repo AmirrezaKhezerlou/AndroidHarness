@@ -952,4 +952,18 @@
     <string name="dhizuku_denied">アクセスが拒否されました · Dhizuku でアクセスを許可してください</string>
     <string name="dhizuku_error">接続に失敗しました · Dhizuku を確認して再試行してください</string>
     <string name="settings_language_sinhala">සිංහල</string>
+    <string name="glass_title">AHarness Glass(実験的)</string>
+    <string name="glass_description">ナビゲーション、コントロール、カードにガラス効果を適用します。</string>
+    <string name="glass_enable">すりガラス</string>
+    <string name="glass_enable_hint">半透明の面と、やわらかくぼかした背景を使います。</string>
+    <string name="glass_liquid">Liquid Glass</string>
+    <string name="glass_liquid_hint">レンズの歪み、光る縁、わずかな色分散を備えた透明なガラスです。すりガラス効果や背景のぼかしはありません。オフにするとすりガラスに戻ります。</string>
+    <string name="glass_unsupported">ガラス効果には Android 12 以降が必要です。</string>
+    <string name="glass_liquid_unsupported">Liquid Glass には Android 13 以降が必要です。この端末ではすりガラスを利用できます。</string>
+    <string name="glass_preview_label">ガラスのプレビュー</string>
+    <string name="glass_preview_title">AndroidHarness</string>
+    <string name="glass_preview_text">くっきりした文字。やわらかな背景。</string>
+    <string name="glass_transparency">透明度</string>
+    <string name="glass_transparency_percent">%1$d%%</string>
+    <string name="glass_transparency_hint">右に動かすほどガラスが透明になります。プレビューはドラッグ中に更新され、指を離すと設定が適用されます。操作ボタンとポップアップは読みやすい色合いを保ちます。</string>
 </resources>

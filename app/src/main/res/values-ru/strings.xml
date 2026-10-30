@@ -955,4 +955,18 @@
     <string name="dhizuku_denied">Доступ запрещён · разрешите доступ в Dhizuku</string>
     <string name="dhizuku_error">Ошибка подключения · проверьте Dhizuku и повторите попытку</string>
     <string name="settings_language_sinhala">සිංහල</string>
+    <string name="glass_title">AHarness Glass (экспериментально)</string>
+    <string name="glass_description">Стеклянные эффекты для навигации, элементов управления и карточек.</string>
+    <string name="glass_enable">Матовое стекло</string>
+    <string name="glass_enable_hint">Полупрозрачные поверхности с мягко размытым фоном.</string>
+    <string name="glass_liquid">Liquid Glass</string>
+    <string name="glass_liquid_hint">Прозрачное стекло с искажением линзы, светлыми краями и лёгкой дисперсией цвета. Без матовости и размытия фона. Выключите, чтобы вернуться к матовому стеклу.</string>
+    <string name="glass_unsupported">Стеклянные эффекты требуют Android 12 или новее.</string>
+    <string name="glass_liquid_unsupported">Liquid Glass требует Android 13 или новее. На этом устройстве доступно матовое стекло.</string>
+    <string name="glass_preview_label">Предпросмотр стекла</string>
+    <string name="glass_preview_title">AndroidHarness</string>
+    <string name="glass_preview_text">Чёткий текст. Мягкий фон.</string>
+    <string name="glass_transparency">Прозрачность</string>
+    <string name="glass_transparency_percent">%1$d%%</string>
+    <string name="glass_transparency_hint">Сдвиньте вправо, чтобы стекло стало прозрачнее. Предпросмотр обновляется при перетаскивании, выбор применяется после отпускания. Кнопки действий и всплывающие окна сохраняют читаемый оттенок.</string>
 </resources>

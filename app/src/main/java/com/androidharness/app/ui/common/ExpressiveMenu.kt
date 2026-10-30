@@ -28,6 +28,10 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
 import com.androidharness.app.ui.theme.expressiveSpatialSpec
+import com.androidharness.app.ui.theme.harnessGlassOverlay
+import com.androidharness.app.ui.theme.LocalHarnessGlass
+import com.androidharness.app.ui.theme.HarnessGlassMode
+import androidx.compose.ui.graphics.Color
 
 /** Native anchored menus retain edge avoidance, scrolling, keyboard focus and back dismissal. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -44,16 +48,18 @@ internal fun ExpressiveDropdownMenu(
     val density = LocalDensity.current
     val maxWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() - 32.dp }
         .coerceAtLeast(48.dp).coerceAtMost(360.dp)
+    val glass = LocalHarnessGlass.current.mode != HarnessGlassMode.OFF
     MaterialTheme(motionScheme = MotionScheme.expressive()) {
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = onDismissRequest,
-            modifier = modifier.widthIn(min = 208.dp.coerceAtMost(maxWidth), max = maxWidth),
+            modifier = modifier.widthIn(min = 208.dp.coerceAtMost(maxWidth), max = maxWidth)
+                .then(if (glass) Modifier.harnessGlassOverlay(RoundedCornerShape(28.dp)) else Modifier),
             offset = offset,
             scrollState = scrollState,
             properties = properties,
-            shape = RoundedCornerShape(24.dp),
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            shape = RoundedCornerShape(if (glass) 28.dp else 24.dp),
+            containerColor = if (glass) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer,
             tonalElevation = 0.dp,
             shadowElevation = 6.dp,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f)),

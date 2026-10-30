@@ -1,5 +1,12 @@
 package com.androidharness.app.ui.chat.components
 
+import com.androidharness.app.ui.theme.*
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.windowInsetsPadding
+import com.androidharness.app.ui.theme.HarnessGlassSurface as Surface
 import com.androidharness.app.ui.common.ExpressiveDropdownMenu as DropdownMenu
 import com.androidharness.app.ui.common.ExpressiveDropdownMenuItem as DropdownMenuItem
 
@@ -43,7 +50,6 @@ import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -134,9 +140,11 @@ internal fun MainHeader(
     var permissionMenu by remember { mutableStateOf(false) }
     val scheme = MaterialTheme.colorScheme
     val thinkingOn = thinkingLevel != ThinkingLevel.OFF
+    val glass = LocalHarnessGlass.current.mode != HarnessGlassMode.OFF
 
     if (com.androidharness.app.ui.LocalDesktopLayout.current) {
-        Column {
+        Column(if (glass) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+            .padding(8.dp) else Modifier) {
             DesktopConversationHeader(sessionTitle, busy, pickerLabel, thinkingLevel, thinkingLevels, mode,
             permissionMode, onPickModel, onSetThinking, onSetMode, onSetPermission,
             onOpenContext, onOpenUndo, canUndo, onOpenGitHub, canOpenGitHub, onOpenWebPreview, thinkingResolved, onCustomizeThinking, onSetCustomThinking, onAddThinkingLevel,
@@ -151,8 +159,8 @@ internal fun MainHeader(
 
     Column(
         Modifier
-            .background(scheme.surface)
-            .statusBarsPadding(),
+            .then(if (glass) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)).padding(horizontal = 12.dp, vertical = 8.dp)
+                else Modifier.harnessGlassBar(scheme.surface).statusBarsPadding()),
     ) {
         Column(Modifier.fillMaxWidth()) {
             Column {
@@ -161,9 +169,9 @@ internal fun MainHeader(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 48.dp)
-                        .padding(start = 10.dp, end = 10.dp),
+                        .padding(horizontal = if (glass) 0.dp else 10.dp),
                 ) {
-                    ExpressiveIconButton(onClick = onOpenDrawer) {
+                    ExpressiveIconButton(glassChrome = true, onClick = onOpenDrawer) {
                         Icon(painterResource(R.drawable.ic_chat_menu), contentDescription = uiContext.getString(R.string.ui_open_navigation), modifier = Modifier.size(18.dp))
                     }
                     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
@@ -178,7 +186,7 @@ internal fun MainHeader(
 
                     // Workspace files explorer, migrated here from the drawer;
                     // workspace switching itself lives inside the file manager.
-                    if (!conversation.isChat) ExpressiveIconButton(onClick = onOpenFiles) {
+                    if (!conversation.isChat) ExpressiveIconButton(glassChrome = true, onClick = onOpenFiles) {
                         Icon(
                             painterResource(R.drawable.ic_chat_folder),
                             modifier = Modifier.size(18.dp),
@@ -186,16 +194,17 @@ internal fun MainHeader(
                             tint = scheme.onSurfaceVariant,
                         )
                     }
-                    if (!conversation.isChat) ExpressiveIconButton(onClick = onOpenGitHub, enabled = canOpenGitHub) {
+                    if (!conversation.isChat) ExpressiveIconButton(glassChrome = true, onClick = onOpenGitHub, enabled = canOpenGitHub) {
                         Icon(painterResource(R.drawable.ic_github), contentDescription = uiContext.getString(R.string.ui_open_github),
                             modifier = Modifier.size(18.dp))
                     }
                     if (conversation.isChat) {
+                        if (glass) Spacer(Modifier.width(4.dp))
                         SearchDepthControl(searchDepth, onSetSearchDepth)
                         Spacer(Modifier.width(2.dp))
                     }
                     Box {
-                        ExpressiveIconButton(onClick = { menu = true }) {
+                        ExpressiveIconButton(glassChrome = true, onClick = { menu = true }) {
                             Icon(painterResource(R.drawable.ic_chat_ellipsis_vertical), contentDescription = uiContext.getString(R.string.ui_more_options), modifier = Modifier.size(18.dp))
                         }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
@@ -372,7 +381,7 @@ internal fun MainHeader(
                 }
             }
         }
-        HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.5f))
+        if (!glass) HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.5f))
     }
 }
 
@@ -409,7 +418,7 @@ private fun DesktopConversationHeader(
     Column {
         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            if (chatOnly) ExpressiveIconButton(onClick = onOpenDrawer, modifier = Modifier.size(36.dp)) {
+            if (chatOnly) ExpressiveIconButton(glassChrome = true, onClick = onOpenDrawer, modifier = Modifier.size(36.dp)) {
                 Icon(painterResource(R.drawable.ic_chat_menu), uiContext.getString(R.string.ui_open_navigation), Modifier.size(18.dp))
             }
             Column(Modifier.weight(1f)) {
@@ -424,10 +433,10 @@ private fun DesktopConversationHeader(
             if (!chatOnly) TextButton(onClick = { onMode(if (mode == AgentMode.PLAN) AgentMode.ACT else AgentMode.PLAN) }) {
                 Text(if (mode == AgentMode.PLAN) uiContext.getString(R.string.settings_telegram_plan) else uiContext.getString(R.string.settings_telegram_act), style = MaterialTheme.typography.labelMedium)
             }
-            if (!chatOnly) ExpressiveIconButton(onClick = onGitHub, enabled = canGitHub, modifier = Modifier.size(36.dp)) {
+            if (!chatOnly) ExpressiveIconButton(glassChrome = true, onClick = onGitHub, enabled = canGitHub, modifier = Modifier.size(36.dp)) {
                 Icon(painterResource(R.drawable.ic_github), uiContext.getString(R.string.ui_open_github), Modifier.size(18.dp))
             }
-            if (!chatOnly && showPreviewShortcut) ExpressiveIconButton(onClick = onPreview, modifier = Modifier.size(36.dp)) {
+            if (!chatOnly && showPreviewShortcut) ExpressiveIconButton(glassChrome = true, onClick = onPreview, modifier = Modifier.size(36.dp)) {
                 Icon(Icons.Outlined.Language, uiContext.getString(R.string.ui_open_web_browser), Modifier.size(18.dp))
             }
             if (chatOnly) {
@@ -435,7 +444,7 @@ private fun DesktopConversationHeader(
                 SearchDepthControl(searchDepth, onSetSearchDepth)
             }
             Box {
-                ExpressiveIconButton(onClick = { menu = true }, modifier = Modifier.size(36.dp)) {
+                ExpressiveIconButton(glassChrome = true, onClick = { menu = true }, modifier = Modifier.size(36.dp)) {
                     Icon(Icons.Filled.MoreVert, uiContext.getString(R.string.ui_conversation_actions), Modifier.size(18.dp))
                 }
                 DropdownMenu(menu, { menu = false }) {
@@ -488,8 +497,10 @@ private fun HeaderModelPicker(label: String, onPickModel: () -> Unit, modifier: 
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     Row(
         modifier.then(if (compact) Modifier.widthIn(max = 136.dp).semantics { contentDescription = label } else Modifier)
-            .clip(RoundedCornerShape(10.dp)).clickable(onClick = onPickModel)
-            .heightIn(min = 36.dp).padding(horizontal = 6.dp, vertical = 2.dp),
+            .then(if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF)
+                Modifier.harnessGlassChrome(Color.Transparent, RoundedCornerShape(50)) else Modifier)
+            .clip(if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) RoundedCornerShape(50) else RoundedCornerShape(10.dp)).clickable(onClick = onPickModel)
+            .heightIn(min = if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) 40.dp else 36.dp).padding(horizontal = 6.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f, fill = false)) {
@@ -540,21 +551,22 @@ private fun SearchDepthControl(
     val label = uiContext.getString(searchDepthShort(depth))
     Box {
         Surface(
+            chrome = true,
             shape = RoundedCornerShape(50),
-            color = if (neutral) scheme.surfaceContainerHigh else scheme.primaryContainer,
-            contentColor = if (neutral) scheme.onSurfaceVariant else scheme.primary,
+            color = if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) Color.Transparent else if (neutral) scheme.surfaceContainerHigh else scheme.primaryContainer,
+            contentColor = if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) scheme.onSurface else if (neutral) scheme.onSurfaceVariant else scheme.primary,
             modifier = Modifier
                 .clip(RoundedCornerShape(50))
                 .clickable { menu = true }
                 .semantics { contentDescription = uiContext.getString(R.string.ui_search_depth_current, label) },
         ) {
             Row(
-                Modifier.heightIn(min = 32.dp).padding(horizontal = 9.dp),
+                Modifier.heightIn(min = if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) 40.dp else 32.dp).padding(horizontal = 9.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Outlined.TravelExplore, contentDescription = null, modifier = Modifier.size(15.dp))
+                Icon(Icons.Outlined.TravelExplore, contentDescription = null, modifier = Modifier.size(if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) 18.dp else 15.dp))
                 Spacer(Modifier.width(4.dp))
-                Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                Text(label, style = if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) MaterialTheme.typography.labelLarge else MaterialTheme.typography.labelSmall, maxLines = 1)
             }
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
@@ -642,20 +654,21 @@ internal fun HeaderThinkingControl(
     Box(Modifier.onGloballyPositioned { anchorBounds = it.boundsInWindow() }) {
         // The visible badge stays small; clickable expands its touch target as needed.
         Box(
-            Modifier.widthIn(max = 148.dp).heightIn(min = 36.dp).clip(RoundedCornerShape(8.dp)).clickable { onMenuChange(true) },
+            Modifier.widthIn(max = 148.dp).heightIn(min = 36.dp).clip(RoundedCornerShape(if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) 100.dp else 8.dp)).clickable { onMenuChange(true) },
             contentAlignment = Alignment.Center,
         ) {
             Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = if (thinkingOn) scheme.primaryContainer else scheme.surfaceContainerHigh,
-                contentColor = if (thinkingOn) scheme.primary else scheme.onSurfaceVariant,
+                chrome = true,
+                shape = RoundedCornerShape(if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) 100.dp else 8.dp),
+                color = if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) Color.Transparent else if (thinkingOn) scheme.primaryContainer else scheme.surfaceContainerHigh,
+                contentColor = if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) scheme.onSurface else if (thinkingOn) scheme.primary else scheme.onSurfaceVariant,
             ) {
-                Row(Modifier.heightIn(min = 28.dp).padding(horizontal = 8.dp, vertical = 3.dp),
+                Row(Modifier.heightIn(min = if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) 40.dp else 28.dp).padding(horizontal = 8.dp, vertical = 3.dp),
                     verticalAlignment = Alignment.CenterVertically) {
-                    Icon(painterResource(R.drawable.ic_brain), contentDescription = uiContext.getString(R.string.ui_thinking_level), modifier = Modifier.size(14.dp),
-                        tint = if (thinkingOn) scheme.primary else scheme.onSurfaceVariant)
+                    Icon(painterResource(R.drawable.ic_brain), contentDescription = uiContext.getString(R.string.ui_thinking_level), modifier = Modifier.size(if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) 18.dp else 14.dp),
+                        tint = if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) scheme.onSurface else if (thinkingOn) scheme.primary else scheme.onSurfaceVariant)
                     Spacer(Modifier.width(4.dp))
-                    Text(resolved?.label ?: localizedOption(thinkingLevel.label), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall,
+                    Text(resolved?.label ?: localizedOption(thinkingLevel.label), maxLines = 1, overflow = TextOverflow.Ellipsis, style = if (LocalHarnessGlass.current.mode != HarnessGlassMode.OFF) MaterialTheme.typography.labelLarge else MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Medium)
                 }
             }
