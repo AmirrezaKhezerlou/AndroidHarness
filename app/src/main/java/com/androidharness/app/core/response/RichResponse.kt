@@ -36,7 +36,7 @@ object RichResponse {
         data class Metrics(val items: List<Metric>) : Node
         data class Chart(val title: String, val points: List<Point>, val kind: String, val unit: String, val caption: String, val series: List<Series> = emptyList()) : Node
         data class Choices(val title: String, val options: List<Choice>) : Node
-        data class Steps(val title: String, val items: List<Step>) : Node
+        data class Steps(val title: String, val items: List<Step>, val checkable: Boolean = false) : Node
         data class Details(val title: String, val text: String) : Node
         data class Link(val title: String, val text: String, val url: String) : Node
         data class Preview(val title: String, val html: String) : Node
@@ -88,7 +88,41 @@ object RichResponse {
     }
 
     fun decode(body: String): Node? = body.takeIf { it.length <= MAX_JSON_CHARS }?.let {
-        runCatching { Decoder().node(json.parseToJsonElement(it).jsonObject, 0) }.getOrNull()
+        runCatching { Decoder().node(componentObject(it), 0) }.getOrNull()
+    }
+
+    /** Recover redundant closing brackets only after a complete, otherwise valid object. */
+    private fun componentObject(body: String): JsonObject {
+        val start = body.indexOfFirst { !it.isWhitespace() }
+        require(body.getOrNull(start) == '{')
+        val closers = ArrayDeque<Char>()
+        var quoted = false
+        var escaped = false
+        for (index in start until body.length) {
+            val char = body[index]
+            if (quoted) {
+                if (escaped) escaped = false
+                else if (char == '\\') escaped = true
+                else if (char == '"') quoted = false
+                continue
+            }
+            when (char) {
+                '"' -> quoted = true
+                '{', '[' -> {
+                    require(closers.size < 32)
+                    closers.addLast(if (char == '{') '}' else ']')
+                }
+                '}', ']' -> {
+                    require(closers.removeLastOrNull() == char)
+                    if (closers.isEmpty()) {
+                        val trailing = body.substring(index + 1).filterNot(Char::isWhitespace)
+                        require(trailing.length <= 12 && trailing.all { it == '}' || it == ']' })
+                        return json.parseToJsonElement(body.substring(start, index + 1)).jsonObject
+                    }
+                }
+            }
+        }
+        error("Incomplete response component")
     }
 
     private class Decoder {
@@ -111,7 +145,7 @@ object RichResponse {
                         o.str("unit", 24), o.str("caption", 500), series)
                 }
                 "table" -> {
-                    val columns = o.array("columns", 8).map { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content?.also { value -> require(value.isNotBlank() && value.length <= 80) } ?: error("Expected column") }
+                    val columns = o.array("columns", 8).map { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content?.also { value -> require(value.length <= 80) } ?: error("Expected column") }
                     val rows = o.array("rows", 100).map { row -> (row as? JsonArray ?: error("Expected row")).also { require(it.size == columns.size) }.map { cell ->
                         (cell as? JsonPrimitive)?.takeIf { it.isString }?.content?.also { require(it.length <= 1000) } ?: error("Expected cell text")
                     } }
@@ -161,7 +195,8 @@ object RichResponse {
                 }
                 "writing" -> Node.Writing(o.str("title", 100, true), o.str("text", 24000, true), o.str("language", 30))
                 "choices" -> Node.Choices(o.str("title", 100, true), o.array("options", 6).map { it.jsonObject.let { c -> Choice(c.str("label", 100, true), c.str("description", 1000), c.str("prompt", 1000)) } })
-                "steps" -> Node.Steps(o.str("title", 100, true), o.array("items", 12).map { it.jsonObject.let { s -> Step(s.str("title", 100, true), s.str("text", 1000), (s["done"] as? JsonPrimitive)?.booleanOrNull ?: false) } })
+                "steps" -> Node.Steps(o.str("title", 100), o.array("items", 12).map { it.jsonObject.let { s -> Step(s.str("title", 100, true), s.str("text", 1000), (s["done"] as? JsonPrimitive)?.booleanOrNull ?: false) } },
+                    if ("checkable" in o) requireNotNull((o["checkable"] as? JsonPrimitive)?.takeUnless { it.isString }?.booleanOrNull) else false)
                 "details" -> Node.Details(o.str("title", 100, true), o.str("text", 6000, true))
                 "link" -> Node.Link(o.str("title", 100, true), o.str("text", 500), o.str("url", 2048, true).also(::requireWebUrl))
                 "preview" -> Node.Preview(o.str("title", 80, true), o.str("html", 64_000, true))
@@ -221,7 +256,7 @@ object RichResponse {
             (if (series.name.isBlank()) "" else series.name + "\n") + series.points.joinToString("\n") { "${it.label}: ${number(it.value)} ${node.unit}" }
         } + "\n" + node.caption
         is Node.Choices -> node.title + "\n" + node.options.joinToString("\n") { "${it.label}: ${it.description}" }
-        is Node.Steps -> node.title + "\n" + node.items.joinToString("\n") { "${if (it.done) "[x]" else "[ ]"} ${it.title} ${it.text}" }
+        is Node.Steps -> node.title + "\n" + node.items.mapIndexed { index, step -> "${if (node.checkable) { if (step.done) "[x]" else "[ ]" } else "${index + 1}."} ${step.title} ${step.text}" }.joinToString("\n")
         is Node.Details -> "${node.title}\n${node.text}"
         is Node.Link -> "${node.title}\n${node.text}\n${node.url}"
         is Node.Preview -> "${node.title} (interactive preview)"
@@ -247,7 +282,7 @@ User messages may carry a [[harness-response]] context attachment containing a r
 Use the current selected rows, chart points, calculator inputs, or preview values when relevant; do not assume a control performed an external action. If the supplied context does not include enough underlying data, ask for it rather than inventing values.
 Answer readability: lead with the direct answer, then develop one idea per short paragraph. Separate paragraphs, lists, headings, and tables with blank lines. Use bullets for parallel points and numbered lists for steps. Use headings only when the answer needs sections. Keep code, links, citations, and technical identifiers intact. Do not compress an explanation into a wall of text or repeat the same content in prose and a component. Follow the user's requested format and personal instructions over these presentation defaults.
 
-You can mix normal Markdown paragraphs with native cards, callouts, metrics, interactive charts, choices, checklists, expandable explanations, link previews, and custom interactive visuals INSIDE an assistant reply. Keep using rich responses when they make an answer easier to understand or use, across all subjects. Prefer cards or choices for options and qualitative tradeoffs, steps for actionable sequences, details for optional depth, and a callout for a key takeaway. Rich responses do not mean tables or charts; these other components remain useful without either. Keep brief answers simple and do not decorate every paragraph.
+You can mix normal Markdown paragraphs with native cards, callouts, metrics, interactive charts, choices, checklists, expandable explanations, link previews, and custom interactive visuals INSIDE an assistant reply. Keep using rich responses when they make an answer easier to understand or use, across all subjects. Prefer prose, ordinary lists, or cards for options and qualitative tradeoffs, steps for ordered sequences, details for optional depth, and a callout for a key takeaway. Use choices only for a decision the user should actually select, rather than presenting every recommendation as a radio-button poll. Rich responses do not mean tables or charts; these other components remain useful without either. Keep brief answers simple and do not decorate every paragraph.
 Catalog examples below describe component syntax, not content to copy into an answer or a checklist of components to include. Choose only components that fit the current request. Never repeat the same content as prose, a table, and a chart.
 To render a component, put one complete JSON object in a fenced block whose language is harness-ui. Continue normal prose before/after it. The app consumes this block as UI, not as displayed source. Supported shapes:
 Use the literal opening line ```harness-ui and closing line ```. Do not use ::card, ::profile, or other colon directives. JSON must be valid, including escaping quotes and newlines inside HTML strings.
@@ -256,13 +291,17 @@ Use the literal opening line ```harness-ui and closing line ```. Do not use ::ca
 {"type":"metrics","items":[{"label":"Total","value":"42","detail":"Based on the supplied data"}]}
 {"type":"chart","title":"Measured latency","kind":"bar","unit":"ms","points":[{"label":"Run A","value":12},{"label":"Run B","value":18}],"caption":"Example structure; replace with supplied or verified measurements"} (kind: bar or line; tap points and view data)
 {"type":"choices","title":"Choose an approach","options":[{"label":"Option A","description":"Tradeoffs","prompt":"Help me use option A"},{"label":"Option B","description":"Tradeoffs"}]}
-{"type":"steps","title":"Next steps","items":[{"title":"First step","text":"How to do it","done":false}]}
+{"type":"steps","title":"How it works","items":[{"title":"First step","text":"What happens here"}]} (plain numbered list by default; no checkboxes or completion controls)
+The steps heading is optional; omit it or use an empty title when an enclosing card already supplies the heading. Each item still needs a nonempty title. Keep at most 12 items per steps component.
+{"type":"steps","title":"Your packing checklist","checkable":true,"items":[{"title":"Pack your charger","text":"Check this after packing it","done":false}]} (opt-in checklist ONLY when the user asks for one or completion tracking is useful for concrete tasks they are carrying out)
+Presentation is not an interaction request: feature lists, pros and cons, comparisons, key layout upgrades, recommendations, roadmaps, brainstorming, and explanations should use ordinary bullets, prose, cards, or plain numbered steps. Do not add checkboxes, checked-off claims, checkbox table columns, or a Continue button just because an answer contains several points or suggested actions. For steps, omit checkable or set it to false unless this is an actual task checklist. Do not mark suggestions or existing product features done. This also applies to Markdown task lists and custom previews. Tables show row-selection checkboxes only when the user explicitly turns on row selection in the table menu; do not imitate that with extra checkbox columns.
 {"type":"details","title":"Why this works","text":"The longer explanation"}
 {"type":"link","title":"Resource","text":"Why it is useful","url":"https://example.com"}
 {"type":"column","children":[...]} and {"type":"columns","children":[...]} compose cards and text; columns stack on phones. {"type":"text","text":"..."} and {"type":"divider"} can be children. Keep nesting shallow. At most 2 actions per card. Actions only prefill the normal composer for the user to review; never claim they already executed a task.
 Additional native components work in BOTH Chat and Code. Prefer these over custom HTML when they fit. Put each object in its own complete harness-ui fence, never bare JSON. All local controls operate inside the reply; they do not run tools, apply file changes, send a message, or alter project settings. User selections/values can attach removable context to the normal composer. Honor that context on the next user message.
 {"type":"table","title":"Recorded measurements","columns":["Run","Latency, ms"],"rows":[["A","12"],["B","18"]],"caption":"Example structure; replace with supplied or verified measurements"} (filter, numeric/text column sorting, row selection, pagination, CSV copy/share; up to 8 columns and 100 rows; cells must be strings)
 Both Markdown and native tables can be expanded for filtering, sorting, and selecting rows. Use a native table when a title, caption, or direct row discussion helps; keep cell text concise and put source citations and longer explanations in surrounding prose. Do not imply that sorting or filtering edits the original data.
+A table column heading may be empty (for example, the row-label column of a comparison). Every row must still have exactly one string cell per column. Close each JSON object exactly once; do not add extra brackets after it.
 {"type":"tabs","title":"Explore the answer","tabs":[{"title":"Overview","children":[{"type":"text","text":"Main answer"}]},{"title":"Examples","children":[{"type":"text","text":"A concrete example"}]}]} (up to 6 tabs; nest any supported components in children; selected-tab controls retain state)
 {"type":"gallery","title":"Visual comparison","images":[{"url":"https://example.com/actual-image.jpg","caption":"What this image shows","source":"https://example.com/source-page"}]} (swipe, previous/next, expand with zoom, and source links; up to 12 images; ONLY actual image URLs returned by tools or supplied by the user, never invented URLs; respect the chat image setting)
 {"type":"profile","name":"Subject name","subtitle":"Verified role or category","description":"A short introduction supported by the sources below.","image":"https://example.com/actual-portrait.jpg","image_source":"https://example.com/biography","facts":[{"label":"Known for","value":"A verified contribution","source":"https://example.com/biography"}],"sources":[{"title":"Biography","url":"https://example.com/biography"}]} (native knowledge/profile card for a person, place, organization, or other named subject; optional image/image_source, up to 8 sourced facts and 6 source links; sources required; use only pages actually read and image URLs returned by tools or supplied by the user; omit unverified facts and resolve ambiguous names before making a card; respect the chat image setting)
@@ -276,7 +315,7 @@ For a custom calculator, diagram, simulation, image/SVG preview, or other visual
 Where create_artifact/read_artifact tools are available, use them for a separately managed, versioned/exportable concept when the user asks for an artifact or that workflow is useful. Keep existing artifacts available. Inline response components do not require creating an artifact, writing files, or starting a server. Never paste harness-ui examples as source unless the user explicitly asks about this protocol; wrap literal examples in a longer code fence.
 
 PRESENTATION CHOICE FOR THE CURRENT ANSWER:
-Choose the simplest presentation that helps the current answer. Use choices for an interactive decision, steps for plans, details for optional depth, and callouts sparingly. Comparisons can use concise prose, cards, or a table when aligned attributes make differences easier to scan.
+Choose the simplest presentation that helps the current answer. Use choices for an actual interactive decision, plain steps for sequences, an explicit checkable checklist only for completion tracking, details for optional depth, and callouts sparingly. Plans and recommendations usually need ordinary lists rather than interactive controls. Comparisons can use concise prose, cards, or a table when aligned attributes make differences easier to scan.
 Table selection: use a native or Markdown table when the user requests one or when aligned rows and columns genuinely help compare or look up information. Tables can compare qualitative attributes as well as measurements, but should not replace an explanation or squeeze long paragraphs into cells. Keep headers and cell text concise, make units and uncertainty clear, and place supporting sources and interpretation in nearby prose. Prefer native tables when filtering or selection would help; ordinary Markdown tables can also be expanded for interaction.
 Chart selection: use charts only when quantitative data has a meaningful trend, distribution, or relationship that a visual helps explain, or the user explicitly requests a chart. Use supplied, verified, or transparently computed values; never invent scores, rankings, percentages, or measurements to turn a qualitative answer into a chart. Label illustrative values and assumptions clearly. A comparison alone is not a reason for a chart.
 Apply these rules to nested components and Markdown too. Reassess each turn; an earlier table or chart is not a reason to generate another. Do not repeat the same information as prose, a table, and a chart. Follow the user's requested format and personal instructions over these presentation defaults.

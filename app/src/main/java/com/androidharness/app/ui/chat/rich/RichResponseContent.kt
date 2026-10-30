@@ -140,12 +140,14 @@ internal fun ResponseNode(node: RichResponse.Node, onOpenUrl: ((String) -> Unit)
         }
         is RichResponse.Node.Steps -> {
             var checked by rememberSaveable(node) { mutableStateOf(node.items.map { it.done }) }
+            val contextTitle = node.title.ifBlank { node.items.first().title }
             ResponsePanel {
-                Text(node.title, style = MaterialTheme.typography.titleSmall)
+                if (node.title.isNotBlank()) Text(node.title, style = MaterialTheme.typography.titleSmall)
                 node.items.forEachIndexed { index, step ->
-                    Row(Modifier.fillMaxWidth().toggleable(checked[index], role = Role.Checkbox,
-                        onValueChange = { value -> checked = checked.toMutableList().also { it[index] = value }; contextChange?.invoke(node.title, node.items.mapIndexed { i, step -> "${if (checked[i]) "Done" else "Remaining"}: ${step.title}" }.joinToString("\n")) }).padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
-                        Checkbox(checked[index], null, Modifier.size(40.dp))
+                    Row(Modifier.fillMaxWidth().then(if (node.checkable) Modifier.toggleable(checked[index], role = Role.Checkbox,
+                        onValueChange = { value -> checked = checked.toMutableList().also { it[index] = value }; contextChange?.invoke(contextTitle, node.items.mapIndexed { i, step -> "${if (checked[i]) "Done" else "Remaining"}: ${step.title}" }.joinToString("\n")) }) else Modifier).padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
+                        if (node.checkable) Checkbox(checked[index], null, Modifier.size(40.dp))
+                        else Text("${index + 1}.", Modifier.width(40.dp), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
                         Spacer(Modifier.width(6.dp))
                         Column(Modifier.weight(1f).heightIn(min = 44.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(step.title, style = MaterialTheme.typography.bodyMedium)
@@ -153,9 +155,9 @@ internal fun ResponseNode(node: RichResponse.Node, onOpenUrl: ((String) -> Unit)
                         }
                     }
                 }
-                onFollowUp?.let { follow -> TextButton(onClick = {
+                if (node.checkable) onFollowUp?.let { follow -> TextButton(onClick = {
                     val state = node.items.mapIndexed { i, step -> "${if (checked[i]) uiContext.getString(R.string.settings_action_done) else uiContext.getString(R.string.ui_remaining)}: ${step.title}" }.joinToString("\n")
-                    follow(RichResponse.followUp("Help me with the next step.", node.title, state))
+                    follow(RichResponse.followUp("Help me with the next step.", contextTitle, state))
                 }) { Text(uiContext.getString(R.string.ui_continue_from_here)) } }
             }
         }

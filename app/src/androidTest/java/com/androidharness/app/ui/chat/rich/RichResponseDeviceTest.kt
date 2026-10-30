@@ -144,6 +144,32 @@ class RichResponseDeviceTest {
         }
     }
 
+    @Test fun ordinaryStepListsHaveNoCheckboxesAndExplicitTaskChecklistsRemainInteractive() {
+        val plain = """{"type":"steps","title":"Key layout upgrades","items":[{"title":"Split screen","text":"Use the available space","done":true},{"title":"Context bridge","done":false}]}"""
+        val source = mutableStateOf("```harness-ui\n$plain\n```")
+        var followUp: RichResponse.FollowUp? = null
+        fun checkableCount(node: AccessibilityNodeInfo?): Int = if (node == null) 0 else
+            (if (node.isCheckable) 1 else 0) + (0 until node.childCount).sumOf { checkableCount(node.getChild(it)) }
+        ActivityScenario.launch(ChatListTestActivity::class.java).use { scenario ->
+            scenario.onActivity { host -> host.setContent { HarnessTheme { ChatAppearance {
+                Column(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp)) {
+                    AssistantText(source.value, onFollowUp = { followUp = it })
+                }
+            } } } }
+            await("Split screen"); await("Context bridge")
+            assertEquals(0, checkableCount(instrumentation.uiAutomation.rootInActiveWindow))
+            assertNull(find(instrumentation.uiAutomation.rootInActiveWindow, "Continue from here"))
+            assertNull(followUp)
+            screenshot("plain-steps-without-checkboxes")
+            scenario.onActivity { source.value = "```harness-ui\n" + plain.replace("\"type\":\"steps\"", "\"type\":\"steps\",\"checkable\":true") + "\n```" }
+            await("Continue from here")
+            assertEquals(2, checkableCount(instrumentation.uiAutomation.rootInActiveWindow))
+            tap("Context bridge"); tap("Continue from here")
+            assertTrue(requireNotNull(followUp).context.contains("Done: Context bridge"))
+            screenshot("explicit-task-checklist")
+        }
+    }
+
     @Test fun nativeActionsCheckboxStateAndLinkCardsWorkWithoutExecutingAgentActions() {
         var followUp = RichResponse.FollowUp("", "", "")
         var openedUrl = ""
@@ -151,7 +177,7 @@ class RichResponseDeviceTest {
             buildJsonObject { put("type", "card"); put("title", "A practical starting point"); put("text", "Start with **one small task**."); putJsonArray("actions") {
                 add(buildJsonObject { put("label", "Explore locally"); put("prompt", "Help me start locally.") })
             } },
-            buildJsonObject { put("type", "steps"); put("title", "Your next steps"); putJsonArray("items") {
+            buildJsonObject { put("type", "steps"); put("title", "Your next steps"); put("checkable", true); putJsonArray("items") {
                 add(buildJsonObject { put("title", "Pick a task"); put("text", "Keep the scope small.") })
                 add(buildJsonObject { put("title", "Review the result"); put("text", "Check it before continuing.") })
             } },

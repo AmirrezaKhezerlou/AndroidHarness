@@ -51,7 +51,7 @@ internal fun ResponseTable(table: RichResponse.Node.Table, onFollowUp: ((RichRes
     val tableScroll = rememberScrollState()
     fun context(): String = buildString {
         append("Filter: ").append(query.ifBlank { "all" }).append("\n")
-        if (sort >= 0) append("Sort: ${table.columns[sort]} ${if (ascending) "ascending" else "descending"}\n")
+        if (sort >= 0) append("Sort: ${table.columns[sort].ifBlank { (sort + 1).toString() }} ${if (ascending) "ascending" else "descending"}\n")
         append(table.columns.joinToString(" | ")).append('\n')
         val chosen = table.rows.indices.filter { selected[it] }
         append(if (chosen.isEmpty()) "No rows selected." else "Selected rows:\n" + chosen.joinToString("\n") { table.rows[it].joinToString(" | ") })
@@ -68,7 +68,7 @@ internal fun ResponseTable(table: RichResponse.Node.Table, onFollowUp: ((RichRes
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(table.title, style = MaterialTheme.typography.titleSmall)
-                Text(table.columns.joinToString(" · "), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+                Text(table.columns.filter(String::isNotBlank).joinToString(" · "), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
             }
             Box {
                 IconButton(onClick = { menu = true }) { Icon(androidx.compose.material.icons.Icons.Outlined.MoreHoriz,
@@ -107,7 +107,7 @@ internal fun ResponseTable(table: RichResponse.Node.Table, onFollowUp: ((RichRes
                 FilterChip(selected = sort == index, onClick = {
                     if (sort == index) ascending = !ascending else { sort = index; ascending = true }
                     page = 0; contextChange?.invoke(table.title, context())
-                }, label = { Text(label + if (sort == index) (if (ascending) " ↑" else " ↓") else "") })
+                }, label = { Text(label.ifBlank { (index + 1).toString() } + if (sort == index) (if (ascending) " ↑" else " ↓") else "") })
             }
         }
         BoxWithConstraints(Modifier.fillMaxWidth()) {
