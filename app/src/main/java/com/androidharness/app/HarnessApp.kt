@@ -232,6 +232,9 @@ class AppContainer(val appContext: Context) {
         memory = memory,
         dhizuku = dhizuku,
         deviceAccess = deviceAccess,
+        // Declared below; resolved on each call, after construction.
+        pullRequests = { githubRepositories },
+        sessionMessages = { sessions.messages(it) },
     )
     val mcp = com.androidharness.app.tools.mcp.McpManager(appContext, linuxEnv, keys, codeGraph)
     val github = com.androidharness.app.github.GitHubAuth(BuildConfig.GITHUB_CLIENT_ID,

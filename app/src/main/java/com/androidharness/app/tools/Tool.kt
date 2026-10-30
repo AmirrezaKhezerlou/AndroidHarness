@@ -90,6 +90,8 @@ class ToolRegistry(private val tools: List<Tool>) {
             searchApiRefresh: suspend () -> SearchApiConfig? = { searchApi() },
             dhizuku: com.androidharness.app.data.env.DhizukuManager? = null,
             deviceAccess: com.androidharness.app.data.env.DeviceAccessManager? = null,
+            pullRequests: (() -> com.androidharness.app.github.PullRequestPublisher?)? = null,
+            sessionMessages: suspend (String) -> List<com.androidharness.app.core.ChatMessage> = { emptyList() },
         ): ToolRegistry {
             val baseTools = mutableListOf<Tool>(
                 ListDirTool(),
@@ -144,6 +146,7 @@ class ToolRegistry(private val tools: List<Tool>) {
                 CodeGraphSyncTool(codeGraph),
             )
             if (dhizuku != null && deviceAccess != null) baseTools += DeviceOwnerShellTool(dhizuku, deviceAccess)
+            if (pullRequests != null) baseTools += GitHubCreatePullRequestTool(pullRequests, sessionMessages)
             if (artifactLoader != null) {
                 baseTools.add(CreateArtifactTool(artifactLoader))
                 baseTools.add(ReadArtifactTool(artifactLoader))

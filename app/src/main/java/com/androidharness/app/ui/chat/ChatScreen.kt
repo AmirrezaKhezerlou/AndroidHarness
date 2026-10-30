@@ -266,7 +266,7 @@ private fun ChatScreenContent(
             onOpenSettings = {
                 viewModel.container.pendingSettingsScroll.value = "github"
                 onOpenSettings()
-            }, onDismiss = { githubProject = null })
+            }, onDismiss = { githubProject = null }, sessionId = state.sessionId)
     }
     var activeModelPickerTarget by remember { mutableStateOf<ModelSelectionTarget?>(null) }
     var activeProviderManagerTarget by remember { mutableStateOf<ModelSelectionTarget?>(null) }
@@ -2018,7 +2018,7 @@ private fun ChatScreenContent(
                                             }
                                         }
                                     }
-                                    if (otherCalls.size >= 3 && otherCalls.none { BrowserToolActivity.isBrowserTool(it.name) || it.name == "pkg_install" } && !(state.showLiveCode && otherCalls.any {
+                                    if (otherCalls.size >= 3 && otherCalls.none { BrowserToolActivity.isBrowserTool(it.name) || it.name == "pkg_install" || it.name == "github_create_pull_request" } && !(state.showLiveCode && otherCalls.any {
                                             it.name in com.androidharness.app.agent.LiveCodePreview.tools })) {
                                         indexedItem(key = "message-$messageKey-tools", contentType = ChatListContentType.Tools) {
                                             Box(Modifier.animateItem(fadeInSpec = fastEffectsSpec(), placementSpec = null, fadeOutSpec = null)) {

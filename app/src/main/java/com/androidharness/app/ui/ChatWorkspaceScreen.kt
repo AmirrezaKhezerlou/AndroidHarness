@@ -91,7 +91,7 @@ fun ChatWorkspaceScreen(
         GitHubWorkspaceDialog(container, id, name, onOpenSettings = {
             container.pendingSettingsScroll.value = "github"
             guard.navigate(onOpenSettings)
-        }, onDismiss = { githubProject = null })
+        }, onDismiss = { githubProject = null }, sessionId = chatState.sessionId)
     }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val windowWidth = maxWidth.value

@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.Merge
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.WarningAmber
@@ -111,10 +112,19 @@ internal fun ApprovalCard(
 ) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val isPkg = approval.call.name == "pkg_install"
+    val isPullRequest = approval.call.name == "github_create_pull_request"
     val scheme = MaterialTheme.colorScheme
     ActionCard(
-        title = if (isPkg) uiContext.getString(R.string.ui_install_linux_package) else uiContext.getString(R.string.ui_approve_this_action),
-        icon = if (isPkg) Icons.Outlined.Inventory2 else Icons.Outlined.Shield,
+        title = when {
+            isPkg -> uiContext.getString(R.string.ui_install_linux_package)
+            isPullRequest -> uiContext.getString(R.string.pr_approval_title)
+            else -> uiContext.getString(R.string.ui_approve_this_action)
+        },
+        icon = when {
+            isPkg -> Icons.Outlined.Inventory2
+            isPullRequest -> Icons.Outlined.Merge
+            else -> Icons.Outlined.Shield
+        },
         iconTint = if (isPkg) scheme.tertiary else scheme.primary,
         actions = {
             TextButton(onClick = onDeny) { Text(if (isPkg) uiContext.getString(R.string.ui_decline) else uiContext.getString(R.string.ui_deny)) }
@@ -151,6 +161,10 @@ internal fun ApprovalCard(
                     )
                 }
             }
+        }
+        if (isPullRequest) {
+            com.androidharness.app.ui.github.PullRequestApprovalSummary(approval.call)
+            return@ActionCard
         }
         Text(
             describeToolCall(approval.call),

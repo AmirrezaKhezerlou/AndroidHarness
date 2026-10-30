@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.Merge
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Terminal
@@ -61,6 +62,7 @@ internal fun toolIcon(name: String): ImageVector = when (name) {
     "web_fetch", "browser_read", "web_search", "http_request" -> Icons.Outlined.Public
     "search_chats", "recent_chats", "read_chat_snippet" -> Icons.Outlined.History
     "github_api", "github_search", "github_file" -> Icons.Outlined.Code
+    "github_create_pull_request" -> Icons.Outlined.Merge
     "todo_write" -> Icons.Outlined.Checklist
     "memory_write" -> Icons.Outlined.EditNote
     "bg_list", "bg_kill" -> Icons.Outlined.Terminal

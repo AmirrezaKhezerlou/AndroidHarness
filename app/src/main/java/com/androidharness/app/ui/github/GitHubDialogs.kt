@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Merge
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -116,7 +118,7 @@ fun GitHubImportDialog(container: AppContainer, onDismiss: () -> Unit, onImporte
 /** Entry point from chat; both OAuth and PAT connections share the same controls. */
 @Composable
 fun GitHubWorkspaceDialog(container: AppContainer, projectId: String, projectName: String,
-    onOpenSettings: () -> Unit, onDismiss: () -> Unit) {
+    onOpenSettings: () -> Unit, onDismiss: () -> Unit, sessionId: String? = null) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val connection by container.github.state.collectAsStateWithLifecycle()
     if (connection.login == null) {
@@ -130,12 +132,34 @@ fun GitHubWorkspaceDialog(container: AppContainer, projectId: String, projectNam
             dismissButton = { TextButton(onClick = onDismiss) { Text(uiContext.getString(R.string.settings_action_close)) } },
         )
     } else {
-        GitHubPublishDialog(container, projectId, projectName, onDismiss)
+        GitHubPublishDialog(container, projectId, projectName, onDismiss, sessionId)
+    }
+}
+
+/** Opens the pull request sheet; the most common next step after publishing a feature branch. */
+@Composable
+private fun PullRequestEntry(enabled: Boolean, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(onClick = onClick, enabled = enabled, shape = MaterialTheme.shapes.large, color = scheme.secondaryContainer.copy(alpha = .6f),
+        modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(androidx.compose.material.icons.Icons.Outlined.Merge, null, Modifier.size(22.dp), tint = scheme.onSecondaryContainer)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(uiString(R.string.pr_create), style = MaterialTheme.typography.titleSmall, color = scheme.onSecondaryContainer)
+                Text(uiString(R.string.pr_entry_body), style = MaterialTheme.typography.bodySmall, color = scheme.onSecondaryContainer.copy(alpha = .8f))
+            }
+            Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(20.dp), tint = scheme.onSecondaryContainer)
+        }
     }
 }
 
 @Composable
-fun GitHubPublishDialog(container: AppContainer, projectId: String, projectName: String, onDismiss: () -> Unit) {
+private fun uiString(id: Int): String = androidx.compose.ui.res.stringResource(id)
+
+@Composable
+fun GitHubPublishDialog(container: AppContainer, projectId: String, projectName: String, onDismiss: () -> Unit,
+    sessionId: String? = null) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val environment by container.linuxEnv.state.collectAsStateWithLifecycle()
@@ -149,6 +173,7 @@ fun GitHubPublishDialog(container: AppContainer, projectId: String, projectName:
     var message by remember { mutableStateOf<String?>(null) }
     var preset by remember { mutableStateOf(false) }
     var importing by remember { mutableStateOf(false) }
+    var pullRequest by remember { mutableStateOf(false) }
 
     suspend fun refresh() {
         val previousState = state
@@ -208,6 +233,15 @@ fun GitHubPublishDialog(container: AppContainer, projectId: String, projectName:
         GitHubImportDialog(container, onDismiss = { importing = false }, onImported = onDismiss)
         return
     }
+    val pullRequestFs = fs
+    if (pullRequest && pullRequestFs != null) {
+        // Back returns to Commit & push, refreshed so a push made from the sheet shows up.
+        GitHubPullRequestDialog(container, pullRequestFs, projectName, sessionId, onDismiss = {
+            pullRequest = false
+            act { refresh() }
+        })
+        return
+    }
     GitHubDialog(uiContext.getString(R.string.settings_github_commit_push), busy, onDismiss, footer = {
         state?.takeIf { it.changes.isNotEmpty() }?.let { snapshot ->
             GitHubCommitFooter(paths.size, snapshot.changes.size, commitMessage, { commitMessage = it }, !busy) {
@@ -227,9 +261,19 @@ fun GitHubPublishDialog(container: AppContainer, projectId: String, projectName:
             } }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(uiContext.getString(R.string.ui_install_or_repair_git_tools)) }
         }
         state?.let { snapshot ->
-            Text(snapshot.remoteUrl.removePrefix("https://github.com/").removeSuffix(".git"))
-            Text(uiContext.getString(R.string.ui_branch, (snapshot.branch).toString()), style = MaterialTheme.typography.bodySmall)
-            Text(uiContext.getString(R.string.ui_changed_files_app_history_excluded, (snapshot.changes.size).toString()), style = MaterialTheme.typography.bodySmall)
+            Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, shape = MaterialTheme.shapes.large,
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f)),
+                modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(snapshot.remoteUrl.removePrefix("https://github.com/").removeSuffix(".git"),
+                        style = MaterialTheme.typography.titleSmall)
+                    Text(uiContext.getString(R.string.ui_branch, (snapshot.branch).toString()), style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(uiContext.getString(R.string.ui_changed_files_app_history_excluded, (snapshot.changes.size).toString()),
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            PullRequestEntry(enabled = !busy && snapshot.head.isNotBlank()) { pullRequest = true }
             if (snapshot.changes.isNotEmpty()) {
                 GitHubChangePicker(snapshot.changes, paths, directory, { directory = it }, { paths = it }, !busy)
             } else Text(uiContext.getString(R.string.ui_no_uncommitted_changes_you_can_push_existing), style = MaterialTheme.typography.bodySmall)

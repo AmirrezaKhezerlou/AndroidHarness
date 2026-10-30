@@ -15,9 +15,37 @@ import java.io.File
 import java.util.UUID
 
 /** Phone-owned clones use private app storage and need no broad storage grant. */
-class GitHubWorkspaces(private val c: AppContainer) {
+class GitHubWorkspaces(private val c: AppContainer) : PullRequestPublisher {
     private val imports = Mutex()
     private val root = File(c.appContext.filesDir, "github-projects")
+    private val pulls by lazy { GitHubPullRequests(c.github.api) }
+
+    private suspend fun token(): String = c.github.accessToken()
+        ?: error("Connect GitHub in Settings to open pull requests.")
+
+    // Pull requests read the workspace and write only to GitHub, so a running task may open one.
+    override suspend fun preparePullRequest(fs: WorkspaceFs, base: String?): PullRequestPlan = withContext(Dispatchers.IO) {
+        val token = token()
+        val repository = repository(fs)
+        val name = repository.originRepository()
+        val defaultBranch = pulls.defaultBranch(name, token)
+        val branch = repository.pullRequestBranch(name, base?.trim()?.ifBlank { null } ?: defaultBranch)
+        PullRequestPlan(branch, defaultBranch, pulls.findOpen(name, branch.branch, token))
+    }
+
+    override suspend fun openPullRequest(plan: PullRequestPlan, title: String, body: String, draft: Boolean): PullRequestInfo {
+        plan.existing?.let { return it }
+        val branch = plan.branch
+        require(title.isNotBlank()) { "Enter a pull request title." }
+        check(branch.ahead > 0) { "${branch.branch} has no commits that aren't already on ${branch.base}." }
+        check(branch.pushed) {
+            if (branch.remoteHead == null) "${branch.branch} isn't on GitHub yet. Push it first."
+            else "GitHub's copy of ${branch.branch} doesn't match your latest commit. Push first."
+        }
+        return pulls.create(branch.repository, branch.branch, branch.base, title, body, draft, token())
+    }
+
+    override suspend fun baseBranches(repository: String): List<String> = pulls.branches(repository, token())
 
     private fun requireGitTools() = check(c.linuxEnv.gitToolsReady) {
         "Install or repair Git tools from Import from GitHub or Commit & push, then retry."

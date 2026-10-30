@@ -8,8 +8,10 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import okhttp3.FormBody
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
 @Serializable
@@ -47,6 +49,13 @@ class GitHubApi(
             }.build(),
     )
 
+    /** Authenticated JSON write; the only caller is the reviewed pull request flow. */
+    suspend fun post(path: String, token: String, body: JsonObject): JsonElement = requestElement(
+        Request.Builder().url("$apiBase$path").header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28").header("Authorization", "Bearer $token")
+            .post(body.toString().toRequestBody("application/json".toMediaType())).build(),
+    )
+
     private suspend fun request(request: Request): JsonObject = requestElement(request).jsonObject
     private suspend fun requestElement(request: Request): JsonElement = withContext(Dispatchers.IO) {
         client.newCall(request).execute().use { response ->
@@ -57,12 +66,20 @@ class GitHubApi(
                 }
                 val message = (parsed as? JsonObject)?.get("message")?.jsonPrimitive?.contentOrNull
                     ?: (parsed as? JsonObject)?.get("error_description")?.jsonPrimitive?.contentOrNull
-                error("GitHub returned HTTP ${response.code}: ${message ?: "check connection and account access"}")
+                // Validation failures name the actual problem only in errors[].message.
+                val details = ((parsed as? JsonObject)?.get("errors") as? JsonArray).orEmpty()
+                    .mapNotNull { (it as? JsonObject)?.string("message") ?: (it as? JsonPrimitive)?.contentOrNull }
+                throw GitHubHttpError(response.code, details,
+                    "GitHub returned HTTP ${response.code}: ${message ?: "check connection and account access"}" +
+                        details.joinToString("") { " $it" })
             }
             parsed ?: error("GitHub returned an unreadable response. Try again.")
         }
     }
 }
+
+/** Kept an IllegalStateException so existing message-only handlers behave as before. */
+class GitHubHttpError(val code: Int, val details: List<String>, message: String) : IllegalStateException(message)
 
 internal fun JsonObject.string(key: String): String? = (get(key) as? JsonPrimitive)?.contentOrNull
 internal fun JsonObject.seconds(key: String): Long? = (get(key) as? JsonPrimitive)?.longOrNull

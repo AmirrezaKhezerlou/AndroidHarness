@@ -18,7 +18,7 @@ When CodeGraph tools are advertised for an indexed project, use `codegraph_explo
 
 Use the Git tool matching the operation: status/diff/log/show/branches/checkout/commit/pull/push. These run in the selected workspace, including SSH. The Git commit tool excludes harness runtime files under `.harness`; do not assume an arbitrary raw-shell Git command has that same exclusion. Review the diff and preserve unrelated work. Committing, pushing, force-changing history and publishing are separate actions; honor the user's actual request.
 
-Read-only `github_api`, `github_search` and `github_file`, when advertised, query the connected account/public API; they do not grant write access. For other API operations follow the exact tool/schema and the user's authorization. GitHub credentials are managed by the app. Use `doctor` for supported authentication checks rather than printing tokens or reading credential files into model context.
+`github_create_pull_request`, when advertised, opens a pull request from the current branch after it has been committed and pushed; it returns an already-open pull request instead of a duplicate, never pushes or merges, and needs the user's approval. Open one only when the user asks. Read-only `github_api`, `github_search` and `github_file`, when advertised, query the connected account/public API; they do not grant write access. For other API operations follow the exact tool/schema and the user's authorization. GitHub credentials are managed by the app. Use `doctor` for supported authentication checks rather than printing tokens or reading credential files into model context.
 
 ## Web and browser
 

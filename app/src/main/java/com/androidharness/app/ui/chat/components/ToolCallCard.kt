@@ -100,6 +100,10 @@ internal fun ToolCallCard(
         PackageInstallCard(call, result, running, awaitingApproval, packageProgress)
         return
     }
+    if (call.name == "github_create_pull_request") {
+        com.androidharness.app.ui.github.PullRequestToolCard(call, result, running, awaitingApproval)
+        return
+    }
     if (com.androidharness.app.browser.BrowserToolActivity.isBrowserTool(call.name)) {
         BrowserToolCard(call, result, running, browserTarget, awaitingApproval, onWatchBrowser)
         return

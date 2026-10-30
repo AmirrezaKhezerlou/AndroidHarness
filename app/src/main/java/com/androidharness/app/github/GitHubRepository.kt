@@ -45,6 +45,26 @@ internal fun parseGitChanges(output: String): List<GitChange> {
 
 private fun privateHarnessPath(path: String) = path.split('/').any { it == ".harness" || it == ".git" }
 
+private const val MAX_PR_COMMITS = 50
+private const val MAX_PR_FILES = 300
+
+/** `diff --numstat -z`: "add\tdel\tpath\0", or "add\tdel\t\0old\0new\0" for a rename. Binary counts are "-". */
+internal fun parseNumstat(output: String): List<PullRequestFile> {
+    val parts = output.split('\u0000')
+    val result = mutableListOf<PullRequestFile>()
+    var i = 0
+    while (i < parts.size && result.size < MAX_PR_FILES) {
+        val entry = parts[i++]
+        if (entry.isBlank()) continue
+        val fields = entry.trimStart('\n').split('\t', limit = 3)
+        if (fields.size < 3) continue
+        val path = if (fields[2].isEmpty() && i + 1 < parts.size) parts[i + 1].also { i += 2 } else fields[2]
+        if (privateHarnessPath(path)) continue
+        result += PullRequestFile(path, fields[0].toIntOrNull(), fields[1].toIntOrNull())
+    }
+    return result
+}
+
 /** Deterministic Git operations, shared by the controls and push automations. Never force-pushes. */
 class GitHubRepository(private val run: suspend (List<String>) -> GitCommandResult) {
     private suspend fun command(stage: String, vararg args: String): String {
@@ -120,6 +140,49 @@ class GitHubRepository(private val run: suspend (List<String>) -> GitCommandResu
             .substringBefore('\t').trim()
         check(remoteHead == head) { "The push could not be verified. Your local commit is kept. Refresh the repository before retrying." }
         return "Published ${head.take(12)} to ${current.remoteUrl.removePrefix("https://github.com/").removeSuffix(".git")} · ${current.branch}."
+    }
+
+    /** origin as owner/repository; SSH and HTTPS GitHub remotes both name the same pull request target. */
+    suspend fun originRepository(): String {
+        val origin = run(listOf("config", "--get", "remote.origin.url"))
+        if (origin.code == 1) throw GitHubOperationFailure("Repository", "This workspace has no GitHub origin. Connect it to a GitHub repository in Commit & push.")
+        if (origin.code != 0) throw GitHubOperationFailure("Repository", gitHubFailureHint(origin.code, origin.err + origin.out))
+        val url = origin.out.trim()
+        return try { gitHubRepositoryUrl(url).removePrefix("https://github.com/").removeSuffix(".git") }
+        catch (_: IllegalArgumentException) { throw GitHubOperationFailure("Repository", "Origin is not a GitHub repository, so a pull request cannot be opened.") }
+    }
+
+    /**
+     * Read-only comparison of the checked-out branch against [base] on GitHub. Fetches base into
+     * FETCH_HEAD only, so no local branch or remote-tracking ref changes.
+     */
+    suspend fun pullRequestBranch(repository: String, base: String): PullRequestBranch {
+        val branchResult = run(listOf("symbolic-ref", "--quiet", "--short", "HEAD"))
+        if (branchResult.code == 1) throw GitHubOperationFailure("Branch", "This repository is in a detached state. Check out a branch before opening a pull request.")
+        if (branchResult.code != 0) throw GitHubOperationFailure("Branch", gitHubFailureHint(branchResult.code, branchResult.err))
+        val branch = branchResult.out.trim()
+        command("Branch", "check-ref-format", "--branch", branch)
+        command("Branch", "check-ref-format", "--branch", base)
+        val head = run(listOf("rev-parse", "--verify", "HEAD"))
+        if (head.code != 0) throw GitHubOperationFailure("Branch", "This branch has no commits yet. Commit your changes first.")
+        val headSha = head.out.trim()
+        if (branch == base) throw GitHubOperationFailure("Branch",
+            "You're on $base, the pull request's base branch. Create a feature branch, commit and push it, then open the pull request.")
+        command("Fetch base", "fetch", "--quiet", "--no-tags", "origin", "refs/heads/$base")
+        val baseSha = command("Fetch base", "rev-parse", "--verify", "FETCH_HEAD").trim()
+        val remote = run(listOf("ls-remote", "--exit-code", "origin", "refs/heads/$branch"))
+        val remoteHead = when (remote.code) {
+            0 -> remote.out.substringBefore('\t').trim().ifBlank { null }
+            2 -> null
+            else -> throw GitHubOperationFailure("Remote branch", gitHubFailureHint(remote.code, remote.err + remote.out))
+        }
+        val ahead = command("Compare", "rev-list", "--count", "$baseSha..$headSha").trim().toIntOrNull() ?: 0
+        val behind = command("Compare", "rev-list", "--count", "$headSha..$baseSha").trim().toIntOrNull() ?: 0
+        val commits = command("Compare", "log", "--no-merges", "--format=%s", "-n", "$MAX_PR_COMMITS", "$baseSha..$headSha")
+            .lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+        val files = parseNumstat(command("Compare", "diff", "--numstat", "-z", "$baseSha...$headSha"))
+        val uncommitted = parseGitChanges(command("Files", "status", "--porcelain=v1", "-z", "--untracked-files=all")).size
+        return PullRequestBranch(repository, branch, headSha, base, baseSha, remoteHead, ahead, behind, commits, files, uncommitted)
     }
 
     suspend fun runPreset(preset: GitHubPushPreset): String {

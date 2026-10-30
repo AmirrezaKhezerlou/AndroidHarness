@@ -156,6 +156,15 @@ fun toolPresentation(call: ToolCallData, result: ChatMessage? = null): ToolPrese
         "git_diff" -> ToolPresentation("Read git diff", "Reading git diff…", kind = ToolActivityKind.READ)
         "git_log", "git_show" -> ToolPresentation("Read git history", "Reading git history…", kind = ToolActivityKind.READ)
         "git_commit" -> ToolPresentation(if (result?.isError == true) "Commit failed" else "Committed changes", "Committing…", kind = ToolActivityKind.EDIT)
+        "github_create_pull_request" -> ToolPresentation(
+            when {
+                result == null -> "Open pull request"
+                result.isError -> "Pull request failed"
+                else -> com.androidharness.app.tools.parsePullRequestResult(result.text)?.let { "Opened pull request #${it.number}" }
+                    ?: "Opened pull request"
+            },
+            "Opening pull request…", arg("title"), ToolActivityKind.EDIT,
+        )
         "web_fetch" -> {
             val url = arg("url") ?: "page"
             ToolPresentation("Fetched page", "Fetching ${url.take(48)}…", url, ToolActivityKind.WEB)

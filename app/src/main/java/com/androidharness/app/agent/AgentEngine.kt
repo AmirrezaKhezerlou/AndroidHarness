@@ -1135,7 +1135,7 @@ class AgentEngine(
         val startedAt = System.currentTimeMillis()
         val linuxWasReady = linuxEnv.isReady
         var executed = try {
-            if (call.name in setOf("git_push", "git_pull", "http_request", "shell", "shell_background") &&
+            if (call.name in setOf("git_push", "git_pull", "github_create_pull_request", "http_request", "shell", "shell_background") &&
                 workspace !is com.androidharness.app.workspace.SshFs) prepareGitHub()
             val execute = suspend {
                 var outcome: ToolResult? = null
